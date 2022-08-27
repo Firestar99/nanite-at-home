@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run space-game" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package space-game --bin space-game" />
+  <configuration default="false" name="Run space-client" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --package space-client --bin space-client" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

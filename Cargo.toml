@@ -1,2 +1,2 @@
 [workspace]
-members = ["space-engine", "space-game"]
+members = ["space-engine", "space-client"]

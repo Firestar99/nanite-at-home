@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 vulkano = "0.29.0"
 vulkano-win = "0.29.0"
+konst = "0.2.15"
