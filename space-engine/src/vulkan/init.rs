@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
-use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
+use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::{Instance, InstanceCreateInfo, InstanceExtensions};
 use vulkano::Version;
 
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::ENGINE_APPLICATION_CONFIG;
+use crate::vulkan::debug::Debug;
 use crate::vulkan::platform::VkPlatform;
+use crate::vulkan::queue_allocator::QueueAllocator;
 
 pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.
@@ -36,13 +38,16 @@ pub trait Plugin {
 	}
 }
 
-pub trait QueueAllocator {
-	fn alloc<'a>(&self, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice<'a>) -> Vec<QueueCreateInfo<'a>>;
+pub struct Init<Q> {
+	pub instance: Arc<Instance>,
+	pub device: Arc<Device>,
+	pub queues: Q,
+	_debug: Debug,
 }
 
-pub fn init<Q>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn Plugin>, queue_allocator: Q) -> (Arc<Instance>, Arc<Device>, impl ExactSizeIterator<Item=Arc<Queue>>)
+pub fn init<Q, A>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn Plugin>, mut queue_allocator: A) -> Init<Q>
 	where
-		Q: QueueAllocator
+		A: QueueAllocator<Q>,
 {
 	let platform = VkPlatform::new();
 
@@ -50,7 +55,7 @@ pub fn init<Q>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn 
 	let configs: Vec<_> = plugins.iter_mut()
 		.map(|p| p.instance_config(&platform))
 		.collect();
-	let extensions = configs.iter()
+	let mut extensions = configs.iter()
 		.map(|e| e.0)
 		.reduce(|a, b| a.union(&b))
 		.unwrap_or(InstanceExtensions::none());
@@ -58,6 +63,11 @@ pub fn init<Q>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn 
 		.flat_map(|e| e.1)
 		.map(|s| String::from(s))
 		.collect();
+
+	// debug
+	extensions.ext_debug_utils = true;
+
+	// instance
 	let instance = Instance::new(InstanceCreateInfo {
 		engine_name: Some(String::from(ENGINE_APPLICATION_CONFIG.name)),
 		engine_version: Version::from(ENGINE_APPLICATION_CONFIG.version),
@@ -67,6 +77,9 @@ pub fn init<Q>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn 
 		enabled_layers: layers,
 		..Default::default()
 	}).unwrap();
+
+	// debug
+	let _debug = Debug::new(&instance);
 
 	// physical device selection
 	let physical_device = PhysicalDevice::enumerate(&instance)
@@ -96,7 +109,14 @@ pub fn init<Q>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn 
 		..Default::default()
 	}).unwrap();
 
-	(instance, device, queues)
+	let queues = queue_allocator.process(queues.collect());
+
+	Init {
+		instance,
+		device,
+		queues,
+		_debug,
+	}
 }
 
 fn device_features_union(a: &Features, b: &Features) -> Features {
