@@ -10,3 +10,4 @@ space-engine = { path = "../space-engine" }
 vulkano = "0.29.0"
 vulkano-win = "0.29.0"
 clap = { version = "3.2", features = ["derive"] }
+parking_lot = "0.12" # FIXME remove

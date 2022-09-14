@@ -942,6 +942,7 @@ name = "space-client"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "parking_lot 0.12.1",
  "space-engine",
  "vulkano",
  "vulkano-win",
@@ -952,6 +953,7 @@ name = "space-engine"
 version = "0.1.0"
 dependencies = [
  "konst",
+ "parking_lot 0.12.1",
  "vulkano",
  "vulkano-win",
 ]
