@@ -1,5 +1,7 @@
 use std::sync::Arc;
-use crate::reinit::reinit::{Callback, Dependency, Reinit, ReinitImpl, ReinitRef};
+
+use crate::reinit::dependency::Dependency;
+use crate::reinit::reinit::{Callback, Reinit, ReinitImpl, ReinitRef};
 
 struct Reinit1<'a, T, F, A>
 	where
@@ -20,15 +22,20 @@ impl<'a, T, F, A> Reinit1<'a, T, F, A>
 			constructor,
 			a: Dependency::new(a),
 		});
-		arc.reinit.init(&*arc);
+		//TODO do callback registration
+		// arc.reinit.init(&*arc);
 		// a.add_callback(&arc);
 		arc
-		//TODO do callback registration
 	}
 }
 
-impl<'a, T, F, A> ReinitImpl<A> for Reinit1<'a, T, F, A> {
-
+impl<'a, T, F, A> ReinitImpl for Reinit1<'a, T, F, A>
+	where
+		F: Fn(&A) -> T
+{
+	fn request_drop(&self) {
+		todo!()
+	}
 }
 
 

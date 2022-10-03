@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::mem::MaybeUninit;
 use crate::reinit::reinit::Reinit;
 
-struct Dependency<'a, D> {
+pub struct Dependency<'a, D> {
 	reinit: &'a Arc<Reinit<D>>,
 	value: MaybeUninit<&'a D>,
 }

@@ -13,7 +13,6 @@ pub trait Callback<'a, T> {
 }
 
 struct DropRedirect<T> {
-
 	reinit: Reinit<T>,
 }
 
@@ -155,23 +154,34 @@ impl<T, F, A, B> Deref for Reinit2<'_, T, F, A, B> {
 }
 
 
-struct A {}
+pub struct A {}
 
-struct B<'a> {
-	a: &'a A,
+pub struct B<'a> {
+	pub a: &'a A,
 }
 
-struct C<'a> {
-	a: &'a A,
+pub struct C<'a> {
+	pub a: &'a A,
 }
 
-struct D<'a> {
-	b: &'a B<'a>,
-	c: &'a C<'a>,
+pub struct D<'a> {
+	pub b: &'a B<'a>,
+	pub c: &'a C<'a>,
 }
+
+static mut restart_counter: u32 = 0;
 
 impl<'a> D<'a> {
-	fn work(&self) {}
+	fn work(&self) {
+		let cnt = unsafe {
+			restart_counter += 1;
+			restart_counter
+		};
+		match cnt {
+			1 => {},
+			_ => unreachable!(),
+		}
+	}
 }
 
 pub fn main() {

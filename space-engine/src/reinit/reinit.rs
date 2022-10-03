@@ -1,12 +1,11 @@
 use std::cell::UnsafeCell;
-use std::hint;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, AtomicU32};
-use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use parking_lot::Mutex;
+use std::sync::atomic::Ordering::Relaxed;
 
+use parking_lot::Mutex;
 
 // Callback
 pub trait Callback<T> {
@@ -21,7 +20,7 @@ pub(super) trait ReinitImpl {
 	fn request_drop(&self);
 }
 
-pub const REINIT_IMPL_NULL: ReinitImplNull = ReinitImplNull {};
+const REINIT_IMPL_NULL: ReinitImplNull = ReinitImplNull {};
 
 struct ReinitImplNull {}
 
@@ -83,9 +82,7 @@ impl<T> Reinit<T> {
 
 	#[cold]
 	#[inline(never)]
-	fn slow_drop(&self) {
-
-	}
+	fn slow_drop(&self) {}
 
 	pub(super) unsafe fn constructed(&self) {
 		let mut hooks = self.hooks.lock();
@@ -106,9 +103,15 @@ impl<T> Reinit<T> {
 		}
 	}
 
-	pub fn add_callback(&self, callback: &Arc<dyn Callback<T>>) {
+	pub fn add_callback<C>(&self, callback: &Arc<C>)
+		where C: Callback<T> + 'static
+	{
 		let mut hooks = self.hooks.lock();
-		hooks.push(Arc::downgrade(callback));
+		let arc = Arc::downgrade(callback);
+		let weak = arc as Weak<dyn Callback<T>>;
+		hooks.push(weak);
+		// drop(weak);
+		// println!("{:?}", weak);
 
 		if self.ref_cnt.load(Relaxed) > 0 {
 			callback.accept(ReinitRef::new(self));

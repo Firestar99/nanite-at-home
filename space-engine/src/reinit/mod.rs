@@ -1,12 +1,10 @@
 pub mod reinit;
-mod reinit1;
-mod dependency;
+pub mod dependency;
+pub mod reinit1;
 
 
 #[cfg(test)]
 mod tests {
-	use crate::reinit::reinit::Reinit1;
-
 	struct A {}
 
 	struct B<'a> {
@@ -22,18 +20,30 @@ mod tests {
 		c: &'a C<'a>,
 	}
 
+	static mut RESTART_COUNTER: u32 = 0;
+
 	impl<'a> D<'a> {
-		fn work(&self) {}
+		fn work(&self) {
+			let cnt = unsafe {
+				RESTART_COUNTER += 1;
+				RESTART_COUNTER
+			};
+			match cnt {
+				1 => {},
+				2 => panic!("Did not exit!"),
+				_ => unreachable!(),
+			}
+		}
 	}
 
 	#[test]
 	pub fn test() {
-		// let a = Reinit0::new(|| A {});
-		// let b = Reinit1::new(&a, |a| B { a });
-		// let c = Reinit1::new(&a, |a| C { a });
-		// let d = Reinit2::new(&b, &c, |b, c| D { b, c });
-		//
-		// d.work();
+		let a = Reinit0::new(|| A {});
+		let b = Reinit1::new(&a, |a| B { a });
+		let c = Reinit1::new(&a, |a| C { a });
+		let d = Reinit2::new(&b, &c, |b, c| D { b, c });
+
+		d.work();
 
 // 	let mut exit = false;
 // 	while !exit {
