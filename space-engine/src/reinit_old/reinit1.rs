@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::reinit::dependency::Dependency;
-use crate::reinit::reinit::{Callback, Reinit, ReinitImpl, ReinitRef};
+use crate::reinit_old::dependency::Dependency;
+use crate::reinit_old::reinit::{Callback, Reinit, ReinitImpl, ReinitRef};
 
 struct Reinit1<T, F, A>
 	where
