@@ -3,20 +3,20 @@ use std::sync::Arc;
 use crate::reinit::dependency::Dependency;
 use crate::reinit::reinit::{Callback, Reinit, ReinitImpl, ReinitRef};
 
-struct Reinit1<'a, T, F, A>
+struct Reinit1<T, F, A>
 	where
 		F: Fn(&A) -> T
 {
 	reinit: Reinit<T>,
 	constructor: F,
-	a: Dependency<'a, A>,
+	a: Dependency<A>,
 }
 
-impl<'a, T, F, A> Reinit1<'a, T, F, A>
+impl<T, F, A> Reinit1<T, F, A>
 	where
 		F: Fn(&A) -> T
 {
-	pub fn new(a: &'a Arc<Reinit<A>>, constructor: F) -> Arc<Self> {
+	pub fn new(a: Arc<Reinit<A>>, constructor: F) -> Arc<Self> {
 		let mut arc = Arc::new(Self {
 			reinit: Reinit::new(),
 			constructor,

@@ -128,6 +128,7 @@ impl<T> Drop for Reinit<T> {
 
 
 // ReinitRef
+#[repr(transparent)]
 pub struct ReinitRef<'a, T> {
 	parent: &'a Reinit<T>,
 }
