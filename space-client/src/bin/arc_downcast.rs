@@ -37,11 +37,11 @@ fn main() {
 		println!("{:#?}", a);
 	}
 
-	{
-		let b = Test { cnt: 42 };
-		let a: dyn Gen<u32> = b as dyn Gen<u32>;
-		println!("{:#?}", a);
-	}
+	// {
+	// 	let b = Test { cnt: 42 };
+	// 	let a: dyn Gen<u32> = b as dyn Gen<u32>;
+	// 	println!("{:#?}", a);
+	// }
 
 	// let arc = Arc::new(Test { cnt: 42 });
 	// call_work(&arc);
