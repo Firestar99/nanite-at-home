@@ -1,27 +1,28 @@
 use std::cell::UnsafeCell;
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomPinned;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::{Arc, Weak};
-use std::sync::atomic::{AtomicBool, AtomicUsize};
-use std::sync::atomic::Ordering::{Relaxed, Release};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, fence};
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use parking_lot::Mutex;
 
-pub trait Callback<T> {
+pub trait Callback<T: 'static> {
 	fn accept(&self, t: ReinitRef<T>);
 
 	fn request_drop(&self);
 }
 
 #[repr(transparent)]
-pub struct Reinit<T> {
+pub struct Reinit<T: 'static> {
 	ptr: Pin<Arc<Inner<T>>>,
 }
 
-pub(super) struct Inner<T>
+pub(super) struct Inner<T: 'static>
 {
 	_pinned: PhantomPinned,
 
@@ -38,16 +39,14 @@ pub(super) struct Inner<T>
 	/// hooks of everyone wanting to get notified, unordered
 	hooks: Mutex<Vec<Weak<dyn Callback<T>>>>,
 
-	details: Box<dyn ReinitDetails<T>>,
+	details: Arc<dyn ReinitDetails<T>>,
 }
 
-pub trait ReinitDetails<T>: 'static {
-	fn init(&self, inner: &Reinit<T>);
-
-	fn request_construction(&self, inner: &Reinit<T>);
+pub trait ReinitDetails<T: 'static>: 'static {
+	fn request_construction(&self);
 }
 
-pub(super) struct Instance<T> {
+pub(super) struct Instance<T: 'static> {
 	pub(super) instance: T,
 	pub(super) arc: Reinit<T>,
 }
@@ -55,7 +54,7 @@ pub(super) struct Instance<T> {
 
 // ReinitRef
 #[repr(transparent)]
-pub struct ReinitRef<T> {
+pub struct ReinitRef<T: 'static> {
 	inner: NonNull<Inner<T>>,
 }
 
@@ -96,55 +95,66 @@ impl<T> Deref for ReinitRef<T> {
 	}
 }
 
+impl<T: Debug> Debug for ReinitRef<T> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		self.deref().fmt(f)
+	}
+}
+
+impl<T: Display> Display for ReinitRef<T> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		self.deref().fmt(f)
+	}
+}
+
 impl<T> Inner<T> {
 	#[inline]
 	unsafe fn ref_inc(&self) {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
+		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		self.ref_cnt.fetch_add(1, Relaxed);
 	}
 
 	#[inline]
 	unsafe fn ref_dec(&self) {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
+		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		if self.ref_cnt.fetch_sub(1, Relaxed) == 1 {
 			self.ref_get_instance().arc.slow_drop();
 		}
 	}
 
+	#[inline]
 	unsafe fn ref_get_instance(&self) -> &Instance<T> {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
+		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		(&*self.instance.get()).assume_init_ref()
 	}
 }
 
 
 // Reinit impl
-/// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T> Clone for Reinit<T> {
-	fn clone(&self) -> Self {
-		Reinit {
-			ptr: self.ptr.clone()
-		}
-	}
-}
-
 impl<T> Reinit<T>
 {
-	fn new<D: ReinitDetails<T>>(details: D) -> Reinit<T> {
-		let reinit = Reinit {
-			ptr: Arc::pin(Inner {
-				_pinned: Default::default(),
-				restart: AtomicBool::new(false),
-				construct_lock: Mutex::new(()),
-				ref_cnt: AtomicUsize::new(0),
-				instance: UnsafeCell::new(MaybeUninit::uninit()),
-				hooks: Mutex::new(vec![]),
-				details: Box::new(details),
-			})
-		};
-		reinit.ptr.details.init(&reinit);
-		reinit.ptr.details.request_construction(&reinit);
+	#[inline]
+	fn new<D, F>(details: F) -> Reinit<T>
+		where
+			D: ReinitDetails<T>,
+			F: FnOnce(&Weak<Inner<T>>) -> Arc<D>
+	{
+		let reinit = Reinit::from(Arc::new_cyclic(|weak| Inner {
+			_pinned: Default::default(),
+			restart: AtomicBool::new(false),
+			construct_lock: Mutex::new(()),
+			ref_cnt: AtomicUsize::new(0),
+			instance: UnsafeCell::new(MaybeUninit::uninit()),
+			hooks: Mutex::new(vec![]),
+			details: details(weak),
+		}));
+		reinit.ptr.details.request_construction();
 		reinit
+	}
+
+	#[inline(always)]
+	fn from(arc: Arc<Inner<T>>) -> Self {
+		Reinit { ptr: unsafe { Pin::new_unchecked(arc) } }
 	}
 
 	fn restart_inc(&self) {}
@@ -199,52 +209,43 @@ impl<T> Reinit<T>
 	}
 }
 
+/// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
+impl<T> Clone for Reinit<T> {
+	fn clone(&self) -> Self {
+		Reinit {
+			ptr: self.ptr.clone()
+		}
+	}
+}
+
 impl<T> Drop for Inner<T> {
 	fn drop(&mut self) {
 		// guarantees that self.instance has dropped already
-		assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
+		debug_assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
 	}
 }
 
 
-// Reinit0Impl
-struct Reinit0Impl<T, F>
-	where
-		T: 'static,
-		F: Fn() -> T + 'static
-{
-	constructor: F,
+// WeakReinit
+#[repr(transparent)]
+pub struct WeakReinit<T: 'static> {
+	/// no Pin<> wrap: cannot upgrade() otherwise
+	ptr: Weak<Inner<T>>,
 }
 
-impl<T, F> Reinit0Impl<T, F>
-	where
-		T: 'static,
-		F: Fn() -> T + 'static
-{
-	fn new0(constructor: F) -> Reinit<T> {
-		Reinit::new(Self {
-			constructor
-		})
+impl<T> WeakReinit<T> {
+	fn new(weak: &Weak<Inner<T>>) -> Self {
+		Self { ptr: weak.clone() }
 	}
-}
 
-impl<T, F> ReinitDetails<T> for Reinit0Impl<T, F>
-	where
-		T: 'static,
-		F: Fn() -> T + 'static
-{
-	fn init(&self, _inner: &Reinit<T>) {}
-
-	fn request_construction(&self, inner: &Reinit<T>) {
-		inner.constructed((self.constructor)())
+	fn upgrade(&self) -> Option<Reinit<T>> {
+		self.ptr.upgrade().map(|a| Reinit::from(a))
 	}
 }
 
 
 // Dependency
-struct Dependency<T>
-	where
-		T: 'static
+struct Dependency<T: 'static>
 {
 	reinit: Reinit<T>,
 	value: UnsafeCell<Option<ReinitRef<T>>>,
@@ -258,66 +259,128 @@ impl<T> Dependency<T> {
 		}
 	}
 
+	#[inline]
 	fn value_set(&self, t: ReinitRef<T>) {
-		unsafe {
-			assert!((&*self.value.get()) == None);
-			self.value.get().write(Some(t));
+		let cell = unsafe { &mut *self.value.get() };
+		debug_assert!(matches!(cell, None));
+		*cell = Some(t);
+	}
+
+	#[inline]
+	fn value_clear(&self) {
+		let cell = unsafe { &mut *self.value.get() };
+		debug_assert!(matches!(cell, Some(..)));
+		*cell = None;
+	}
+
+	#[inline]
+	fn value_get(&self) -> &ReinitRef<T> {
+		let cell = unsafe { &mut *self.value.get() };
+		debug_assert!(matches!(cell, Some(..)));
+		unsafe { cell.as_ref().unwrap_unchecked() }
+	}
+}
+
+
+// Reinit0
+struct Reinit0<T: 'static, F>
+	where
+		F: Fn() -> T + 'static
+{
+	parent: WeakReinit<T>,
+	constructor: F,
+}
+
+impl<T: 'static> Reinit<T>
+{
+	pub fn new0<F>(constructor: F) -> Reinit<T>
+		where
+			F: Fn() -> T + 'static
+	{
+		Reinit::new(|weak| Arc::new(Reinit0 {
+			parent: WeakReinit::new(weak),
+			constructor,
+		}))
+	}
+}
+
+impl<T: 'static, F> ReinitDetails<T> for Reinit0<T, F>
+	where
+		F: Fn() -> T + 'static
+{
+	fn request_construction(&self) {
+		if let Some(parent) = &self.parent.upgrade() {
+			parent.constructed((self.constructor)())
 		}
 	}
 }
 
 
-// Reinit1Impl
-struct Reinit1Impl<T, F, A>
+// Reinit1
+struct Reinit1<T: 'static, F, A: 'static>
 	where
-		A: 'static,
-		T: 'static,
 		F: Fn(ReinitRef<A>) -> T + 'static
 {
+	parent: WeakReinit<T>,
 	constructor: F,
+	countdown: AtomicU32,
 	a: Dependency<A>,
 }
 
-impl<T, F, A> Reinit1Impl<T, F, A>
-	where
-		A: 'static,
-		T: 'static,
-		F: Fn(ReinitRef<A>) -> T + 'static
+impl<T: 'static> Reinit<T>
 {
-	fn new1(a: Reinit<A>, constructor: F) -> Reinit<T> {
-		Reinit::new(Self {
-			a: Dependency::new(a),
-			constructor,
+	pub fn new1<F, A: 'static>(a: Reinit<A>, constructor: F) -> Reinit<T>
+		where
+			F: Fn(ReinitRef<A>) -> T + 'static
+	{
+		Reinit::new(|weak| {
+			let this = Arc::new(Reinit1 {
+				parent: WeakReinit::new(weak),
+				a: Dependency::new(a),
+				countdown: AtomicU32::new(1 + 1),
+				constructor,
+			});
+			this.a.reinit.add_callback(&this);
+			this
 		})
 	}
 }
 
-impl<T, F, A> ReinitDetails<T> for Reinit1Impl<T, F, A>
+impl<T: 'static, F, A: 'static> Reinit1<T, F, A>
 	where
-		A: 'static,
-		T: 'static,
 		F: Fn(ReinitRef<A>) -> T + 'static
 {
-	fn init(&self, inner: &Reinit<T>) {
-		self.a.reinit.add_callback(self);
-	}
-
-	fn request_construction(&self, inner: &Reinit<T>) {
-		inner.constructed((self.constructor)(self.a))
+	fn construct_countdown(&self) {
+		// TODO proper construct_lock usage
+		if self.countdown.fetch_sub(1, Release) == 1 {
+			fence(Acquire);
+			if let Some(parent) = self.parent.upgrade() {
+				parent.constructed((self.constructor)(self.a.value_get().clone()));
+			}
+		}
 	}
 }
 
-impl<T, F, A> Callback<A> for Reinit1Impl<T, F, A>
+impl<T: 'static, F, A: 'static> ReinitDetails<T> for Reinit1<T, F, A>
 	where
-		A: 'static,
-		T: 'static,
+		F: Fn(ReinitRef<A>) -> T + 'static
+{
+	fn request_construction(&self) {
+		self.construct_countdown()
+	}
+}
+
+impl<T: 'static, F, A: 'static> Callback<A> for Reinit1<T, F, A>
+	where
 		F: Fn(ReinitRef<A>) -> T + 'static
 {
 	fn accept(&self, t: ReinitRef<A>) {
-		self.a.value = t;
+		self.a.value_set(t);
+		self.construct_countdown();
 	}
 
 	fn request_drop(&self) {
-		todo!()
+		self.a.value_clear();
+		// TODO drop instance
 	}
 }
