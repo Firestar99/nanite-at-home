@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomPinned;
 use std::mem::MaybeUninit;
@@ -6,10 +6,11 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::{Arc, Weak};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, fence};
-use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
+use std::sync::atomic::Ordering::{Relaxed, Release};
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RawMutex, RawThreadId, ReentrantMutex};
+use parking_lot::lock_api::ReentrantMutexGuard;
 
 pub trait Callback<T: 'static> {
 	fn accept(&self, t: ReinitRef<T>);
@@ -22,15 +23,19 @@ pub struct Reinit<T: 'static> {
 	ptr: Pin<Arc<Inner<T>>>,
 }
 
-pub(super) struct Inner<T: 'static>
+struct Inner<T: 'static>
 {
 	_pinned: PhantomPinned,
 
-	/// a restart is requested
-	restart: AtomicBool,
+	// members contributing to next state computation
+	/// countdown to construction, used to count down construction of dependent Reinits, used for restarting by increasing it by one
+	countdown: AtomicU32,
+	/// true if self should restart, restart happens when self is in state Initialized
+	queued_restart: AtomicBool,
 
+	// state
 	/// lock while constructing or destroying instance, may also lock hooks while holding this
-	construct_lock: Mutex<()>,
+	state_lock: ReentrantMutex<Cell<State>>,
 	/// ref count for member instance
 	ref_cnt: AtomicUsize,
 	/// instance of T and holding an Arc reference to this to prevent freeing self
@@ -42,13 +47,22 @@ pub(super) struct Inner<T: 'static>
 	details: Arc<dyn ReinitDetails<T>>,
 }
 
-pub trait ReinitDetails<T: 'static>: 'static {
-	fn request_construction(&self);
+#[repr(u8)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum State {
+	Uninitialized,
+	Constructing,
+	Initialized,
+	Destructing,
 }
 
-pub(super) struct Instance<T: 'static> {
-	pub(super) instance: T,
-	pub(super) arc: Reinit<T>,
+struct Instance<T: 'static> {
+	instance: T,
+	arc: Reinit<T>,
+}
+
+trait ReinitDetails<T: 'static>: 'static {
+	fn request_construction(&self, parent: &Reinit<T>);
 }
 
 
@@ -134,22 +148,30 @@ impl<T> Inner<T> {
 impl<T> Reinit<T>
 {
 	#[inline]
-	fn new<D, F>(details: F) -> Reinit<T>
+	fn new<D, F, I>(initial_countdown: u32, details_construct: F, details_init: I) -> Reinit<T>
 		where
 			D: ReinitDetails<T>,
-			F: FnOnce(&Weak<Inner<T>>) -> Arc<D>
+			F: FnOnce(&Weak<Inner<T>>) -> Arc<D>,
+			I: FnOnce(&Arc<D>),
 	{
-		let reinit = Reinit::from(Arc::new_cyclic(|weak| Inner {
-			_pinned: Default::default(),
-			restart: AtomicBool::new(false),
-			construct_lock: Mutex::new(()),
-			ref_cnt: AtomicUsize::new(0),
-			instance: UnsafeCell::new(MaybeUninit::uninit()),
-			hooks: Mutex::new(vec![]),
-			details: details(weak),
+		let mut details_arc = None;
+		let this = Reinit::from(Arc::new_cyclic(|weak| {
+			let details = details_construct(weak);
+			details_arc = Some(details.clone());
+			Inner {
+				_pinned: Default::default(),
+				countdown: AtomicU32::new(initial_countdown + 1),
+				queued_restart: AtomicBool::new(false),
+				state_lock: ReentrantMutex::new(Cell::new(State::Uninitialized)),
+				ref_cnt: AtomicUsize::new(0),
+				instance: UnsafeCell::new(MaybeUninit::uninit()),
+				hooks: Mutex::new(vec![]),
+				details,
+			}
 		}));
-		reinit.ptr.details.request_construction();
-		reinit
+		details_init(details_arc.as_ref().unwrap());
+		this.construct_countdown();
+		this
 	}
 
 	#[inline(always)]
@@ -157,15 +179,80 @@ impl<T> Reinit<T>
 		Reinit { ptr: unsafe { Pin::new_unchecked(arc) } }
 	}
 
-	fn restart_inc(&self) {}
+	fn restart(&self) {
+		// TODO check this later
+		// TODO restart called during construct/destruct must be handled correctly
+		// self.construct_countup();
+		// self.construct_countdown();
+		if self.ptr.queued_restart.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
+			self.check_state();
+		}
+	}
 
-	fn restart_dec(&self) {}
+	#[inline]
+	fn construct_countdown(&self) {
+		if self.ptr.countdown.fetch_sub(1, Release) == 1 {
+			self.check_state();
+		}
+	}
 
-	#[cold]
-	#[inline(never)]
-	fn slow_drop(&self) {}
+	#[inline]
+	fn construct_countup(&self) {
+		if self.ptr.countdown.fetch_add(1, Relaxed) == 0 {
+			self.check_state();
+		}
+	}
+
+	fn check_state(&self) {
+		// lock is held for the entire method
+		let guard = self.ptr.state_lock.lock();
+		if matches!(guard.get(), State::Constructing | State::Destructing) {
+			// do nothing, wait for construction / destruction to finish
+			return;
+		}
+
+		self.check_state_internal(&guard);
+	}
+
+	fn check_state_internal(&self, guard: &ReentrantMutexGuard<RawMutex, RawThreadId, Cell<State>>) {
+		// figure out target state
+		let is_init = guard.get() == State::Initialized;
+		let mut should_be_init = self.ptr.countdown.load(Relaxed) == 0;
+		if should_be_init && self.ptr.queued_restart.compare_exchange(true, false, Relaxed, Relaxed).is_ok() {
+			should_be_init = false;
+		}
+		if is_init == should_be_init {
+			// already in correct state
+			return;
+		}
+
+		// not in correct state
+		if should_be_init {
+			assert!(guard.get() == State::Uninitialized);
+			guard.set(State::Constructing);
+
+			self.ptr.details.request_construction(self);
+		} else {
+			assert!(guard.get() == State::Initialized);
+			guard.set(State::Destructing);
+
+			// SAFETY: decrement initial ref count owned by ourselves
+			unsafe {
+				self.ptr.ref_dec();
+			}
+
+			self.call_callbacks(|h| h.request_drop());
+		}
+	}
 
 	fn constructed(&self, t: T) {
+		// lock is held for the entire method
+		let guard = self.ptr.state_lock.lock();
+
+		// change state
+		assert!(guard.get() == State::Constructing);
+		guard.set(State::Initialized);
+
 		// initialize self.instance
 		{
 			assert_eq!(self.ptr.ref_cnt.load(Relaxed), 0);
@@ -177,21 +264,46 @@ impl<T> Reinit<T>
 		}
 
 		// call hooks
-		{
-			let mut hooks = self.ptr.hooks.lock();
+		self.call_callbacks(|h| h.accept(ReinitRef::new(&*self.ptr)));
 
-			// basically hooks.retain() but with swap_remove() as we don't care about order
-			let mut i = 0;
-			while i < hooks.len() {
-				match hooks[i].upgrade() {
-					None => {
-						hooks.swap_remove(i);
-						// no increment
-					}
-					Some(h) => {
-						h.accept(ReinitRef::new(&*self.ptr));
-						i += 1;
-					}
+		// TODO do not call hooks if we should destruct immediately
+		self.check_state_internal(&guard);
+	}
+
+	#[cold]
+	#[inline(never)]
+	fn slow_drop(&self) {
+		// lock is held for the entire method
+		let guard = self.ptr.state_lock.lock();
+
+		// change state
+		assert!(guard.get() == State::Destructing);
+		guard.set(State::Uninitialized);
+
+		// drop self.instance as noone is referencing it anymore
+		unsafe {
+			(&mut *self.ptr.instance.get()).assume_init_drop()
+		};
+
+		self.check_state_internal(&guard);
+	}
+
+	fn call_callbacks<F>(&self, f: F)
+		where
+			F: Fn(Arc<dyn Callback<T>>)
+	{
+		let mut hooks = self.ptr.hooks.lock();
+		// basically hooks.retain() but with swap_remove() as we don't care about order
+		let mut i = 0;
+		while i < hooks.len() {
+			match hooks[i].upgrade() {
+				None => {
+					hooks.swap_remove(i);
+					// no increment
+				}
+				Some(h) => {
+					f(h);
+					i += 1;
 				}
 			}
 		}
@@ -212,9 +324,7 @@ impl<T> Reinit<T>
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
 impl<T> Clone for Reinit<T> {
 	fn clone(&self) -> Self {
-		Reinit {
-			ptr: self.ptr.clone()
-		}
+		Self { ptr: self.ptr.clone() }
 	}
 }
 
@@ -222,6 +332,32 @@ impl<T> Drop for Inner<T> {
 	fn drop(&mut self) {
 		// guarantees that self.instance has dropped already
 		debug_assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
+	}
+}
+
+
+// Restart
+pub struct Restart<T: 'static> {
+	parent: WeakReinit<T>,
+}
+
+impl<T> Restart<T> {
+	pub fn new(parent: &WeakReinit<T>) -> Self {
+		Self { parent: parent.clone() }
+	}
+
+	pub fn restart(&self) {
+		if let Some(parent) = self.parent.upgrade() {
+			parent.restart();
+		}
+	}
+}
+
+impl<T> Debug for Restart<T> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		f.write_str("Restart<")?;
+		f.write_str(stringify!(T))?;
+		f.write_str(">")
 	}
 }
 
@@ -243,6 +379,12 @@ impl<T> WeakReinit<T> {
 	}
 }
 
+/// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
+impl<T> Clone for WeakReinit<T> {
+	fn clone(&self) -> Self {
+		Self { ptr: self.ptr.clone() }
+	}
+}
 
 // Dependency
 struct Dependency<T: 'static>
@@ -259,23 +401,28 @@ impl<T> Dependency<T> {
 		}
 	}
 
+	#[allow(clippy::mut_from_ref)]
+	fn value(&self) -> &mut Option<ReinitRef<T>> {
+		unsafe { &mut *self.value.get() }
+	}
+
 	#[inline]
 	fn value_set(&self, t: ReinitRef<T>) {
-		let cell = unsafe { &mut *self.value.get() };
+		let cell = self.value();
 		debug_assert!(matches!(cell, None));
 		*cell = Some(t);
 	}
 
 	#[inline]
 	fn value_clear(&self) {
-		let cell = unsafe { &mut *self.value.get() };
+		let cell = self.value();
 		debug_assert!(matches!(cell, Some(..)));
 		*cell = None;
 	}
 
 	#[inline]
 	fn value_get(&self) -> &ReinitRef<T> {
-		let cell = unsafe { &mut *self.value.get() };
+		let cell = self.value();
 		debug_assert!(matches!(cell, Some(..)));
 		unsafe { cell.as_ref().unwrap_unchecked() }
 	}
@@ -285,7 +432,7 @@ impl<T> Dependency<T> {
 // Reinit0
 struct Reinit0<T: 'static, F>
 	where
-		F: Fn() -> T + 'static
+		F: Fn(Restart<T>) -> T + 'static
 {
 	parent: WeakReinit<T>,
 	constructor: F,
@@ -295,23 +442,21 @@ impl<T: 'static> Reinit<T>
 {
 	pub fn new0<F>(constructor: F) -> Reinit<T>
 		where
-			F: Fn() -> T + 'static
+			F: Fn(Restart<T>) -> T + 'static
 	{
-		Reinit::new(|weak| Arc::new(Reinit0 {
+		Reinit::new(0, |weak| Arc::new(Reinit0 {
 			parent: WeakReinit::new(weak),
 			constructor,
-		}))
+		}), |_| {})
 	}
 }
 
 impl<T: 'static, F> ReinitDetails<T> for Reinit0<T, F>
 	where
-		F: Fn() -> T + 'static
+		F: Fn(Restart<T>) -> T + 'static
 {
-	fn request_construction(&self) {
-		if let Some(parent) = &self.parent.upgrade() {
-			parent.constructed((self.constructor)())
-		}
+	fn request_construction(&self, parent: &Reinit<T>) {
+		parent.constructed((self.constructor)(Restart::new(&self.parent)))
 	}
 }
 
@@ -319,11 +464,10 @@ impl<T: 'static, F> ReinitDetails<T> for Reinit0<T, F>
 // Reinit1
 struct Reinit1<T: 'static, F, A: 'static>
 	where
-		F: Fn(ReinitRef<A>) -> T + 'static
+		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
 {
 	parent: WeakReinit<T>,
 	constructor: F,
-	countdown: AtomicU32,
 	a: Dependency<A>,
 }
 
@@ -331,56 +475,122 @@ impl<T: 'static> Reinit<T>
 {
 	pub fn new1<F, A: 'static>(a: Reinit<A>, constructor: F) -> Reinit<T>
 		where
-			F: Fn(ReinitRef<A>) -> T + 'static
+			F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
 	{
-		Reinit::new(|weak| {
-			let this = Arc::new(Reinit1 {
+		Reinit::new(1, |weak| {
+			Arc::new(Reinit1 {
 				parent: WeakReinit::new(weak),
 				a: Dependency::new(a),
-				countdown: AtomicU32::new(1 + 1),
 				constructor,
-			});
-			this.a.reinit.add_callback(&this);
-			this
+			})
+		}, |arc| {
+			arc.a.reinit.add_callback(arc);
 		})
-	}
-}
-
-impl<T: 'static, F, A: 'static> Reinit1<T, F, A>
-	where
-		F: Fn(ReinitRef<A>) -> T + 'static
-{
-	fn construct_countdown(&self) {
-		// TODO proper construct_lock usage
-		if self.countdown.fetch_sub(1, Release) == 1 {
-			fence(Acquire);
-			if let Some(parent) = self.parent.upgrade() {
-				parent.constructed((self.constructor)(self.a.value_get().clone()));
-			}
-		}
 	}
 }
 
 impl<T: 'static, F, A: 'static> ReinitDetails<T> for Reinit1<T, F, A>
 	where
-		F: Fn(ReinitRef<A>) -> T + 'static
+		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
 {
-	fn request_construction(&self) {
-		self.construct_countdown()
+	fn request_construction(&self, parent: &Reinit<T>) {
+		parent.constructed((self.constructor)(self.a.value_get().clone(), Restart::new(&self.parent)));
 	}
 }
 
 impl<T: 'static, F, A: 'static> Callback<A> for Reinit1<T, F, A>
 	where
-		F: Fn(ReinitRef<A>) -> T + 'static
+		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
 {
 	fn accept(&self, t: ReinitRef<A>) {
-		self.a.value_set(t);
-		self.construct_countdown();
+		if let Some(parent) = self.parent.upgrade() {
+			self.a.value_set(t);
+			parent.construct_countdown();
+		}
 	}
 
 	fn request_drop(&self) {
-		self.a.value_clear();
-		// TODO drop instance
+		if let Some(parent) = self.parent.upgrade() {
+			self.a.value_clear();
+			parent.construct_countup();
+		}
+	}
+}
+
+
+// Reinit2
+struct Reinit2<T: 'static, F, A: 'static, B: 'static>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	parent: WeakReinit<T>,
+	constructor: F,
+	a: Dependency<A>,
+	b: Dependency<B>,
+}
+
+impl<T: 'static> Reinit<T>
+{
+	pub fn new2<F, A: 'static, B: 'static>(a: Reinit<A>, b: Reinit<B>, constructor: F) -> Reinit<T>
+		where
+			F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+	{
+		Reinit::new(2, |weak| {
+			Arc::new(Reinit2 {
+				parent: WeakReinit::new(weak),
+				a: Dependency::new(a),
+				b: Dependency::new(b),
+				constructor,
+			})
+		}, |arc| {
+			arc.a.reinit.add_callback(arc);
+		})
+	}
+}
+
+impl<T: 'static, F, A: 'static, B: 'static> ReinitDetails<T> for Reinit2<T, F, A, B>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	fn request_construction(&self, parent: &Reinit<T>) {
+		parent.constructed((self.constructor)(self.a.value_get().clone(), self.b.value_get().clone(), Restart::new(&self.parent)));
+	}
+}
+
+impl<T: 'static, F, A: 'static, B: 'static> Callback<A> for Reinit2<T, F, A, B>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	fn accept(&self, t: ReinitRef<A>) {
+		if let Some(parent) = self.parent.upgrade() {
+			self.a.value_set(t);
+			parent.construct_countdown();
+		}
+	}
+
+	fn request_drop(&self) {
+		if let Some(parent) = self.parent.upgrade() {
+			self.a.value_clear();
+			parent.construct_countup();
+		}
+	}
+}
+
+impl<T: 'static, F, A: 'static, B: 'static> Callback<B> for Reinit2<T, F, A, B>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	fn accept(&self, t: ReinitRef<B>) {
+		if let Some(parent) = self.parent.upgrade() {
+			self.a.value_set(t);
+			parent.construct_countdown();
+		}
+	}
+
+	fn request_drop(&self) {
+		if let Some(parent) = self.parent.upgrade() {
+			self.a.value_clear();
+			parent.construct_countup();
+		}
 	}
 }

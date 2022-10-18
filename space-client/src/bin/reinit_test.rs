@@ -1,8 +1,9 @@
-use space_engine::reinit::{Reinit, ReinitRef};
+use space_engine::reinit::{Reinit, ReinitRef, Restart};
 
 #[derive(Debug)]
 pub struct A {
 	pub count: i32,
+	pub restart: Restart<A>,
 }
 
 impl Drop for A {
@@ -24,16 +25,19 @@ impl Drop for B {
 }
 
 fn main() {
-	let a = Reinit::new0(|| {
-		let a = A { count: 42 };
+	let a = Reinit::new0(|restart| {
+		let a = A { count: 42, restart };
 		println!("constructed {:#?}", a);
 		a
 	});
-	let _b = Reinit::new1(a, |a| {
+	let b = Reinit::new1(a, |a, _| {
 		let b = B { a, extra: String::from("test") };
 		println!("constructed {:#?}", b);
 		b
 	});
-	println!("work");
+
+	let main_state = Reinit::new0(|_| 0);
+
+	println!("exit")
 	// TODO no drops happen cause instance.arc does not get dropped
 }
