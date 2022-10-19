@@ -2,7 +2,7 @@ use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomPinned;
 use std::mem;
-use std::mem::MaybeUninit;
+use std::mem::{MaybeUninit, transmute};
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::ptr::NonNull;
@@ -43,7 +43,7 @@ struct Inner<T: 'static>
 	instance: UnsafeCell<MaybeUninit<Instance<T>>>,
 
 	/// hooks of everyone wanting to get notified, unordered
-	hooks: Mutex<Vec<Weak<dyn Callback<T>>>>,
+	hooks: Mutex<Vec<Hook<T>>>,
 
 	details: Arc<dyn ReinitDetails<T>>,
 }
@@ -291,33 +291,65 @@ impl<T> Reinit<T>
 
 	fn call_callbacks<F>(&self, f: F)
 		where
-			F: Fn(Arc<dyn Callback<T>>)
+			F: Fn(&Hook<T>) -> bool
 	{
 		let mut hooks = self.ptr.hooks.lock();
 		// basically hooks.retain() but with swap_remove() as we don't care about order
 		let mut i = 0;
 		while i < hooks.len() {
-			match hooks[i].upgrade() {
-				None => {
-					hooks.swap_remove(i);
-					// no increment
-				}
-				Some(h) => {
-					f(h);
-					i += 1;
-				}
+			if f(&hooks[i]) {
+				i += 1;
+			} else {
+				hooks.swap_remove(i);
 			}
 		}
 	}
 
-	pub fn add_callback<C>(&self, callback: &Arc<C>)
-		where C: Callback<T> + 'static
+	pub fn add_callback<C>(&self, arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T>), request_drop: fn(Arc<C>))
 	{
 		let mut hooks = self.ptr.hooks.lock();
-		hooks.push(Arc::downgrade(callback) as Weak<dyn Callback<T>>);
-
+		let hook = Hook::new(arc, accept, request_drop);
 		if self.ptr.ref_cnt.load(Relaxed) > 0 {
-			callback.accept(ReinitRef::new(&*self.ptr));
+			hook.accept(ReinitRef::new(&*self.ptr));
+		}
+		hooks.push(hook);
+	}
+}
+
+struct Hook<T: 'static> {
+	arc: Weak<()>,
+	accept: fn(Arc<()>, ReinitRef<T>),
+	request_drop: fn(Arc<()>),
+}
+
+impl<T: 'static> Hook<T> {
+	fn new<C>(arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T>), request_drop: fn(Arc<C>)) -> Self {
+		unsafe {
+			Self {
+				arc: transmute(Arc::downgrade(arc)),
+				accept: transmute(accept),
+				request_drop: transmute(request_drop),
+			}
+		}
+	}
+
+	fn accept(&self, t: ReinitRef<T>) -> bool {
+		if let Some(arc) = self.arc.upgrade() {
+			// SAFETY: call of function(Arc<C>) with Arc<()>
+			(self.accept)(arc, t);
+			true
+		} else {
+			false
+		}
+	}
+
+	fn request_drop(&self) -> bool {
+		if let Some(arc) = self.arc.upgrade() {
+			// SAFETY: call of function(Arc<C>) with Arc<()>
+			(self.request_drop)(arc);
+			true
+		} else {
+			false
 		}
 	}
 }
@@ -492,7 +524,7 @@ impl<T: 'static> Reinit<T>
 				constructor,
 			})
 		}, |arc| {
-			arc.a.reinit.add_callback(arc);
+			arc.a.reinit.add_callback(arc, Reinit1::accept_a, Reinit1::request_drop_a);
 		})
 	}
 }
@@ -506,18 +538,18 @@ impl<T: 'static, F, A: 'static> ReinitDetails<T> for Reinit1<T, F, A>
 	}
 }
 
-impl<T: 'static, F, A: 'static> Callback<A> for Reinit1<T, F, A>
+impl<T: 'static, F, A: 'static> Reinit1<T, F, A>
 	where
 		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
 {
-	fn accept(&self, t: ReinitRef<A>) {
+	fn accept_a(self: Arc<Self>, t: ReinitRef<A>) {
 		if let Some(parent) = self.parent.upgrade() {
 			self.a.value_set(t);
 			parent.construct_countdown();
 		}
 	}
 
-	fn request_drop(&self) {
+	fn request_drop_a(self: Arc<Self>) {
 		if let Some(parent) = self.parent.upgrade() {
 			self.a.value_clear();
 			parent.construct_countup();
@@ -551,8 +583,8 @@ impl<T: 'static> Reinit<T>
 				constructor,
 			})
 		}, |arc| {
-			arc.a.reinit.add_callback(arc);
-			arc.b.reinit.add_callback(unsafe { mem::transmute::<_, &Arc<Wrapper2B<T, F, A, B>>>(arc)} );
+			arc.a.reinit.add_callback(arc, Reinit2::accept_a, Reinit2::request_drop_a);
+			arc.b.reinit.add_callback(arc, Reinit2::accept_b, Reinit2::request_drop_b);
 		})
 	}
 }
@@ -566,65 +598,31 @@ impl<T: 'static, F, A: 'static, B: 'static> ReinitDetails<T> for Reinit2<T, F, A
 	}
 }
 
-impl<T: 'static, F, A: 'static, B: 'static> Callback<A> for Reinit2<T, F, A, B>
+impl<T: 'static, F, A: 'static, B: 'static> Reinit2<T, F, A, B>
 	where
 		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
 {
-	fn accept(&self, t: ReinitRef<A>) {
+	fn accept_a(self: Arc<Self>, t: ReinitRef<A>) {
 		if let Some(parent) = self.parent.upgrade() {
 			self.a.value_set(t);
 			parent.construct_countdown();
 		}
 	}
 
-	fn request_drop(&self) {
+	fn request_drop_a(self: Arc<Self>) {
 		if let Some(parent) = self.parent.upgrade() {
 			self.a.value_clear();
 			parent.construct_countup();
 		}
 	}
-}
-
-#[repr(transparent)]
-struct Wrapper2B<T: 'static, F, A: 'static, B: 'static>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	details: Reinit2<T, F, A, B>,
-}
-
-impl<T: 'static, F, A: 'static, B: 'static> Deref for Wrapper2B<T, F, A, B>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	type Target = Reinit2<T, F, A, B>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.details
-	}
-}
-
-impl<T: 'static, F, A: 'static, B: 'static> DerefMut for Wrapper2B<T, F, A, B>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.details
-	}
-}
-
-impl<T: 'static, F, A: 'static, B: 'static> Callback<B> for Wrapper2B<T, F, A, B>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	fn accept(&self, t: ReinitRef<B>) {
+	fn accept_b(self: Arc<Self>, t: ReinitRef<B>) {
 		if let Some(parent) = self.parent.upgrade() {
 			self.b.value_set(t);
 			parent.construct_countdown();
 		}
 	}
 
-	fn request_drop(&self) {
+	fn request_drop_b(self: Arc<Self>) {
 		if let Some(parent) = self.parent.upgrade() {
 			self.b.value_clear();
 			parent.construct_countup();
