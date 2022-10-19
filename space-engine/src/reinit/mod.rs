@@ -1,8 +1,9 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomPinned;
+use std::mem;
 use std::mem::MaybeUninit;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::{Arc, Weak};
@@ -132,7 +133,7 @@ impl<T> Inner<T> {
 	unsafe fn ref_dec(&self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		if self.ref_cnt.fetch_sub(1, Relaxed) == 1 {
-			self.ref_get_instance().arc.slow_drop();
+			(&*self.instance.get()).assume_init_ref().arc.slow_drop();
 		}
 	}
 
@@ -353,6 +354,13 @@ impl<T> Restart<T> {
 	}
 }
 
+/// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
+impl<T> Clone for Restart<T> {
+	fn clone(&self) -> Self {
+		Self { parent: self.parent.clone() }
+	}
+}
+
 impl<T> Debug for Restart<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str("Restart<")?;
@@ -473,14 +481,14 @@ struct Reinit1<T: 'static, F, A: 'static>
 
 impl<T: 'static> Reinit<T>
 {
-	pub fn new1<F, A: 'static>(a: Reinit<A>, constructor: F) -> Reinit<T>
+	pub fn new1<F, A: 'static>(a: &Reinit<A>, constructor: F) -> Reinit<T>
 		where
 			F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
 	{
 		Reinit::new(1, |weak| {
 			Arc::new(Reinit1 {
 				parent: WeakReinit::new(weak),
-				a: Dependency::new(a),
+				a: Dependency::new(a.clone()),
 				constructor,
 			})
 		}, |arc| {
@@ -531,19 +539,20 @@ struct Reinit2<T: 'static, F, A: 'static, B: 'static>
 
 impl<T: 'static> Reinit<T>
 {
-	pub fn new2<F, A: 'static, B: 'static>(a: Reinit<A>, b: Reinit<B>, constructor: F) -> Reinit<T>
+	pub fn new2<F, A: 'static, B: 'static>(a: &Reinit<A>, b: &Reinit<B>, constructor: F) -> Reinit<T>
 		where
 			F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
 	{
 		Reinit::new(2, |weak| {
 			Arc::new(Reinit2 {
 				parent: WeakReinit::new(weak),
-				a: Dependency::new(a),
-				b: Dependency::new(b),
+				a: Dependency::new(a.clone()),
+				b: Dependency::new(b.clone()),
 				constructor,
 			})
 		}, |arc| {
 			arc.a.reinit.add_callback(arc);
+			arc.b.reinit.add_callback(unsafe { mem::transmute::<_, &Arc<Wrapper2B<T, F, A, B>>>(arc)} );
 		})
 	}
 }
@@ -576,20 +585,48 @@ impl<T: 'static, F, A: 'static, B: 'static> Callback<A> for Reinit2<T, F, A, B>
 	}
 }
 
-impl<T: 'static, F, A: 'static, B: 'static> Callback<B> for Reinit2<T, F, A, B>
+#[repr(transparent)]
+struct Wrapper2B<T: 'static, F, A: 'static, B: 'static>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	details: Reinit2<T, F, A, B>,
+}
+
+impl<T: 'static, F, A: 'static, B: 'static> Deref for Wrapper2B<T, F, A, B>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	type Target = Reinit2<T, F, A, B>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.details
+	}
+}
+
+impl<T: 'static, F, A: 'static, B: 'static> DerefMut for Wrapper2B<T, F, A, B>
+	where
+		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.details
+	}
+}
+
+impl<T: 'static, F, A: 'static, B: 'static> Callback<B> for Wrapper2B<T, F, A, B>
 	where
 		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
 {
 	fn accept(&self, t: ReinitRef<B>) {
 		if let Some(parent) = self.parent.upgrade() {
-			self.a.value_set(t);
+			self.b.value_set(t);
 			parent.construct_countdown();
 		}
 	}
 
 	fn request_drop(&self) {
 		if let Some(parent) = self.parent.upgrade() {
-			self.a.value_clear();
+			self.b.value_clear();
 			parent.construct_countup();
 		}
 	}
