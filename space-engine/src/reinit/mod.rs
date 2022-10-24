@@ -1,16 +1,15 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomPinned;
-use std::mem;
 use std::mem::{MaybeUninit, transmute};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
 use std::sync::atomic::Ordering::{Relaxed, Release};
 
-use parking_lot::{Mutex, RawMutex, RawThreadId, ReentrantMutex};
+use parking_lot::{RawMutex, RawThreadId, ReentrantMutex};
 use parking_lot::lock_api::ReentrantMutexGuard;
 
 pub trait Callback<T: 'static> {
@@ -43,14 +42,14 @@ struct Inner<T: 'static>
 	instance: UnsafeCell<MaybeUninit<Instance<T>>>,
 
 	/// hooks of everyone wanting to get notified, unordered
-	hooks: Mutex<Vec<Hook<T>>>,
+	hooks: ReentrantMutex<UnsafeCell<Vec<Hook<T>>>>,
 
 	details: Arc<dyn ReinitDetails<T>>,
 }
 
 #[repr(u8)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-enum State {
+pub enum State {
 	Uninitialized,
 	Constructing,
 	Initialized,
@@ -166,7 +165,7 @@ impl<T> Reinit<T>
 				state_lock: ReentrantMutex::new(Cell::new(State::Uninitialized)),
 				ref_cnt: AtomicUsize::new(0),
 				instance: UnsafeCell::new(MaybeUninit::uninit()),
-				hooks: Mutex::new(vec![]),
+				hooks: ReentrantMutex::new(UnsafeCell::new(vec![])),
 				details,
 			}
 		}));
@@ -200,7 +199,7 @@ impl<T> Reinit<T>
 	#[inline]
 	fn construct_countup(&self) {
 		if self.ptr.countdown.fetch_add(1, Relaxed) == 0 {
-			self.check_state();
+			self.restart();
 		}
 	}
 
@@ -293,7 +292,8 @@ impl<T> Reinit<T>
 		where
 			F: Fn(&Hook<T>) -> bool
 	{
-		let mut hooks = self.ptr.hooks.lock();
+		let mut lock = self.ptr.hooks.lock();
+		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
 		// basically hooks.retain() but with swap_remove() as we don't care about order
 		let mut i = 0;
 		while i < hooks.len() {
@@ -307,11 +307,12 @@ impl<T> Reinit<T>
 
 	pub fn add_callback<C>(&self, arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T>), request_drop: fn(Arc<C>))
 	{
-		let mut hooks = self.ptr.hooks.lock();
+		let mut lock = self.ptr.hooks.lock();
 		let hook = Hook::new(arc, accept, request_drop);
 		if self.ptr.ref_cnt.load(Relaxed) > 0 {
 			hook.accept(ReinitRef::new(&*self.ptr));
 		}
+		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
 		hooks.push(hook);
 	}
 }
@@ -629,3 +630,28 @@ impl<T: 'static, F, A: 'static, B: 'static> Reinit2<T, F, A, B>
 		}
 	}
 }
+
+
+// tests
+#[cfg(test)]
+impl<T> Reinit<T> {
+	#[inline]
+	#[allow(clippy::mut_from_ref)]
+	pub fn test_get_instance(&self) -> &mut T {
+		assert!(self.ptr.ref_cnt.load(Relaxed) > 0);
+		unsafe { &mut (&mut *self.ptr.instance.get()).assume_init_mut().instance }
+	}
+
+	#[inline]
+	pub fn test_get_state(&self) -> State {
+		self.ptr.state_lock.lock().get()
+	}
+
+	#[inline]
+	pub fn test_restart(&self) {
+		self.restart();
+	}
+}
+
+#[cfg(test)]
+mod tests;
