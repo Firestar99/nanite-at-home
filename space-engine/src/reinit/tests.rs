@@ -1,11 +1,12 @@
 use std::cell::{Cell, RefCell};
+use std::mem::swap;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
 use crate::reinit::{Reinit, ReinitRef, Restart, State};
 
-#[derive(Default, Eq, PartialEq, Debug)]
+#[derive(Default, Eq, PartialEq, Debug, Copy, Clone)]
 struct Calls {
 	new: i32,
 	drop: i32,
@@ -13,7 +14,7 @@ struct Calls {
 	callback_drop: i32,
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
 struct Shared {
 	counter: i32,
 	a: Calls,
@@ -384,4 +385,103 @@ fn reinit1_restart() {
 		..Default::default()
 	});
 	shared.deref().borrow_mut().reset();
+}
+
+#[test]
+fn reinit2_diamond_b_then_c() {
+	reinit2_diamond(true);
+}
+
+#[test]
+fn reinit2_diamond_c_then_b() {
+	reinit2_diamond(false);
+}
+
+fn reinit2_diamond(b_then_c: bool) {
+	type A = AT<()>;
+	type B = BT<(), A>;
+	type C = CT<(), A>;
+	type D = DT<(), B, C>;
+
+	// init
+	let shared = Shared::new();
+	let a = A::new(&shared, ());
+	let b;
+	let c;
+	if b_then_c {
+		b = B::new(&shared, &a, ());
+		c = C::new(&shared, &a, ());
+	} else {
+		c = C::new(&shared, &a, ());
+		b = B::new(&shared, &a, ());
+	}
+	let _d = D::new(&shared, &b, &c, ());
+
+	{
+		let mut expected = Shared {
+			a: Calls {
+				new: 1,
+				callback: 2,
+				..Default::default()
+			},
+			b: Calls {
+				new: 3,
+				callback: 4,
+				..Default::default()
+			},
+			c: Calls {
+				new: 5,
+				callback: 6,
+				..Default::default()
+			},
+			d: Calls {
+				new: 7,
+				callback: 8,
+				..Default::default()
+			},
+			counter: 9,
+		};
+		if !b_then_c {
+			swap(&mut expected.b, &mut expected.c);
+		}
+		assert_eq!(*shared.deref().borrow_mut(), expected);
+		shared.deref().borrow_mut().reset();
+	}
+
+	// restart
+	{
+		a.test_restart();
+		let mut expected = Shared {
+			a: Calls {
+				callback_drop: 1,
+				drop: 8,
+				new: 9,
+				callback: 10,
+			},
+			b: Calls {
+				callback_drop: 2,
+				drop: 5,
+				new: 11,
+				callback: 12,
+			},
+			c: Calls {
+				callback_drop: 6,
+				drop: 7,
+				new: 13,
+				callback: 14,
+			},
+			d: Calls {
+				callback_drop: 3,
+				drop: 4,
+				new: 15,
+				callback: 16,
+			},
+			counter: 17,
+		};
+		if !b_then_c {
+			swap(&mut expected.b, &mut expected.c);
+		}
+		assert_eq!(*shared.deref().borrow_mut(), expected);
+		shared.deref().borrow_mut().reset();
+	}
 }
