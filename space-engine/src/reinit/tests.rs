@@ -227,13 +227,12 @@ fn reinit0_reset_manual() {
 	// add callback
 	a.add_callback(&shared, |shared, v| {
 		let mut s = shared.deref().borrow_mut();
-		let _expected_state = if s.is_callback_init { State::Initialized } else { State::Destructing };
-		assert!(matches!(s.a.as_ref().unwrap().test_get_state(), _expected_state));
+		assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
 		assert_eq!(s.received, None);
 		s.received = Some(*v);
 	}, |shared| {
 		let mut s = shared.deref().borrow_mut();
-		assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
+		assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Destructing));
 		assert!(!s.freed);
 		assert_eq!(s.received, None, "must not give value and then clear it");
 		s.freed = true;
@@ -370,14 +369,14 @@ fn reinit1_restart() {
 	a.test_restart();
 	assert_eq!(*shared.deref().borrow_mut(), Shared {
 		a: Calls {
-			callback_drop: 3,
+			callback_drop: 1,
 			drop: 4,
 			new: 5,
 			callback: 6,
 		},
 		b: Calls {
-			callback_drop: 1,
-			drop: 2,
+			callback_drop: 2,
+			drop: 3,
 			new: 7,
 			callback: 8,
 		},
