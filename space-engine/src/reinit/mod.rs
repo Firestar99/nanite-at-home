@@ -218,11 +218,12 @@ impl<T> Reinit<T>
 		// figure out target state
 		let is_init = guard.get() == State::Initialized;
 		let mut should_be_init = self.ptr.countdown.load(Relaxed) == 0;
-		if should_be_init && self.ptr.queued_restart.compare_exchange(true, false, Relaxed, Relaxed).is_ok() {
+		// if self is initialized, self ALWAYS clear restart flag, even if I would have destructed anyways due to should_be_init = false.
+		if is_init && self.ptr.queued_restart.compare_exchange(true, false, Relaxed, Relaxed).is_ok() {
 			should_be_init = false;
 		}
+		// already in correct state -> do nothing
 		if is_init == should_be_init {
-			// already in correct state
 			return;
 		}
 
@@ -236,12 +237,13 @@ impl<T> Reinit<T>
 			assert!(guard.get() == State::Initialized);
 			guard.set(State::Destructing);
 
+			self.call_callbacks(|h| h.request_drop());
+
 			// SAFETY: decrement initial ref count owned by ourselves
+			// is required to be after call_callbacks() otherwise we may start constructing before calling all request_drop()s
 			unsafe {
 				self.ptr.ref_dec();
 			}
-
-			self.call_callbacks(|h| h.request_drop());
 		}
 	}
 
