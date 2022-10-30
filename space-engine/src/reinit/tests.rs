@@ -2,6 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::mem::swap;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering::Relaxed;
 
 use crate::reinit::{Reinit, ReinitRef, Restart, State};
@@ -484,4 +485,103 @@ fn reinit2_diamond(b_then_c: bool) {
 		assert_eq!(*shared.deref().borrow_mut(), expected);
 		shared.deref().borrow_mut().reset();
 	}
+}
+
+#[test]
+fn reinit_restart_during_construction() {
+	type A = AT<i32>;
+
+	struct State {
+		counter: AtomicI32,
+		// oof, inefficient, unnecessary Arc
+		shared: SharedRef,
+		shared_during_restart: RefCell<Shared>,
+		shared_before_restart: RefCell<Shared>,
+	}
+
+	// copy from AT::new and modified
+	fn new(shared: &Arc<State>) -> Reinit<A> {
+		let shared_a = shared.clone();
+		let a = Reinit::new0(move |restart| {
+			shared_a.shared.borrow_mut().register(|s| &mut s.a.new);
+			let i = shared_a.counter.fetch_add(1, Relaxed);
+			match i {
+				1 => {
+					*shared_a.shared_before_restart.borrow_mut() = *shared_a.shared.borrow_mut();
+					shared_a.shared.borrow_mut().reset();
+					restart.restart();
+				}
+				2 => {
+					*shared_a.shared_during_restart.borrow_mut() = *shared_a.shared.borrow_mut();
+					shared_a.shared.borrow_mut().reset();
+				}
+				_ => {}
+			}
+			AT { shared: shared_a.shared.clone(), t: i }
+		});
+		a.add_callback(
+			shared,
+			|shared, _a| shared.shared.borrow_mut().register(|s| &mut s.a.callback),
+			|shared| shared.shared.borrow_mut().register(|s| &mut s.a.callback_drop),
+		);
+		a
+	}
+
+	let shared = Arc::new(State {
+		counter: AtomicI32::new(0),
+		shared: Shared::new(),
+		shared_before_restart: RefCell::new(Default::default()),
+		shared_during_restart: RefCell::new(Default::default()),
+	});
+	let a = new(&shared);
+
+	assert_eq!(shared.counter.load(Relaxed), 1);
+	assert_eq!(a.test_get_instance().t, shared.counter.load(Relaxed) - 1);
+	assert_eq!(*shared.shared.borrow_mut(), Shared {
+		a: Calls {
+			new: 1,
+			callback: 2,
+			..Default::default()
+		},
+		counter: 3,
+		..Default::default()
+	});
+	assert_eq!(*shared.shared_before_restart.borrow_mut(), Default::default());
+	assert_eq!(*shared.shared_during_restart.borrow_mut(), Default::default());
+	shared.shared.borrow_mut().reset();
+
+	a.test_restart();
+	assert_eq!(shared.counter.load(Relaxed), 3);
+	assert_eq!(a.test_get_instance().t, shared.counter.load(Relaxed) - 1);
+	assert_eq!(*shared.shared_before_restart.borrow_mut(), Shared {
+		a: Calls {
+			callback_drop: 1,
+			drop: 2,
+			new: 3,
+			callback: 0,
+		},
+		counter: 4,
+		..Default::default()
+	});
+	assert_eq!(*shared.shared_during_restart.borrow_mut(), Shared {
+		a: Calls {
+			callback_drop: 2,
+			drop: 3,
+			new: 4,
+			callback: 1,
+		},
+		counter: 5,
+		..Default::default()
+	});
+	assert_eq!(*shared.shared.borrow_mut(), Shared {
+		a: Calls {
+			callback_drop: 0,
+			drop: 0,
+			new: 0,
+			callback: 1,
+		},
+		counter: 2,
+		..Default::default()
+	});
+	shared.shared.borrow_mut().reset();
 }
