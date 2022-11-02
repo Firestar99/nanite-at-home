@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomPinned;
-use std::mem::{MaybeUninit, transmute};
+use std::mem::{MaybeUninit, replace, transmute};
 use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr::NonNull;
@@ -500,6 +500,39 @@ impl<T: 'static, F> ReinitDetails<T> for Reinit0<T, F>
 {
 	fn request_construction(&self, parent: &Reinit<T>) {
 		parent.constructed((self.constructor)(Restart::new(&self.parent)))
+	}
+}
+
+
+// ReinitNoRestart
+struct ReinitNoRestart<T: 'static, F>
+	where
+		F: FnOnce() -> T + 'static
+{
+	_parent: WeakReinit<T>,
+	constructor: UnsafeCell<Option<F>>,
+}
+
+impl<T: 'static> Reinit<T>
+{
+	pub fn new_no_restart<F>(constructor: F) -> Reinit<T>
+		where
+			F: FnOnce() -> T + 'static
+	{
+		Reinit::new(0, |weak| Arc::new(ReinitNoRestart {
+			_parent: WeakReinit::new(weak),
+			constructor: UnsafeCell::new(Some(constructor)),
+		}), |_| {})
+	}
+}
+
+impl<T: 'static, F> ReinitDetails<T> for ReinitNoRestart<T, F>
+	where
+		F: FnOnce() -> T + 'static
+{
+	fn request_construction(&self, parent: &Reinit<T>) {
+		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
+		parent.constructed((constructor.expect("Constructed more than once!"))())
 	}
 }
 

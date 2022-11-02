@@ -585,3 +585,26 @@ fn reinit_restart_during_construction() {
 	});
 	shared.shared.borrow_mut().reset();
 }
+
+#[test]
+fn reinit_no_restart_basic() {
+	let inited = Arc::new(Cell::new(false));
+	let inited2 = inited.clone();
+	let reinit = Reinit::new_no_restart(move || {
+		inited2.set(true);
+	});
+	assert!(matches!(reinit.test_get_state(), State::Initialized));
+	assert_eq!(reinit.ptr.countdown.load(Relaxed), 0);
+	assert!(inited.get());
+	assert!(!reinit.ptr.queued_restart.load(Relaxed));
+	assert!(reinit.ptr.ref_cnt.load(Relaxed) > 0);
+}
+
+#[test]
+#[should_panic(expected = "Constructed more than once!")]
+fn reinit_no_restart_restarted() {
+	let reinit = Reinit::new_no_restart(move || {
+		Arc::new(42)
+	});
+	reinit.test_restart();
+}
