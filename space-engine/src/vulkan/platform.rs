@@ -30,7 +30,7 @@ impl LayerPropertiesWrapper {
 
 impl Borrow<str> for LayerPropertiesWrapper {
 	fn borrow(&self) -> &str {
-		self.layer_properties.name()
+		&self.name
 	}
 }
 

@@ -61,7 +61,7 @@ pub fn init<Q, A>(application_config: ApplicationConfig, mut plugins: Vec<&mut d
 		.unwrap_or(InstanceExtensions::none());
 	let layers: Vec<_> = configs.into_iter()
 		.flat_map(|e| e.1)
-		.map(|s| String::from(s))
+		.map(String::from)
 		.collect();
 
 	// debug
@@ -86,9 +86,9 @@ pub fn init<Q, A>(application_config: ApplicationConfig, mut plugins: Vec<&mut d
 		.filter_map(|phy| {
 			plugins.iter_mut()
 				.map(|p| p.physical_device_filter(&instance, &phy))
-				.reduce(|oa, ob| oa.map_or(None, |a| ob.map_or(None, |b| Some(a + b))))
+				.reduce(|oa, ob| oa.and_then(|a| ob.map(|b| a + b)))
 				.unwrap_or(Some(0))
-				.map_or(None, |p| Some((phy, p)))
+				.map(|p| (phy, p))
 		})
 		.min_by_key(|(_, priority)| *priority)
 		.expect("No suitable PhysicalDevice was found!")

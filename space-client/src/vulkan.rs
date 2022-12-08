@@ -4,29 +4,7 @@ use vulkano::device::{Queue, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::Instance;
 
-use space_engine::application_config::ApplicationConfig;
-use space_engine::vulkan::init::{init, Init, Plugin};
-use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
-use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use space_engine::vulkan::queue_allocator::{QueueAllocation, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocator};
-
-use crate::cli_args::Cli;
-
-pub fn create_vulkan_instance_and_device(application_config: ApplicationConfig, cli: &Cli) -> Init<Queues> {
-	let mut plugins: Vec<&mut dyn Plugin> = vec![];
-
-	let mut standard_validation_plugin = StandardValidationLayerPlugin {};
-	if cli.validation_layer {
-		plugins.push(&mut standard_validation_plugin);
-	}
-	let mut renderdoc_plugin = RenderdocLayerPlugin {};
-	if cli.renderdoc {
-		plugins.push(&mut renderdoc_plugin);
-	}
-
-	init(application_config, plugins, ClientQueueAllocator::new())
-}
-
 
 // queues
 #[derive(Default)]
@@ -49,7 +27,7 @@ pub type Queues = QueuesGeneric<Arc<Queue>>;
 
 // queue allocator
 #[derive(Default)]
-struct ClientQueueAllocator {
+pub struct ClientQueueAllocator {
 	queue_ids: QueuesGeneric<QueueAllocationHelperEntry>,
 	allocation: Option<QueueAllocation>,
 }

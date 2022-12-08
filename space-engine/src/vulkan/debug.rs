@@ -11,8 +11,8 @@ impl Debug {
 	pub fn new(instance: &Arc<Instance>) -> Debug {
 		Debug {
 			_debug_callback: DebugCallback::new(&instance, MessageSeverity::all(), MessageType::all(),
-												|m| println!("[{}] {}: {}", debug_severity_string(m.severity), debug_type_string(m.ty), m.description))
-				.unwrap()
+												|m| println!("[{}] {}: {}", debug_severity_string(m.severity), debug_type_string(m.ty), m.description),
+			).unwrap()
 		}
 	}
 }
