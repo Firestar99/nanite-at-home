@@ -292,7 +292,7 @@ impl<T> Reinit<T>
 		where
 			F: Fn(&Hook<T>) -> bool
 	{
-		let mut lock = self.ptr.hooks.lock();
+		let lock = self.ptr.hooks.lock();
 		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
 		// basically hooks.retain() but with swap_remove() as we don't care about order
 		let mut i = 0;
@@ -307,7 +307,7 @@ impl<T> Reinit<T>
 
 	pub fn add_callback<C>(&self, arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T>), request_drop: fn(Arc<C>))
 	{
-		let mut lock = self.ptr.hooks.lock();
+		let lock = self.ptr.hooks.lock();
 		let hook = Hook::new(arc, accept, request_drop);
 		if self.ptr.ref_cnt.load(Relaxed) > 0 {
 			hook.accept(ReinitRef::new(&*self.ptr));
@@ -502,136 +502,6 @@ impl<T: 'static, F> ReinitDetails<T> for Reinit0<T, F>
 }
 
 
-// Reinit1
-struct Reinit1<T: 'static, F, A: 'static>
-	where
-		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
-{
-	parent: WeakReinit<T>,
-	constructor: F,
-	a: Dependency<A>,
-}
-
-impl<T: 'static> Reinit<T>
-{
-	pub fn new1<F, A: 'static>(a: &Reinit<A>, constructor: F) -> Reinit<T>
-		where
-			F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
-	{
-		Reinit::new(1, |weak| {
-			Arc::new(Reinit1 {
-				parent: WeakReinit::new(weak),
-				a: Dependency::new(a.clone()),
-				constructor,
-			})
-		}, |arc| {
-			arc.a.reinit.add_callback(arc, Reinit1::accept_a, Reinit1::request_drop_a);
-		})
-	}
-}
-
-impl<T: 'static, F, A: 'static> ReinitDetails<T> for Reinit1<T, F, A>
-	where
-		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
-{
-	fn request_construction(&self, parent: &Reinit<T>) {
-		parent.constructed((self.constructor)(self.a.value_get().clone(), Restart::new(&self.parent)));
-	}
-}
-
-impl<T: 'static, F, A: 'static> Reinit1<T, F, A>
-	where
-		F: Fn(ReinitRef<A>, Restart<T>) -> T + 'static
-{
-	fn accept_a(self: Arc<Self>, t: ReinitRef<A>) {
-		if let Some(parent) = self.parent.upgrade() {
-			self.a.value_set(t);
-			parent.construct_countdown();
-		}
-	}
-
-	fn request_drop_a(self: Arc<Self>) {
-		if let Some(parent) = self.parent.upgrade() {
-			self.a.value_clear();
-			parent.construct_countup();
-		}
-	}
-}
-
-
-// Reinit2
-struct Reinit2<T: 'static, F, A: 'static, B: 'static>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	parent: WeakReinit<T>,
-	constructor: F,
-	a: Dependency<A>,
-	b: Dependency<B>,
-}
-
-impl<T: 'static> Reinit<T>
-{
-	pub fn new2<F, A: 'static, B: 'static>(a: &Reinit<A>, b: &Reinit<B>, constructor: F) -> Reinit<T>
-		where
-			F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-	{
-		Reinit::new(2, |weak| {
-			Arc::new(Reinit2 {
-				parent: WeakReinit::new(weak),
-				a: Dependency::new(a.clone()),
-				b: Dependency::new(b.clone()),
-				constructor,
-			})
-		}, |arc| {
-			arc.a.reinit.add_callback(arc, Reinit2::accept_a, Reinit2::request_drop_a);
-			arc.b.reinit.add_callback(arc, Reinit2::accept_b, Reinit2::request_drop_b);
-		})
-	}
-}
-
-impl<T: 'static, F, A: 'static, B: 'static> ReinitDetails<T> for Reinit2<T, F, A, B>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	fn request_construction(&self, parent: &Reinit<T>) {
-		parent.constructed((self.constructor)(self.a.value_get().clone(), self.b.value_get().clone(), Restart::new(&self.parent)));
-	}
-}
-
-impl<T: 'static, F, A: 'static, B: 'static> Reinit2<T, F, A, B>
-	where
-		F: Fn(ReinitRef<A>, ReinitRef<B>, Restart<T>) -> T + 'static
-{
-	fn accept_a(self: Arc<Self>, t: ReinitRef<A>) {
-		if let Some(parent) = self.parent.upgrade() {
-			self.a.value_set(t);
-			parent.construct_countdown();
-		}
-	}
-
-	fn request_drop_a(self: Arc<Self>) {
-		if let Some(parent) = self.parent.upgrade() {
-			self.a.value_clear();
-			parent.construct_countup();
-		}
-	}
-	fn accept_b(self: Arc<Self>, t: ReinitRef<B>) {
-		if let Some(parent) = self.parent.upgrade() {
-			self.b.value_set(t);
-			parent.construct_countdown();
-		}
-	}
-
-	fn request_drop_b(self: Arc<Self>) {
-		if let Some(parent) = self.parent.upgrade() {
-			self.b.value_clear();
-			parent.construct_countup();
-		}
-	}
-}
-
-
 // tests
 #[cfg(test)]
 impl<T> Reinit<T> {
@@ -653,5 +523,8 @@ impl<T> Reinit<T> {
 	}
 }
 
+mod variants;
+
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests;

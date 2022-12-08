@@ -4,7 +4,7 @@ use space_engine::reinit::{Reinit, ReinitRef, Restart};
 
 #[derive(Debug)]
 pub struct A {
-	pub count: i32,
+	pub count: Cell<i32>,
 	pub restart: Restart<A>,
 }
 
@@ -55,7 +55,7 @@ impl Drop for D {
 #[allow(unused_variables)]
 fn main() {
 	let a = Reinit::new0(|restart| {
-		let a = A { count: 42, restart };
+		let a = A { count: Cell::new(42), restart };
 		println!("constructed {:#?}", a);
 		a
 	});
@@ -76,16 +76,30 @@ fn main() {
 	});
 
 	let main_state = Reinit::new0(|_| Cell::new(0));
-	let main = Reinit::new2(&d, &main_state, |a, state, _| {
+	let main = Reinit::new2(&a, &main_state, |a, state, _| {
 		match state.get() {
 			0 => {
 				println!("restart A");
+				a.count.set(9);
+
+				// condition: Reinit does not keep ReinitRef beyond construction
+
+				// main get's constructed
+				// restarts A
+				// A requests main to drop
+				// main records request to uninit, but cannot destruct as it's currently constructing
+				// this closure holds a reference to ReinitRef<A>
+				// this closure returns, drops ReinitRef, allows A to restart
+				// A gives main the new A value
+				// main will increment countdown, erasing any information about the required reboot
+				// BUG main does not construct again
 				a.restart.restart();
 			}
 			1 => println!("done!"),
 			_ => {}
-		}
+		};
 		state.set(state.get() + 1);
+		// a
 	});
 
 	println!("exit")
