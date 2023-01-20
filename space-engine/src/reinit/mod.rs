@@ -1,10 +1,8 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
-use std::marker::PhantomPinned;
+use std::marker::PhantomData;
 use std::mem::{MaybeUninit, replace, transmute};
 use std::ops::Deref;
-use std::pin::Pin;
-use std::ptr::NonNull;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
 use std::sync::atomic::Ordering::{Relaxed, Release};
@@ -12,25 +10,25 @@ use std::sync::atomic::Ordering::{Relaxed, Release};
 use parking_lot::{RawMutex, RawThreadId, ReentrantMutex};
 use parking_lot::lock_api::ReentrantMutexGuard;
 
-pub trait Callback<T: 'static> {
-	fn accept(&self, t: ReinitRef<T>);
+pub trait Callback<T: 'static, D: ReinitDetails<T, D>> {
+	fn accept(&self, t: ReinitRef<T, D>);
 
 	fn request_drop(&self);
 }
 
-#[repr(transparent)]
-pub struct Reinit<T: 'static> {
-	ptr: Pin<Arc<Inner<T>>>,
-}
-
-struct Inner<T: 'static>
+pub struct Reinit<T: 'static, D: ReinitDetails<T, D>>
 {
-	_pinned: PhantomPinned,
+	// members for figuring out if this works
+	/// counter for how many times this is used by others, >0 means that this reinit should start, =0 that it should stop
+	need_count: AtomicU32,
+	/// The first time needCount is incremented, hooks must be registered. This bool is used to signal that registration has already happened.
+	/// Sadly it does not seem to be possible to generate these hook lists during compile time, so it's done during first use.
+	registered_hooks: AtomicBool,
 
 	// members contributing to next state computation
 	/// countdown to construction, used to count down construction of dependent Reinits, used for restarting by increasing it by one
 	countdown: AtomicU32,
-	/// true if self should restart, restart happens when self is in state Initialized
+	/// true if self should restart, restart happens when self would go into state Initialized
 	queued_restart: AtomicBool,
 
 	// state
@@ -39,12 +37,12 @@ struct Inner<T: 'static>
 	/// ref count for member instance
 	ref_cnt: AtomicUsize,
 	/// instance of T and holding an Arc reference to this to prevent freeing self
-	instance: UnsafeCell<MaybeUninit<Instance<T>>>,
+	instance: UnsafeCell<MaybeUninit<T>>,
 
 	/// hooks of everyone wanting to get notified, unordered
-	hooks: ReentrantMutex<UnsafeCell<Vec<Hook<T>>>>,
+	hooks: ReentrantMutex<UnsafeCell<Vec<Hook<T, D>>>>,
 
-	details: Arc<dyn ReinitDetails<T>>,
+	details: D,
 }
 
 #[repr(u8)]
@@ -56,72 +54,68 @@ pub enum State {
 	Destructing,
 }
 
-struct Instance<T: 'static> {
-	instance: T,
-	arc: Reinit<T>,
-}
+pub trait ReinitDetails<T: 'static, D: ReinitDetails<T, D>>: 'static {
+	fn init(&'static self, parent: &'static Reinit<T, D>);
 
-trait ReinitDetails<T: 'static>: 'static {
-	fn request_construction(&self, parent: &Reinit<T>);
+	fn request_construction(&'static self, parent: &'static Reinit<T, D>);
 }
 
 
 // ReinitRef
 #[repr(transparent)]
-pub struct ReinitRef<T: 'static> {
-	inner: NonNull<Inner<T>>,
+pub struct ReinitRef<T: 'static, D: ReinitDetails<T, D>> {
+	inner: &'static Reinit<T, D>,
 }
 
-impl<T> ReinitRef<T> {
+impl<T, D: ReinitDetails<T, D>> ReinitRef<T, D> {
 	#[inline]
-	fn new(parent: &Inner<T>) -> Self {
-		unsafe { parent.ref_inc() };
-		Self { inner: NonNull::from(parent) }
+	fn new(inner: &'static Reinit<T, D>) -> Self {
+		unsafe { inner.ref_inc() };
+		Self { inner }
 	}
 
 	#[inline]
-	fn inner(&self) -> &Inner<T> {
-		// SAFETY: parent should exist as ReinitRef ref counts it's existence
-		unsafe { self.inner.as_ref() }
+	fn inner(&self) -> &'static Reinit<T, D> {
+		&self.inner
 	}
 }
 
-impl<T> Clone for ReinitRef<T> {
+impl<T, D: ReinitDetails<T, D>> Clone for ReinitRef<T, D> {
 	#[inline]
 	fn clone(&self) -> Self {
 		ReinitRef::new(self.inner())
 	}
 }
 
-impl<T> Drop for ReinitRef<T> {
+impl<T, D: ReinitDetails<T, D>> Drop for ReinitRef<T, D> {
 	#[inline]
 	fn drop(&mut self) {
 		unsafe { self.inner().ref_dec() }
 	}
 }
 
-impl<T> Deref for ReinitRef<T> {
+impl<T, D: ReinitDetails<T, D>> Deref for ReinitRef<T, D> {
 	type Target = T;
 
 	#[inline]
 	fn deref(&self) -> &Self::Target {
-		unsafe { &self.inner().ref_get_instance().instance }
+		unsafe { &self.inner().ref_get_instance() }
 	}
 }
 
-impl<T: Debug> Debug for ReinitRef<T> {
+impl<T: Debug, D: ReinitDetails<T, D>> Debug for ReinitRef<T, D> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T: Display> Display for ReinitRef<T> {
+impl<T: Display, D: ReinitDetails<T, D>> Display for ReinitRef<T, D> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T> Inner<T> {
+impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
 	#[inline]
 	unsafe fn ref_inc(&self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
@@ -132,12 +126,13 @@ impl<T> Inner<T> {
 	unsafe fn ref_dec(&self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		if self.ref_cnt.fetch_sub(1, Relaxed) == 1 {
-			(&*self.instance.get()).assume_init_ref().arc.slow_drop();
+			// FIXME: do something with need here maybe?
+			// (&*self.instance.get()).assume_init_ref().arc.slow_drop();
 		}
 	}
 
 	#[inline]
-	unsafe fn ref_get_instance(&self) -> &Instance<T> {
+	unsafe fn ref_get_instance(&self) -> &T {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		(&*self.instance.get()).assume_init_ref()
 	}
@@ -145,67 +140,53 @@ impl<T> Inner<T> {
 
 
 // Reinit impl
-impl<T> Reinit<T>
+impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 {
 	#[inline]
-	fn new<D, F, I>(initial_countdown: u32, details_construct: F, details_init: I) -> Reinit<T>
-		where
-			D: ReinitDetails<T>,
-			F: FnOnce(&Weak<Inner<T>>) -> Arc<D>,
-			I: FnOnce(&Arc<D>),
+	const fn new(initial_countdown: u32, details: D) -> Reinit<T, D>
 	{
-		let mut details_arc = None;
-		let this = Reinit::from(Arc::new_cyclic(|weak| {
-			let details = details_construct(weak);
-			details_arc = Some(details.clone());
-			Inner {
-				_pinned: Default::default(),
-				countdown: AtomicU32::new(initial_countdown + 1),
-				queued_restart: AtomicBool::new(false),
-				state_lock: ReentrantMutex::new(Cell::new(State::Uninitialized)),
-				ref_cnt: AtomicUsize::new(0),
-				instance: UnsafeCell::new(MaybeUninit::uninit()),
-				hooks: ReentrantMutex::new(UnsafeCell::new(vec![])),
-				details,
-			}
-		}));
-		details_init(details_arc.as_ref().unwrap());
-		this.construct_countdown();
-		this
+		Reinit {
+			need_count: AtomicU32::new(0),
+			registered_hooks: AtomicBool::new(false),
+			countdown: AtomicU32::new(initial_countdown + 1),
+			queued_restart: AtomicBool::new(false),
+			state_lock: ReentrantMutex::new(Cell::new(State::Uninitialized)),
+			ref_cnt: AtomicUsize::new(0),
+			instance: UnsafeCell::new(MaybeUninit::uninit()),
+			hooks: ReentrantMutex::new(UnsafeCell::new(vec![])),
+			details,
+		}
+		// FIXME move this to need--
+		// this.construct_countdown();
 	}
 
-	#[inline(always)]
-	fn from(arc: Arc<Inner<T>>) -> Self {
-		Reinit { ptr: unsafe { Pin::new_unchecked(arc) } }
-	}
-
-	fn restart(&self) {
+	fn restart(&'static self) {
 		// TODO check this later
 		// TODO restart called during construct/destruct must be handled correctly
 		// self.construct_countup();
 		// self.construct_countdown();
-		if self.ptr.queued_restart.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
+		if self.queued_restart.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
 			self.check_state();
 		}
 	}
 
 	#[inline]
-	fn construct_countdown(&self) {
-		if self.ptr.countdown.fetch_sub(1, Release) == 1 {
+	fn construct_countdown(&'static self) {
+		if self.countdown.fetch_sub(1, Release) == 1 {
 			self.check_state();
 		}
 	}
 
 	#[inline]
-	fn construct_countup(&self) {
-		if self.ptr.countdown.fetch_add(1, Relaxed) == 0 {
+	fn construct_countup(&'static self) {
+		if self.countdown.fetch_add(1, Relaxed) == 0 {
 			self.restart();
 		}
 	}
 
-	fn check_state(&self) {
+	fn check_state(&'static self) {
 		// lock is held for the entire method
-		let guard = self.ptr.state_lock.lock();
+		let guard = self.state_lock.lock();
 		if matches!(guard.get(), State::Constructing | State::Destructing) {
 			// do nothing, wait for construction / destruction to finish
 			return;
@@ -214,12 +195,12 @@ impl<T> Reinit<T>
 		self.check_state_internal(&guard);
 	}
 
-	fn check_state_internal(&self, guard: &ReentrantMutexGuard<RawMutex, RawThreadId, Cell<State>>) {
+	fn check_state_internal(&'static self, guard: &ReentrantMutexGuard<RawMutex, RawThreadId, Cell<State>>) {
 		// figure out target state
 		let is_init = guard.get() == State::Initialized;
-		let mut should_be_init = self.ptr.countdown.load(Relaxed) == 0;
+		let mut should_be_init = self.countdown.load(Relaxed) == 0;
 		// if self is initialized, self ALWAYS clear restart flag, even if I would have destructed anyways due to should_be_init = false.
-		if is_init && self.ptr.queued_restart.compare_exchange(true, false, Relaxed, Relaxed).is_ok() {
+		if is_init && self.queued_restart.compare_exchange(true, false, Relaxed, Relaxed).is_ok() {
 			should_be_init = false;
 		}
 		// already in correct state -> do nothing
@@ -232,7 +213,7 @@ impl<T> Reinit<T>
 			assert!(guard.get() == State::Uninitialized);
 			guard.set(State::Constructing);
 
-			self.ptr.details.request_construction(self);
+			self.details.request_construction(self);
 		} else {
 			assert!(guard.get() == State::Initialized);
 			guard.set(State::Destructing);
@@ -242,14 +223,14 @@ impl<T> Reinit<T>
 			// SAFETY: decrement initial ref count owned by ourselves
 			// is required to be after call_callbacks() otherwise we may start constructing before calling all request_drop()s
 			unsafe {
-				self.ptr.ref_dec();
+				self.ref_dec();
 			}
 		}
 	}
 
-	fn constructed(&self, t: T) {
+	fn constructed(&'static self, t: T) {
 		// lock is held for the entire method
-		let guard = self.ptr.state_lock.lock();
+		let guard = self.state_lock.lock();
 
 		// change state
 		assert!(guard.get() == State::Constructing);
@@ -257,16 +238,13 @@ impl<T> Reinit<T>
 
 		// initialize self.instance
 		{
-			assert_eq!(self.ptr.ref_cnt.load(Relaxed), 0);
-			unsafe { &mut *self.ptr.instance.get() }.write(Instance {
-				instance: t,
-				arc: self.clone(),
-			});
-			self.ptr.ref_cnt.store(1, Release);
+			assert_eq!(self.ref_cnt.load(Relaxed), 0);
+			unsafe { &mut *self.instance.get() }.write(t);
+			self.ref_cnt.store(1, Release);
 		}
 
 		// call hooks
-		self.call_callbacks(|h| h.accept(ReinitRef::new(&*self.ptr)));
+		self.call_callbacks(|h| h.accept(ReinitRef::new(&*self)));
 
 		// TODO do not call hooks if we should destruct immediately
 		self.check_state_internal(&guard);
@@ -274,9 +252,9 @@ impl<T> Reinit<T>
 
 	#[cold]
 	#[inline(never)]
-	fn slow_drop(&self) {
+	fn slow_drop(&'static self) {
 		// lock is held for the entire method
-		let guard = self.ptr.state_lock.lock();
+		let guard = self.state_lock.lock();
 
 		// change state
 		assert!(guard.get() == State::Destructing);
@@ -284,17 +262,17 @@ impl<T> Reinit<T>
 
 		// drop self.instance as noone is referencing it anymore
 		unsafe {
-			(&mut *self.ptr.instance.get()).assume_init_drop()
+			(&mut *self.instance.get()).assume_init_drop()
 		};
 
 		self.check_state_internal(&guard);
 	}
 
-	fn call_callbacks<F>(&self, f: F)
+	fn call_callbacks<F>(&'static self, f: F)
 		where
-			F: Fn(&Hook<T>) -> bool
+			F: Fn(&Hook<T, D>) -> bool
 	{
-		let lock = self.ptr.hooks.lock();
+		let lock = self.hooks.lock();
 		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
 		// basically hooks.retain() but with swap_remove() as we don't care about order
 		let mut i = 0;
@@ -307,26 +285,26 @@ impl<T> Reinit<T>
 		}
 	}
 
-	pub fn add_callback<C>(&self, arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T>), request_drop: fn(Arc<C>))
+	pub fn add_callback<C>(&'static self, arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T, D>), request_drop: fn(Arc<C>))
 	{
-		let lock = self.ptr.hooks.lock();
+		let lock = self.hooks.lock();
 		let hook = Hook::new(arc, accept, request_drop);
-		if self.ptr.ref_cnt.load(Relaxed) > 0 {
-			hook.accept(ReinitRef::new(&*self.ptr));
+		if self.ref_cnt.load(Relaxed) > 0 {
+			hook.accept(ReinitRef::new(&*self));
 		}
 		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
 		hooks.push(hook);
 	}
 }
 
-struct Hook<T: 'static> {
+struct Hook<T: 'static, D: ReinitDetails<T, D>> {
 	arc: Weak<()>,
-	accept: fn(Arc<()>, ReinitRef<T>),
+	accept: fn(Arc<()>, ReinitRef<T, D>),
 	request_drop: fn(Arc<()>),
 }
 
-impl<T: 'static> Hook<T> {
-	fn new<C>(arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T>), request_drop: fn(Arc<C>)) -> Self {
+impl<T: 'static, D: ReinitDetails<T, D>> Hook<T, D> {
+	fn new<C>(arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T, D>), request_drop: fn(Arc<C>)) -> Self {
 		unsafe {
 			Self {
 				arc: transmute(Arc::downgrade(arc)),
@@ -336,7 +314,7 @@ impl<T: 'static> Hook<T> {
 		}
 	}
 
-	fn accept(&self, t: ReinitRef<T>) -> bool {
+	fn accept(&self, t: ReinitRef<T, D>) -> bool {
 		if let Some(arc) = self.arc.upgrade() {
 			// SAFETY: call of function(Arc<C>) with Arc<()>
 			(self.accept)(arc, t);
@@ -357,14 +335,7 @@ impl<T: 'static> Hook<T> {
 	}
 }
 
-/// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T> Clone for Reinit<T> {
-	fn clone(&self) -> Self {
-		Self { ptr: self.ptr.clone() }
-	}
-}
-
-impl<T> Drop for Inner<T> {
+impl<T, D: ReinitDetails<T, D>> Drop for Reinit<T, D> {
 	fn drop(&mut self) {
 		// guarantees that self.instance has dropped already
 		debug_assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
@@ -373,30 +344,28 @@ impl<T> Drop for Inner<T> {
 
 
 // Restart
-pub struct Restart<T: 'static> {
-	parent: WeakReinit<T>,
+pub struct Restart<T: 'static, D: ReinitDetails<T, D>> {
+	parent: &'static Reinit<T, D>,
 }
 
-impl<T> Restart<T> {
-	pub fn new(parent: &WeakReinit<T>) -> Self {
-		Self { parent: parent.clone() }
+impl<T, D: ReinitDetails<T, D>> Restart<T, D> {
+	pub fn new(parent: &'static Reinit<T, D>) -> Self {
+		Self { parent }
 	}
 
 	pub fn restart(&self) {
-		if let Some(parent) = self.parent.upgrade() {
-			parent.restart();
-		}
+		self.parent.restart();
 	}
 }
 
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T> Clone for Restart<T> {
+impl<T, D: ReinitDetails<T, D>> Clone for Restart<T, D> {
 	fn clone(&self) -> Self {
 		Self { parent: self.parent.clone() }
 	}
 }
 
-impl<T> Debug for Restart<T> {
+impl<T, D: ReinitDetails<T, D>> Debug for Restart<T, D> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str("Restart<")?;
 		f.write_str(stringify!(T))?;
@@ -405,39 +374,15 @@ impl<T> Debug for Restart<T> {
 }
 
 
-// WeakReinit
-#[repr(transparent)]
-pub struct WeakReinit<T: 'static> {
-	/// no Pin<> wrap: cannot upgrade() otherwise
-	ptr: Weak<Inner<T>>,
-}
-
-impl<T> WeakReinit<T> {
-	fn new(weak: &Weak<Inner<T>>) -> Self {
-		Self { ptr: weak.clone() }
-	}
-
-	fn upgrade(&self) -> Option<Reinit<T>> {
-		self.ptr.upgrade().map(|a| Reinit::from(a))
-	}
-}
-
-/// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T> Clone for WeakReinit<T> {
-	fn clone(&self) -> Self {
-		Self { ptr: self.ptr.clone() }
-	}
-}
-
 // Dependency
-struct Dependency<T: 'static>
+struct Dependency<T: 'static, D: ReinitDetails<T, D>>
 {
-	reinit: Reinit<T>,
-	value: UnsafeCell<Option<ReinitRef<T>>>,
+	reinit: Reinit<T, D>,
+	value: UnsafeCell<Option<ReinitRef<T, D>>>,
 }
 
-impl<T> Dependency<T> {
-	fn new(reinit: Reinit<T>) -> Self {
+impl<T, D: ReinitDetails<T, D>> Dependency<T, D> {
+	fn new(reinit: Reinit<T, D>) -> Self {
 		Self {
 			reinit,
 			value: UnsafeCell::new(None),
@@ -445,12 +390,12 @@ impl<T> Dependency<T> {
 	}
 
 	#[allow(clippy::mut_from_ref)]
-	fn value(&self) -> &mut Option<ReinitRef<T>> {
+	fn value(&self) -> &mut Option<ReinitRef<T, D>> {
 		unsafe { &mut *self.value.get() }
 	}
 
 	#[inline]
-	fn value_set(&self, t: ReinitRef<T>) {
+	fn value_set(&self, t: ReinitRef<T, D>) {
 		let cell = self.value();
 		debug_assert!(matches!(cell, None));
 		*cell = Some(t);
@@ -464,7 +409,7 @@ impl<T> Dependency<T> {
 	}
 
 	#[inline]
-	fn value_get(&self) -> &ReinitRef<T> {
+	fn value_get(&self) -> &ReinitRef<T, D> {
 		let cell = self.value();
 		debug_assert!(matches!(cell, Some(..)));
 		unsafe { cell.as_ref().unwrap_unchecked() }
@@ -475,31 +420,33 @@ impl<T> Dependency<T> {
 // Reinit0
 struct Reinit0<T: 'static, F>
 	where
-		F: Fn(Restart<T>) -> T + 'static
+		F: Fn(Restart<T, Self>) -> T + 'static
 {
-	parent: WeakReinit<T>,
+	_phantom: PhantomData<T>,
 	constructor: F,
 }
 
-impl<T: 'static> Reinit<T>
+impl<T: 'static, F> Reinit<T, Reinit0<T, F>>
+	where
+		F: Fn(Restart<T, Reinit0<T, F>>) -> T
 {
-	pub fn new0<F>(constructor: F) -> Reinit<T>
-		where
-			F: Fn(Restart<T>) -> T + 'static
+	pub const fn new0(constructor: F) -> Reinit<T, Reinit0<T, F>>
 	{
-		Reinit::new(0, |weak| Arc::new(Reinit0 {
-			parent: WeakReinit::new(weak),
+		Reinit::new(0, Reinit0 {
+			_phantom: PhantomData {},
 			constructor,
-		}), |_| {})
+		})
 	}
 }
 
-impl<T: 'static, F> ReinitDetails<T> for Reinit0<T, F>
+impl<T: 'static, F> ReinitDetails<T, Self> for Reinit0<T, F>
 	where
-		F: Fn(Restart<T>) -> T + 'static
+		F: Fn(Restart<T, Self>) -> T
 {
-	fn request_construction(&self, parent: &Reinit<T>) {
-		parent.constructed((self.constructor)(Restart::new(&self.parent)))
+	fn init(&'static self, _: &'static Reinit<T, Self>) {}
+
+	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
+		parent.constructed((self.constructor)(Restart::new(&parent)))
 	}
 }
 
@@ -509,28 +456,28 @@ struct ReinitNoRestart<T: 'static, F>
 	where
 		F: FnOnce() -> T + 'static
 {
-	_parent: WeakReinit<T>,
 	constructor: UnsafeCell<Option<F>>,
 }
 
-impl<T: 'static> Reinit<T>
+impl<T: 'static, F> Reinit<T, ReinitNoRestart<T, F>>
+	where
+		F: FnOnce() -> T
 {
-	pub fn new_no_restart<F>(constructor: F) -> Reinit<T>
-		where
-			F: FnOnce() -> T + 'static
+	pub fn new_no_restart(constructor: F) -> Reinit<T, ReinitNoRestart<T, F>>
 	{
-		Reinit::new(0, |weak| Arc::new(ReinitNoRestart {
-			_parent: WeakReinit::new(weak),
-			constructor: UnsafeCell::new(Some(constructor)),
-		}), |_| {})
+		Reinit::new(0, ReinitNoRestart {
+			constructor: UnsafeCell::new(Some(constructor))
+		})
 	}
 }
 
-impl<T: 'static, F> ReinitDetails<T> for ReinitNoRestart<T, F>
+impl<T: 'static, F> ReinitDetails<T, Self> for ReinitNoRestart<T, F>
 	where
 		F: FnOnce() -> T + 'static
 {
-	fn request_construction(&self, parent: &Reinit<T>) {
+	fn init(&'static self, _: &'static Reinit<T, Self>) {}
+
+	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
 		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
 		parent.constructed((constructor.expect("Constructed more than once!"))())
 	}
@@ -539,17 +486,17 @@ impl<T: 'static, F> ReinitDetails<T> for ReinitNoRestart<T, F>
 
 // tests
 #[cfg(test)]
-impl<T> Reinit<T> {
+impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
 	#[inline]
 	#[allow(clippy::mut_from_ref)]
 	pub fn test_get_instance(&self) -> &mut T {
-		assert!(self.ptr.ref_cnt.load(Relaxed) > 0);
-		unsafe { &mut (&mut *self.ptr.instance.get()).assume_init_mut().instance }
+		assert!(self.ref_cnt.load(Relaxed) > 0);
+		unsafe { &mut (&mut *self.instance.get()).assume_init_mut().instance }
 	}
 
 	#[inline]
 	pub fn test_get_state(&self) -> State {
-		self.ptr.state_lock.lock().get()
+		self.state_lock.lock().get()
 	}
 
 	#[inline]

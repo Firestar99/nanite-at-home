@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use crate::reinit::{Dependency, Reinit, ReinitDetails, ReinitRef, Restart, WeakReinit};
+use crate::reinit::{Dependency, Reinit, ReinitDetails, ReinitRef, Restart};
 use paste::paste;
 
 /// T: Reinit type
@@ -71,19 +71,19 @@ macro_rules! struct_decl {
     })
 }
 
-struct_decl!(1, <A>);
-struct_decl!(2, <A, B>);
-struct_decl!(3, <A, B, C>);
-struct_decl!(4, <A, B, C, D>);
-struct_decl!(5, <A, B, C, D, E>);
-struct_decl!(6, <A, B, C, D, E, F>);
-struct_decl!(7, <A, B, C, D, E, F, G>);
-struct_decl!(8, <A, B, C, D, E, F, G, H>);
-struct_decl!(9, <A, B, C, D, E, F, G, H, I>);
-struct_decl!(10, <A, B, C, D, E, F, G, H, I, J>);
-struct_decl!(11, <A, B, C, D, E, F, G, H, I, J, K>);
-struct_decl!(12, <A, B, C, D, E, F, G, H, I, J, K, L>);
-struct_decl!(13, <A, B, C, D, E, F, G, H, I, J, K, L, M>);
-struct_decl!(14, <A, B, C, D, E, F, G, H, I, J, K, L, M, N>);
-struct_decl!(15, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>);
-struct_decl!(16, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P>);
+// struct_decl!(1, <A>);
+// struct_decl!(2, <A, B>);
+// struct_decl!(3, <A, B, C>);
+// struct_decl!(4, <A, B, C, D>);
+// struct_decl!(5, <A, B, C, D, E>);
+// struct_decl!(6, <A, B, C, D, E, F>);
+// struct_decl!(7, <A, B, C, D, E, F, G>);
+// struct_decl!(8, <A, B, C, D, E, F, G, H>);
+// struct_decl!(9, <A, B, C, D, E, F, G, H, I>);
+// struct_decl!(10, <A, B, C, D, E, F, G, H, I, J>);
+// struct_decl!(11, <A, B, C, D, E, F, G, H, I, J, K>);
+// struct_decl!(12, <A, B, C, D, E, F, G, H, I, J, K, L>);
+// struct_decl!(13, <A, B, C, D, E, F, G, H, I, J, K, L, M>);
+// struct_decl!(14, <A, B, C, D, E, F, G, H, I, J, K, L, M, N>);
+// struct_decl!(15, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>);
+// struct_decl!(16, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P>);
