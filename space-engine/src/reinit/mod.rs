@@ -26,7 +26,7 @@ pub struct Reinit<T: 'static, D: ReinitDetails<T, D>>
 	registered_hooks: AtomicBool,
 
 	// members contributing to next state computation
-	/// countdown to construction, used to count down construction of dependent Reinits, used for restarting by increasing it by one
+	/// countdown to 0 for construction of dependent Reinits, may also be incremented to destruct instance
 	countdown: AtomicU32,
 	/// true if self should restart, restart happens when self would go into state Initialized
 	queued_restart: AtomicBool,
@@ -68,22 +68,27 @@ pub struct ReinitRef<T: 'static, D: ReinitDetails<T, D>> {
 }
 
 impl<T, D: ReinitDetails<T, D>> ReinitRef<T, D> {
+
+	/// SAFETY: inner has to be in state Initialized
 	#[inline]
-	fn new(inner: &'static Reinit<T, D>) -> Self {
-		unsafe { inner.ref_inc() };
+	unsafe fn new(inner: &'static Reinit<T, D>) -> Self {
+		inner.ref_inc();
 		Self { inner }
 	}
 
 	#[inline]
 	fn inner(&self) -> &'static Reinit<T, D> {
-		&self.inner
+		self.inner
 	}
 }
 
 impl<T, D: ReinitDetails<T, D>> Clone for ReinitRef<T, D> {
 	#[inline]
 	fn clone(&self) -> Self {
-		ReinitRef::new(self.inner())
+		unsafe {
+			// SAFETY: inner has to be Initialized for self to exist
+			ReinitRef::new(self.inner())
+		}
 	}
 }
 
@@ -134,7 +139,7 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
 	#[inline]
 	unsafe fn ref_get_instance(&self) -> &T {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
-		(&*self.instance.get()).assume_init_ref()
+		(*self.instance.get()).assume_init_ref()
 	}
 }
 
@@ -171,14 +176,14 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 	}
 
 	#[inline]
-	fn construct_countdown(&'static self) {
+	fn construct_dec(&'static self) {
 		if self.countdown.fetch_sub(1, Release) == 1 {
 			self.check_state();
 		}
 	}
 
 	#[inline]
-	fn construct_countup(&'static self) {
+	fn construct_inc(&'static self) {
 		if self.countdown.fetch_add(1, Relaxed) == 0 {
 			self.restart();
 		}
@@ -244,7 +249,10 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 		}
 
 		// call hooks
-		self.call_callbacks(|h| h.accept(ReinitRef::new(&*self)));
+		self.call_callbacks(|h| h.accept(unsafe {
+			// SAFETY: we just made self be Initialized
+			ReinitRef::new(self)
+		}));
 
 		// TODO do not call hooks if we should destruct immediately
 		self.check_state_internal(&guard);
@@ -262,7 +270,7 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 
 		// drop self.instance as noone is referencing it anymore
 		unsafe {
-			(&mut *self.instance.get()).assume_init_drop()
+			(*self.instance.get()).assume_init_drop()
 		};
 
 		self.check_state_internal(&guard);
@@ -290,7 +298,10 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 		let lock = self.hooks.lock();
 		let hook = Hook::new(arc, accept, request_drop);
 		if self.ref_cnt.load(Relaxed) > 0 {
-			hook.accept(ReinitRef::new(&*self));
+			unsafe {
+				// SAFETY: self being constructed is checked in the if above
+				hook.accept(ReinitRef::new(self));
+			}
 		}
 		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
 		hooks.push(hook);
@@ -361,9 +372,11 @@ impl<T, D: ReinitDetails<T, D>> Restart<T, D> {
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
 impl<T, D: ReinitDetails<T, D>> Clone for Restart<T, D> {
 	fn clone(&self) -> Self {
-		Self { parent: self.parent.clone() }
+		Self { parent: self.parent }
 	}
 }
+
+impl<T, D: ReinitDetails<T, D>> Copy for Restart<T, D> {}
 
 impl<T, D: ReinitDetails<T, D>> Debug for Restart<T, D> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -446,7 +459,7 @@ impl<T: 'static, F> ReinitDetails<T, Self> for Reinit0<T, F>
 	fn init(&'static self, _: &'static Reinit<T, Self>) {}
 
 	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
-		parent.constructed((self.constructor)(Restart::new(&parent)))
+		parent.constructed((self.constructor)(Restart::new(parent)))
 	}
 }
 
