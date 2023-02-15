@@ -1,14 +1,18 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
+use std::hint::spin_loop;
 use std::marker::PhantomData;
 use std::mem::{MaybeUninit, replace, transmute};
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
-use std::sync::atomic::Ordering::{Relaxed, Release};
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use parking_lot::{RawMutex, RawThreadId, ReentrantMutex};
 use parking_lot::lock_api::ReentrantMutexGuard;
+
+pub use target::*;
+pub use variants::*;
 
 pub trait Callback<T: 'static, D: ReinitDetails<T, D>> {
 	fn accept(&self, t: ReinitRef<T, D>);
@@ -57,6 +61,10 @@ pub enum State {
 pub trait ReinitDetails<T: 'static, D: ReinitDetails<T, D>>: 'static {
 	fn init(&'static self, parent: &'static Reinit<T, D>);
 
+	fn on_need_inc(&'static self, parent: &'static Reinit<T, D>);
+
+	fn on_need_dec(&'static self, parent: &'static Reinit<T, D>);
+
 	fn request_construction(&'static self, parent: &'static Reinit<T, D>);
 }
 
@@ -68,7 +76,6 @@ pub struct ReinitRef<T: 'static, D: ReinitDetails<T, D>> {
 }
 
 impl<T, D: ReinitDetails<T, D>> ReinitRef<T, D> {
-
 	/// SAFETY: inner has to be in state Initialized
 	#[inline]
 	unsafe fn new(inner: &'static Reinit<T, D>) -> Self {
@@ -104,7 +111,7 @@ impl<T, D: ReinitDetails<T, D>> Deref for ReinitRef<T, D> {
 
 	#[inline]
 	fn deref(&self) -> &Self::Target {
-		unsafe { &self.inner().ref_get_instance() }
+		unsafe { self.inner().ref_get_instance() }
 	}
 }
 
@@ -161,15 +168,65 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 			hooks: ReentrantMutex::new(UnsafeCell::new(vec![])),
 			details,
 		}
-		// FIXME move this to need--
-		// this.construct_countdown();
+	}
+
+	unsafe fn need_inc(&'static self) {
+		loop {
+			let need = self.need_count.load(Acquire);
+			if need == 0 {
+				// lock need_count for 0->1 transition
+				if self.need_count.compare_exchange_weak(0, !0, Relaxed, Relaxed).is_ok() {
+					// FIXME init details once for registering hooks
+					if self.registered_hooks.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
+						self.details.init(self);
+					}
+
+					self.details.on_need_inc(self);
+					self.construct_dec();
+					let unlock = self.need_count.compare_exchange(!0, 1, Release, Relaxed).is_ok();
+					assert!(unlock, "need_count changed away from locked !0 value!");
+					break;
+				}
+			} else if need == !0 {
+				// locked from case above, busy wait
+				spin_loop();
+			} else {
+				// need > 0: just increment
+				if self.need_count.compare_exchange_weak(need, need + 1, Release, Relaxed).is_ok() {
+					break;
+				}
+			}
+		}
+	}
+
+	unsafe fn need_dec(&'static self) {
+		loop {
+			let need = self.need_count.load(Acquire);
+			if need == 0 {
+				panic!("need_count underflow!");
+			} else if need == 1 {
+				// lock need_count for 1->0 transition
+				if self.need_count.compare_exchange_weak(1, !0, Relaxed, Relaxed).is_ok() {
+					self.details.on_need_dec(self);
+					self.construct_inc();
+					let unlock = self.need_count.compare_exchange(!0, 0, Release, Relaxed).is_ok();
+					assert!(unlock, "need_count changed away from locked !0 value!");
+					break;
+				}
+			} else if need == !0 {
+				// locked from case above, busy wait
+				spin_loop();
+			} else {
+				// need > 1: just decrement
+				if self.need_count.compare_exchange_weak(need, need - 1, Release, Relaxed).is_ok() {
+					break;
+				}
+			}
+		}
 	}
 
 	fn restart(&'static self) {
-		// TODO check this later
 		// TODO restart called during construct/destruct must be handled correctly
-		// self.construct_countup();
-		// self.construct_countdown();
 		if self.queued_restart.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
 			self.check_state();
 		}
@@ -458,6 +515,10 @@ impl<T: 'static, F> ReinitDetails<T, Self> for Reinit0<T, F>
 {
 	fn init(&'static self, _: &'static Reinit<T, Self>) {}
 
+	fn on_need_inc(&'static self, _: &'static Reinit<T, Self>) {}
+
+	fn on_need_dec(&'static self, _: &'static Reinit<T, Self>) {}
+
 	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
 		parent.constructed((self.constructor)(Restart::new(parent)))
 	}
@@ -490,6 +551,10 @@ impl<T: 'static, F> ReinitDetails<T, Self> for ReinitNoRestart<T, F>
 {
 	fn init(&'static self, _: &'static Reinit<T, Self>) {}
 
+	fn on_need_inc(&'static self, _: &'static Reinit<T, Self>) {}
+
+	fn on_need_dec(&'static self, _: &'static Reinit<T, Self>) {}
+
 	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
 		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
 		parent.constructed((constructor.expect("Constructed more than once!"))())
@@ -518,6 +583,7 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
 	}
 }
 
+mod target;
 mod variants;
 
 #[cfg(test)]
