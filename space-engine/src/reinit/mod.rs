@@ -1,10 +1,8 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::hint::spin_loop;
-use std::marker::PhantomData;
 use std::mem::{MaybeUninit, replace, transmute};
 use std::ops::Deref;
-use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
@@ -14,14 +12,20 @@ use parking_lot::lock_api::ReentrantMutexGuard;
 pub use target::*;
 pub use variants::*;
 
-pub trait Callback<T: 'static, D: ReinitDetails<T, D>> {
-	fn accept(&self, t: ReinitRef<T, D>);
+mod target;
+mod variants;
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod tests;
+
+pub trait Callback<T: 'static> {
+	fn accept(&self, t: ReinitRef<T>);
 
 	fn request_drop(&self);
 }
 
-pub struct Reinit<T: 'static, D: ReinitDetails<T, D>>
-{
+pub struct Reinit<T: 'static> {
 	// members for figuring out if this works
 	/// counter for how many times this is used by others, >0 means that this reinit should start, =0 that it should stop
 	need_count: AtomicU32,
@@ -40,17 +44,21 @@ pub struct Reinit<T: 'static, D: ReinitDetails<T, D>>
 	state_lock: ReentrantMutex<Cell<State>>,
 	/// ref count for member instance
 	ref_cnt: AtomicUsize,
-	/// instance of T and holding an Arc reference to this to prevent freeing self
+	/// instance of T
 	instance: UnsafeCell<MaybeUninit<T>>,
 
 	/// hooks of everyone wanting to get notified, unordered
-	hooks: ReentrantMutex<UnsafeCell<Vec<Hook<T, D>>>>,
+	hooks: ReentrantMutex<UnsafeCell<Vec<Hook<T, ()>>>>,
 
-	details: D,
+	details: &'static dyn ReinitDetails<T>,
 }
 
+unsafe impl<T> Send for Reinit<T> {}
+
+unsafe impl<T> Sync for Reinit<T> {}
+
 #[repr(u8)]
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum State {
 	Uninitialized,
 	Constructing,
@@ -58,38 +66,42 @@ pub enum State {
 	Destructing,
 }
 
-pub trait ReinitDetails<T: 'static, D: ReinitDetails<T, D>>: 'static {
-	fn init(&'static self, parent: &'static Reinit<T, D>);
+pub trait ReinitDetails<T: 'static>: 'static {
+	/// register callbacks on Dependencies
+	fn init(&'static self, parent: &'static Reinit<T>);
 
-	fn on_need_inc(&'static self, parent: &'static Reinit<T, D>);
+	/// SATEFY: allow need_inc() calls on Dependencies
+	unsafe fn on_need_inc(&'static self, parent: &'static Reinit<T>);
 
-	fn on_need_dec(&'static self, parent: &'static Reinit<T, D>);
+	/// SATEFY: allow need_dec() calls on Dependencies
+	unsafe fn on_need_dec(&'static self, parent: &'static Reinit<T>);
 
-	fn request_construction(&'static self, parent: &'static Reinit<T, D>);
+	/// actually construct T
+	fn request_construction(&'static self, parent: &'static Reinit<T>);
 }
 
 
 // ReinitRef
 #[repr(transparent)]
-pub struct ReinitRef<T: 'static, D: ReinitDetails<T, D>> {
-	inner: &'static Reinit<T, D>,
+pub struct ReinitRef<T: 'static> {
+	inner: &'static Reinit<T>,
 }
 
-impl<T, D: ReinitDetails<T, D>> ReinitRef<T, D> {
+impl<T> ReinitRef<T> {
 	/// SAFETY: inner has to be in state Initialized
 	#[inline]
-	unsafe fn new(inner: &'static Reinit<T, D>) -> Self {
+	unsafe fn new(inner: &'static Reinit<T>) -> Self {
 		inner.ref_inc();
 		Self { inner }
 	}
 
 	#[inline]
-	fn inner(&self) -> &'static Reinit<T, D> {
+	fn inner(&self) -> &'static Reinit<T> {
 		self.inner
 	}
 }
 
-impl<T, D: ReinitDetails<T, D>> Clone for ReinitRef<T, D> {
+impl<T> Clone for ReinitRef<T> {
 	#[inline]
 	fn clone(&self) -> Self {
 		unsafe {
@@ -99,14 +111,14 @@ impl<T, D: ReinitDetails<T, D>> Clone for ReinitRef<T, D> {
 	}
 }
 
-impl<T, D: ReinitDetails<T, D>> Drop for ReinitRef<T, D> {
+impl<T> Drop for ReinitRef<T> {
 	#[inline]
 	fn drop(&mut self) {
 		unsafe { self.inner().ref_dec() }
 	}
 }
 
-impl<T, D: ReinitDetails<T, D>> Deref for ReinitRef<T, D> {
+impl<T> Deref for ReinitRef<T> {
 	type Target = T;
 
 	#[inline]
@@ -115,36 +127,35 @@ impl<T, D: ReinitDetails<T, D>> Deref for ReinitRef<T, D> {
 	}
 }
 
-impl<T: Debug, D: ReinitDetails<T, D>> Debug for ReinitRef<T, D> {
+impl<T: Debug> Debug for ReinitRef<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T: Display, D: ReinitDetails<T, D>> Display for ReinitRef<T, D> {
+impl<T: Display> Display for ReinitRef<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
+impl<T> Reinit<T> {
 	#[inline]
-	unsafe fn ref_inc(&self) {
+	unsafe fn ref_inc(&'static self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		self.ref_cnt.fetch_add(1, Relaxed);
 	}
 
 	#[inline]
-	unsafe fn ref_dec(&self) {
+	unsafe fn ref_dec(&'static self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		if self.ref_cnt.fetch_sub(1, Relaxed) == 1 {
-			// FIXME: do something with need here maybe?
-			// (&*self.instance.get()).assume_init_ref().arc.slow_drop();
+			self.slow_drop();
 		}
 	}
 
 	#[inline]
-	unsafe fn ref_get_instance(&self) -> &T {
+	unsafe fn ref_get_instance(&'static self) -> &T {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
 		(*self.instance.get()).assume_init_ref()
 	}
@@ -152,10 +163,10 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
 
 
 // Reinit impl
-impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
+impl<T> Reinit<T>
 {
 	#[inline]
-	const fn new(initial_countdown: u32, details: D) -> Reinit<T, D>
+	const fn new<D: ReinitDetails<T>>(initial_countdown: u32, details: &'static D) -> Reinit<T>
 	{
 		Reinit {
 			need_count: AtomicU32::new(0),
@@ -272,12 +283,12 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 
 		// not in correct state
 		if should_be_init {
-			assert!(guard.get() == State::Uninitialized);
+			assert_eq!(guard.get(), State::Uninitialized);
 			guard.set(State::Constructing);
 
 			self.details.request_construction(self);
 		} else {
-			assert!(guard.get() == State::Initialized);
+			assert_eq!(guard.get(), State::Initialized);
 			guard.set(State::Destructing);
 
 			self.call_callbacks(|h| h.request_drop());
@@ -295,7 +306,7 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 		let guard = self.state_lock.lock();
 
 		// change state
-		assert!(guard.get() == State::Constructing);
+		assert_eq!(guard.get(), State::Constructing);
 		guard.set(State::Initialized);
 
 		// initialize self.instance
@@ -322,7 +333,7 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 		let guard = self.state_lock.lock();
 
 		// change state
-		assert!(guard.get() == State::Destructing);
+		assert_eq!(guard.get(), State::Destructing);
 		guard.set(State::Uninitialized);
 
 		// drop self.instance as noone is referencing it anymore
@@ -335,75 +346,56 @@ impl<T, D: ReinitDetails<T, D>> Reinit<T, D>
 
 	fn call_callbacks<F>(&'static self, f: F)
 		where
-			F: Fn(&Hook<T, D>) -> bool
+			F: Fn(&Hook<T, ()>)
 	{
 		let lock = self.hooks.lock();
-		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
-		// basically hooks.retain() but with swap_remove() as we don't care about order
-		let mut i = 0;
-		while i < hooks.len() {
-			if f(&hooks[i]) {
-				i += 1;
-			} else {
-				hooks.swap_remove(i);
-			}
-		}
+		let hooks = unsafe { &*lock.get() };
+		hooks.iter().for_each(f);
 	}
 
-	pub fn add_callback<C>(&'static self, arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T, D>), request_drop: fn(Arc<C>))
+	pub fn add_callback<C>(&'static self, callee: &'static C, accept: fn(&'static C, ReinitRef<T>), request_drop: fn(&'static C))
 	{
 		let lock = self.hooks.lock();
-		let hook = Hook::new(arc, accept, request_drop);
+		let hook = Hook::new(callee, accept, request_drop);
 		if self.ref_cnt.load(Relaxed) > 0 {
 			unsafe {
 				// SAFETY: self being constructed is checked in the if above
 				hook.accept(ReinitRef::new(self));
 			}
 		}
-		let hooks = unsafe { &mut *lock.get() }; // BUG this is not safe!
-		hooks.push(hook);
+		// BUG this is not safe cause ReentrantMutex
+		let hooks = unsafe { &mut *lock.get() };
+		hooks.push(hook.ungenerify());
 	}
 }
 
-struct Hook<T: 'static, D: ReinitDetails<T, D>> {
-	arc: Weak<()>,
-	accept: fn(Arc<()>, ReinitRef<T, D>),
-	request_drop: fn(Arc<()>),
+struct Hook<T: 'static, C: 'static> {
+	callee: &'static C,
+	accept: fn(&'static C, ReinitRef<T>),
+	request_drop: fn(&'static C),
 }
 
-impl<T: 'static, D: ReinitDetails<T, D>> Hook<T, D> {
-	fn new<C>(arc: &Arc<C>, accept: fn(Arc<C>, ReinitRef<T, D>), request_drop: fn(Arc<C>)) -> Self {
-		unsafe {
-			Self {
-				arc: transmute(Arc::downgrade(arc)),
-				accept: transmute(accept),
-				request_drop: transmute(request_drop),
-			}
-		}
+impl<T: 'static, C: 'static> Hook<T, C> {
+	fn new(callee: &'static C, accept: fn(&'static C, ReinitRef<T>), request_drop: fn(&'static C)) -> Self {
+		Self { callee, accept, request_drop }
 	}
 
-	fn accept(&self, t: ReinitRef<T, D>) -> bool {
-		if let Some(arc) = self.arc.upgrade() {
-			// SAFETY: call of function(Arc<C>) with Arc<()>
-			(self.accept)(arc, t);
-			true
-		} else {
-			false
-		}
+	fn ungenerify(self) -> Hook<T, ()> {
+		// SAFETY: transmuting raw pointers to raw pointers, just the type they point to actually changes
+		unsafe { transmute(self) }
 	}
 
-	fn request_drop(&self) -> bool {
-		if let Some(arc) = self.arc.upgrade() {
-			// SAFETY: call of function(Arc<C>) with Arc<()>
-			(self.request_drop)(arc);
-			true
-		} else {
-			false
-		}
+	fn accept(&self, t: ReinitRef<T>) {
+		// SAFETY: call of function(Arc<C>) with Arc<()>
+		(self.accept)(self.callee, t);
+	}
+
+	fn request_drop(&self) {
+		(self.request_drop)(self.callee);
 	}
 }
 
-impl<T, D: ReinitDetails<T, D>> Drop for Reinit<T, D> {
+impl<T> Drop for Reinit<T> {
 	fn drop(&mut self) {
 		// guarantees that self.instance has dropped already
 		debug_assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
@@ -412,12 +404,12 @@ impl<T, D: ReinitDetails<T, D>> Drop for Reinit<T, D> {
 
 
 // Restart
-pub struct Restart<T: 'static, D: ReinitDetails<T, D>> {
-	parent: &'static Reinit<T, D>,
+pub struct Restart<T: 'static> {
+	parent: &'static Reinit<T>,
 }
 
-impl<T, D: ReinitDetails<T, D>> Restart<T, D> {
-	pub fn new(parent: &'static Reinit<T, D>) -> Self {
+impl<T> Restart<T> {
+	pub fn new(parent: &'static Reinit<T>) -> Self {
 		Self { parent }
 	}
 
@@ -427,15 +419,15 @@ impl<T, D: ReinitDetails<T, D>> Restart<T, D> {
 }
 
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T, D: ReinitDetails<T, D>> Clone for Restart<T, D> {
+impl<T> Clone for Restart<T> {
 	fn clone(&self) -> Self {
 		Self { parent: self.parent }
 	}
 }
 
-impl<T, D: ReinitDetails<T, D>> Copy for Restart<T, D> {}
+impl<T> Copy for Restart<T> {}
 
-impl<T, D: ReinitDetails<T, D>> Debug for Restart<T, D> {
+impl<T> Debug for Restart<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str("Restart<")?;
 		f.write_str(stringify!(T))?;
@@ -445,14 +437,14 @@ impl<T, D: ReinitDetails<T, D>> Debug for Restart<T, D> {
 
 
 // Dependency
-struct Dependency<T: 'static, D: ReinitDetails<T, D>>
+struct Dependency<T: 'static>
 {
-	reinit: Reinit<T, D>,
-	value: UnsafeCell<Option<ReinitRef<T, D>>>,
+	reinit: &'static Reinit<T>,
+	value: UnsafeCell<Option<ReinitRef<T>>>,
 }
 
-impl<T, D: ReinitDetails<T, D>> Dependency<T, D> {
-	fn new(reinit: Reinit<T, D>) -> Self {
+impl<T> Dependency<T> {
+	const fn new(reinit: &'static Reinit<T>) -> Self {
 		Self {
 			reinit,
 			value: UnsafeCell::new(None),
@@ -460,12 +452,12 @@ impl<T, D: ReinitDetails<T, D>> Dependency<T, D> {
 	}
 
 	#[allow(clippy::mut_from_ref)]
-	fn value(&self) -> &mut Option<ReinitRef<T, D>> {
+	fn value(&self) -> &mut Option<ReinitRef<T>> {
 		unsafe { &mut *self.value.get() }
 	}
 
 	#[inline]
-	fn value_set(&self, t: ReinitRef<T, D>) {
+	fn value_set(&self, t: ReinitRef<T>) {
 		let cell = self.value();
 		debug_assert!(matches!(cell, None));
 		*cell = Some(t);
@@ -479,7 +471,7 @@ impl<T, D: ReinitDetails<T, D>> Dependency<T, D> {
 	}
 
 	#[inline]
-	fn value_get(&self) -> &ReinitRef<T, D> {
+	fn value_get(&self) -> &ReinitRef<T> {
 		let cell = self.value();
 		debug_assert!(matches!(cell, Some(..)));
 		unsafe { cell.as_ref().unwrap_unchecked() }
@@ -488,74 +480,84 @@ impl<T, D: ReinitDetails<T, D>> Dependency<T, D> {
 
 
 // Reinit0
-struct Reinit0<T: 'static, F>
-	where
-		F: Fn(Restart<T, Self>) -> T + 'static
+pub struct Reinit0<T: 'static>
 {
-	_phantom: PhantomData<T>,
-	constructor: F,
+	constructor: fn(Restart<T>) -> T,
 }
 
-impl<T: 'static, F> Reinit<T, Reinit0<T, F>>
-	where
-		F: Fn(Restart<T, Reinit0<T, F>>) -> T
-{
-	pub const fn new0(constructor: F) -> Reinit<T, Reinit0<T, F>>
+impl<T: 'static> Reinit0<T> {
+	pub const fn new(constructor: fn(Restart<T>) -> T) -> Self
 	{
-		Reinit::new(0, Reinit0 {
-			_phantom: PhantomData {},
-			constructor,
-		})
+		Self { constructor }
+	}
+
+	pub const fn create_reinit(&'static self) -> Reinit<T> {
+		Reinit::new(0, self)
 	}
 }
 
-impl<T: 'static, F> ReinitDetails<T, Self> for Reinit0<T, F>
-	where
-		F: Fn(Restart<T, Self>) -> T
+#[macro_export]
+macro_rules! reinit0 {
+	($name:ident: $t:ty = $f:expr) => (paste::paste!{
+		static [<$name _DETAILS>]: Reinit0<$t> = Reinit0::new(|_restart| $f);
+		static $name: Reinit<$t> = [<$name _DETAILS>].create_reinit();
+	});
+}
+
+impl<T: 'static> ReinitDetails<T> for Reinit0<T>
 {
-	fn init(&'static self, _: &'static Reinit<T, Self>) {}
+	fn init(&'static self, _: &'static Reinit<T>) {}
 
-	fn on_need_inc(&'static self, _: &'static Reinit<T, Self>) {}
+	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
 
-	fn on_need_dec(&'static self, _: &'static Reinit<T, Self>) {}
+	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
 
-	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
+	fn request_construction(&'static self, parent: &'static Reinit<T>) {
 		parent.constructed((self.constructor)(Restart::new(parent)))
 	}
 }
 
 
 // ReinitNoRestart
-struct ReinitNoRestart<T: 'static, F>
-	where
-		F: FnOnce() -> T + 'static
+pub struct ReinitNoRestart<T: 'static>
 {
-	constructor: UnsafeCell<Option<F>>,
+	constructor: UnsafeCell<Option<fn() -> T>>,
 }
 
-impl<T: 'static, F> Reinit<T, ReinitNoRestart<T, F>>
-	where
-		F: FnOnce() -> T
-{
-	pub fn new_no_restart(constructor: F) -> Reinit<T, ReinitNoRestart<T, F>>
+// member constructor is not Sync
+unsafe impl<T: 'static> Sync for ReinitNoRestart<T> {}
+
+impl<T: 'static> ReinitNoRestart<T> {
+	pub const fn new(constructor: fn() -> T) -> Self
 	{
-		Reinit::new(0, ReinitNoRestart {
+		Self {
 			constructor: UnsafeCell::new(Some(constructor))
-		})
+		}
+	}
+
+	pub const fn create_reinit(&'static self) -> Reinit<T> {
+		Reinit::new(0, self)
 	}
 }
 
-impl<T: 'static, F> ReinitDetails<T, Self> for ReinitNoRestart<T, F>
-	where
-		F: FnOnce() -> T + 'static
+#[macro_export]
+macro_rules! reinit_no_restart {
+	($name:ident: $t:ty = $f:expr) => (paste::paste!{
+		static [<$name _DETAILS>]: ReinitNoRestart<$t> = ReinitNoRestart::new(|| $f);
+		static $name: Reinit<$t> = [<$name _DETAILS>].create_reinit();
+	});
+}
+
+impl<T: 'static> ReinitDetails<T> for ReinitNoRestart<T>
 {
-	fn init(&'static self, _: &'static Reinit<T, Self>) {}
+	fn init(&'static self, _: &'static Reinit<T>) {}
 
-	fn on_need_inc(&'static self, _: &'static Reinit<T, Self>) {}
+	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
 
-	fn on_need_dec(&'static self, _: &'static Reinit<T, Self>) {}
+	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
 
-	fn request_construction(&'static self, parent: &'static Reinit<T, Self>) {
+	fn request_construction(&'static self, parent: &'static Reinit<T>) {
+		// this may not be atomic, but that's ok as Reinit will act as a Mutex for this method
 		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
 		parent.constructed((constructor.expect("Constructed more than once!"))())
 	}
@@ -564,28 +566,28 @@ impl<T: 'static, F> ReinitDetails<T, Self> for ReinitNoRestart<T, F>
 
 // tests
 #[cfg(test)]
-impl<T, D: ReinitDetails<T, D>> Reinit<T, D> {
+impl<T> Reinit<T> {
 	#[inline]
 	#[allow(clippy::mut_from_ref)]
-	pub fn test_get_instance(&self) -> &mut T {
+	pub fn test_get_instance(&'static self) -> &T {
+		self.test_ref().deref()
+	}
+
+	pub fn test_ref(&'static self) -> ReinitRef<T> {
 		assert!(self.ref_cnt.load(Relaxed) > 0);
-		unsafe { &mut (&mut *self.instance.get()).assume_init_mut().instance }
+		unsafe {
+			// SAFETY: checked above, BUT does not account for multithreading
+			ReinitRef::new(self)
+		}
 	}
 
 	#[inline]
-	pub fn test_get_state(&self) -> State {
+	pub fn test_get_state(&'static self) -> State {
 		self.state_lock.lock().get()
 	}
 
 	#[inline]
-	pub fn test_restart(&self) {
+	pub fn test_restart(&'static self) {
 		self.restart();
 	}
 }
-
-mod target;
-mod variants;
-
-#[cfg(test)]
-#[allow(dead_code)]
-mod tests;
