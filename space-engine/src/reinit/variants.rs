@@ -11,7 +11,7 @@ use crate::reinit::{Dependency, Reinit, ReinitDetails, ReinitRef, Restart};
 
 /// T: Reinit type
 /// A..P: dependent Reinit types
-macro_rules! struct_decl {
+macro_rules! reinit_variant_struct {
     (
 		$num:literal,
 		<$($x:ident),+>
@@ -22,6 +22,8 @@ macro_rules! struct_decl {
 			constructor: fn($(ReinitRef<$x>,)+ Restart<T>) -> T,
 			parent: AtomicPtr<Reinit<T>>,
 		}
+
+		unsafe impl<T: 'static, $($x: 'static,)+> Sync for [<Reinit $num>]<T, $($x,)+> {}
 
 		impl<T: 'static, $($x: 'static,)+> [<Reinit $num>]<T, $($x,)+>
 		{
@@ -86,19 +88,116 @@ macro_rules! struct_decl {
     })
 }
 
-struct_decl!(1, <A>);
-struct_decl!(2, <A, B>);
-struct_decl!(3, <A, B, C>);
-struct_decl!(4, <A, B, C, D>);
-struct_decl!(5, <A, B, C, D, E>);
-struct_decl!(6, <A, B, C, D, E, F>);
-struct_decl!(7, <A, B, C, D, E, F, G>);
-struct_decl!(8, <A, B, C, D, E, F, G, H>);
-struct_decl!(9, <A, B, C, D, E, F, G, H, I>);
-struct_decl!(10, <A, B, C, D, E, F, G, H, I, J>);
-struct_decl!(11, <A, B, C, D, E, F, G, H, I, J, K>);
-struct_decl!(12, <A, B, C, D, E, F, G, H, I, J, K, L>);
-struct_decl!(13, <A, B, C, D, E, F, G, H, I, J, K, L, M>);
-struct_decl!(14, <A, B, C, D, E, F, G, H, I, J, K, L, M, N>);
-struct_decl!(15, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>);
-struct_decl!(16, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P>);
+macro_rules! reinit_variant_process {
+    (
+		$((
+			$num:literal,
+			<$($x:ident),+>
+		),)+
+	) => {
+		$(reinit_variant_struct!($num, <$($x),+>);)+
+
+		// you cannot declare macro_rules! within macro_rules! as you cannot escape the $ character
+		// see https://github.com/rust-lang/rust/issues/83527
+		// so to generate reinit! atm just expand the macro below and replace a few things:
+		// remove the "macro_rules! reinit_generator {" and the last "}"
+		// ' ' -> ''
+		// _ -> $
+		// paste -> paste!
+		// \((.*?)\)=>\{(.*?;)\n\s*}; -> ($1) => {\n\t\t$2\n\t};\n\t
+
+		// paste!(macro_rules! reinit_generator {
+		// 	$(
+		// 		(_name:ident: _t:ty = ($([<_r $x:lower>]:ident: [<_f $x:lower>]:ty),+) => _f:expr) => {
+		// 			reinit(_name: _t = ($([<_r $x:lower>]: [<_f $x:lower>]),+) => _f; $num);
+		// 		};
+		// 	)+
+		// });
+	};
+}
+
+reinit_variant_process!(
+	(1, <A>),
+	(2, <A, B>),
+	(3, <A, B, C>),
+	(4, <A, B, C, D>),
+	(5, <A, B, C, D, E>),
+	(6, <A, B, C, D, E, F>),
+	(7, <A, B, C, D, E, F, G>),
+	(8, <A, B, C, D, E, F, G, H>),
+	(9, <A, B, C, D, E, F, G, H, I>),
+	(10, <A, B, C, D, E, F, G, H, I, J>),
+	(11, <A, B, C, D, E, F, G, H, I, J, K>),
+	(12, <A, B, C, D, E, F, G, H, I, J, K, L>),
+	(13, <A, B, C, D, E, F, G, H, I, J, K, L, M>),
+	(14, <A, B, C, D, E, F, G, H, I, J, K, L, M, N>),
+	(15, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O>),
+	(16, <A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P>),
+);
+
+#[macro_export]
+macro_rules! reinit {
+	// generic case generating code
+	($name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => $f:expr; $num:literal) => (paste::paste!{
+		static [<$name _DETAILS>]: $crate::reinit::[<Reinit $num>]<$t, $($from_type),*> = $crate::reinit::[<Reinit $num>]::new($(&$from,)* $f);
+		static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
+	});
+
+	// all lengths redirecting to generic case with length appended at the end
+	($name:ident:$t:ty=($ra:ident:$fa:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa)=>$f;1);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb)=>$f;2);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc)=>$f;3);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd)=>$f;4);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe)=>$f;5);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff)=>$f;6);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg)=>$f;7);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh)=>$f;8);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi)=>$f;9);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj)=>$f;10);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk)=>$f;11);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl)=>$f;12);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm)=>$f;13);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn)=>$f;14);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty,$ro:ident:$fo:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn,$ro:$fo)=>$f;15);
+	};
+	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty,$ro:ident:$fo:ty,$rp:ident:$fp:ty)=>$f:expr) => {
+		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn,$ro:$fo,$rp:$fp)=>$f;16);
+	};
+
+	// special case 0, needs to be at the end
+	($name:ident: $t:ty = () => $f:expr) => {
+		reinit!($name: $t = () => $f; 0);
+	};
+	($name:ident: $t:ty = $f:expr) => {
+		reinit!($name: $t = () => |_| $f; 0);
+	};
+}

@@ -70,10 +70,12 @@ pub trait ReinitDetails<T: 'static>: 'static {
 	/// register callbacks on Dependencies
 	fn init(&'static self, parent: &'static Reinit<T>);
 
-	/// SATEFY: allow need_inc() calls on Dependencies
+	/// # Safety
+	/// allow need_inc() calls on Dependencies
 	unsafe fn on_need_inc(&'static self, parent: &'static Reinit<T>);
 
-	/// SATEFY: allow need_dec() calls on Dependencies
+	/// # Safety
+	/// allow need_dec() calls on Dependencies
 	unsafe fn on_need_dec(&'static self, parent: &'static Reinit<T>);
 
 	/// actually construct T
@@ -496,14 +498,6 @@ impl<T: 'static> Reinit0<T> {
 	}
 }
 
-#[macro_export]
-macro_rules! reinit0 {
-	($name:ident: $t:ty = $f:expr) => (paste::paste!{
-		static [<$name _DETAILS>]: Reinit0<$t> = Reinit0::new(|_restart| $f);
-		static $name: Reinit<$t> = [<$name _DETAILS>].create_reinit();
-	});
-}
-
 impl<T: 'static> ReinitDetails<T> for Reinit0<T>
 {
 	fn init(&'static self, _: &'static Reinit<T>) {}
@@ -543,8 +537,8 @@ impl<T: 'static> ReinitNoRestart<T> {
 #[macro_export]
 macro_rules! reinit_no_restart {
 	($name:ident: $t:ty = $f:expr) => (paste::paste!{
-		static [<$name _DETAILS>]: ReinitNoRestart<$t> = ReinitNoRestart::new(|| $f);
-		static $name: Reinit<$t> = [<$name _DETAILS>].create_reinit();
+		static [<$name _DETAILS>]: $crate::reinit::ReinitNoRestart<$t> = $crate::reinit::ReinitNoRestart::new(|| $f);
+		static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
 	});
 }
 
