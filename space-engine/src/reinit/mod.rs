@@ -12,6 +12,8 @@ use parking_lot::lock_api::ReentrantMutexGuard;
 pub use target::*;
 pub use variants::*;
 
+use crate::reinit::NeedIncType::{EnsureInitialized, NeedInc};
+
 mod target;
 mod variants;
 
@@ -29,9 +31,9 @@ pub struct Reinit<T: 'static> {
 	// members for figuring out if this works
 	/// counter for how many times this is used by others, >0 means that this reinit should start, =0 that it should stop
 	need_count: AtomicU32,
-	/// The first time needCount is incremented, hooks must be registered. This bool is used to signal that registration has already happened.
+	/// The first time needCount is incremented, hooks must be registered. This bool is used to signal that registration has already happened and has been completed.
 	/// Sadly it does not seem to be possible to generate these hook lists during compile time, so it's done during first use.
-	registered_hooks: AtomicBool,
+	is_initialized: AtomicBool,
 
 	// members contributing to next state computation
 	/// countdown to 0 for construction of dependent Reinits, may also be incremented to destruct instance
@@ -172,7 +174,7 @@ impl<T> Reinit<T>
 	{
 		Reinit {
 			need_count: AtomicU32::new(0),
-			registered_hooks: AtomicBool::new(false),
+			is_initialized: AtomicBool::new(false),
 			countdown: AtomicU32::new(initial_countdown + 1),
 			queued_restart: AtomicBool::new(false),
 			state_lock: ReentrantMutex::new(Cell::new(State::Uninitialized)),
@@ -182,21 +184,58 @@ impl<T> Reinit<T>
 			details,
 		}
 	}
+}
 
+#[derive(Clone, Copy)]
+enum NeedIncType {
+	NeedInc,
+	EnsureInitialized,
+}
+
+impl<T> Reinit<T>
+{
 	unsafe fn need_inc(&'static self) {
+		self.need_inc_internal(NeedInc)
+	}
+
+	pub fn ensure_initialized(&'static self) {
+		unsafe { self.need_inc_internal(EnsureInitialized) }
+	}
+
+	#[inline]
+	unsafe fn need_inc_internal(&'static self, inc_type: NeedIncType) {
 		loop {
+			match inc_type {
+				NeedInc => {}
+				EnsureInitialized => {
+					if self.is_initialized.load(Relaxed) {
+						// hooks already registered: return
+						break;
+					}
+				}
+			}
+
 			let need = self.need_count.load(Acquire);
 			if need == 0 {
-				// lock need_count for 0->1 transition
+				// lock need_count for 0->1 transition (or hooks registration)
 				if self.need_count.compare_exchange_weak(0, !0, Relaxed, Relaxed).is_ok() {
-					// FIXME init details once for registering hooks
-					if self.registered_hooks.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
+					// register hooks: as this section is mutexed via need_count lock, we can update registered_hooks non-atomically
+					// This allows us to only set registered_hooks to true once registering has finished, not just when we started
+					if !self.is_initialized.load(Relaxed) {
 						self.details.init(self);
+						let hooks_done = self.is_initialized.compare_exchange(false, true, Relaxed, Relaxed).is_ok();
+						assert!(hooks_done, "hooks were registered twice!")
 					}
 
-					self.details.on_need_inc(self);
-					self.construct_dec();
-					let unlock = self.need_count.compare_exchange(!0, 1, Release, Relaxed).is_ok();
+					let unlock_state = match inc_type {
+						NeedInc => {
+							self.details.on_need_inc(self);
+							self.construct_dec();
+							1
+						}
+						EnsureInitialized => 0
+					};
+					let unlock = self.need_count.compare_exchange(!0, unlock_state, Release, Relaxed).is_ok();
 					assert!(unlock, "need_count changed away from locked !0 value!");
 					break;
 				}
@@ -204,9 +243,19 @@ impl<T> Reinit<T>
 				// locked from case above, busy wait
 				spin_loop();
 			} else {
-				// need > 0: just increment
-				if self.need_count.compare_exchange_weak(need, need + 1, Release, Relaxed).is_ok() {
-					break;
+				match inc_type {
+					NeedInc => {
+						// need > 0: just increment
+						if self.need_count.compare_exchange_weak(need, need + 1, Release, Relaxed).is_ok() {
+							break;
+						}
+					}
+					EnsureInitialized => {
+						// need > 0: race condition between top registered_hooks check and need_count lock
+						// by now hooks must have been registered by a different thread
+						assert!(self.is_initialized.load(Relaxed));
+						break;
+					}
 				}
 			}
 		}
