@@ -1,4 +1,4 @@
-use crate::reinit::{Reinit, ReinitRef};
+use crate::reinit::Reinit;
 
 pub trait Target {}
 
@@ -34,7 +34,7 @@ impl<T: 'static> Reinit<T> {
 
 #[cfg(test)]
 impl<T: 'static> NeedGuard<T> {
-	pub fn test_ref(&'static self) -> ReinitRef<T> {
+	pub fn test_ref(&'static self) -> crate::reinit::ReinitRef<T> {
 		self.reinit.test_ref()
 	}
 }

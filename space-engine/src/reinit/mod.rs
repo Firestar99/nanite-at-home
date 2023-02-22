@@ -118,7 +118,10 @@ impl<T> Clone for ReinitRef<T> {
 impl<T> Drop for ReinitRef<T> {
 	#[inline]
 	fn drop(&mut self) {
-		unsafe { self.inner().ref_dec() }
+		unsafe {
+			// SAFETY: inner has to be Initialized for self to exist
+			self.inner().ref_dec()
+		}
 	}
 }
 
@@ -127,7 +130,10 @@ impl<T> Deref for ReinitRef<T> {
 
 	#[inline]
 	fn deref(&self) -> &Self::Target {
-		unsafe { self.inner().ref_get_instance() }
+		unsafe {
+			// SAFETY: inner has to be Initialized for self to exist
+			self.inner().ref_get_instance()
+		}
 	}
 }
 
@@ -363,7 +369,10 @@ impl<T> Reinit<T>
 		// initialize self.instance
 		{
 			assert_eq!(self.ref_cnt.load(Relaxed), 0);
-			unsafe { &mut *self.instance.get() }.write(t);
+			unsafe {
+				// SAFETY: as ref_cnt == 0 no references must exist on instance
+				&mut *self.instance.get()
+			}.write(t);
 			self.ref_cnt.store(1, Release);
 		}
 
@@ -611,15 +620,19 @@ impl<T: 'static> ReinitDetails<T> for ReinitNoRestart<T>
 #[cfg(test)]
 impl<T> Reinit<T> {
 	#[inline]
-	#[allow(clippy::mut_from_ref)]
-	pub fn test_get_instance(&'static self) -> &T {
-		self.test_ref().deref()
+	pub fn test_instance(&self) -> &T {
+		assert!(self.ref_cnt.load(Relaxed) > 0);
+		unsafe {
+			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
+			(*self.instance.get()).assume_init_ref()
+		}
 	}
 
+	#[inline]
 	pub fn test_ref(&'static self) -> ReinitRef<T> {
 		assert!(self.ref_cnt.load(Relaxed) > 0);
 		unsafe {
-			// SAFETY: checked above, BUT does not account for multithreading
+			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
 			ReinitRef::new(self)
 		}
 	}
