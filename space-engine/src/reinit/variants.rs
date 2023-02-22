@@ -1,6 +1,5 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::mem::transmute;
 use std::ptr::null_mut;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering::{Relaxed, Release};
@@ -66,10 +65,8 @@ macro_rules! reinit_variant_struct {
 		impl<T: 'static, $($x: 'static,)+> ReinitDetails<T> for [<Reinit $num>]<T, $($x,)+>
 		{
 			fn init(&'static self, parent: &'static Reinit<T>) {
-				unsafe {
-					self.parent.compare_exchange(null_mut(), transmute(&parent), Release, Relaxed)
-						.expect("Multiple Reinits initialized this ReinitDetails! There should only be a 1:1 relationship between them, which the macros enforce.");
-				}
+				self.parent.compare_exchange(null_mut(), parent as *const _ as *mut _, Release, Relaxed)
+					.expect("Multiple Reinits initialized this ReinitDetails! There should only be a 1:1 relationship between them, which the macros enforce.");
 				$(self.[<$x:lower>].reinit.add_callback(self, Self::[<accept_ $x:lower>], Self::[<request_drop_ $x:lower>]);)+
 			}
 
