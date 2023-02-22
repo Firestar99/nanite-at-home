@@ -1,11 +1,12 @@
-use std::cell::{Cell, RefCell};
-use std::mem::swap;
 use std::ops::Deref;
-use std::sync::Arc;
-use std::sync::atomic::AtomicI32;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 
+use parking_lot::Mutex;
+
+use crate::reinit;
 use crate::reinit::{Reinit, ReinitRef, Restart, State};
+use crate::reinit_no_restart;
 
 #[derive(Default, Eq, PartialEq, Debug, Copy, Clone)]
 struct Calls {
@@ -13,6 +14,17 @@ struct Calls {
 	drop: i32,
 	callback: i32,
 	callback_drop: i32,
+}
+
+impl Calls {
+	const fn def() -> Self {
+		Self {
+			new: 0,
+			drop: 0,
+			callback: 0,
+			callback_drop: 0,
+		}
+	}
 }
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
@@ -24,15 +36,25 @@ struct Shared {
 	d: Calls,
 }
 
-type SharedRef = Arc<RefCell<Shared>>;
+type SharedRef = Mutex<Shared>;
 
 impl Shared {
-	fn new() -> SharedRef {
-		Arc::new(RefCell::new(Shared { ..Default::default() }))
+	const fn new() -> SharedRef {
+		Mutex::new(Self::def())
+	}
+
+	const fn def() -> Self {
+		Self {
+			counter: 1,
+			a: Calls::def(),
+			b: Calls::def(),
+			c: Calls::def(),
+			d: Calls::def(),
+		}
 	}
 
 	fn reset(&mut self) {
-		*self = Shared { ..Default::default() }
+		*self = Default::default()
 	}
 
 	fn register<F>(&mut self, call: F)
@@ -49,132 +71,125 @@ impl Shared {
 
 impl Default for Shared {
 	fn default() -> Self {
-		Self {
-			counter: 1,
-			a: Default::default(),
-			b: Default::default(),
-			c: Default::default(),
-			d: Default::default(),
-		}
+		Self::def()
 	}
 }
 
 struct AT<T: 'static> {
-	shared: SharedRef,
+	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T: Clone> AT<T> {
-	fn new(shared: &SharedRef, t: T) -> Reinit<Self> {
-		let shared_a = shared.clone();
-		let a = Reinit::new0(move |_| {
-			shared_a.deref().borrow_mut().register(|s| &mut s.a.new);
-			AT { shared: shared_a.clone(), t: t.clone() }
-		});
-		a.add_callback(
+impl<T> AT<T> {
+	fn new(shared: &'static SharedRef, t: T) -> Self {
+		shared.lock().register(|s| &mut s.a.new);
+		Self { shared, t }
+	}
+
+	fn register_callbacks(reinit: &'static Reinit<Self>, shared: &'static SharedRef) {
+		reinit.ensure_initialized();
+		reinit.add_callback(
 			shared,
-			|shared, _a| shared.deref().borrow_mut().register(|s| &mut s.a.callback),
-			|shared| shared.deref().borrow_mut().register(|s| &mut s.a.callback_drop),
-		);
-		a
+			|shared, _a| shared.deref().lock().register(|s| &mut s.a.callback),
+			|shared| shared.deref().lock().register(|s| &mut s.a.callback_drop),
+		)
 	}
 }
 
 impl<T> Drop for AT<T> {
 	fn drop(&mut self) {
-		self.shared.deref().borrow_mut().register(|s| &mut s.a.drop);
+		self.shared.lock().register(|s| &mut s.a.drop);
 	}
 }
 
 struct BT<T: 'static, A: 'static> {
-	shared: SharedRef,
 	a: ReinitRef<A>,
+	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T: Clone, A> BT<T, A> {
-	fn new(shared: &SharedRef, a: &Reinit<A>, t: T) -> Reinit<Self> {
-		let shared_a = shared.clone();
-		let b = Reinit::new1(a, move |a, _| {
-			shared_a.deref().borrow_mut().register(|s| &mut s.b.new);
-			BT { a, shared: shared_a.clone(), t: t.clone() }
-		});
-		b.add_callback(
+impl<T, A> BT<T, A> {
+	fn new(a: ReinitRef<A>, shared: &'static SharedRef, t: T) -> Self {
+		shared.lock().register(|s| &mut s.b.new);
+		Self { a, shared, t }
+	}
+
+	fn register_callbacks(reinit: &'static Reinit<Self>, shared: &'static SharedRef) {
+		reinit.ensure_initialized();
+		reinit.add_callback(
 			shared,
-			|shared, _b| shared.deref().borrow_mut().register(|s| &mut s.b.callback),
-			|shared| shared.deref().borrow_mut().register(|s| &mut s.b.callback_drop),
-		);
-		b
+			|shared, _a| shared.deref().lock().register(|s| &mut s.b.callback),
+			|shared| shared.deref().lock().register(|s| &mut s.b.callback_drop),
+		)
 	}
 }
 
 impl<T, A> Drop for BT<T, A> {
 	fn drop(&mut self) {
-		self.shared.deref().borrow_mut().register(|s| &mut s.b.drop);
+		self.shared.lock().register(|s| &mut s.b.drop);
 	}
 }
 
 struct CT<T: 'static, A: 'static> {
-	shared: SharedRef,
 	a: ReinitRef<A>,
+	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T: Clone, A> CT<T, A> {
-	fn new(shared: &SharedRef, a: &Reinit<A>, t: T) -> Reinit<Self> {
-		let shared_a = shared.clone();
-		let c = Reinit::new1(a, move |a, _| {
-			shared_a.deref().borrow_mut().register(|s| &mut s.c.new);
-			CT { a, shared: shared_a.clone(), t: t.clone() }
-		});
-		c.add_callback(
+impl<T, A> CT<T, A> {
+	fn new(a: ReinitRef<A>, shared: &'static SharedRef, t: T) -> Self {
+		shared.lock().register(|s| &mut s.c.new);
+		Self { a, shared, t }
+	}
+
+	fn register_callbacks(reinit: &'static Reinit<Self>, shared: &'static SharedRef) {
+		reinit.ensure_initialized();
+		reinit.add_callback(
 			shared,
-			|shared, _c| shared.deref().borrow_mut().register(|s| &mut s.c.callback),
-			|shared| shared.deref().borrow_mut().register(|s| &mut s.c.callback_drop),
-		);
-		c
+			|shared, _a| shared.deref().lock().register(|s| &mut s.c.callback),
+			|shared| shared.deref().lock().register(|s| &mut s.c.callback_drop),
+		)
 	}
 }
 
 impl<T, A> Drop for CT<T, A> {
 	fn drop(&mut self) {
-		self.shared.deref().borrow_mut().register(|s| &mut s.c.drop);
+		self.shared.lock().register(|s| &mut s.c.drop);
 	}
 }
 
 struct DT<T: 'static, B: 'static, C: 'static> {
-	shared: SharedRef,
 	b: ReinitRef<B>,
 	c: ReinitRef<C>,
+	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T: Clone, B, C> DT<T, B, C> {
-	fn new(shared: &SharedRef, b: &Reinit<B>, c: &Reinit<C>, t: T) -> Reinit<Self> {
-		let shared_a = shared.clone();
-		let d = Reinit::new2(b, c, move |b, c, _| {
-			shared_a.deref().borrow_mut().register(|s| &mut s.d.new);
-			DT { b, c, shared: shared_a.clone(), t: t.clone() }
-		});
-		d.add_callback(
+impl<T, B, C> DT<T, B, C> {
+	fn new(b: ReinitRef<B>, c: ReinitRef<C>, shared: &'static SharedRef, t: T) -> Self {
+		shared.lock().register(|s| &mut s.d.new);
+		Self { b, c, shared, t }
+	}
+
+	fn register_callbacks(reinit: &'static Reinit<Self>, shared: &'static SharedRef) {
+		reinit.ensure_initialized();
+		reinit.add_callback(
 			shared,
-			|shared, _d| shared.deref().borrow_mut().register(|s| &mut s.d.callback),
-			|shared| shared.deref().borrow_mut().register(|s| &mut s.d.callback_drop),
-		);
-		d
+			|shared, _a| shared.deref().lock().register(|s| &mut s.d.callback),
+			|shared| shared.deref().lock().register(|s| &mut s.d.callback_drop),
+		)
 	}
 }
 
 impl<T, B, C> Drop for DT<T, B, C> {
 	fn drop(&mut self) {
-		self.shared.deref().borrow_mut().register(|s| &mut s.d.drop);
+		self.shared.lock().register(|s| &mut s.d.drop);
 	}
 }
 
 #[test]
 fn test_shared_reset() {
-	let shared = Shared::new();
-	*shared.deref().borrow_mut() = Shared {
+	let mut shared = Shared {
 		b: Calls {
 			callback_drop: 0,
 			drop: 1,
@@ -185,241 +200,285 @@ fn test_shared_reset() {
 		..Default::default()
 	};
 
-	shared.deref().borrow_mut().reset();
-	assert_eq!(*shared.deref().borrow_mut(), Shared {
-		..Default::default()
-	});
+	shared.reset();
+	assert_eq!(shared, Shared::default());
 }
 
-#[test]
-fn reinit0_basic() {
-	let inited = Arc::new(Cell::new(false));
-	let inited2 = inited.clone();
-	let reinit = Reinit::new0(move |_| {
-		inited2.set(true);
+mod test_functions_panic {
+	use super::*;
+
+	reinit!(REINIT: i32 = {
+		panic!("Should never construct")
 	});
-	assert!(matches!(reinit.test_get_state(), State::Initialized));
-	assert_eq!(reinit.ptr.countdown.load(Relaxed), 0);
-	assert!(inited.get());
-	assert!(!reinit.ptr.queued_restart.load(Relaxed));
-	assert!(reinit.ptr.ref_cnt.load(Relaxed) > 0);
+
+	#[test]
+	#[should_panic]
+	fn test_ref_panic() {
+		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		REINIT.test_ref();
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_instance_panic() {
+		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		REINIT.test_instance();
+	}
 }
 
-#[test]
-fn reinit0_reset_manual() {
+
+mod reinit0_basic {
+	use super::*;
+
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit!(REINIT: () = () => |_| {
+		INITED.store(true, Relaxed);
+	});
+
+	#[test]
+	fn reinit0_basic() {
+		assert_eq!(INITED.load(Relaxed), false);
+
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert_eq!(REINIT.countdown.load(Relaxed), 0);
+		assert_eq!(INITED.load(Relaxed), true);
+		assert!(!REINIT.queued_restart.load(Relaxed));
+		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
+	}
+}
+
+mod reinit0_reset_manual {
+	use super::*;
+
 	struct Shared {
-		a: Option<Reinit<i32>>,
+		a: Option<&'static Reinit<i32>>,
 		is_callback_init: bool,
 		next_value: i32,
 		received: Option<i32>,
 		freed: bool,
 		restart: Option<Restart<i32>>,
 	}
-	let shared = Arc::new(RefCell::new(Shared { a: None, is_callback_init: true, next_value: 42, received: None, freed: false, restart: None }));
 
-	let shared_a = shared.clone();
-	let a = Reinit::new0(move |restart| {
-		let mut s = shared_a.deref().borrow_mut();
+	static SHARED: Mutex<Shared> = Mutex::new(Shared { a: None, is_callback_init: true, next_value: 42, received: None, freed: false, restart: None });
+	reinit!(A: i32 = () => |restart| {
+		let mut s = SHARED.lock();
 		s.restart = Some(restart);
 		s.next_value
 	});
-	shared.deref().borrow_mut().a = Some(a.clone());
-	assert!(matches!(a.test_get_state(), State::Initialized));
 
-	// add callback
-	a.add_callback(&shared, |shared, v| {
-		let mut s = shared.deref().borrow_mut();
-		assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
-		assert_eq!(s.received, None);
-		s.received = Some(*v);
-	}, |shared| {
-		let mut s = shared.deref().borrow_mut();
-		assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Destructing));
-		assert!(!s.freed);
-		assert_eq!(s.received, None, "must not give value and then clear it");
-		s.freed = true;
-	});
-	{
-		let mut s = shared.deref().borrow_mut();
-		s.is_callback_init = false;
-		assert_eq!(s.received, Some(42));
-		assert!(!s.freed);
-	}
+	#[test]
+	fn reinit0_reset_manual() {
+		SHARED.lock().a = Some(&A);
+		let _need = A.test_need();
+		assert!(matches!(A.test_get_state(), State::Initialized));
 
-	// restart
-	let restart;
-	{
-		let mut s = shared.deref().borrow_mut();
-		s.next_value = 127;
-		s.received = None;
-		restart = s.restart.as_ref().unwrap().clone();
-	}
-	restart.restart();
-	{
-		let s = shared.deref().borrow_mut();
-		assert!(matches!(a.test_get_state(), State::Initialized));
-		assert!(s.freed);
-		assert_eq!(s.received, Some(127));
+		// add callback
+		A.add_callback(&SHARED, |shared, v| {
+			let mut s = shared.lock();
+			assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
+			assert_eq!(s.received, None);
+			s.received = Some(*v);
+		}, |shared| {
+			let mut s = shared.lock();
+			assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Destructing));
+			assert!(!s.freed);
+			assert_eq!(s.received, None, "must not give value and then clear it");
+			s.freed = true;
+		});
+		{
+			let mut s = SHARED.lock();
+			s.is_callback_init = false;
+			assert_eq!(s.received, Some(42));
+			assert!(!s.freed);
+		}
+
+		// restart
+		let restart;
+		{
+			let mut s = SHARED.lock();
+			s.next_value = 127;
+			s.received = None;
+			restart = *s.restart.as_ref().unwrap();
+		}
+		restart.restart();
+		{
+			let s = SHARED.lock();
+			assert!(matches!(A.test_get_state(), State::Initialized));
+			assert!(s.freed);
+			assert_eq!(s.received, Some(127));
+		}
+
+		// drop
+		{
+			let mut s = SHARED.lock();
+			s.freed = false;
+			s.received = None;
+		}
+		drop(_need);
+		{
+			let s = SHARED.lock();
+			assert!(matches!(A.test_get_state(), State::Uninitialized));
+			assert!(s.freed);
+			assert_eq!(s.received, None);
+		}
 	}
 }
 
-#[test]
-fn reinit0_restart() {
+mod reinit0_restart {
+	use super::*;
+
 	type A = AT<()>;
 
-	// init
-	let shared = Shared::new();
-	let a = A::new(&shared, ());
-	assert_eq!(*shared.deref().borrow_mut(), Shared {
-		a: Calls {
-			new: 1,
-			callback: 2,
-			..Default::default()
-		},
-		counter: 3,
-		..Default::default()
-	});
-	shared.deref().borrow_mut().reset();
+	static SHARED: SharedRef = Shared::new();
+	reinit!(A: A = A::new(&SHARED, ()));
 
-	// restart A
-	a.test_restart();
-	assert_eq!(*shared.deref().borrow_mut(), Shared {
-		a: Calls {
-			callback_drop: 1,
-			drop: 2,
-			new: 3,
-			callback: 4,
-		},
-		counter: 5,
-		..Default::default()
-	});
-	shared.deref().borrow_mut().reset();
+	#[test]
+	fn reinit0_restart() {
+		A::register_callbacks(&A, &SHARED);
+
+		// init
+		let _need = A.test_need();
+		assert_eq!(*SHARED.lock(), Shared {
+			a: Calls {
+				new: 1,
+				callback: 2,
+				..Default::default()
+			},
+			counter: 3,
+			..Default::default()
+		});
+		SHARED.lock().reset();
+
+		// restart A
+		A.test_restart();
+		assert_eq!(*SHARED.lock(), Shared {
+			a: Calls {
+				callback_drop: 1,
+				drop: 2,
+				new: 3,
+				callback: 4,
+			},
+			counter: 5,
+			..Default::default()
+		});
+		SHARED.lock().reset();
+
+		// drop
+		drop(_need);
+		assert_eq!(*SHARED.lock(), Shared {
+			a: Calls {
+				callback_drop: 1,
+				drop: 2,
+				..Default::default()
+			},
+			counter: 3,
+			..Default::default()
+		});
+		SHARED.lock().reset();
+	}
 }
 
-// TODO: need proper shutdown mechanism, ignored for now
-#[test]
-#[ignore]
-fn reinit0_free() {
-	let freed = Arc::new(Cell::new(false));
-	let freed2 = freed.clone();
+mod reinit0_need {
+	use super::*;
 
-	struct Freeable {
-		freed: Arc<Cell<bool>>,
-	}
+	static FREED: AtomicBool = AtomicBool::new(false);
 
-	impl Drop for Freeable {
+	struct Bla {}
+
+	impl Drop for Bla {
 		fn drop(&mut self) {
-			self.freed.set(true);
+			FREED.store(true, Relaxed);
 		}
 	}
 
-	{
-		let _reinit = Reinit::new0(move |_| {
-			Freeable {
-				freed: freed2.clone()
-			}
-		});
-		assert!(!freed.get());
+	reinit!(REINIT: Bla = Bla {});
+
+	#[test]
+	fn reinit0_need() {
+		assert!(matches!(REINIT.test_get_state(), State::Uninitialized));
+		assert!(!FREED.load(Relaxed));
+
+		// init
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(!FREED.load(Relaxed));
+
+		// drop
+		drop(_need);
+		assert!(matches!(REINIT.test_get_state(), State::Uninitialized));
+		assert!(FREED.load(Relaxed), "T was not freed by Reinit!");
 	}
-	assert!(freed.get(), "Leaked Arc");
 }
 
-#[test]
-fn reinit1_basic() {
-	type A = AT<i32>;
+mod reinit1_basic {
+	use std::cell::Cell;
+
+	use super::*;
+
+	struct EvilCell(Cell<i32>);
+
+	// SAFETY: only safe for this test
+	unsafe impl Send for EvilCell {}
+
+	// SAFETY: only safe for this test
+	unsafe impl Sync for EvilCell {}
+
+	type A = AT<EvilCell>;
 	type B = BT<i32, A>;
 
-	let shared = Shared::new();
-	let a = A::new(&shared, 0);
-	assert!(matches!(a.test_get_state(), State::Initialized));
-	let b = B::new(&shared, &a, 0);
-	assert!(matches!(b.test_get_state(), State::Initialized));
+	static SHARED: SharedRef = Shared::new();
+	reinit!(A: A = A::new(&SHARED, EvilCell(Cell::new(0))));
+	reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, 2));
 
-	assert_eq!(a.test_get_instance() as *const A, b.test_get_instance().a.deref() as *const A);
-	assert_eq!(a.test_get_instance().t, 0);
-	a.test_get_instance().t = 42;
-	assert_eq!(b.test_get_instance().a.t, 42);
-	assert_eq!(b.test_get_instance().t, 0);
-}
+	#[test]
+	fn reinit1_basic() {
+		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert!(matches!(B.test_get_state(), State::Uninitialized));
 
-#[test]
-fn reinit1_restart() {
-	type A = AT<()>;
-	type B = BT<(), A>;
+		// init
+		let _need = B.test_need();
+		assert!(matches!(A.test_get_state(), State::Initialized));
+		assert!(matches!(B.test_get_state(), State::Initialized));
 
-	// init
-	let shared = Shared::new();
-	let a = A::new(&shared, ());
-	let _b = B::new(&shared, &a, ());
-	assert_eq!(*shared.deref().borrow_mut(), Shared {
-		a: Calls {
-			new: 1,
-			callback: 2,
-			..Default::default()
-		},
-		b: Calls {
-			new: 3,
-			callback: 4,
-			..Default::default()
-		},
-		counter: 5,
-		..Default::default()
-	});
-	shared.deref().borrow_mut().reset();
+		assert_eq!(A.test_instance() as *const A, B.test_instance().a.deref() as *const A);
+		assert_eq!(A.test_instance().t.0.get(), 0);
+		A.test_instance().t.0.set(42);
+		assert_eq!(B.test_instance().a.t.0.get(), 42);
+		assert_eq!(B.test_instance().t, 2);
 
-	// restart
-	a.test_restart();
-	assert_eq!(*shared.deref().borrow_mut(), Shared {
-		a: Calls {
-			callback_drop: 1,
-			drop: 4,
-			new: 5,
-			callback: 6,
-		},
-		b: Calls {
-			callback_drop: 2,
-			drop: 3,
-			new: 7,
-			callback: 8,
-		},
-		counter: 9,
-		..Default::default()
-	});
-	shared.deref().borrow_mut().reset();
-}
-
-#[test]
-fn reinit2_diamond_b_then_c() {
-	reinit2_diamond(true);
-}
-
-#[test]
-fn reinit2_diamond_c_then_b() {
-	reinit2_diamond(false);
-}
-
-fn reinit2_diamond(b_then_c: bool) {
-	type A = AT<()>;
-	type B = BT<(), A>;
-	type C = CT<(), A>;
-	type D = DT<(), B, C>;
-
-	// init
-	let shared = Shared::new();
-	let a = A::new(&shared, ());
-	let b;
-	let c;
-	if b_then_c {
-		b = B::new(&shared, &a, ());
-		c = C::new(&shared, &a, ());
-	} else {
-		c = C::new(&shared, &a, ());
-		b = B::new(&shared, &a, ());
+		// drop
+		drop(_need);
+		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert!(matches!(B.test_get_state(), State::Uninitialized));
 	}
-	let _d = D::new(&shared, &b, &c, ());
+}
 
-	{
-		let mut expected = Shared {
+mod reinit1_restart {
+	use super::*;
+
+	type A = AT<()>;
+	type B = BT<(), A>;
+
+	static SHARED: SharedRef = Shared::new();
+	reinit!(A: A = A::new(&SHARED, ()));
+	reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, ()));
+
+	#[test]
+	fn reinit1_restart() {
+		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert!(matches!(B.test_get_state(), State::Uninitialized));
+
+		A::register_callbacks(&A, &SHARED);
+		B::register_callbacks(&B, &SHARED);
+
+
+		// init
+		let _need = B.test_need();
+		assert!(matches!(A.test_get_state(), State::Initialized));
+		assert!(matches!(B.test_get_state(), State::Initialized));
+
+		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
 				new: 1,
 				callback: 2,
@@ -430,181 +489,353 @@ fn reinit2_diamond(b_then_c: bool) {
 				callback: 4,
 				..Default::default()
 			},
-			c: Calls {
-				new: 5,
-				callback: 6,
-				..Default::default()
-			},
-			d: Calls {
-				new: 7,
-				callback: 8,
-				..Default::default()
-			},
-			counter: 9,
-		};
-		if !b_then_c {
-			swap(&mut expected.b, &mut expected.c);
-		}
-		assert_eq!(*shared.deref().borrow_mut(), expected);
-		shared.deref().borrow_mut().reset();
-	}
+			counter: 5,
+			..Default::default()
+		});
+		SHARED.lock().reset();
 
-	// restart
-	{
-		a.test_restart();
-		let mut expected = Shared {
+		// restart
+		A.test_restart();
+		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
 				callback_drop: 1,
-				drop: 8,
-				new: 9,
-				callback: 10,
+				drop: 4,
+				new: 5,
+				callback: 6,
 			},
 			b: Calls {
 				callback_drop: 2,
-				drop: 5,
-				new: 11,
-				callback: 12,
+				drop: 3,
+				new: 7,
+				callback: 8,
 			},
-			c: Calls {
-				callback_drop: 6,
-				drop: 7,
-				new: 13,
-				callback: 14,
-			},
-			d: Calls {
-				callback_drop: 3,
+			counter: 9,
+			..Default::default()
+		});
+		SHARED.lock().reset();
+
+
+		// drop
+		drop(_need);
+		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert_eq!(*SHARED.lock(), Shared {
+			a: Calls {
+				callback_drop: 1,
 				drop: 4,
-				new: 15,
-				callback: 16,
+				..Default::default()
 			},
-			counter: 17,
-		};
-		if !b_then_c {
-			swap(&mut expected.b, &mut expected.c);
-		}
-		assert_eq!(*shared.deref().borrow_mut(), expected);
-		shared.deref().borrow_mut().reset();
+			b: Calls {
+				callback_drop: 2,
+				drop: 3,
+				..Default::default()
+			},
+			counter: 5,
+			..Default::default()
+		});
+		SHARED.lock().reset();
 	}
 }
 
-#[test]
-fn reinit_restart_during_construction() {
+mod reinit2_diamond {
+	use std::mem::swap;
+
+	use super::*;
+
+	type A = AT<()>;
+	type B = BT<(), A>;
+	type C = CT<(), A>;
+	type D = DT<(), B, C>;
+
+	mod bc {
+		use super::*;
+
+		static SHARED: SharedRef = Shared::new();
+		reinit!(A: A = A::new(&SHARED, ()));
+		reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, ()));
+		reinit!(C: C = (A: A) => |a, _| C::new(a, &SHARED, ()));
+		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b, c, &SHARED, ()));
+
+		#[test]
+		fn reinit2_diamond_b_then_c() {
+			reinit2_diamond(&SHARED, &A, &B, &C, &D, true);
+		}
+	}
+
+	mod cb {
+		use super::*;
+
+		static SHARED: SharedRef = Shared::new();
+		reinit!(A: A = A::new(&SHARED, ()));
+		reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, ()));
+		reinit!(C: C = (A: A) => |a, _| C::new(a, &SHARED, ()));
+		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b, c, &SHARED, ()));
+
+		#[test]
+		fn reinit2_diamond_c_then_b() {
+			reinit2_diamond(&SHARED, &A, &B, &C, &D, false);
+		}
+	}
+
+	fn reinit2_diamond(shared: &'static SharedRef, a: &'static Reinit<A>, b: &'static Reinit<B>, c: &'static Reinit<C>, d: &'static Reinit<D>, b_then_c: bool) {
+		A::register_callbacks(&a, &shared);
+		if b_then_c {
+			B::register_callbacks(&b, &shared);
+			C::register_callbacks(&c, &shared);
+		} else {
+			C::register_callbacks(&c, &shared);
+			B::register_callbacks(&b, &shared);
+		}
+		D::register_callbacks(&d, &shared);
+
+		// init
+		let _need = d.test_need();
+		{
+			let mut expected = Shared {
+				a: Calls {
+					new: 1,
+					callback: 2,
+					..Default::default()
+				},
+				b: Calls {
+					new: 3,
+					callback: 4,
+					..Default::default()
+				},
+				c: Calls {
+					new: 5,
+					callback: 6,
+					..Default::default()
+				},
+				d: Calls {
+					new: 7,
+					callback: 8,
+					..Default::default()
+				},
+				counter: 9,
+			};
+			if !b_then_c {
+				swap(&mut expected.b, &mut expected.c);
+			}
+			let mut shared = shared.lock();
+			assert_eq!(*shared, expected);
+			shared.reset();
+		}
+
+		// restart
+		a.test_restart();
+		{
+			let mut expected = Shared {
+				a: Calls {
+					callback_drop: 1,
+					drop: 8,
+					new: 9,
+					callback: 10,
+				},
+				b: Calls {
+					callback_drop: 2,
+					drop: 5,
+					new: 11,
+					callback: 12,
+				},
+				c: Calls {
+					callback_drop: 6,
+					drop: 7,
+					new: 13,
+					callback: 14,
+				},
+				d: Calls {
+					callback_drop: 3,
+					drop: 4,
+					new: 15,
+					callback: 16,
+				},
+				counter: 17,
+			};
+			if !b_then_c {
+				swap(&mut expected.b, &mut expected.c);
+			}
+			let mut shared = shared.lock();
+			assert_eq!(*shared, expected);
+			shared.reset();
+		}
+
+		// drop
+		drop(_need);
+		{
+			let mut expected = Shared {
+				a: Calls {
+					callback_drop: 1,
+					drop: 8,
+					..Default::default()
+				},
+				b: Calls {
+					callback_drop: 2,
+					drop: 5,
+					..Default::default()
+				},
+				c: Calls {
+					callback_drop: 6,
+					drop: 7,
+					..Default::default()
+				},
+				d: Calls {
+					callback_drop: 3,
+					drop: 4,
+					..Default::default()
+				},
+				counter: 9,
+			};
+			if !b_then_c {
+				swap(&mut expected.b, &mut expected.c);
+			}
+			let mut shared = shared.lock();
+			assert_eq!(*shared, expected);
+			shared.reset();
+		}
+	}
+}
+
+// #[test]
+fn reinit_restart_while_not_needed() {
+	// FIXME write test
+}
+
+mod reinit_restart_during_construction {
+	use super::*;
+
 	type A = AT<i32>;
 
+	#[derive(Default)]
 	struct State {
-		counter: AtomicI32,
-		// oof, inefficient, unnecessary Arc
-		shared: SharedRef,
-		shared_during_restart: RefCell<Shared>,
-		shared_before_restart: RefCell<Shared>,
+		counter: i32,
+		shared_during_restart: Shared,
+		shared_before_restart: Shared,
 	}
 
-	// copy from AT::new and modified
-	fn new(shared: &Arc<State>) -> Reinit<A> {
-		let shared_a = shared.clone();
-		let a = Reinit::new0(move |restart| {
-			shared_a.shared.borrow_mut().register(|s| &mut s.a.new);
-			let i = shared_a.counter.fetch_add(1, Relaxed);
-			match i {
-				1 => {
-					*shared_a.shared_before_restart.borrow_mut() = *shared_a.shared.borrow_mut();
-					shared_a.shared.borrow_mut().reset();
-					restart.restart();
-				}
-				2 => {
-					*shared_a.shared_during_restart.borrow_mut() = *shared_a.shared.borrow_mut();
-					shared_a.shared.borrow_mut().reset();
-				}
-				_ => {}
+	static STATE: Mutex<State> = Mutex::new(State {
+		counter: 0,
+		shared_during_restart: Shared::def(),
+		shared_before_restart: Shared::def(),
+	});
+	static SHARED: SharedRef = Shared::new();
+
+	reinit!(A: A = () => |restart| {
+		let mut state = STATE.lock();
+		let mut shared = SHARED.lock();
+		shared.register(|s| &mut s.a.new);
+		match state.counter {
+			1 => {
+				state.shared_before_restart = *shared;
+				shared.reset();
+				restart.restart();
 			}
-			AT { shared: shared_a.shared.clone(), t: i }
-		});
-		a.add_callback(
-			shared,
-			|shared, _a| shared.shared.borrow_mut().register(|s| &mut s.a.callback),
-			|shared| shared.shared.borrow_mut().register(|s| &mut s.a.callback_drop),
-		);
-		a
+			2 => {
+				state.shared_during_restart = *shared;
+				shared.reset();
+			}
+			_ => {}
+		}
+		state.counter += 1;
+		AT { shared: &SHARED, t: state.counter }
+	});
+
+	#[test]
+	fn reinit_restart_during_construction() {
+		A::register_callbacks(&A, &SHARED);
+
+		// init
+		let _need = A.test_need();
+		{
+			let state = STATE.lock();
+			let mut shared = SHARED.lock();
+			assert_eq!(shared.counter, 1);
+			assert_eq!(A.test_instance().t, shared.counter - 1);
+			assert_eq!(*shared, Shared {
+				a: Calls {
+					new: 1,
+					callback: 2,
+					..Default::default()
+				},
+				counter: 3,
+				..Default::default()
+			});
+			assert_eq!(state.shared_before_restart, Default::default());
+			assert_eq!(state.shared_during_restart, Default::default());
+			shared.reset();
+		}
+
+		// restart
+		A.test_restart();
+		{
+			let state = STATE.lock();
+			let shared = SHARED.lock();
+			assert_eq!(state.counter, 3);
+			assert_eq!(A.test_instance().t, shared.counter - 1);
+			assert_eq!(state.shared_before_restart, Shared {
+				a: Calls {
+					callback_drop: 1,
+					drop: 2,
+					new: 3,
+					callback: 0,
+				},
+				counter: 4,
+				..Default::default()
+			});
+			assert_eq!(state.shared_during_restart, Shared {
+				a: Calls {
+					callback_drop: 2,
+					drop: 3,
+					new: 4,
+					callback: 1,
+				},
+				counter: 5,
+				..Default::default()
+			});
+			assert_eq!(*shared, Shared {
+				a: Calls {
+					callback_drop: 0,
+					drop: 0,
+					new: 0,
+					callback: 1,
+				},
+				counter: 2,
+				..Default::default()
+			});
+		}
 	}
-
-	let shared = Arc::new(State {
-		counter: AtomicI32::new(0),
-		shared: Shared::new(),
-		shared_before_restart: RefCell::new(Default::default()),
-		shared_during_restart: RefCell::new(Default::default()),
-	});
-	let a = new(&shared);
-
-	assert_eq!(shared.counter.load(Relaxed), 1);
-	assert_eq!(a.test_get_instance().t, shared.counter.load(Relaxed) - 1);
-	assert_eq!(*shared.shared.borrow_mut(), Shared {
-		a: Calls {
-			new: 1,
-			callback: 2,
-			..Default::default()
-		},
-		counter: 3,
-		..Default::default()
-	});
-	assert_eq!(*shared.shared_before_restart.borrow_mut(), Default::default());
-	assert_eq!(*shared.shared_during_restart.borrow_mut(), Default::default());
-	shared.shared.borrow_mut().reset();
-
-	a.test_restart();
-	assert_eq!(shared.counter.load(Relaxed), 3);
-	assert_eq!(a.test_get_instance().t, shared.counter.load(Relaxed) - 1);
-	assert_eq!(*shared.shared_before_restart.borrow_mut(), Shared {
-		a: Calls {
-			callback_drop: 1,
-			drop: 2,
-			new: 3,
-			callback: 0,
-		},
-		counter: 4,
-		..Default::default()
-	});
-	assert_eq!(*shared.shared_during_restart.borrow_mut(), Shared {
-		a: Calls {
-			callback_drop: 2,
-			drop: 3,
-			new: 4,
-			callback: 1,
-		},
-		counter: 5,
-		..Default::default()
-	});
-	assert_eq!(*shared.shared.borrow_mut(), Shared {
-		a: Calls {
-			callback_drop: 0,
-			drop: 0,
-			new: 0,
-			callback: 1,
-		},
-		counter: 2,
-		..Default::default()
-	});
-	shared.shared.borrow_mut().reset();
 }
 
-#[test]
-fn reinit_no_restart_basic() {
-	let inited = Arc::new(Cell::new(false));
-	let inited2 = inited.clone();
-	let reinit = Reinit::new_no_restart(move || {
-		inited2.set(true);
+mod reinit_no_restart_basic {
+	use super::*;
+
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit_no_restart!(REINIT: () = {
+		INITED.store(true, Relaxed);
 	});
-	assert!(matches!(reinit.test_get_state(), State::Initialized));
-	assert_eq!(reinit.ptr.countdown.load(Relaxed), 0);
-	assert!(inited.get());
-	assert!(!reinit.ptr.queued_restart.load(Relaxed));
-	assert!(reinit.ptr.ref_cnt.load(Relaxed) > 0);
+
+	#[test]
+	fn reinit_no_restart_basic() {
+		let _need = REINIT.test_need();
+
+		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert_eq!(REINIT.countdown.load(Relaxed), 0);
+		assert!(INITED.load(Relaxed));
+		assert!(!REINIT.queued_restart.load(Relaxed));
+		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
+	}
 }
 
-#[test]
-#[should_panic(expected = "Constructed more than once!")]
-fn reinit_no_restart_restarted() {
-	let reinit = Reinit::new_no_restart(move || {
-		Arc::new(42)
-	});
-	reinit.test_restart();
+mod reinit_no_restart_restarted {
+	use super::*;
+
+	reinit_no_restart!(REINIT: i32 = 42);
+
+	#[test]
+	#[should_panic(expected = "Constructed more than once!")]
+	fn reinit_no_restart_restarted() {
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		REINIT.test_restart();
+	}
 }
