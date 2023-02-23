@@ -275,8 +275,8 @@ impl<T> Reinit<T>
 			} else if need == 1 {
 				// lock need_count for 1->0 transition
 				if self.need_count.compare_exchange_weak(1, !0, Relaxed, Relaxed).is_ok() {
-					self.details.on_need_dec(self);
 					self.construct_inc();
+					self.details.on_need_dec(self);
 					let unlock = self.need_count.compare_exchange(!0, 0, Release, Relaxed).is_ok();
 					assert!(unlock, "need_count changed away from locked !0 value!");
 					break;

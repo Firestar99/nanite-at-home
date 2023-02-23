@@ -514,20 +514,19 @@ mod reinit1_restart {
 		});
 		SHARED.lock().reset();
 
-
 		// drop
 		drop(_need);
 		assert!(matches!(A.test_get_state(), State::Uninitialized));
 		assert!(matches!(B.test_get_state(), State::Uninitialized));
 		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
-				callback_drop: 1,
+				callback_drop: 3,
 				drop: 4,
 				..Default::default()
 			},
 			b: Calls {
-				callback_drop: 2,
-				drop: 3,
+				callback_drop: 1,
+				drop: 2,
 				..Default::default()
 			},
 			counter: 5,
@@ -614,9 +613,7 @@ mod reinit2_diamond {
 				},
 				counter: 9,
 			};
-			if !b_then_c {
-				swap(&mut expected.b, &mut expected.c);
-			}
+			// do not swap: need_inc() order is not influenced by callbacks, but by the generics "list"
 			let mut shared = shared.lock();
 			assert_eq!(*shared, expected);
 			shared.reset();
@@ -665,30 +662,28 @@ mod reinit2_diamond {
 		{
 			let mut expected = Shared {
 				a: Calls {
-					callback_drop: 1,
+					callback_drop: 7,
 					drop: 8,
 					..Default::default()
 				},
 				b: Calls {
-					callback_drop: 2,
-					drop: 5,
-					..Default::default()
-				},
-				c: Calls {
-					callback_drop: 6,
-					drop: 7,
-					..Default::default()
-				},
-				d: Calls {
 					callback_drop: 3,
 					drop: 4,
 					..Default::default()
 				},
+				c: Calls {
+					callback_drop: 5,
+					drop: 6,
+					..Default::default()
+				},
+				d: Calls {
+					callback_drop: 1,
+					drop: 2,
+					..Default::default()
+				},
 				counter: 9,
 			};
-			if !b_then_c {
-				swap(&mut expected.b, &mut expected.c);
-			}
+			// do not swap: need_inc() order is not influenced by callbacks, but by the generics "list"
 			let mut shared = shared.lock();
 			assert_eq!(*shared, expected);
 			shared.reset();
@@ -708,13 +703,13 @@ mod reinit_restart_during_construction {
 
 	#[derive(Default)]
 	struct State {
-		counter: i32,
+		restart_cnt: i32,
 		shared_during_restart: Shared,
 		shared_before_restart: Shared,
 	}
 
 	static STATE: Mutex<State> = Mutex::new(State {
-		counter: 0,
+		restart_cnt: 0,
 		shared_during_restart: Shared::def(),
 		shared_before_restart: Shared::def(),
 	});
@@ -724,7 +719,10 @@ mod reinit_restart_during_construction {
 		let mut state = STATE.lock();
 		let mut shared = SHARED.lock();
 		shared.register(|s| &mut s.a.new);
-		match state.counter {
+
+		let restart_cnt = state.restart_cnt;
+		state.restart_cnt += 1;
+		match restart_cnt {
 			1 => {
 				state.shared_before_restart = *shared;
 				shared.reset();
@@ -736,8 +734,7 @@ mod reinit_restart_during_construction {
 			}
 			_ => {}
 		}
-		state.counter += 1;
-		AT { shared: &SHARED, t: state.counter }
+		AT { shared: &SHARED, t: restart_cnt }
 	});
 
 	#[test]
@@ -749,8 +746,8 @@ mod reinit_restart_during_construction {
 		{
 			let state = STATE.lock();
 			let mut shared = SHARED.lock();
-			assert_eq!(shared.counter, 1);
-			assert_eq!(A.test_instance().t, shared.counter - 1);
+			assert_eq!(state.restart_cnt, 1);
+			assert_eq!(A.test_instance().t, state.restart_cnt - 1);
 			assert_eq!(*shared, Shared {
 				a: Calls {
 					new: 1,
@@ -770,8 +767,8 @@ mod reinit_restart_during_construction {
 		{
 			let state = STATE.lock();
 			let shared = SHARED.lock();
-			assert_eq!(state.counter, 3);
-			assert_eq!(A.test_instance().t, shared.counter - 1);
+			assert_eq!(state.restart_cnt, 3);
+			assert_eq!(A.test_instance().t, state.restart_cnt - 1);
 			assert_eq!(state.shared_before_restart, Shared {
 				a: Calls {
 					callback_drop: 1,

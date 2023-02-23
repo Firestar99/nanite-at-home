@@ -8,7 +8,7 @@
     <option name="emulateTerminal" value="false" />
     <option name="withSudo" value="false" />
     <option name="buildTarget" value="REMOTE" />
-    <option name="backtrace" value="SHORT" />
+    <option name="backtrace" value="FULL" />
     <envs />
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
