@@ -48,8 +48,8 @@ macro_rules! reinit_variant_struct {
 			}
 
 			$(
-			fn [<accept_ $x:lower>](&'static self, t: ReinitRef<$x>) {
-				self.[<$x:lower>].value_set(t);
+			fn [<accept_ $x:lower>](&'static self, t: &ReinitRef<$x>) {
+				self.[<$x:lower>].value_set(t.clone());
 				self.parent().construct_dec();
 			}
 			)+

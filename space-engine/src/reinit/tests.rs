@@ -283,7 +283,7 @@ mod reinit0_reset_manual {
 				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
 			}
 			assert_eq!(s.received, None);
-			s.received = Some(*v);
+			s.received = Some(**v);
 		}, |shared| {
 			let mut s = shared.lock();
 			assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Destructing));

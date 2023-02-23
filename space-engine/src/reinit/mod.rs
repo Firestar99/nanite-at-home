@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::hint::spin_loop;
-use std::mem::{MaybeUninit, replace, transmute};
+use std::mem::{forget, MaybeUninit, replace, transmute};
 use std::ops::Deref;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
@@ -370,13 +370,14 @@ impl<T> Reinit<T>
 				self.ref_cnt.store(1, Release);
 			}
 		}
+		// total ordering continues to be ensured: as state is still Destructing no other thread should mess with this object
 
 		// call hooks
+		// create and forget ReinitRef instance without ref counting, clone() it to actually inc ref count
+		let reinit_ref = ReinitRef { inner: self };
 		// TODO optimization: do not call hooks if we should destruct immediately
-		self.call_callbacks(|h| h.accept(unsafe {
-			// SAFETY: we just made self be Initialized
-			ReinitRef::new(self)
-		}));
+		self.call_callbacks(|h| h.accept(&reinit_ref));
+		forget(reinit_ref);
 
 		{
 			let guard = self.state_lock.lock();
@@ -435,16 +436,16 @@ impl<T> Reinit<T>
 	/// One may NOT add or remove callbacks to this and only this Reinit within the accept or request_drop methods, as it will lead to a deadlock.
 	///
 	/// [remove_callback()]: Self::remove_callback
-	pub fn add_callback<C>(&'static self, callee: &'static C, accept: fn(&'static C, ReinitRef<T>), request_drop: fn(&'static C))
+	pub fn add_callback<C>(&'static self, callee: &'static C, accept: fn(&'static C, &ReinitRef<T>), request_drop: fn(&'static C))
 	{
 		// needs to lock before calling accept on hook to ensure proper ordering
 		let mut lock = self.hooks.lock();
 		let hook = Hook::new(callee, accept, request_drop);
 		if self.ref_cnt.load(Relaxed) > 0 {
-			unsafe {
-				// SAFETY: self being constructed is checked in the if above
-				hook.accept(ReinitRef::new(self));
-			}
+			// create and forget ReinitRef instance without ref counting, clone() it to actually inc ref count
+			let reinit_ref = ReinitRef { inner: self };
+			hook.accept(&reinit_ref);
+			forget(reinit_ref);
 		}
 		lock.push(hook.ungenerify());
 	}
@@ -452,12 +453,12 @@ impl<T> Reinit<T>
 
 struct Hook<T: 'static, C: 'static> {
 	callee: &'static C,
-	accept: fn(&'static C, ReinitRef<T>),
+	accept: fn(&'static C, &ReinitRef<T>),
 	request_drop: fn(&'static C),
 }
 
 impl<T: 'static, C: 'static> Hook<T, C> {
-	fn new(callee: &'static C, accept: fn(&'static C, ReinitRef<T>), request_drop: fn(&'static C)) -> Self {
+	fn new(callee: &'static C, accept: fn(&'static C, &ReinitRef<T>), request_drop: fn(&'static C)) -> Self {
 		Self { callee, accept, request_drop }
 	}
 
@@ -466,7 +467,7 @@ impl<T: 'static, C: 'static> Hook<T, C> {
 		unsafe { transmute(self) }
 	}
 
-	fn accept(&self, t: ReinitRef<T>) {
+	fn accept(&self, t: &ReinitRef<T>) {
 		// SAFETY: call of function(Arc<C>) with Arc<()>
 		(self.accept)(self.callee, t);
 	}
