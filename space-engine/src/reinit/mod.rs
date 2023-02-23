@@ -49,9 +49,9 @@ pub struct Reinit<T: 'static> {
 	details: &'static dyn ReinitDetails<T>,
 }
 
-unsafe impl<T> Send for Reinit<T> {}
+unsafe impl<T> Send for Reinit<T> where T: Send {}
 
-unsafe impl<T> Sync for Reinit<T> {}
+unsafe impl<T> Sync for Reinit<T> where T: Sync {}
 
 #[repr(u8)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
