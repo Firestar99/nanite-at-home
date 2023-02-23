@@ -260,6 +260,7 @@ mod reinit0_reset_manual {
 		restart: Option<Restart<i32>>,
 	}
 
+	static RESTARTING: AtomicBool = AtomicBool::new(false);
 	static SHARED: Mutex<Shared> = Mutex::new(Shared { a: None, is_callback_init: true, next_value: 42, received: None, freed: false, restart: None });
 	reinit!(A: i32 = () => |restart| {
 		let mut s = SHARED.lock();
@@ -276,7 +277,11 @@ mod reinit0_reset_manual {
 		// add callback
 		A.add_callback(&SHARED, |shared, v| {
 			let mut s = shared.lock();
-			assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
+			if RESTARTING.load(Relaxed) {
+				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Constructing));
+			} else {
+				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
+			}
 			assert_eq!(s.received, None);
 			s.received = Some(*v);
 		}, |shared| {
@@ -301,7 +306,9 @@ mod reinit0_reset_manual {
 			s.received = None;
 			restart = *s.restart.as_ref().unwrap();
 		}
+		RESTARTING.store(true, Relaxed);
 		restart.restart();
+		RESTARTING.store(false, Relaxed);
 		{
 			let s = SHARED.lock();
 			assert!(matches!(A.test_get_state(), State::Initialized));

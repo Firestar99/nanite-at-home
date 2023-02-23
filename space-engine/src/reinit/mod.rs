@@ -6,9 +6,7 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
-use parking_lot::{RawMutex, RawThreadId, ReentrantMutex};
-use parking_lot::lock_api::ReentrantMutexGuard;
-
+use parking_lot::{Mutex, MutexGuard, ReentrantMutex};
 pub use target::*;
 pub use variants::*;
 
@@ -43,7 +41,7 @@ pub struct Reinit<T: 'static> {
 
 	// state
 	/// lock while constructing or destroying instance, may also lock hooks while holding this
-	state_lock: ReentrantMutex<Cell<State>>,
+	state_lock: Mutex<Cell<State>>,
 	/// ref count for member instance
 	ref_cnt: AtomicUsize,
 	/// instance of T
@@ -183,7 +181,7 @@ impl<T> Reinit<T>
 			is_initialized: AtomicBool::new(false),
 			countdown: AtomicU32::new(initial_countdown + 1),
 			queued_restart: AtomicBool::new(false),
-			state_lock: ReentrantMutex::new(Cell::new(State::Uninitialized)),
+			state_lock: Mutex::new(Cell::new(State::Uninitialized)),
 			ref_cnt: AtomicUsize::new(0),
 			instance: UnsafeCell::new(MaybeUninit::uninit()),
 			hooks: ReentrantMutex::new(UnsafeCell::new(vec![])),
@@ -315,17 +313,15 @@ impl<T> Reinit<T>
 	}
 
 	fn check_state(&'static self) {
-		// lock is held for the entire method
-		let guard = self.state_lock.lock();
+		self.check_state_internal(self.state_lock.lock());
+	}
+
+	fn check_state_internal(&'static self, guard: MutexGuard<Cell<State>>) {
 		if matches!(guard.get(), State::Constructing | State::Destructing) {
 			// do nothing, wait for construction / destruction to finish
 			return;
 		}
 
-		self.check_state_internal(&guard);
-	}
-
-	fn check_state_internal(&'static self, guard: &ReentrantMutexGuard<RawMutex, RawThreadId, Cell<State>>) {
 		// figure out target state
 		let is_init = guard.get() == State::Initialized;
 		let mut should_be_init = self.countdown.load(Relaxed) == 0;
@@ -344,47 +340,56 @@ impl<T> Reinit<T>
 			guard.set(State::Constructing);
 			self.queued_restart.store(false, Relaxed);
 
+			// total ordering continues to be ensured: as state is Destructing no other thread should mess with this object
+			drop(guard);
+
 			self.details.request_construction(self);
 		} else {
 			assert_eq!(guard.get(), State::Initialized);
 			guard.set(State::Destructing);
 
+			// total ordering continues to be ensured: as state is Destructing no other thread should mess with this object
+			drop(guard);
+
 			self.call_callbacks(|h| h.request_drop());
 
-			// SAFETY: decrement initial ref count owned by ourselves
 			// is required to be after call_callbacks() otherwise we may start constructing before calling all request_drop()s
 			unsafe {
+				// SAFETY: decrement initial ref count owned by ourselves
 				self.ref_dec();
 			}
 		}
 	}
 
 	fn constructed(&'static self, t: T) {
-		// lock is held for the entire method
-		let guard = self.state_lock.lock();
-
-		// change state
-		assert_eq!(guard.get(), State::Constructing);
-		guard.set(State::Initialized);
-
-		// initialize self.instance
 		{
-			assert_eq!(self.ref_cnt.load(Relaxed), 0);
-			unsafe {
-				// SAFETY: as ref_cnt == 0 no references must exist on instance
-				&mut *self.instance.get()
-			}.write(t);
-			self.ref_cnt.store(1, Release);
+			let _guard = self.state_lock.lock();
+			// initialize self.instance
+			{
+				assert_eq!(self.ref_cnt.load(Relaxed), 0);
+				unsafe {
+					// SAFETY: as ref_cnt == 0 no references must exist on instance, so we can grab &mut
+					&mut *self.instance.get()
+				}.write(t);
+				self.ref_cnt.store(1, Release);
+			}
 		}
 
 		// call hooks
+		// TODO optimization: do not call hooks if we should destruct immediately
 		self.call_callbacks(|h| h.accept(unsafe {
 			// SAFETY: we just made self be Initialized
 			ReinitRef::new(self)
 		}));
 
-		// TODO do not call hooks if we should destruct immediately
-		self.check_state_internal(&guard);
+		{
+			let guard = self.state_lock.lock();
+			// change state
+			assert_eq!(guard.get(), State::Constructing);
+			guard.set(State::Initialized);
+
+			self.check_state_internal(guard);
+		}
 	}
 
 	#[cold]
@@ -402,7 +407,7 @@ impl<T> Reinit<T>
 			(*self.instance.get()).assume_init_drop()
 		};
 
-		self.check_state_internal(&guard);
+		self.check_state_internal(guard);
 	}
 
 	fn call_callbacks<F>(&'static self, f: F)
