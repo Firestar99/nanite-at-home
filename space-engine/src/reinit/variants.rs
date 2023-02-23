@@ -18,7 +18,7 @@ macro_rules! reinit_variant_struct {
 		pub struct [<Reinit $num>]<T: 'static, $($x: 'static,)+>
 		{
 			$([<$x:lower>]: Dependency<$x>),+,
-			constructor: fn($(ReinitRef<$x>,)+ Restart<T>) -> T,
+			constructor: fn($(&ReinitRef<$x>,)+ Restart<T>) -> T,
 			parent: AtomicPtr<Reinit<T>>,
 		}
 
@@ -26,7 +26,7 @@ macro_rules! reinit_variant_struct {
 
 		impl<T: 'static, $($x: 'static,)+> [<Reinit $num>]<T, $($x,)+>
 		{
-			pub const fn new($([<$x:lower>]: &'static Reinit<$x>,)+ constructor: fn($(ReinitRef<$x>,)+ Restart<T>) -> T) -> Self
+			pub const fn new($([<$x:lower>]: &'static Reinit<$x>,)+ constructor: fn($(&ReinitRef<$x>,)+ Restart<T>) -> T) -> Self
 			{
 				Self {
 					$([<$x:lower>]: Dependency::new([<$x:lower>]),)+
@@ -79,7 +79,7 @@ macro_rules! reinit_variant_struct {
 			}
 
 			fn request_construction(&'static self, parent: &'static Reinit<T>) {
-				parent.constructed((self.constructor)($(self.[<$x:lower>].value_get().clone(),)+ Restart::new(&self.parent())));
+				parent.constructed((self.constructor)($(self.[<$x:lower>].value_ref(),)+ Restart::new(&self.parent())));
 			}
 		}
     })

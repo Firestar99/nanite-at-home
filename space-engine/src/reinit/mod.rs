@@ -553,7 +553,7 @@ impl<T> Dependency<T> {
 	}
 
 	#[inline]
-	fn value_get(&self) -> &ReinitRef<T> {
+	fn value_ref(&self) -> &ReinitRef<T> {
 		let cell = self.value();
 		debug_assert!(matches!(cell, Some(..)));
 		unsafe { cell.as_ref().unwrap_unchecked() }

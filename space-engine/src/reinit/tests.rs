@@ -436,7 +436,7 @@ mod reinit1_basic {
 
 	static SHARED: SharedRef = Shared::new();
 	reinit!(A: A = A::new(&SHARED, EvilCell(Cell::new(0))));
-	reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, 2));
+	reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, 2));
 
 	#[test]
 	fn reinit1_basic() {
@@ -469,7 +469,7 @@ mod reinit1_restart {
 
 	static SHARED: SharedRef = Shared::new();
 	reinit!(A: A = A::new(&SHARED, ()));
-	reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, ()));
+	reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
 
 	#[test]
 	fn reinit1_restart() {
@@ -558,9 +558,9 @@ mod reinit2_diamond {
 
 		static SHARED: SharedRef = Shared::new();
 		reinit!(A: A = A::new(&SHARED, ()));
-		reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, ()));
-		reinit!(C: C = (A: A) => |a, _| C::new(a, &SHARED, ()));
-		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b, c, &SHARED, ()));
+		reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
+		reinit!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
+		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
 
 		#[test]
 		fn reinit2_diamond_b_then_c() {
@@ -573,9 +573,9 @@ mod reinit2_diamond {
 
 		static SHARED: SharedRef = Shared::new();
 		reinit!(A: A = A::new(&SHARED, ()));
-		reinit!(B: B = (A: A) => |a, _| B::new(a, &SHARED, ()));
-		reinit!(C: C = (A: A) => |a, _| C::new(a, &SHARED, ()));
-		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b, c, &SHARED, ()));
+		reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
+		reinit!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
+		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
 
 		#[test]
 		fn reinit2_diamond_c_then_b() {
