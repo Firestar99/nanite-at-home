@@ -294,7 +294,7 @@ impl<T> Reinit<T>
 	}
 
 	fn restart(&'static self) {
-		// TODO restart called during construct/destruct must be handled correctly
+		// only handle the first call to restart()
 		if self.queued_restart.compare_exchange(false, true, Relaxed, Relaxed).is_ok() {
 			self.check_state();
 		}
@@ -329,8 +329,8 @@ impl<T> Reinit<T>
 		// figure out target state
 		let is_init = guard.get() == State::Initialized;
 		let mut should_be_init = self.countdown.load(Relaxed) == 0;
-		// if self is initialized, self ALWAYS clear restart flag, even if I would have destructed anyways due to should_be_init = false.
-		if is_init && self.queued_restart.compare_exchange(true, false, Relaxed, Relaxed).is_ok() {
+		// force should_be_init to false if we should restart, restart flag is cleared on construction start
+		if is_init && self.queued_restart.load(Relaxed) {
 			should_be_init = false;
 		}
 		// already in correct state -> do nothing
@@ -342,6 +342,7 @@ impl<T> Reinit<T>
 		if should_be_init {
 			assert_eq!(guard.get(), State::Uninitialized);
 			guard.set(State::Constructing);
+			self.queued_restart.store(false, Relaxed);
 
 			self.details.request_construction(self);
 		} else {

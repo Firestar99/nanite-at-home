@@ -590,7 +590,7 @@ mod reinit2_diamond {
 		// init
 		let _need = d.test_need();
 		{
-			let mut expected = Shared {
+			let expected = Shared {
 				a: Calls {
 					new: 1,
 					callback: 2,
@@ -660,7 +660,7 @@ mod reinit2_diamond {
 		// drop
 		drop(_need);
 		{
-			let mut expected = Shared {
+			let expected = Shared {
 				a: Calls {
 					callback_drop: 7,
 					drop: 8,
@@ -689,11 +689,6 @@ mod reinit2_diamond {
 			shared.reset();
 		}
 	}
-}
-
-// #[test]
-fn reinit_restart_while_not_needed() {
-	// FIXME write test
 }
 
 mod reinit_restart_during_construction {
@@ -800,6 +795,47 @@ mod reinit_restart_during_construction {
 				..Default::default()
 			});
 		}
+	}
+}
+
+mod reinit_restart_while_not_needed {
+	use super::*;
+
+	type A = AT<i32>;
+
+	static ALLOW_CONSTRUCT: AtomicBool = AtomicBool::new(false);
+	static SHARED: SharedRef = Shared::new();
+
+	reinit!(A: A = () => |_| {
+		if !ALLOW_CONSTRUCT.load(Relaxed) {
+			panic!("Not allowed to construct!");
+		}
+		AT::new(&SHARED, 42)
+	});
+
+	#[test]
+	fn reinit_restart_while_not_needed() {
+		A::register_callbacks(&A, &SHARED);
+
+		// restart without need should noop
+		A.restart();
+		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert_eq!(*SHARED.lock(), Shared::def());
+
+		// needing later should not restart
+		ALLOW_CONSTRUCT.store(true, Relaxed);
+		let _need = A.test_need();
+		assert!(matches!(A.test_get_state(), State::Initialized));
+		let expected = Shared {
+			a: Calls {
+				new: 1,
+				callback: 2,
+				..Default::default()
+			},
+			counter: 3,
+			..Default::default()
+		};
+		assert_eq!(*SHARED.lock(), expected);
 	}
 }
 
