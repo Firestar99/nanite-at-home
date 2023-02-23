@@ -237,12 +237,12 @@ mod reinit0_basic {
 
 	#[test]
 	fn reinit0_basic() {
-		assert_eq!(INITED.load(Relaxed), false);
+		assert!(!INITED.load(Relaxed));
 
 		let _need = REINIT.test_need();
 		assert!(matches!(REINIT.test_get_state(), State::Initialized));
 		assert_eq!(REINIT.countdown.load(Relaxed), 0);
-		assert_eq!(INITED.load(Relaxed), true);
+		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
 		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
 	}
@@ -584,15 +584,15 @@ mod reinit2_diamond {
 	}
 
 	fn reinit2_diamond(shared: &'static SharedRef, a: &'static Reinit<A>, b: &'static Reinit<B>, c: &'static Reinit<C>, d: &'static Reinit<D>, b_then_c: bool) {
-		A::register_callbacks(&a, &shared);
+		A::register_callbacks(a, shared);
 		if b_then_c {
-			B::register_callbacks(&b, &shared);
-			C::register_callbacks(&c, &shared);
+			B::register_callbacks(b, shared);
+			C::register_callbacks(c, shared);
 		} else {
-			C::register_callbacks(&c, &shared);
-			B::register_callbacks(&b, &shared);
+			C::register_callbacks(c, shared);
+			B::register_callbacks(b, shared);
 		}
-		D::register_callbacks(&d, &shared);
+		D::register_callbacks(d, shared);
 
 		// init
 		let _need = d.test_need();
