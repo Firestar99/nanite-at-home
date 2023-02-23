@@ -3,10 +3,12 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hint::spin_loop;
 use std::mem::{MaybeUninit, replace, transmute};
 use std::ops::Deref;
+use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
-use parking_lot::{Mutex, MutexGuard, ReentrantMutex};
+use parking_lot::{Mutex, MutexGuard};
+
 pub use target::*;
 pub use variants::*;
 
@@ -18,12 +20,6 @@ mod variants;
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests;
-
-pub trait Callback<T: 'static> {
-	fn accept(&self, t: ReinitRef<T>);
-
-	fn request_drop(&self);
-}
 
 pub struct Reinit<T: 'static> {
 	// members for figuring out if this works
@@ -48,7 +44,7 @@ pub struct Reinit<T: 'static> {
 	instance: UnsafeCell<MaybeUninit<T>>,
 
 	/// hooks of everyone wanting to get notified, unordered
-	hooks: ReentrantMutex<UnsafeCell<Vec<Hook<T, ()>>>>,
+	hooks: Mutex<Vec<Hook<T, ()>>>,
 
 	details: &'static dyn ReinitDetails<T>,
 }
@@ -184,7 +180,7 @@ impl<T> Reinit<T>
 			state_lock: Mutex::new(Cell::new(State::Uninitialized)),
 			ref_cnt: AtomicUsize::new(0),
 			instance: UnsafeCell::new(MaybeUninit::uninit()),
-			hooks: ReentrantMutex::new(UnsafeCell::new(vec![])),
+			hooks: Mutex::new(vec![]),
 			details,
 		}
 	}
@@ -415,13 +411,34 @@ impl<T> Reinit<T>
 			F: Fn(&Hook<T, ()>)
 	{
 		let lock = self.hooks.lock();
-		let hooks = unsafe { &*lock.get() };
-		hooks.iter().for_each(f);
+		lock.iter().for_each(f);
 	}
 
+	/// Removes a previously added callback using the callback's callee as the key.
+	/// May be expensive as one needs to iterate over the entire vec of currently registered hooks. If need arises Reinit may have to switch to HashSets.
+	pub fn remove_callback<C>(&'static self, callee: &'static C)
+	{
+		let mut lock = self.hooks.lock();
+		for i in 0..lock.len() {
+			if ptr::eq(lock.get(i).unwrap().callee, callee as *const _ as *const ()) {
+				lock.swap_remove(i);
+				return;
+			}
+		}
+	}
+
+	/// adds a new callback to this Reinit. It may be removed later with [remove_callback()] using the same `callee`
+	/// * `callee`: a reference to some C that is passed to every function as the first argument, and used as a key to remove this callback again
+	/// * `accept`: accept the new T value wrapped in an &ReinitRef<T>, which may be cloned to grab ownership of it
+	/// * `request_drop`: if the ReinitRef<T> was taken ownership of in accept, it should be dropped to allow self to drop it's value for either restarting or stopping
+	///
+	/// One may NOT add or remove callbacks to this and only this Reinit within the accept or request_drop methods, as it will lead to a deadlock.
+	///
+	/// [remove_callback()]: Self::remove_callback
 	pub fn add_callback<C>(&'static self, callee: &'static C, accept: fn(&'static C, ReinitRef<T>), request_drop: fn(&'static C))
 	{
-		let lock = self.hooks.lock();
+		// needs to lock before calling accept on hook to ensure proper ordering
+		let mut lock = self.hooks.lock();
 		let hook = Hook::new(callee, accept, request_drop);
 		if self.ref_cnt.load(Relaxed) > 0 {
 			unsafe {
@@ -429,9 +446,7 @@ impl<T> Reinit<T>
 				hook.accept(ReinitRef::new(self));
 			}
 		}
-		// BUG this is not safe cause ReentrantMutex
-		let hooks = unsafe { &mut *lock.get() };
-		hooks.push(hook.ungenerify());
+		lock.push(hook.ungenerify());
 	}
 }
 
