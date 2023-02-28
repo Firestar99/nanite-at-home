@@ -1,14 +1,15 @@
 [package]
 name = "space-client"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 default-run = "start"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 space-engine = { path = "../space-engine" }
-vulkano = "0.29.0"
-vulkano-win = "0.29.0"
-clap = { version = "3.2", features = ["derive"] }
-parking_lot = "0.12" # FIXME remove
+vulkano = { workspace = true }
+vulkano-win = { workspace = true }
+clap = { workspace = true }
+parking_lot = { workspace = true }

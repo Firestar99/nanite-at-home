@@ -1,2 +1,20 @@
 [workspace]
-members = ["space-engine", "space-client"]
+members = [
+    "space-engine",
+    "space-client",
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Firestar99"]
+edition = "2021"
+license = "MIT"
+repository = "https://gitlab.com/spacegamedev/space-rust"
+
+[workspace.dependencies]
+vulkano = "0.29.0"
+vulkano-win = "0.29.0"
+parking_lot = "0.12"
+clap = { version = "3.2", features = ["derive"] }
+konst = "0.2.15"
+paste = "1.0.9"

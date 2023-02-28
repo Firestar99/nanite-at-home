@@ -1,13 +1,14 @@
 [package]
 name = "space-engine"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-vulkano = "0.29.0"
-vulkano-win = "0.29.0"
-konst = "0.2.15"
-parking_lot = "0.12"
-paste = "1.0.9"
+vulkano = { workspace = true }
+vulkano-win = { workspace = true }
+konst = { workspace = true }
+parking_lot = { workspace = true }
+paste = { workspace = true }
