@@ -616,7 +616,7 @@ impl<T: 'static> ReinitNoRestart<T> {
 
 #[macro_export]
 macro_rules! reinit_no_restart {
-	($name:ident: $t:ty = $f:expr) => (paste::paste!{
+	($name:ident: $t:ty = $f:expr) => ($crate::paste::paste!{
 		static [<$name _DETAILS>]: $crate::reinit::ReinitNoRestart<$t> = $crate::reinit::ReinitNoRestart::new(|| $f);
 		static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
 	});

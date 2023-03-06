@@ -135,7 +135,7 @@ reinit_variant_process!(
 #[macro_export]
 macro_rules! reinit {
 	// generic case generating code
-	($name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => $f:expr; $num:literal) => (paste::paste!{
+	($name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => $f:expr; $num:literal) => ($crate::paste::paste!{
 		static [<$name _DETAILS>]: $crate::reinit::[<Reinit $num>]<$t, $($from_type),*> = $crate::reinit::[<Reinit $num>]::new($(&$from,)* $f);
 		static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
 	});
