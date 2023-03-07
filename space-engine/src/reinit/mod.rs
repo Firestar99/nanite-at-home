@@ -638,7 +638,19 @@ impl<T: 'static> ReinitDetails<T> for ReinitNoRestart<T>
 }
 
 
-// tests
+// asserts and tests
+impl<T> Reinit<T> {
+	#[inline]
+	pub fn get_state(&'static self) -> State {
+		self.state_lock.lock().get()
+	}
+
+	#[inline]
+	pub fn assert_state(&'static self, state: State) {
+		assert_eq!(self.get_state(), state);
+	}
+}
+
 #[cfg(test)]
 impl<T> Reinit<T> {
 	#[inline]
@@ -657,11 +669,6 @@ impl<T> Reinit<T> {
 			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
 			ReinitRef::new(self)
 		}
-	}
-
-	#[inline]
-	pub fn test_get_state(&'static self) -> State {
-		self.state_lock.lock().get()
 	}
 
 	#[inline]

@@ -214,14 +214,14 @@ mod test_functions_panic {
 	#[test]
 	#[should_panic]
 	fn test_ref_panic() {
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		REINIT.test_ref();
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_instance_panic() {
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		REINIT.test_instance();
 	}
 }
@@ -240,7 +240,7 @@ mod reinit0_basic {
 		assert!(!INITED.load(Relaxed));
 
 		let _need = REINIT.test_need();
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert_eq!(REINIT.countdown.load(Relaxed), 0);
 		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
@@ -272,21 +272,21 @@ mod reinit0_reset_manual {
 	fn reinit0_reset_manual() {
 		SHARED.lock().a = Some(&A);
 		let _need = A.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
 
 		// add callback
 		A.add_callback(&SHARED, |shared, v| {
 			let mut s = shared.lock();
 			if RESTARTING.load(Relaxed) {
-				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Constructing));
+				assert!(matches!(s.a.as_ref().unwrap().get_state(), State::Constructing));
 			} else {
-				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
+				assert!(matches!(s.a.as_ref().unwrap().get_state(), State::Initialized));
 			}
 			assert_eq!(s.received, None);
 			s.received = Some(**v);
 		}, |shared| {
 			let mut s = shared.lock();
-			assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Destructing));
+			assert!(matches!(s.a.as_ref().unwrap().get_state(), State::Destructing));
 			assert!(!s.freed);
 			assert_eq!(s.received, None, "must not give value and then clear it");
 			s.freed = true;
@@ -311,7 +311,7 @@ mod reinit0_reset_manual {
 		RESTARTING.store(false, Relaxed);
 		{
 			let s = SHARED.lock();
-			assert!(matches!(A.test_get_state(), State::Initialized));
+			assert!(matches!(A.get_state(), State::Initialized));
 			assert!(s.freed);
 			assert_eq!(s.received, Some(127));
 		}
@@ -325,7 +325,7 @@ mod reinit0_reset_manual {
 		drop(_need);
 		{
 			let s = SHARED.lock();
-			assert!(matches!(A.test_get_state(), State::Uninitialized));
+			assert!(matches!(A.get_state(), State::Uninitialized));
 			assert!(s.freed);
 			assert_eq!(s.received, None);
 		}
@@ -403,17 +403,17 @@ mod reinit0_need {
 
 	#[test]
 	fn reinit0_need() {
-		assert!(matches!(REINIT.test_get_state(), State::Uninitialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		assert!(!FREED.load(Relaxed));
 
 		// init
 		let _need = REINIT.test_need();
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert!(!FREED.load(Relaxed));
 
 		// drop
 		drop(_need);
-		assert!(matches!(REINIT.test_get_state(), State::Uninitialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		assert!(FREED.load(Relaxed), "T was not freed by Reinit!");
 	}
 }
@@ -440,13 +440,13 @@ mod reinit1_basic {
 
 	#[test]
 	fn reinit1_basic() {
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 
 		// init
 		let _need = B.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
-		assert!(matches!(B.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
+		assert!(matches!(B.get_state(), State::Initialized));
 
 		assert_eq!(A.test_instance() as *const A, B.test_instance().a.deref() as *const A);
 		assert_eq!(A.test_instance().t.0.get(), 0);
@@ -456,8 +456,8 @@ mod reinit1_basic {
 
 		// drop
 		drop(_need);
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 	}
 }
 
@@ -473,8 +473,8 @@ mod reinit1_restart {
 
 	#[test]
 	fn reinit1_restart() {
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 
 		A::register_callbacks(&A, &SHARED);
 		B::register_callbacks(&B, &SHARED);
@@ -482,8 +482,8 @@ mod reinit1_restart {
 
 		// init
 		let _need = B.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
-		assert!(matches!(B.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
+		assert!(matches!(B.get_state(), State::Initialized));
 
 		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
@@ -523,8 +523,8 @@ mod reinit1_restart {
 
 		// drop
 		drop(_need);
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
 				callback_drop: 3,
@@ -826,13 +826,13 @@ mod reinit_restart_while_not_needed {
 
 		// restart without need should noop
 		A.restart();
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
 		assert_eq!(*SHARED.lock(), Shared::def());
 
 		// needing later should not restart
 		ALLOW_CONSTRUCT.store(true, Relaxed);
 		let _need = A.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
 		let expected = Shared {
 			a: Calls {
 				new: 1,
@@ -858,7 +858,7 @@ mod reinit_no_restart_basic {
 	fn reinit_no_restart_basic() {
 		let _need = REINIT.test_need();
 
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert_eq!(REINIT.countdown.load(Relaxed), 0);
 		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
@@ -875,7 +875,7 @@ mod reinit_no_restart_restarted {
 	#[should_panic(expected = "Constructed more than once!")]
 	fn reinit_no_restart_restarted() {
 		let _need = REINIT.test_need();
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		REINIT.test_restart();
 	}
 }
