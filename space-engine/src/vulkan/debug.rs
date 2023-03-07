@@ -1,47 +1,75 @@
 use std::sync::Arc;
 
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
+use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger, DebugUtilsMessengerCreateInfo, Message};
 use vulkano::instance::Instance;
 
 pub struct Debug {
-	_debug_callback: DebugCallback,
+	_debug_callback: DebugUtilsMessenger,
 }
 
 impl Debug {
 	pub fn new(instance: &Arc<Instance>) -> Debug {
-		Debug {
-			_debug_callback: DebugCallback::new(&instance, MessageSeverity::all(), MessageType::all(),
-												|m| println!("[{}] {}: {}", debug_severity_string(m.severity), debug_type_string(m.ty), m.description),
-			).unwrap()
+		// SAFETY: the user_callback may not make any vulkan calls
+		unsafe {
+			Debug {
+				_debug_callback: DebugUtilsMessenger::new(instance.clone(), DebugUtilsMessengerCreateInfo {
+					message_type: DebugUtilsMessageType {
+						general: true,
+						performance: true,
+						validation: true,
+						..DebugUtilsMessageType::empty()
+					},
+					message_severity: DebugUtilsMessageSeverity {
+						error: true,
+						warning: true,
+						information: true,
+						verbose: false,
+						..DebugUtilsMessageSeverity::empty()
+					},
+					..DebugUtilsMessengerCreateInfo::user_callback(Arc::new(Self::debug_message))
+				}).unwrap()
+			}
 		}
 	}
-}
 
-fn debug_severity_string(a: MessageSeverity) -> &'static str {
-	if a.error {
-		return "error";
+	/// SAFETY: the user_callback may not make any vulkan calls
+	fn debug_message(m: &Message) {
+		let error = format!("[{}] {}{}: {}",
+							Self::debug_severity_string(m.severity),
+							Self::debug_type_string(m.ty),
+							m.layer_prefix.map(|s| format!(" by {}", s)).unwrap_or(String::new()),
+							m.description
+		);
+		if m.severity.error {
+			panic!("{}", error);
+		} else {
+			println!("{}", error);
+		}
 	}
-	if a.warning {
-		return "warning";
-	}
-	if a.information {
-		return "information";
-	}
-	if a.verbose {
-		return "verbose";
-	}
-	return "unknown";
-}
 
-fn debug_type_string(a: MessageType) -> &'static str {
-	if a.validation {
-		return "validation";
+	fn debug_severity_string(a: DebugUtilsMessageSeverity) -> &'static str {
+		if a.error {
+			"error"
+		} else if a.warning {
+			"warning"
+		} else if a.information {
+			"information"
+		} else if a.verbose {
+			"verbose"
+		} else {
+			unreachable!();
+		}
 	}
-	if a.performance {
-		return "performance";
+
+	fn debug_type_string(a: DebugUtilsMessageType) -> &'static str {
+		if a.validation {
+			"validation"
+		} else if a.performance {
+			"performance"
+		} else if a.general {
+			"general"
+		} else {
+			unreachable!()
+		}
 	}
-	if a.general {
-		return "general";
-	}
-	return "unknown";
 }

@@ -12,9 +12,9 @@ license = "MIT"
 repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
-vulkano = "0.29.0"
-vulkano-win = "0.29.0"
+vulkano = "0.32.3"
+vulkano-win = "0.32.0"
 parking_lot = "0.12"
 clap = { version = "3.2", features = ["derive"] }
-konst = "0.2.15"
+konst = "0.3.4"
 paste = "1.0.9"

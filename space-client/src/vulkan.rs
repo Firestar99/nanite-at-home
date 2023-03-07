@@ -4,7 +4,8 @@ use vulkano::device::{Queue, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::Instance;
 
-use space_engine::vulkan::queue_allocator::{QueueAllocation, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocator};
+use space_engine::vulkan::init::{QueueAllocation, QueueAllocator};
+use space_engine::vulkan::queue_allocation_helper::{Priority, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocatorHelper};
 
 // queues
 #[derive(Default)]
@@ -27,76 +28,82 @@ pub type Queues = QueuesGeneric<Arc<Queue>>;
 
 // queue allocator
 #[derive(Default)]
-pub struct ClientQueueAllocator {
-	queue_ids: QueuesGeneric<QueueAllocationHelperEntry>,
-	allocation: Option<QueueAllocation>,
+pub struct SpaceQueueAllocator {}
+
+pub struct SpaceQueueAllocation {
+	queue_ids: QueuesGeneric<QueueAllocationHelperEntry<1>>,
+	allocation: QueueAllocationHelper,
 }
 
-impl ClientQueueAllocator {
-	pub fn new() -> ClientQueueAllocator {
-		ClientQueueAllocator { ..Default::default() }
+impl SpaceQueueAllocator {
+	pub fn new() -> SpaceQueueAllocator {
+		Default::default()
 	}
 }
 
-impl QueueAllocator<Queues> for ClientQueueAllocator {
-	fn alloc<'a>(&mut self, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice<'a>) -> Vec<QueueCreateInfo<'a>> {
-		assert!(self.allocation.is_none());
-		let mut queue_allocator = QueueAllocationHelper::new(_physical_device);
+impl QueueAllocator<Queues, SpaceQueueAllocation> for SpaceQueueAllocator {
+	fn alloc(self, _instance: &Arc<Instance>, _physical_device: &Arc<PhysicalDevice>) -> (SpaceQueueAllocation, Vec<QueueCreateInfo>) {
+		let queue_allocator = QueueAllocatorHelper::new(_physical_device);
 
 		// graphics_main (compute and graphics) queue
-		let graphics_family = _physical_device.queue_families().find(|q| q.supports_graphics() && q.supports_compute())
-			.expect("No graphics queue available!");
-		{
-			self.queue_ids.client.graphics_main = queue_allocator.add_single(graphics_family, 1.0);
-		}
+		let graphics_family = queue_allocator.queues().find(|q| q.queue_flags.graphics && q.queue_flags.compute)
+			.expect("No graphics and compute queue available!");
+		let client_graphics_main = graphics_family.add(Priority(1.0));
 
 		// async_compute queue
 		// 1. compute but not graphics
-		let async_compute_family = _physical_device.queue_families().find(|q| q.supports_compute() && !q.supports_graphics())
+		let async_compute_family = queue_allocator.queues().find(|q| q.queue_flags.compute && !q.queue_flags.graphics)
 			// 2. compute but not selected graphics_family
-			.or_else(|| _physical_device.queue_families().find(|q| q.supports_compute() && *q != graphics_family))
+			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.compute && *q != graphics_family))
 			// 3. inherit from graphics_family if additional queues are available
-			.or_else(|| (graphics_family.queues_count() > 1).then_some(graphics_family));
-		if let Some(async_compute) = async_compute_family {
-			self.queue_ids.client.async_compute = queue_allocator.add_single(async_compute, 0.5);
+			.or_else(|| (graphics_family.queue_count > 1).then_some(graphics_family));
+		let client_async_compute = if let Some(async_compute) = async_compute_family {
+			async_compute.add(Priority::default())
 		} else {
 			// 4. no dedicated compute queue: share graphics queue
-			self.queue_ids.client.async_compute = self.queue_ids.client.graphics_main;
-		}
+			client_graphics_main
+		};
 
 		// transfer queue
 		// 1. explicit transfer but not compute or graphics
-		let transfer_family = _physical_device.queue_families().find(|q| q.explicitly_supports_transfers() && !q.supports_compute() && !q.supports_graphics())
+		let transfer_family = queue_allocator.queues().find(|q| q.queue_flags.transfer && !q.queue_flags.graphics && !q.queue_flags.compute)
 			// 2. explicit transfer but not selected graphics_family or async_compute_family
-			.or_else(|| _physical_device.queue_families().find(|q| q.explicitly_supports_transfers() && *q != graphics_family && async_compute_family.map_or(true, |f| *q != f)))
+			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.transfer && *q != graphics_family && async_compute_family.as_ref().map_or(true, |f| *q != *f)))
 			// 3. inherit from async_compute_family if additional queues are available
-			.or_else(|| async_compute_family.and_then(|f| (f.queues_count() > 1).then_some(f)))
+			.or_else(|| async_compute_family.and_then(|f| (f.queue_count > 1).then_some(f)))
 			// 4. inherit from graphics_family if additional queues are available
-			.or_else(|| (graphics_family.queues_count() > 1).then_some(graphics_family));
-		if let Some(transfer) = transfer_family {
+			.or_else(|| (graphics_family.queue_count > 1).then_some(graphics_family));
+		let client_transfer = if let Some(transfer) = transfer_family {
 			// transfer queue found: create entry
-			self.queue_ids.client.transfer = queue_allocator.add_single(transfer, 0.5);
+			transfer.add(Priority::default())
 		} else {
 			// 5. no dedicated transfer queue: share compute queue (which may share graphics queue)
-			self.queue_ids.client.transfer = self.queue_ids.client.async_compute;
-		}
+			client_async_compute
+		};
 
-		let (allocation, create_info) = queue_allocator.build();
-		self.allocation = Some(allocation);
-		create_info
-	}
+		let (queue_ids, create_info) = queue_allocator.build();
 
-	fn process(&mut self, queues: Vec<Arc<Queue>>) -> Queues {
-		if let Some(allocation) = &self.allocation {
-			Queues {
+		(SpaceQueueAllocation {
+			queue_ids: QueuesGeneric {
 				client: ClientQueuesGeneric {
-					graphics_main: allocation.get_queue_single(&self.queue_ids.client.graphics_main, queues.as_slice()).clone(),
-					async_compute: allocation.get_queue_single(&self.queue_ids.client.async_compute, queues.as_slice()).clone(),
-					transfer: allocation.get_queue_single(&self.queue_ids.client.transfer, queues.as_slice()).clone(),
-				},
-			}
-		} else {
-			unreachable!()
+					graphics_main: client_graphics_main,
+					async_compute: client_async_compute,
+					transfer: client_transfer,
+				}
+			},
+			allocation: queue_ids,
+		}, create_info)
+	}
+}
+
+impl QueueAllocation<Queues> for SpaceQueueAllocation {
+	fn take(self, queues: Vec<Arc<Queue>>) -> Queues {
+		Queues {
+			client: ClientQueuesGeneric {
+				graphics_main: self.allocation.get_queue(queues.as_slice(), &self.queue_ids.client.graphics_main).clone(),
+				async_compute: self.allocation.get_queue(queues.as_slice(), &self.queue_ids.client.async_compute).clone(),
+				transfer: self.allocation.get_queue(queues.as_slice(), &self.queue_ids.client.transfer).clone(),
+			},
 		}
 	}
 }

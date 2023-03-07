@@ -3,7 +3,7 @@ use crate::generate_application_config;
 
 pub mod platform;
 pub mod debug;
-pub mod queue_allocator;
+pub mod queue_allocation_helper;
 pub mod init;
 pub mod plugins;
 
