@@ -1,8 +1,17 @@
 extern crate core;
 
+/// for macro use
+pub use paste;
+
 pub mod reinit;
 pub mod vulkan;
 pub mod application_config;
 
-/// for macro use
-pub use paste;
+/// Call function on drop
+struct CallOnDrop<F: FnMut()>(F);
+
+impl<F: FnMut()> Drop for CallOnDrop<F> {
+	fn drop(&mut self) {
+		self.0()
+	}
+}

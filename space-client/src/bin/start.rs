@@ -1,4 +1,8 @@
+use std::thread::current;
+
+use async_std::task::block_on;
 use clap::Parser;
+use futures::FutureExt;
 
 use space_client::APPLICATION_CONFIG;
 use space_client::cli_args::Cli;
@@ -9,7 +13,7 @@ use space_engine::reinit::State::Initialized;
 use space_engine::vulkan::init::{init, Init, Plugin};
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
-use space_engine::vulkan::window::event_loop::event_loop_init;
+use space_engine::vulkan::window::event_loop::{event_loop_init, run_on_event_loop};
 
 reinit_no_restart!(CLI: Cli = Cli::parse());
 reinit!(RENDERDOC_ENABLE: bool = (CLI: Cli) => |cli, _| cli.renderdoc);
@@ -32,17 +36,26 @@ reinit!(VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABLE: b
 });
 
 struct Main {
-	init: ReinitRef<Init<Queues>>,
+	_init: ReinitRef<Init<Queues>>,
 }
 
 impl Target for Main {}
 
-reinit!(MAIN: Main = (VULKAN_INIT: Init<Queues>) => |init, _| Main {init: init.clone()});
+reinit!(MAIN: Main = (VULKAN_INIT: Init<Queues>) => |init, _| Main {_init: init.clone()});
 
 fn main() {
-	event_loop_init(true, |rx| {
+	event_loop_init(true, |_rx| {
 		let _need = MAIN.need();
 		MAIN.assert_state(Initialized);
+
+		let event_loop = run_on_event_loop(|_| {
+			assert_eq!(current().name().unwrap(), "main");
+			"sent from main"
+		});
+		block_on(event_loop.then(|s| async move {
+			println!("written in {}: {}", current().name().unwrap(), s);
+		}));
+
 		println!("exiting...");
 	})
 }

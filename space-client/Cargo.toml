@@ -8,8 +8,17 @@ repository.workspace = true
 default-run = "start"
 
 [dependencies]
+# my projects
 space-engine = { path = "../space-engine" }
+
+# vulkan
 vulkano = { workspace = true }
 vulkano-win = { workspace = true }
+
+# async
+futures = { workspace = true }
+async-std = { workspace = true }
+
+# other
 clap = { workspace = true }
 parking_lot = { workspace = true }

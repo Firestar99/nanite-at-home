@@ -12,12 +12,19 @@ license = "MIT"
 repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
+# vulkan
 vulkano = "0.32.3"
 vulkano-win = "0.32.0"
-# keep in sync with vulkano-win
-winit = "0.27"
+winit = "0.27" # in sync with vulkano-win
 
+# async
+futures = "0.3"
+async-std = { version = "1.12", features = ["attributes"] }
+
+# other
 parking_lot = "0.12"
 clap = { version = "3.2", features = ["derive"] }
 konst = "0.3.4"
 paste = "1.0.9"
+num-traits = "0.2"
+num-derive = "0.3"
