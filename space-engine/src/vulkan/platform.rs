@@ -8,7 +8,7 @@ use vulkano::instance::LayerProperties;
 use vulkano::VulkanLibrary;
 
 pub struct VulkanLayers {
-	pub validation_layers: HashSet<LayerPropertiesWrapper>,
+	validation_layers: HashSet<LayerPropertiesWrapper>,
 }
 
 impl VulkanLayers {
@@ -16,6 +16,14 @@ impl VulkanLayers {
 		VulkanLayers {
 			validation_layers: lib.layer_properties().unwrap().map(LayerPropertiesWrapper::new).collect(),
 		}
+	}
+}
+
+impl Deref for VulkanLayers {
+	type Target = HashSet<LayerPropertiesWrapper>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.validation_layers
 	}
 }
 

@@ -20,7 +20,7 @@ pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.
 	/// Note that you must check that said InstanceExtensions or validation layers are available,
 	/// requesting something that the PhysicalDevice does not support will panic!
-	fn instance_config(&mut self, _platform: &VulkanLayers) -> (InstanceExtensions, Vec<&'static str>) {
+	fn instance_config(&mut self, _library: &Arc<VulkanLibrary>, _layers: &VulkanLayers) -> (InstanceExtensions, Vec<&'static str>) {
 		(InstanceExtensions::empty(), Vec::new())
 	}
 
@@ -31,14 +31,14 @@ pub trait Plugin {
 	/// * to disallow a device return `Disallow`
 	/// * to set a priority for a Device return `Allow(priority)`
 	/// * allow the device without any priority changes return `Allow(0)`
-	fn physical_device_filter(&mut self, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice) -> DevicePriority {
+	fn physical_device_filter(&mut self, _library: &Arc<VulkanLibrary>, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice) -> DevicePriority {
 		Allow(0)
 	}
 
 	/// Return what DeviceExtensions and Features you would like to be enabled.
 	/// Note that you must check that said DeviceExtensions or Features are available on the
 	/// PhysicalDevice, requesting something that the PhysicalDevice does not support will panic!
-	fn device_config(&mut self, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice) -> (DeviceExtensions, Features) {
+	fn device_config(&mut self, _library: &Arc<VulkanLibrary>, _instance: &Arc<Instance>, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
 		(DeviceExtensions::empty(), Features::empty())
 	}
 }
@@ -70,7 +70,7 @@ pub fn init<Q, ALLOCATOR, ALLOCATION>(application_config: ApplicationConfig, mut
 
 	// instance
 	let configs: Vec<_> = plugins.iter_mut()
-		.map(|p| p.instance_config(&platform))
+		.map(|p| p.instance_config(&library, &platform))
 		.collect();
 	let mut extensions = configs.iter()
 		.map(|e| e.0)
@@ -104,7 +104,7 @@ pub fn init<Q, ALLOCATOR, ALLOCATION>(application_config: ApplicationConfig, mut
 	let physical_device = instance.enumerate_physical_devices().unwrap()
 		.filter_map(|phy| {
 			let priority = plugins.iter_mut()
-				.map(|p| p.physical_device_filter(&instance, &phy))
+				.map(|p| p.physical_device_filter(&library, &instance, &phy))
 				.reduce(|a, b| match a {
 					Disallow => { Disallow }
 					Allow(ap) => {
@@ -126,7 +126,7 @@ pub fn init<Q, ALLOCATOR, ALLOCATION>(application_config: ApplicationConfig, mut
 
 	// device extensions and features
 	let (device_extensions, device_features) = plugins.iter_mut()
-		.map(|p| p.device_config(&instance, &physical_device))
+		.map(|p| p.device_config(&library, &instance, &physical_device))
 		.reduce(|a, b| (DeviceExtensions::union(&a.0, &b.0), Features::union(&a.1, &b.1)))
 		.unwrap_or((DeviceExtensions::empty(), Features::empty()));
 

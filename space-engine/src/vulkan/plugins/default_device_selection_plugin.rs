@@ -2,14 +2,15 @@ use std::sync::Arc;
 
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::instance::Instance;
+use vulkano::VulkanLibrary;
 
 use crate::vulkan::init::{DevicePriority, Plugin};
 use crate::vulkan::init::DevicePriority::Allow;
 
-struct DefaultDeviceSelectionPlugin {}
+struct DefaultDeviceSelectionPlugin;
 
 impl Plugin for DefaultDeviceSelectionPlugin {
-	fn physical_device_filter(&mut self, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice) -> DevicePriority {
+	fn physical_device_filter(&mut self, _library: &Arc<VulkanLibrary>, _instance: &Arc<Instance>, _physical_device: &PhysicalDevice) -> DevicePriority {
 		Allow(match _physical_device.properties().device_type {
 			PhysicalDeviceType::DiscreteGpu => 4,
 			PhysicalDeviceType::IntegratedGpu => 3,
