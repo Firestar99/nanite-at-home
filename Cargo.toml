@@ -14,6 +14,9 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 [workspace.dependencies]
 vulkano = "0.32.3"
 vulkano-win = "0.32.0"
+# keep in sync with vulkano-win
+winit = "0.27"
+
 parking_lot = "0.12"
 clap = { version = "3.2", features = ["derive"] }
 konst = "0.3.4"

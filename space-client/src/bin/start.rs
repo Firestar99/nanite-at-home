@@ -9,6 +9,7 @@ use space_engine::reinit::State::Initialized;
 use space_engine::vulkan::init::{init, Init, Plugin};
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
+use space_engine::vulkan::window::event_loop::event_loop_init;
 
 reinit_no_restart!(CLI: Cli = Cli::parse());
 reinit!(RENDERDOC_ENABLE: bool = (CLI: Cli) => |cli, _| cli.renderdoc);
@@ -39,7 +40,9 @@ impl Target for Main {}
 reinit!(MAIN: Main = (VULKAN_INIT: Init<Queues>) => |init, _| Main {init: init.clone()});
 
 fn main() {
-	let _need = MAIN.need();
-	MAIN.assert_state(Initialized);
-	println!("exiting...");
+	event_loop_init(true, |rx| {
+		let _need = MAIN.need();
+		MAIN.assert_state(Initialized);
+		println!("exiting...");
+	})
 }

@@ -9,6 +9,8 @@ repository.workspace = true
 [dependencies]
 vulkano = { workspace = true }
 vulkano-win = { workspace = true }
+winit = { workspace = true }
+
 konst = { workspace = true }
 parking_lot = { workspace = true }
 paste = { workspace = true }

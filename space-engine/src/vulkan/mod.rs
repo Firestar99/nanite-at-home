@@ -6,5 +6,6 @@ pub mod debug;
 pub mod queue_allocation_helper;
 pub mod init;
 pub mod plugins;
+pub mod window;
 
 pub const ENGINE_APPLICATION_CONFIG: ApplicationConfig = generate_application_config!();
