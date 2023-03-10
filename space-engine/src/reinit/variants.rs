@@ -56,8 +56,8 @@ macro_rules! reinit_variant_struct {
 
 			$(
 			fn [<request_drop_ $x:lower>](&'static self) {
-				self.[<$x:lower>].value_clear();
 				self.parent().construct_inc();
+				self.[<$x:lower>].value_clear();
 			}
 			)+
 		}

@@ -8,6 +8,12 @@ use crate::reinit;
 use crate::reinit::{Reinit, ReinitRef, Restart, State};
 use crate::reinit_no_restart;
 
+fn inc(v: &mut i32) -> i32 {
+	let old = *v;
+	*v += 1;
+	old
+}
+
 #[derive(Default, Eq, PartialEq, Debug, Copy, Clone)]
 struct Calls {
 	new: i32,
@@ -877,5 +883,87 @@ mod reinit_no_restart_restarted {
 		let _need = REINIT.test_need();
 		assert!(matches!(REINIT.get_state(), State::Initialized));
 		REINIT.test_restart();
+	}
+}
+
+mod reinit_ref_free_ordering {
+	use super::*;
+
+	#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+	struct Tracker {
+		counter: i32,
+		a_freed: Option<i32>,
+		b_freed: Option<i32>,
+	}
+
+	impl Tracker {
+		const fn default() -> Self {
+			Self {
+				counter: 0,
+				a_freed: None,
+				b_freed: None,
+			}
+		}
+	}
+
+	struct A(i32);
+
+	impl Drop for A {
+		fn drop(&mut self) {
+			let mut guard = STATE.try_lock().unwrap();
+			guard.a_freed = Some(inc(&mut guard.counter));
+		}
+	}
+
+	struct B(i32);
+
+	impl Drop for B {
+		fn drop(&mut self) {
+			let mut guard = STATE.try_lock().unwrap();
+			guard.b_freed = Some(inc(&mut guard.counter));
+		}
+	}
+
+	static STATE: Mutex<Tracker> = Mutex::new(Tracker::default());
+
+	reinit!(RA: A = A(42));
+	reinit!(RB: B = (RA: A) => |a, _| B(a.0 + 5));
+
+	/// this test does the same as reinit1_* tests, but the values do NOT store a ReinitRef themselves,
+	/// so it relies on ReinitDetails holding any ReinitRefs and freeing them in the correct order.
+	/// This was meant to show the order of instructions in ReinitX::request_drop_X() matter, but it
+	/// actually does not due to Reinit::check_state_internal()'s deconstruct branch holding onto the
+	/// last ref_dec() call for after request_drop callbacks are called.
+	#[test]
+	fn reinit_ref_free_ordering() {
+		assert!(matches!(RA.get_state(), State::Uninitialized));
+		assert!(matches!(RB.get_state(), State::Uninitialized));
+		*STATE.try_lock().unwrap() = Tracker::default();
+
+		let correct_free_order = Tracker {
+			counter: 2,
+			a_freed: Some(1),
+			b_freed: Some(0),
+		};
+
+		{
+			let _need_b = RB.test_need();
+			assert!(matches!(RA.get_state(), State::Initialized));
+			assert!(matches!(RB.get_state(), State::Initialized));
+			assert_eq!(*STATE.try_lock().unwrap(), Tracker::default());
+
+			{
+				RA.test_restart();
+				assert!(matches!(RA.get_state(), State::Initialized));
+				assert!(matches!(RB.get_state(), State::Initialized));
+				assert_eq!(*STATE.try_lock().unwrap(), correct_free_order);
+				*STATE.try_lock().unwrap() = Tracker::default();
+			}
+		}
+
+		assert!(matches!(RA.get_state(), State::Uninitialized));
+		assert!(matches!(RB.get_state(), State::Uninitialized));
+		assert_eq!(*STATE.try_lock().unwrap(), correct_free_order);
+		*STATE.try_lock().unwrap() = Tracker::default();
 	}
 }
