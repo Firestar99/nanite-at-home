@@ -5,7 +5,6 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-default-run = "start"
 
 [dependencies]
 # my projects
