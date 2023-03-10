@@ -36,8 +36,16 @@ impl Debug {
 	fn debug_message(m: &Message) {
 		let error = format!("[{}] {}{}: {}",
 							Self::debug_severity_string(m.severity),
-							Self::debug_type_string(m.ty),
-							m.layer_prefix.map(|s| format!(" by {}", s)).unwrap_or(String::new()),
+							m.layer_prefix.unwrap_or("Unknown"),
+							if m.ty.validation {
+								" (Validation)"
+							} else if m.ty.performance {
+								" (Performance)"
+							} else if m.ty.general {
+								""
+							} else {
+								unreachable!()
+							},
 							m.description
 		);
 		if m.severity.error {
@@ -47,27 +55,27 @@ impl Debug {
 		}
 	}
 
-	fn debug_severity_string(a: DebugUtilsMessageSeverity) -> &'static str {
+	pub fn debug_severity_string(a: DebugUtilsMessageSeverity) -> &'static str {
 		if a.error {
-			"error"
+			"Error"
 		} else if a.warning {
-			"warning"
+			"Warn"
 		} else if a.information {
-			"information"
+			"Info"
 		} else if a.verbose {
-			"verbose"
+			"Verbose"
 		} else {
 			unreachable!();
 		}
 	}
 
-	fn debug_type_string(a: DebugUtilsMessageType) -> &'static str {
+	pub fn debug_type_string(a: DebugUtilsMessageType) -> &'static str {
 		if a.validation {
-			"validation"
+			"Validation"
 		} else if a.performance {
-			"performance"
+			"Performance"
 		} else if a.general {
-			"general"
+			"General"
 		} else {
 			unreachable!()
 		}
