@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 # my projects
 space-engine = { path = "../space-engine" }
+winit = { workspace = true }
 
 # vulkan
 vulkano = { workspace = true }

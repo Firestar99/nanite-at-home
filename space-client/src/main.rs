@@ -1,23 +1,22 @@
+use std::sync::Arc;
 use std::thread::current;
+use std::time::Duration;
 
-use async_std::task::block_on;
+use async_std::task::{block_on, sleep};
 use futures::FutureExt;
+use vulkano::swapchain::Surface;
 
-use space_client::bootup::VULKAN_INIT;
-use space_client::vulkan::Queues;
+use space_client::bootup::SURFACE;
 use space_engine::reinit;
-use space_engine::reinit::{ReinitRef, Target};
+use space_engine::reinit::Target;
 use space_engine::reinit::State::Initialized;
-use space_engine::vulkan::init::Init;
 use space_engine::vulkan::window::event_loop::{event_loop_init, run_on_event_loop};
 
-struct Main {
-	_init: ReinitRef<Init<Queues>>,
-}
+struct Main {}
 
 impl Target for Main {}
 
-reinit!(MAIN: Main = (VULKAN_INIT: Init<Queues>) => |init, _| Main {_init: init.clone()});
+reinit!(MAIN: Main = (SURFACE: Arc<Surface>) => |_, _| Main {});
 
 fn main() {
 	event_loop_init(true, |_rx| {
@@ -30,6 +29,9 @@ fn main() {
 		});
 		block_on(event_loop.then(|s| async move {
 			println!("written in {}: {}", current().name().unwrap(), s);
+
+			println!("waiting 5s until exit");
+			sleep(Duration::from_secs(5)).await;
 		}));
 
 		println!("exiting...");

@@ -6,7 +6,7 @@ use vulkano::VulkanLibrary;
 use crate::vulkan::init::Plugin;
 use crate::vulkan::platform::VulkanLayers;
 
-struct WindowPlugin;
+pub struct WindowPlugin;
 
 impl Plugin for WindowPlugin {
 	fn instance_config(&mut self, _library: &Arc<VulkanLibrary>, _layers: &VulkanLayers) -> (InstanceExtensions, Vec<&'static str>) {
