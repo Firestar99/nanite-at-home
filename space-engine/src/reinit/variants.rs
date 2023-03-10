@@ -105,8 +105,8 @@ macro_rules! reinit_variant_process {
 
 		// paste!(macro_rules! reinit_generator {
 		// 	$(
-		// 		(_name:ident: _t:ty = ($([<_r $x:lower>]:ident: [<_f $x:lower>]:ty),+) => _f:expr) => {
-		// 			reinit(_name: _t = ($([<_r $x:lower>]: [<_f $x:lower>]),+) => _f; $num);
+		// 		(_vis:vis _name:ident: _t:ty = ($([<_r $x:lower>]:ident: [<_f $x:lower>]:ty),+) => _f:expr) => {
+		// 			reinit(_vis _name: _t = ($([<_r $x:lower>]: [<_f $x:lower>]),+) => _f; $num);
 		// 		};
 		// 	)+
 		// });
@@ -135,66 +135,66 @@ reinit_variant_process!(
 #[macro_export]
 macro_rules! reinit {
 	// generic case generating code
-	($name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => $f:expr; $num:literal) => ($crate::paste::paste!{
+	($vis:vis $name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => $f:expr; $num:literal) => ($crate::paste::paste!{
 		static [<$name _DETAILS>]: $crate::reinit::[<Reinit $num>]<$t, $($from_type),*> = $crate::reinit::[<Reinit $num>]::new($(&$from,)* $f);
-		static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
+		$vis static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
 	});
 
 	// all lengths redirecting to generic case with length appended at the end
-	($name:ident:$t:ty=($ra:ident:$fa:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa)=>$f;1);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa)=>$f;1);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb)=>$f;2);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb)=>$f;2);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc)=>$f;3);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc)=>$f;3);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd)=>$f;4);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd)=>$f;4);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe)=>$f;5);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe)=>$f;5);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff)=>$f;6);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff)=>$f;6);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg)=>$f;7);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg)=>$f;7);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh)=>$f;8);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh)=>$f;8);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi)=>$f;9);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi)=>$f;9);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj)=>$f;10);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj)=>$f;10);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk)=>$f;11);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk)=>$f;11);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl)=>$f;12);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl)=>$f;12);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm)=>$f;13);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm)=>$f;13);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn)=>$f;14);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn)=>$f;14);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty,$ro:ident:$fo:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn,$ro:$fo)=>$f;15);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty,$ro:ident:$fo:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn,$ro:$fo)=>$f;15);
 	};
-	($name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty,$ro:ident:$fo:ty,$rp:ident:$fp:ty)=>$f:expr) => {
-		reinit!($name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn,$ro:$fo,$rp:$fp)=>$f;16);
+	($vis:vis $name:ident:$t:ty=($ra:ident:$fa:ty,$rb:ident:$fb:ty,$rc:ident:$fc:ty,$rd:ident:$fd:ty,$re:ident:$fe:ty,$rf:ident:$ff:ty,$rg:ident:$fg:ty,$rh:ident:$fh:ty,$ri:ident:$fi:ty,$rj:ident:$fj:ty,$rk:ident:$fk:ty,$rl:ident:$fl:ty,$rm:ident:$fm:ty,$rn:ident:$fn:ty,$ro:ident:$fo:ty,$rp:ident:$fp:ty)=>$f:expr) => {
+		reinit!($vis $name:$t=($ra:$fa,$rb:$fb,$rc:$fc,$rd:$fd,$re:$fe,$rf:$ff,$rg:$fg,$rh:$fh,$ri:$fi,$rj:$fj,$rk:$fk,$rl:$fl,$rm:$fm,$rn:$fn,$ro:$fo,$rp:$fp)=>$f;16);
 	};
 
 	// special case 0, needs to be at the end
-	($name:ident: $t:ty = () => $f:expr) => {
-		reinit!($name: $t = () => $f; 0);
+	($vis:vis $name:ident: $t:ty = () => $f:expr) => {
+		reinit!($vis $name: $t = () => $f; 0);
 	};
-	($name:ident: $t:ty = $f:expr) => {
-		reinit!($name: $t = () => |_| $f; 0);
+	($vis:vis $name:ident: $t:ty = $f:expr) => {
+		reinit!($vis $name: $t = () => |_| $f; 0);
 	};
 }
