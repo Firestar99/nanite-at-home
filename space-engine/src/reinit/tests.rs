@@ -1,12 +1,18 @@
+use std::future::ready;
 use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
+use std::thread::current;
 
 use parking_lot::Mutex;
 
 use crate::reinit;
 use crate::reinit::{Reinit, ReinitRef, Restart, State};
+use crate::reinit_future;
+use crate::reinit_map;
 use crate::reinit_no_restart;
+use crate::reinit_no_restart_future;
+use crate::reinit_no_restart_map;
 
 fn inc(v: &mut i32) -> i32 {
 	let old = *v;
@@ -211,6 +217,8 @@ fn test_shared_reset() {
 }
 
 mod test_functions_panic {
+	#![allow(unreachable_code)]
+
 	use super::*;
 
 	reinit!(REINIT: i32 = {
@@ -232,13 +240,13 @@ mod test_functions_panic {
 	}
 }
 
-
 mod reinit0_basic {
 	use super::*;
 
 	static INITED: AtomicBool = AtomicBool::new(false);
-	reinit!(REINIT: () = () => |_| {
+	reinit!(REINIT: i32 = () => |_| {
 		INITED.store(true, Relaxed);
+		122
 	});
 
 	#[test]
@@ -251,10 +259,77 @@ mod reinit0_basic {
 		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
 		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
+		assert_eq!(*REINIT.test_instance(), 122);
 	}
 }
 
-mod reinit0_reset_manual {
+mod reinit0_threading {
+	use super::*;
+
+	static THREAD_NAME: Mutex<Option<String>> = Mutex::new(None);
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit!(REINIT: i32 = () => |_| {
+		*THREAD_NAME.try_lock().unwrap() = current().name().map(String::from);
+		INITED.store(true, Relaxed);
+		123
+	});
+
+	#[test]
+	fn reinit0_threading() {
+		assert!(!INITED.load(Relaxed));
+
+		let _need = REINIT.test_need();
+		assert!(INITED.load(Relaxed));
+		assert_eq!(*REINIT.test_instance(), 123);
+		assert_ne!(THREAD_NAME.try_lock().unwrap().as_ref().unwrap(), current().name().unwrap());
+	}
+}
+
+mod reinit0_map {
+	use super::*;
+
+	static THREAD_NAME: Mutex<Option<String>> = Mutex::new(None);
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit_map!(REINIT: i32 = () => |_| {
+		*THREAD_NAME.try_lock().unwrap() = current().name().map(String::from);
+		INITED.store(true, Relaxed);
+		124
+	});
+
+	#[test]
+	fn reinit0_map() {
+		assert!(!INITED.load(Relaxed));
+
+		let _need = REINIT.test_need();
+		assert!(INITED.load(Relaxed));
+		assert_eq!(*REINIT.test_instance(), 124);
+		assert_eq!(THREAD_NAME.try_lock().unwrap().as_ref().unwrap(), current().name().unwrap());
+	}
+}
+
+mod reinit0_future {
+	use super::*;
+
+	static THREAD_NAME: Mutex<Option<String>> = Mutex::new(None);
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit_future!(REINIT: i32 = () => |_| {
+		*THREAD_NAME.try_lock().unwrap() = current().name().map(String::from);
+		INITED.store(true, Relaxed);
+		ready(125)
+	});
+
+	#[test]
+	fn reinit0_future() {
+		assert!(!INITED.load(Relaxed));
+
+		let _need = REINIT.test_need();
+		assert!(INITED.load(Relaxed));
+		assert_eq!(*REINIT.test_instance(), 125);
+		assert_ne!(THREAD_NAME.try_lock().unwrap().as_ref().unwrap(), current().name().unwrap());
+	}
+}
+
+mod reinit0_restart_manual {
 	use super::*;
 
 	struct Shared {
@@ -268,7 +343,7 @@ mod reinit0_reset_manual {
 
 	static RESTARTING: AtomicBool = AtomicBool::new(false);
 	static SHARED: Mutex<Shared> = Mutex::new(Shared { a: None, is_callback_init: true, next_value: 42, received: None, freed: false, restart: None });
-	reinit!(A: i32 = () => |restart| {
+	reinit_map!(A: i32 = () => |restart| {
 		let mut s = SHARED.lock();
 		s.restart = Some(restart);
 		s.next_value
@@ -563,10 +638,10 @@ mod reinit2_diamond {
 		use super::*;
 
 		static SHARED: SharedRef = Shared::new();
-		reinit!(A: A = A::new(&SHARED, ()));
-		reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
-		reinit!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
-		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
+		reinit_map!(A: A = A::new(&SHARED, ()));
+		reinit_map!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
+		reinit_map!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
+		reinit_map!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
 
 		#[test]
 		fn reinit2_diamond_b_then_c() {
@@ -578,10 +653,10 @@ mod reinit2_diamond {
 		use super::*;
 
 		static SHARED: SharedRef = Shared::new();
-		reinit!(A: A = A::new(&SHARED, ()));
-		reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
-		reinit!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
-		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
+		reinit_map!(A: A = A::new(&SHARED, ()));
+		reinit_map!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
+		reinit_map!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
+		reinit_map!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
 
 		#[test]
 		fn reinit2_diamond_c_then_b() {
@@ -886,6 +961,32 @@ mod reinit_no_restart_restarted {
 		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert_eq!(*REINIT.test_instance(), 42);
 		REINIT.test_restart();
+	}
+}
+
+mod reinit_no_restart_future {
+	use super::*;
+
+	reinit_no_restart_future!(REINIT: i32 = ready(53));
+
+	#[test]
+	fn reinit_no_restart_future() {
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert_eq!(*REINIT.test_instance(), 53);
+	}
+}
+
+mod reinit_no_restart_map {
+	use super::*;
+
+	reinit_no_restart_map!(REINIT: i32 = 123);
+
+	#[test]
+	fn reinit_no_restart_map() {
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert_eq!(*REINIT.test_instance(), 123);
 	}
 }
 

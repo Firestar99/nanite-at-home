@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::hint::spin_loop;
-use std::mem::{forget, MaybeUninit, replace, transmute};
+use std::mem::{forget, MaybeUninit, transmute};
 use std::ops::Deref;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
@@ -9,6 +9,8 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use parking_lot::{Mutex, MutexGuard};
 
+pub use macros::*;
+pub use no_restart::*;
 pub use target::*;
 pub use variants::*;
 
@@ -16,6 +18,8 @@ use crate::reinit::NeedIncType::{EnsureInitialized, NeedInc};
 
 mod target;
 mod variants;
+mod macros;
+mod no_restart;
 
 #[cfg(test)]
 #[allow(dead_code)]
@@ -485,25 +489,19 @@ impl<T> Drop for Reinit<T> {
 }
 
 
-// Restart
-pub struct Restart<T: 'static> {
-	parent: &'static Reinit<T>,
-}
+// Restart allows one to restart referenced Reinit
+pub struct Restart<T: 'static>(&'static Reinit<T>);
 
 impl<T> Restart<T> {
-	pub fn new(parent: &'static Reinit<T>) -> Self {
-		Self { parent }
-	}
-
 	pub fn restart(&self) {
-		self.parent.restart();
+		self.0.restart();
 	}
 }
 
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
 impl<T> Clone for Restart<T> {
 	fn clone(&self) -> Self {
-		Self { parent: self.parent }
+		Self(self.0)
 	}
 }
 
@@ -518,7 +516,17 @@ impl<T> Debug for Restart<T> {
 }
 
 
-// Dependency
+// Constructed allows access once to the constructed() method
+pub struct Constructed<T: 'static> (&'static Reinit<T>);
+
+impl<T: 'static> Constructed<T> {
+	pub fn constructed(self, t: T) {
+		self.0.constructed(t);
+	}
+}
+
+
+// Dependency for variants to use
 struct Dependency<T: 'static>
 {
 	reinit: &'static Reinit<T>,
@@ -564,11 +572,11 @@ impl<T> Dependency<T> {
 // Reinit0
 pub struct Reinit0<T: 'static>
 {
-	constructor: fn(Restart<T>) -> T,
+	constructor: fn(Restart<T>, Constructed<T>),
 }
 
 impl<T: 'static> Reinit0<T> {
-	pub const fn new(constructor: fn(Restart<T>) -> T) -> Self
+	pub const fn new(constructor: fn(Restart<T>, Constructed<T>)) -> Self
 	{
 		Self { constructor }
 	}
@@ -587,53 +595,7 @@ impl<T: 'static> ReinitDetails<T> for Reinit0<T>
 	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
 
 	fn request_construction(&'static self, parent: &'static Reinit<T>) {
-		parent.constructed((self.constructor)(Restart::new(parent)))
-	}
-}
-
-
-// ReinitNoRestart
-pub struct ReinitNoRestart<T: 'static>
-{
-	constructor: UnsafeCell<Option<fn() -> T>>,
-}
-
-// member constructor is not Sync
-unsafe impl<T: 'static> Sync for ReinitNoRestart<T> {}
-
-impl<T: 'static> ReinitNoRestart<T> {
-	pub const fn new(constructor: fn() -> T) -> Self
-	{
-		Self {
-			constructor: UnsafeCell::new(Some(constructor))
-		}
-	}
-
-	pub const fn create_reinit(&'static self) -> Reinit<T> {
-		Reinit::new(0, self)
-	}
-}
-
-#[macro_export]
-macro_rules! reinit_no_restart {
-	($vis:vis $name:ident: $t:ty = $f:expr) => ($crate::paste::paste!{
-		static [<$name _DETAILS>]: $crate::reinit::ReinitNoRestart<$t> = $crate::reinit::ReinitNoRestart::new(|| $f);
-		$vis static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
-	});
-}
-
-impl<T: 'static> ReinitDetails<T> for ReinitNoRestart<T>
-{
-	fn init(&'static self, _: &'static Reinit<T>) {}
-
-	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
-
-	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
-
-	fn request_construction(&'static self, parent: &'static Reinit<T>) {
-		// this may not be atomic, but that's ok as Reinit will act as a Mutex for this method
-		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
-		parent.constructed((constructor.expect("Constructed more than once!"))())
+		(self.constructor)(Restart::<T>(parent), Constructed(parent))
 	}
 }
 
@@ -652,27 +614,71 @@ impl<T> Reinit<T> {
 }
 
 #[cfg(test)]
-impl<T> Reinit<T> {
-	#[inline]
-	pub fn test_instance(&self) -> &T {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
-		unsafe {
-			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
-			(*self.instance.get()).assume_init_ref()
+mod test_helper {
+	use std::thread::sleep;
+	use std::time::{Duration, Instant};
+
+	use crate::reinit::State::Initialized;
+
+	use super::*;
+
+	impl<T> Reinit<T> {
+		#[inline]
+		pub fn test_instance(&self) -> &T {
+			assert!(self.ref_cnt.load(Relaxed) > 0);
+			unsafe {
+				// SAFETY: asserted self is initialized above, BUT does not account for multithreading
+				(*self.instance.get()).assume_init_ref()
+			}
+		}
+
+		#[inline]
+		pub fn test_ref(&'static self) -> ReinitRef<T> {
+			assert!(self.ref_cnt.load(Relaxed) > 0);
+			unsafe {
+				// SAFETY: asserted self is initialized above, BUT does not account for multithreading
+				ReinitRef::new(self)
+			}
+		}
+
+		#[inline]
+		pub fn test_restart(&'static self) {
+			self.test_restart_timeout(Duration::from_secs(1));
+		}
+
+		#[inline]
+		pub fn test_restart_timeout(&'static self, timeout: Duration) {
+			self.restart();
+			// restart flag is consumed when construction initiates.
+			// However when the clearing of this flag is visible, the state update to Constructing may not yet be!
+			// But that's ok it will be at least in state Uninitialized which is all we need.
+			// Also we may double the timeout but that's fine tests aren't time sensitive.
+			busy_wait_loop(timeout, Some(|| String::from("Restart flag to be consumed")), || !self.queued_restart.load(Relaxed));
+			busy_wait_loop(timeout, Some(|| String::from("Reinit Initialized after restart")), || self.get_state() == Initialized);
+		}
+
+		pub fn busy_wait_until_state(&'static self, state: State, timeout: Duration) {
+			busy_wait_loop(timeout, Some(|| format!("Reinit in state {:?}", state)), || self.get_state() == state);
 		}
 	}
 
-	#[inline]
-	pub fn test_ref(&'static self) -> ReinitRef<T> {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
-		unsafe {
-			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
-			ReinitRef::new(self)
+	pub fn busy_wait_loop<F, R>(timeout: Duration, timeout_reason: Option<R>, f: F)
+		where
+			F: Fn() -> bool,
+			R: Fn() -> String,
+	{
+		let start = Instant::now();
+		loop {
+			if f() {
+				return;
+			}
+			if start.elapsed() > timeout {
+				let reason = timeout_reason.map(|r| (" while waiting for ", r())).unwrap_or_else(|| ("", String::new()));
+				panic!("timeout after {:?}{}{}!", timeout, reason.0, reason.1);
+			}
+			// sleep(1ms) instead of spin_loop() as we don't know how long it may take
+			// for a Reinit to initialize and need to back off from lock()-ing Mutexes
+			sleep(Duration::from_millis(1));
 		}
-	}
-
-	#[inline]
-	pub fn test_restart(&'static self) {
-		self.restart();
 	}
 }

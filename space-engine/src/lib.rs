@@ -2,6 +2,7 @@ extern crate core;
 
 /// for macro use
 pub use paste;
+pub use async_global_executor::spawn as spawn;
 
 pub mod reinit;
 pub mod vulkan;

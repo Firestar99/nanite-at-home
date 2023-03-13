@@ -18,6 +18,7 @@ vulkano-win = { workspace = true }
 # async
 futures = { workspace = true }
 async-std = { workspace = true }
+async-global-executor = { workspace = true }
 
 # other
 clap = { workspace = true }
