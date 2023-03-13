@@ -220,14 +220,14 @@ mod test_functions_panic {
 	#[test]
 	#[should_panic]
 	fn test_ref_panic() {
-		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		REINIT.test_ref();
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_instance_panic() {
-		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		REINIT.test_instance();
 	}
 }
@@ -856,8 +856,9 @@ mod reinit_no_restart_basic {
 	use super::*;
 
 	static INITED: AtomicBool = AtomicBool::new(false);
-	reinit_no_restart!(REINIT: () = {
+	reinit_no_restart!(REINIT: i32 = {
 		INITED.store(true, Relaxed);
+		23
 	});
 
 	#[test]
@@ -869,6 +870,7 @@ mod reinit_no_restart_basic {
 		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
 		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
+		assert_eq!(*REINIT.test_instance(), 23);
 	}
 }
 
@@ -882,6 +884,7 @@ mod reinit_no_restart_restarted {
 	fn reinit_no_restart_restarted() {
 		let _need = REINIT.test_need();
 		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert_eq!(*REINIT.test_instance(), 42);
 		REINIT.test_restart();
 	}
 }
