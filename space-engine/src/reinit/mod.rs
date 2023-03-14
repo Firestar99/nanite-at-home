@@ -362,17 +362,21 @@ impl<T> Reinit<T>
 	}
 
 	fn constructed(&'static self, t: T) {
+		// initialize self.instance
 		{
-			let _guard = self.state_lock.lock();
-			// initialize self.instance
 			{
-				assert_eq!(self.ref_cnt.load(Relaxed), 0);
-				unsafe {
+				let instance = unsafe {
 					// SAFETY: as ref_cnt == 0 no references must exist on instance, so we can grab &mut
 					&mut *self.instance.get()
-				}.write(t);
-				self.ref_cnt.store(1, Release);
+				};
+				instance.write(t);
+				// instance.assume_init_ref()
 			}
+
+
+
+			debug_assert_eq!(self.ref_cnt.load(Relaxed), 0);
+			self.ref_cnt.store(1, Release);
 		}
 		// total ordering continues to be ensured: as state is still Destructing no other thread should mess with this object
 
@@ -618,8 +622,6 @@ mod test_helper {
 	use std::thread::sleep;
 	use std::time::{Duration, Instant};
 
-	use crate::reinit::State::Initialized;
-
 	use super::*;
 
 	impl<T> Reinit<T> {
@@ -654,7 +656,7 @@ mod test_helper {
 			// But that's ok it will be at least in state Uninitialized which is all we need.
 			// Also we may double the timeout but that's fine tests aren't time sensitive.
 			busy_wait_loop(timeout, Some(|| String::from("Restart flag to be consumed")), || !self.queued_restart.load(Relaxed));
-			busy_wait_loop(timeout, Some(|| String::from("Reinit Initialized after restart")), || self.get_state() == Initialized);
+			busy_wait_loop(timeout, Some(|| String::from("Reinit Initialized after restart")), || self.get_state() == State::Initialized);
 		}
 
 		pub fn busy_wait_until_state(&'static self, state: State, timeout: Duration) {

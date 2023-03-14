@@ -73,7 +73,7 @@ macro_rules! clone_shadow {
 	};
 }
 
-/// default reinit macro, always delegates initialization to an async task
+/// default reinit macro, always delegates initialization to an async task, function consumes ReinitRefs
 #[macro_export]
 macro_rules! reinit {
 	($vis:vis $name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => |$($in:tt),*| $f:expr) => {
@@ -89,7 +89,7 @@ macro_rules! reinit {
 	};
 }
 
-/// reinit macro expecting a `Future<Output=T>`, always delegates initialization to an async task
+/// reinit macro expecting a `Future<Output=T>`, always delegates initialization to an async task, function consumes ReinitRefs
 #[macro_export]
 macro_rules! reinit_future {
 	($vis:vis $name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => |$($in:tt),*| $f:expr) => {
@@ -102,7 +102,7 @@ macro_rules! reinit_future {
 	};
 }
 
-/// reinit macro which does the initialization immediately instead of spawning a task, for small things such as just mapping a value
+/// reinit macro which does the initialization immediately instead of spawning a task, for small things such as just mapping a value, only gets ReinitRefs by ref
 #[macro_export]
 macro_rules! reinit_map {
 	($vis:vis $name:ident: $t:ty = ($($from:ident: $from_type:ty),*) => |$($in:tt),*| $f:expr) => {

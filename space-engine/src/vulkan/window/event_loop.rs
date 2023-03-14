@@ -208,7 +208,7 @@ pub fn run_on_event_loop<R, F>(f: F) -> impl Future<Output=R>
 /// needs to be called from main thread, as EventLoop requires to be used on it to be portable between platforms
 pub fn event_loop_init<F>(make_event_loop: bool, f: F) -> !
 	where
-		F: FnOnce(Receiver<Event<()>>) + Send + 'static
+		F: FnOnce(Receiver<Event<'static, ()>>) + Send + 'static
 {
 	// sending events from main to application
 	let (tx, rx) = channel();
@@ -225,11 +225,11 @@ pub fn event_loop_init<F>(make_event_loop: bool, f: F) -> !
 	let join_handle = Builder::new()
 		.name(String::from("init"))
 		.spawn(move || {
-			let _drop_sender = CallOnDrop(|| {
+			let _drop_sender = make_event_loop.then(|| CallOnDrop(|| {
 				let mut guard = SENDER.lock();
 				let (_, notify) = replace(&mut *guard, None).unwrap();
 				notify.send_event(()).unwrap();
-			});
+			}));
 			f(rx)
 		})
 		.unwrap();
@@ -259,10 +259,9 @@ pub fn event_loop_init<F>(make_event_loop: bool, f: F) -> !
 			}
 		});
 	} else {
-		// this code does NOT get run when using EventLoop as EventLoop::run() never returns due to calling exit() directly!
-		join_handle
-			.join()
-			.unwrap();
+		// alternative version without EventLoop
+		// just as the EventLoop version it should not care about errors stemming from init and thus we do not unwrap(), unless we can properly error above as well
+		let _ = join_handle.join();
 		exit(0);
 	}
 }
