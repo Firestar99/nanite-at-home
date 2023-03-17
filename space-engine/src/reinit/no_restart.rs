@@ -5,15 +5,15 @@ use crate::reinit::{Constructed, Reinit, ReinitDetails};
 
 // ReinitNoRestart
 #[allow(clippy::type_complexity)]
-pub struct ReinitNoRestart<T: 'static>
+pub struct ReinitNoRestart<T: Send + Sync + 'static>
 {
 	constructor: UnsafeCell<Option<fn(Constructed<T>)>>,
 }
 
 // member constructor is not Sync
-unsafe impl<T: 'static> Sync for ReinitNoRestart<T> {}
+unsafe impl<T: Send + Sync + 'static> Sync for ReinitNoRestart<T> {}
 
-impl<T: 'static> ReinitNoRestart<T> {
+impl<T: Send + Sync + 'static> ReinitNoRestart<T> {
 	pub const fn new(constructor: fn(Constructed<T>)) -> Self
 	{
 		Self {
@@ -59,7 +59,7 @@ macro_rules! reinit_no_restart_map {
 	};
 }
 
-impl<T: 'static> ReinitDetails<T> for ReinitNoRestart<T>
+impl<T: Send + Sync + 'static> ReinitDetails<T> for ReinitNoRestart<T>
 {
 	fn init(&'static self, _: &'static Reinit<T>) {}
 

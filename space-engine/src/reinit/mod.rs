@@ -25,7 +25,7 @@ mod no_restart;
 #[allow(dead_code)]
 mod tests;
 
-pub struct Reinit<T: 'static> {
+pub struct Reinit<T: Send + Sync + 'static> {
 	// members for figuring out if this works
 	/// counter for how many times this is used by others, >0 means that this reinit should start, =0 that it should stop
 	need_count: AtomicU32,
@@ -53,9 +53,9 @@ pub struct Reinit<T: 'static> {
 	details: &'static dyn ReinitDetails<T>,
 }
 
-unsafe impl<T> Send for Reinit<T> where T: Send {}
+unsafe impl<T: Send + Sync + 'static> Send for Reinit<T> {}
 
-unsafe impl<T> Sync for Reinit<T> where T: Sync {}
+unsafe impl<T: Send + Sync + 'static> Sync for Reinit<T> {}
 
 #[repr(u8)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -66,7 +66,7 @@ pub enum State {
 	Destructing,
 }
 
-pub trait ReinitDetails<T: 'static>: 'static {
+pub trait ReinitDetails<T: Send + Sync + 'static>: 'static {
 	/// register callbacks on Dependencies
 	fn init(&'static self, parent: &'static Reinit<T>);
 
@@ -85,11 +85,11 @@ pub trait ReinitDetails<T: 'static>: 'static {
 
 // ReinitRef
 #[repr(transparent)]
-pub struct ReinitRef<T: 'static> {
+pub struct ReinitRef<T: Send + Sync + 'static> {
 	inner: &'static Reinit<T>,
 }
 
-impl<T> ReinitRef<T> {
+impl<T: Send + Sync + 'static> ReinitRef<T> {
 	/// SAFETY: inner has to be in state Initialized
 	#[inline]
 	unsafe fn new(inner: &'static Reinit<T>) -> Self {
@@ -103,7 +103,7 @@ impl<T> ReinitRef<T> {
 	}
 }
 
-impl<T> Clone for ReinitRef<T> {
+impl<T: Send + Sync + 'static> Clone for ReinitRef<T> {
 	#[inline]
 	fn clone(&self) -> Self {
 		unsafe {
@@ -113,7 +113,7 @@ impl<T> Clone for ReinitRef<T> {
 	}
 }
 
-impl<T> Drop for ReinitRef<T> {
+impl<T: Send + Sync + 'static> Drop for ReinitRef<T> {
 	#[inline]
 	fn drop(&mut self) {
 		unsafe {
@@ -123,7 +123,7 @@ impl<T> Drop for ReinitRef<T> {
 	}
 }
 
-impl<T> Deref for ReinitRef<T> {
+impl<T: Send + Sync + 'static> Deref for ReinitRef<T> {
 	type Target = T;
 
 	#[inline]
@@ -135,19 +135,19 @@ impl<T> Deref for ReinitRef<T> {
 	}
 }
 
-impl<T: Debug> Debug for ReinitRef<T> {
+impl<T: Debug + Send + Sync + 'static> Debug for ReinitRef<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T: Display> Display for ReinitRef<T> {
+impl<T: Display + Send + Sync + 'static> Display for ReinitRef<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T> Reinit<T> {
+impl<T: Send + Sync + 'static> Reinit<T> {
 	#[inline]
 	unsafe fn ref_inc(&'static self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
@@ -171,7 +171,7 @@ impl<T> Reinit<T> {
 
 
 // Reinit impl
-impl<T> Reinit<T>
+impl<T: Send + Sync + 'static> Reinit<T>
 {
 	#[inline]
 	const fn new<D: ReinitDetails<T>>(initial_countdown: u32, details: &'static D) -> Reinit<T>
@@ -196,7 +196,7 @@ enum NeedIncType {
 	EnsureInitialized,
 }
 
-impl<T> Reinit<T>
+impl<T: Send + Sync + 'static> Reinit<T>
 {
 	unsafe fn need_inc(&'static self) {
 		self.need_inc_internal(NeedInc)
@@ -459,13 +459,13 @@ impl<T> Reinit<T>
 	}
 }
 
-struct Hook<T: 'static, C: 'static> {
+struct Hook<T: Send + Sync + 'static, C: 'static> {
 	callee: &'static C,
 	accept: fn(&'static C, &ReinitRef<T>),
 	request_drop: fn(&'static C),
 }
 
-impl<T: 'static, C: 'static> Hook<T, C> {
+impl<T: Send + Sync + 'static, C: 'static> Hook<T, C> {
 	fn new(callee: &'static C, accept: fn(&'static C, &ReinitRef<T>), request_drop: fn(&'static C)) -> Self {
 		Self { callee, accept, request_drop }
 	}
@@ -485,7 +485,7 @@ impl<T: 'static, C: 'static> Hook<T, C> {
 	}
 }
 
-impl<T> Drop for Reinit<T> {
+impl<T: Send + Sync + 'static> Drop for Reinit<T> {
 	fn drop(&mut self) {
 		// guarantees that self.instance has dropped already
 		debug_assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
@@ -494,24 +494,24 @@ impl<T> Drop for Reinit<T> {
 
 
 // Restart allows one to restart referenced Reinit
-pub struct Restart<T: 'static>(&'static Reinit<T>);
+pub struct Restart<T: Send + Sync + 'static>(&'static Reinit<T>);
 
-impl<T> Restart<T> {
+impl<T: Send + Sync + 'static> Restart<T> {
 	pub fn restart(&self) {
 		self.0.restart();
 	}
 }
 
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T> Clone for Restart<T> {
+impl<T: Send + Sync + 'static> Clone for Restart<T> {
 	fn clone(&self) -> Self {
 		Self(self.0)
 	}
 }
 
-impl<T> Copy for Restart<T> {}
+impl<T: Send + Sync + 'static> Copy for Restart<T> {}
 
-impl<T> Debug for Restart<T> {
+impl<T: Send + Sync + 'static> Debug for Restart<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str("Restart<")?;
 		f.write_str(stringify!(T))?;
@@ -521,9 +521,9 @@ impl<T> Debug for Restart<T> {
 
 
 // Constructed allows access once to the constructed() method
-pub struct Constructed<T: 'static> (&'static Reinit<T>);
+pub struct Constructed<T: Send + Sync + 'static> (&'static Reinit<T>);
 
-impl<T: 'static> Constructed<T> {
+impl<T: Send + Sync + 'static> Constructed<T> {
 	pub fn constructed(self, t: T) {
 		self.0.constructed(t);
 	}
@@ -531,13 +531,13 @@ impl<T: 'static> Constructed<T> {
 
 
 // Dependency for variants to use
-struct Dependency<T: 'static>
+struct Dependency<T: Send + Sync + 'static>
 {
 	reinit: &'static Reinit<T>,
 	value: UnsafeCell<Option<ReinitRef<T>>>,
 }
 
-impl<T> Dependency<T> {
+impl<T: Send + Sync + 'static> Dependency<T> {
 	const fn new(reinit: &'static Reinit<T>) -> Self {
 		Self {
 			reinit,
@@ -574,12 +574,12 @@ impl<T> Dependency<T> {
 
 
 // Reinit0
-pub struct Reinit0<T: 'static>
+pub struct Reinit0<T: Send + Sync + 'static>
 {
 	constructor: fn(Restart<T>, Constructed<T>),
 }
 
-impl<T: 'static> Reinit0<T> {
+impl<T: Send + Sync + 'static> Reinit0<T> {
 	pub const fn new(constructor: fn(Restart<T>, Constructed<T>)) -> Self
 	{
 		Self { constructor }
@@ -590,7 +590,7 @@ impl<T: 'static> Reinit0<T> {
 	}
 }
 
-impl<T: 'static> ReinitDetails<T> for Reinit0<T>
+impl<T: Send + Sync + 'static> ReinitDetails<T> for Reinit0<T>
 {
 	fn init(&'static self, _: &'static Reinit<T>) {}
 
@@ -605,7 +605,7 @@ impl<T: 'static> ReinitDetails<T> for Reinit0<T>
 
 
 // asserts and tests
-impl<T> Reinit<T> {
+impl<T: Send + Sync + 'static> Reinit<T> {
 	#[inline]
 	pub fn get_state(&'static self) -> State {
 		self.state_lock.lock().get()
@@ -624,7 +624,7 @@ mod test_helper {
 
 	use super::*;
 
-	impl<T> Reinit<T> {
+	impl<T: Send + Sync + 'static> Reinit<T> {
 		#[inline]
 		pub fn test_instance(&self) -> &T {
 			assert!(self.ref_cnt.load(Relaxed) > 0);

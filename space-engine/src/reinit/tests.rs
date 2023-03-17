@@ -87,12 +87,12 @@ impl Default for Shared {
 	}
 }
 
-struct AT<T: 'static> {
+struct AT<T: Send + Sync + 'static> {
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T> AT<T> {
+impl<T: Send + Sync + 'static> AT<T> {
 	fn new(shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.a.new);
 		Self { shared, t }
@@ -108,19 +108,19 @@ impl<T> AT<T> {
 	}
 }
 
-impl<T> Drop for AT<T> {
+impl<T: Send + Sync + 'static> Drop for AT<T> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.a.drop);
 	}
 }
 
-struct BT<T: 'static, A: 'static> {
+struct BT<T: Send + Sync + 'static, A: Send + Sync + 'static> {
 	a: ReinitRef<A>,
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T, A> BT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> BT<T, A> {
 	fn new(a: ReinitRef<A>, shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.b.new);
 		Self { a, shared, t }
@@ -136,19 +136,19 @@ impl<T, A> BT<T, A> {
 	}
 }
 
-impl<T, A> Drop for BT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> Drop for BT<T, A> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.b.drop);
 	}
 }
 
-struct CT<T: 'static, A: 'static> {
+struct CT<T: Send + Sync + 'static, A: Send + Sync + 'static> {
 	a: ReinitRef<A>,
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T, A> CT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> CT<T, A> {
 	fn new(a: ReinitRef<A>, shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.c.new);
 		Self { a, shared, t }
@@ -164,20 +164,20 @@ impl<T, A> CT<T, A> {
 	}
 }
 
-impl<T, A> Drop for CT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> Drop for CT<T, A> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.c.drop);
 	}
 }
 
-struct DT<T: 'static, B: 'static, C: 'static> {
+struct DT<T: Send + Sync + 'static, B: Send + Sync + 'static, C: Send + Sync + 'static> {
 	b: ReinitRef<B>,
 	c: ReinitRef<C>,
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T, B, C> DT<T, B, C> {
+impl<T: Send + Sync + 'static, B: Send + Sync + 'static, C: Send + Sync + 'static> DT<T, B, C> {
 	fn new(b: ReinitRef<B>, c: ReinitRef<C>, shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.d.new);
 		Self { b, c, shared, t }
@@ -193,7 +193,7 @@ impl<T, B, C> DT<T, B, C> {
 	}
 }
 
-impl<T, B, C> Drop for DT<T, B, C> {
+impl<T: Send + Sync + 'static, B: Send + Sync + 'static, C: Send + Sync + 'static> Drop for DT<T, B, C> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.d.drop);
 	}

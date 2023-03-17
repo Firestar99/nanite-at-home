@@ -1,9 +1,9 @@
 use crate::reinit::Reinit;
 
-pub trait Target {}
+pub trait Target: Send + Sync {}
 
 pub struct NeedGuard<T: Target + 'static> {
-	reinit: &'static Reinit<T>,
+	pub reinit: &'static Reinit<T>,
 }
 
 impl<T: Target + 'static> NeedGuard<T> {
@@ -32,12 +32,12 @@ mod test {
 	use crate::reinit::Reinit;
 	use crate::reinit::State::{Initialized, Uninitialized};
 
-	pub struct TestNeedGuard<T: 'static> {
+	pub struct TestNeedGuard<T: Send + Sync + 'static> {
 		reinit: &'static Reinit<T>,
 		timeout: Duration,
 	}
 
-	impl<T: 'static> TestNeedGuard<T> {
+	impl<T: Send + Sync + 'static> TestNeedGuard<T> {
 		fn new(reinit: &'static Reinit<T>, timeout: Duration) -> Self {
 			unsafe { reinit.need_inc() };
 			reinit.busy_wait_until_state(Initialized, timeout);
@@ -53,19 +53,19 @@ mod test {
 		}
 	}
 
-	impl<T: 'static> Drop for TestNeedGuard<T> {
+	impl<T: Send + Sync + 'static> Drop for TestNeedGuard<T> {
 		fn drop(&mut self) {
 			unsafe { self.reinit.need_dec() }
 		}
 	}
 
-	impl<T: 'static> TestNeedGuard<T> {
+	impl<T: Send + Sync + 'static> TestNeedGuard<T> {
 		pub fn test_ref(&'static self) -> crate::reinit::ReinitRef<T> {
 			self.reinit.test_ref()
 		}
 	}
 
-	impl<T: 'static> Reinit<T> {
+	impl<T: Send + Sync + 'static> Reinit<T> {
 		pub fn test_need(&'static self) -> TestNeedGuard<T> {
 			self.test_need_timeout(Duration::from_secs(1))
 		}

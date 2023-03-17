@@ -15,16 +15,16 @@ macro_rules! reinit_variant_struct {
 		$num:literal,
 		<$($x:ident),+>
 	) => (paste!{
-		pub struct [<Reinit $num>]<T: 'static, $($x: 'static,)+>
+		pub struct [<Reinit $num>]<T: Send + Sync + 'static, $($x: Send + Sync + 'static,)+>
 		{
 			$([<$x:lower>]: Dependency<$x>),+,
 			constructor: fn($(&ReinitRef<$x>,)+ Restart<T>, Constructed<T>),
 			parent: AtomicPtr<Reinit<T>>,
 		}
 
-		unsafe impl<T: 'static, $($x: 'static,)+> Sync for [<Reinit $num>]<T, $($x,)+> {}
+		unsafe impl<T: Send + Sync + 'static, $($x: Send + Sync + 'static,)+> Sync for [<Reinit $num>]<T, $($x,)+> {}
 
-		impl<T: 'static, $($x: 'static,)+> [<Reinit $num>]<T, $($x,)+>
+		impl<T: Send + Sync + 'static, $($x: Send + Sync + 'static,)+> [<Reinit $num>]<T, $($x,)+>
 		{
 			pub const fn new($([<$x:lower>]: &'static Reinit<$x>,)+ constructor: fn($(&ReinitRef<$x>,)+ Restart<T>, Constructed<T>)) -> Self
 			{
@@ -62,7 +62,7 @@ macro_rules! reinit_variant_struct {
 			)+
 		}
 
-		impl<T: 'static, $($x: 'static,)+> ReinitDetails<T> for [<Reinit $num>]<T, $($x,)+>
+		impl<T: Send + Sync + 'static, $($x: Send + Sync + 'static,)+> ReinitDetails<T> for [<Reinit $num>]<T, $($x,)+>
 		{
 			fn init(&'static self, parent: &'static Reinit<T>) {
 				self.parent.compare_exchange(null_mut(), parent as *const _ as *mut _, Release, Relaxed)
