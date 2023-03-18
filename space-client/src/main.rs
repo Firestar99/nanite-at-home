@@ -7,9 +7,9 @@ use async_std::task::sleep;
 use vulkano::swapchain::Surface;
 
 use space_client::bootup::SURFACE;
-use space_engine::reinit;
+use space_engine::{init, reinit};
 use space_engine::reinit::{ReinitRef, Target};
-use space_engine::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, event_loop_init, EventLoopAccess, stop};
+use space_engine::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess, stop};
 
 pub struct Main {
 	pub event_loop: ReinitRef<EventLoopAccess>,
@@ -49,5 +49,5 @@ impl Main {
 }
 
 fn main() {
-	event_loop_init(&MAIN);
+	init(&MAIN);
 }
