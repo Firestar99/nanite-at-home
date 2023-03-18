@@ -9,7 +9,7 @@ use space_engine::{reinit, reinit_future, reinit_map, reinit_no_restart};
 use space_engine::vulkan::init::{init, Init, Plugin};
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
-use space_engine::vulkan::window::event_loop::run_on_event_loop;
+use space_engine::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess};
 use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
 
@@ -45,9 +45,9 @@ reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABL
 
 // TODO WindowBuilder is not Send, needs separate config type
 // reinit!(WINDOW_CONFIG: Mutex<WindowBuilder> = () => |_| Mutex::new(WindowBuilder::new()));
-reinit_future!(pub WINDOW: WindowRef = () => |_| {
-	run_on_event_loop(|event_loop|WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
+reinit_future!(pub WINDOW: WindowRef = (EVENT_LOOP_ACCESS: EventLoopAccess) => |event_loop, _| {
+	event_loop.spawn(|event_loop|WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
 });
-reinit_future!(pub SURFACE: Arc<Surface> = (WINDOW: WindowRef, VULKAN_INIT: Init<Queues>) => |window, init, _| {
-	run_on_event_loop(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), init.instance.clone()).unwrap())
+reinit_future!(pub SURFACE: Arc<Surface> = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, VULKAN_INIT: Init<Queues>) => |event_loop, window, init, _| {
+	event_loop.spawn(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), init.instance.clone()).unwrap())
 });

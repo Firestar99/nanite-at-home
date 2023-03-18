@@ -1,7 +1,7 @@
 use std::cell::UnsafeCell;
 use std::mem::replace;
 
-use crate::reinit::{Constructed, Reinit, ReinitDetails};
+use crate::reinit::{Constructed, global_need_dec, global_need_inc, Reinit, ReinitDetails};
 
 // ReinitNoRestart
 #[allow(clippy::type_complexity)]
@@ -63,9 +63,13 @@ impl<T: Send + Sync + 'static> ReinitDetails<T> for ReinitNoRestart<T>
 {
 	fn init(&'static self, _: &'static Reinit<T>) {}
 
-	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
+	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {
+		global_need_inc()
+	}
 
-	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
+	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {
+		global_need_dec()
+	}
 
 	fn request_construction(&'static self, parent: &'static Reinit<T>) {
 		// this may not be atomic, but that's ok as Reinit will act as a Mutex for this method

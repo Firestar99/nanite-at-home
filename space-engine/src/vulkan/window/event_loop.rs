@@ -7,19 +7,23 @@ use std::process::exit;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::mpsc::TryRecvError::Disconnected;
+use std::sync::mpsc::{channel, Sender, TryRecvError};
 use std::task::{Context, Poll, Waker};
-use std::thread::Builder;
+use std::thread::yield_now;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use parking_lot::Mutex;
 use winit::event::Event;
-use winit::event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget};
+use winit::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
 
-use crate::CallOnDrop;
+use crate::reinit::{global_need_init, NeedGuard, Reinit, Target};
+use crate::reinit_no_restart_map;
 use crate::vulkan::window::event_loop::TaskState::*;
+
+trait RunOnEventLoop: Send + Sync {
+	fn run(self: Arc<Self>, event_loop: &EventLoopWindowTarget<()>);
+}
 
 // TaskInner
 #[repr(u8)]
@@ -51,7 +55,7 @@ unsafe impl<R, F> Sync for TaskInner<R, F>
 		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {}
 
-impl<R, F> Runnable for TaskInner<R, F>
+impl<R, F> RunOnEventLoop for TaskInner<R, F>
 	where
 		R: Send + 'static,
 		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
@@ -181,87 +185,165 @@ impl<R, F> Future for Task<R, F>
 	}
 }
 
-trait Runnable: Send + Sync {
-	fn run(self: Arc<Self>, event_loop: &EventLoopWindowTarget<()>);
+
+// Messages sent to main loop
+enum Message {
+	InitEventLoop,
+	RunOnEventLoop(Arc<dyn RunOnEventLoop>),
 }
 
+#[allow(clippy::type_complexity)]
+static SENDER: Mutex<Option<(Sender<Message>, Option<EventLoopProxy<()>>)>> = Mutex::new(None);
 
-// executor
-/// using a Mutex as Sender is not Sync. Optimally one would clone it once for each sender, but that's probably more effort than using a plain Mutex.
-type SenderNotify = (Sender<Arc<dyn Runnable>>, EventLoopProxy<()>);
-
-static SENDER: Mutex<Option<SenderNotify>> = Mutex::new(None);
-
-pub fn run_on_event_loop<R, F>(f: F) -> impl Future<Output=R>
-	where
-		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
-{
-	let task = Arc::new(TaskInner::new(f));
+fn send(msg: Message) {
 	let guard = SENDER.lock();
-	let (sender, notify) = guard.as_ref().expect("No EventLoop present!");
-	sender.send(task.clone()).unwrap();
-	notify.send_event(()).unwrap();
-	Task(task)
+	let (sender, notify) = guard.as_ref().expect("EventLoop was not initialized!");
+	sender.send(msg).unwrap();
+	if let Some(notify) = notify {
+		notify.send_event(()).unwrap();
+	}
 }
 
-/// needs to be called from main thread, as EventLoop requires to be used on it to be portable between platforms
-pub fn event_loop_init<F>(make_event_loop: bool, f: F) -> !
-	where
-		F: FnOnce(Receiver<Event<'static, ()>>) + Send + 'static
+pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 {
-	// sending events from main to application
-	let (tx, rx) = channel();
+	// plain setup
+	let (tx, exec_rx) = channel();
+	{
+		let mut guard = SENDER.lock();
+		*guard = Some((tx, None));
+	}
 
-	let event_loop = if make_event_loop {
-		let event_loop = EventLoopBuilder::new().build();
-		let (tx, rx) = channel();
-		*SENDER.lock() = Some((tx, event_loop.create_proxy()));
-		Some((rx, event_loop))
-	} else {
-		None
-	};
+	// need target
+	// SAFETY: this method is exactly made for this case, and should not be called from anywhere else
+	// fixme what to do with the need?
+	let need = unsafe { global_need_init(target) };
+	*ROOT_NEED.lock() = Some(Box::new(need));
 
-	let join_handle = Builder::new()
-		.name(String::from("init"))
-		.spawn(move || {
-			let _drop_sender = make_event_loop.then(|| CallOnDrop(|| {
-				let mut guard = SENDER.lock();
-				let (_, notify) = replace(&mut *guard, None).unwrap();
-				notify.send_event(()).unwrap();
-			}));
-			f(rx)
-		})
-		.unwrap();
-
-	if let Some((rx, event_loop)) = event_loop {
-		drop(join_handle);
-		event_loop.run(move |event, b, control_flow| {
-			match event {
-				Event::UserEvent(_) => {
-					loop {
-						match rx.try_recv() {
-							Ok(c) => { c.run(b) }
-							Err(e) => {
-								if matches!(e, Disconnected) {
-									control_flow.set_exit();
-								}
-								break;
-							}
-						}
+	// plain loop without EventLoop
+	loop {
+		match exec_rx.recv() {
+			Ok(msg) => {
+				match msg {
+					Message::InitEventLoop => {
+						break;
 					}
-				}
-				event => {
-					if let Some(event) = event.to_static() {
-						tx.send(event).ok();
+					Message::RunOnEventLoop(_) => {
+						panic!("EventLoop is not yet initialized!");
 					}
 				}
 			}
-		});
-	} else {
-		// alternative version without EventLoop
-		// just as the EventLoop version it should not care about errors stemming from init and thus we do not unwrap(), unless we can properly error above as well
-		let _ = join_handle.join();
-		exit(0);
+			Err(_) => {
+				// is always a disconnect
+				exit(0);
+			}
+		};
+	}
+
+	// EventLoop setup
+	println!("[Info] Main: transitioning to Queue with EventLoop");
+	let event_loop = EventLoop::new();
+	{
+		let mut guard = SENDER.lock();
+		let proxy = event_loop.create_proxy();
+		// there may be Messages remaining on the queue which need handling
+		proxy.send_event(()).unwrap();
+		guard.as_mut().unwrap().1 = Some(proxy);
+	}
+
+	// EventLoop loop
+	event_loop.run(move |event, b, control_flow| {
+		match event {
+			Event::UserEvent(_) => {
+				loop {
+					match exec_rx.try_recv() {
+						Ok(msg) => {
+							match msg {
+								Message::InitEventLoop => { panic!("already inited EventLoop!") }
+								Message::RunOnEventLoop(run) => { run.run(b) }
+							}
+						}
+						Err(e) => {
+							if matches!(e, TryRecvError::Disconnected) {
+								// received disconnect from last_reinit_dropped()
+								control_flow.set_exit();
+							}
+							break;
+						}
+					}
+				}
+			}
+			event => {
+				// fixme
+				drop(event);
+				// if let Some(event) = event.to_static() {
+				// 	let _ = event_tx.send(event);
+				// }
+			}
+		}
+	});
+}
+
+pub(crate) fn last_reinit_dropped() {
+	let mut guard = SENDER.lock();
+	let (sender, notify) = replace(&mut *guard, None).expect("EventLoop was not initialized!");
+	drop(sender);
+	if let Some(notify) = notify {
+		notify.send_event(()).unwrap();
+	}
+}
+
+
+// stop
+// FIXME: idea how to handle this better
+// need system is great for eg. a client starting up an internal server, or a connection to a server, etc.
+// How to manage the Lifetime of Client, the root Target of the Application?
+// Idea: allow a Target to manage it's own lifetime using their own Instance of NeedGuard
+// allows ReinitNoRestart to stay permanently initialized
+// allows client to un-need itself to shut down
+// Even if a NeedGuard may be dropped immediately, it still needs to construct the Reinit as it may need itself
+// Questions:
+// Maybe separate these "root"-Targets from normal Targets using a different trait?
+// Maybe get rid of current Target (allow every Reinit to be need()) and make it the new root-Target?
+// May need a new type of reinit! macro? NO, would suck cause it'll need normal, map and future variant again.
+// Maybe couple construction of the self-need onto impl Restart<T: Target>, as we're passing that already?
+trait NeedGuardTrait: Send + Sync {}
+
+impl<T: Target> NeedGuardTrait for NeedGuard<T> {}
+
+static ROOT_NEED: Mutex<Option<Box<dyn NeedGuardTrait>>> = Mutex::new(None);
+
+pub fn stop() {
+	loop {
+		if let Some(need) = ROOT_NEED.lock().take() {
+			drop(need);
+			return;
+		}
+		yield_now();
+	}
+}
+
+
+// EventLoopAccess
+#[derive(Copy, Clone)]
+pub struct EventLoopAccess(EventLoopAccessSecret);
+
+// prevent external construction using this secret
+#[derive(Copy, Clone)]
+struct EventLoopAccessSecret;
+
+reinit_no_restart_map!(pub EVENT_LOOP_ACCESS: EventLoopAccess = {
+	send(Message::InitEventLoop);
+	EventLoopAccess(EventLoopAccessSecret)
+});
+
+impl EventLoopAccess {
+	pub fn spawn<R, F>(&self, f: F) -> impl Future<Output=R>
+		where
+			R: Send + 'static,
+			F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
+	{
+		let task = Arc::new(TaskInner::new(f));
+		send(Message::RunOnEventLoop(task.clone()));
+		Task(task)
 	}
 }

@@ -373,8 +373,6 @@ impl<T: Send + Sync + 'static> Reinit<T>
 				// instance.assume_init_ref()
 			}
 
-
-
 			debug_assert_eq!(self.ref_cnt.load(Relaxed), 0);
 			self.ref_cnt.store(1, Release);
 		}
@@ -493,6 +491,37 @@ impl<T: Send + Sync + 'static> Drop for Reinit<T> {
 }
 
 
+// global reinit counter
+static GLOBAL_NEED_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+pub(crate) unsafe fn global_need_init<T: Target>(target: &'static Reinit<T>) -> NeedGuard<T> {
+	GLOBAL_NEED_COUNTER.compare_exchange(0, 1, Relaxed, Relaxed).unwrap();
+	let need = target.need();
+	global_need_dec();
+	need
+}
+
+unsafe fn global_need_inc() {
+	if GLOBAL_NEED_COUNTER.fetch_add(1, Relaxed) == 0 {
+		global_need_inc_panic();
+	}
+}
+
+#[cfg(not(test))]
+unsafe fn global_need_inc_panic() {
+	panic!("global need_inc() before initialization!");
+}
+
+#[cfg(test)]
+unsafe fn global_need_inc_panic() {}
+
+unsafe fn global_need_dec() {
+	if GLOBAL_NEED_COUNTER.fetch_sub(1, Relaxed) == 1 {
+		crate::vulkan::window::event_loop::last_reinit_dropped();
+	}
+}
+
+
 // Restart allows one to restart referenced Reinit
 pub struct Restart<T: Send + Sync + 'static>(&'static Reinit<T>);
 
@@ -594,9 +623,13 @@ impl<T: Send + Sync + 'static> ReinitDetails<T> for Reinit0<T>
 {
 	fn init(&'static self, _: &'static Reinit<T>) {}
 
-	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
+	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {
+		global_need_inc()
+	}
 
-	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
+	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {
+		global_need_dec()
+	}
 
 	fn request_construction(&'static self, parent: &'static Reinit<T>) {
 		(self.constructor)(Restart::<T>(parent), Constructed(parent))
