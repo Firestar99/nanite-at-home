@@ -6,4 +6,3 @@ pub mod vulkan;
 pub mod bootup;
 
 pub const APPLICATION_CONFIG: ApplicationConfig = generate_application_config!();
-

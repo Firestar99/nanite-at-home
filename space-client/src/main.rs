@@ -4,16 +4,16 @@ use std::time::Duration;
 
 use async_global_executor::{spawn, Task};
 use async_std::task::sleep;
-use vulkano::swapchain::Surface;
 
-use space_client::bootup::SURFACE;
+use space_client::bootup::SWAPCHAIN;
 use space_engine::{init, reinit};
 use space_engine::reinit::{ReinitRef, Target};
 use space_engine::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess, stop};
+use space_engine::vulkan::window::swapchain::Swapchain;
 
 pub struct Main {
 	pub event_loop: ReinitRef<EventLoopAccess>,
-	pub surface: ReinitRef<Arc<Surface>>,
+	pub swapchain: ReinitRef<Swapchain>,
 }
 
 pub struct MainTarget {
@@ -23,24 +23,25 @@ pub struct MainTarget {
 
 impl Target for MainTarget {}
 
-reinit!(MAIN: MainTarget = (EVENT_LOOP_ACCESS: EventLoopAccess, SURFACE: Arc<Surface>) => |event_loop, surface, _| {
-	let main = Arc::new(Main { event_loop, surface });
-	MainTarget { worker: main.run(), main }
+reinit!(MAIN: MainTarget = (EVENT_LOOP_ACCESS: EventLoopAccess, SWAPCHAIN: Swapchain) => |event_loop, swapchain, _| {
+	let main = Arc::new(Main { event_loop, swapchain });
+	MainTarget { worker: main.clone().run(), main }
 });
 
 impl Main {
-	fn run(&self) -> Task<()> {
-		let event_loop = *self.event_loop;
+	fn run(self: Arc<Self>) -> Task<()> {
 		spawn(async move {
-			let from_main = event_loop.spawn(|_| {
+			let from_main = self.event_loop.spawn(|_| {
 				assert_eq!(current().name().unwrap(), "main");
 				String::from("sent from main")
 			}).await;
 
 			println!("written in {}: {}", current().name().unwrap(), from_main);
 
+			let _ = self.swapchain.acquire_image(None).unwrap();
+
 			println!("waiting 5s until exit");
-			sleep(Duration::from_millis(500)).await;
+			sleep(Duration::from_millis(5000)).await;
 
 			println!("exiting...");
 			stop();

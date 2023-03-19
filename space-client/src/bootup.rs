@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use vulkano::device::Device;
+use vulkano::instance::Instance;
 use vulkano::swapchain::Surface;
 use vulkano_win::create_surface_from_winit;
 use winit::window::WindowBuilder;
@@ -10,6 +12,7 @@ use space_engine::vulkan::init::{init, Init, Plugin};
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use space_engine::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess};
+use space_engine::vulkan::window::swapchain::Swapchain;
 use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
 
@@ -42,12 +45,18 @@ reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABL
 		println!("{}", init.device.physical_device().properties().device_name);
 		init
 });
+reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Init<Queues>) => |init, _| init.instance.clone());
+reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Init<Queues>) => |init, _| init.device.clone());
 
 // TODO WindowBuilder is not Send, needs separate config type
 // reinit!(WINDOW_CONFIG: Mutex<WindowBuilder> = () => |_| Mutex::new(WindowBuilder::new()));
 reinit_future!(pub WINDOW: WindowRef = (EVENT_LOOP_ACCESS: EventLoopAccess) => |event_loop, _| {
-	event_loop.spawn(|event_loop|WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
+	event_loop.spawn(move |event_loop| WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
 });
-reinit_future!(pub SURFACE: Arc<Surface> = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, VULKAN_INIT: Init<Queues>) => |event_loop, window, init, _| {
-	event_loop.spawn(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), init.instance.clone()).unwrap())
+reinit_future!(pub WINDOW_SIZE: [u32; 2] = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef) => |event_loop, window, _| {
+	event_loop.spawn(move |event_loop| window.get(event_loop).inner_size().into())
 });
+reinit_future!(pub SURFACE: Arc<Surface> = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, INSTANCE: Arc<Instance>) => |event_loop, window, instance, _| {
+	event_loop.spawn(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), (*instance).clone()).unwrap())
+});
+reinit!(pub SWAPCHAIN: Swapchain = (DEVICE: Arc<Device>, WINDOW_SIZE: [u32; 2], SURFACE: Arc<Surface>) => |device, window_size, surface, restart| Swapchain::new(device, *window_size, surface, restart));
