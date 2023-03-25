@@ -13,8 +13,10 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-vulkano = "0.32.3"
-vulkano-win = "0.32.0"
+vulkano = "0.32"
+vulkano-shaders = "0.32"
+vulkano-win = "0.32"
+bytemuck = { version = "1.7" } # in sync with vulkano-win
 winit = "0.27" # in sync with vulkano-win
 
 # async

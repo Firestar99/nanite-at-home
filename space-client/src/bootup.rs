@@ -3,6 +3,7 @@ use std::sync::Arc;
 use clap::Parser;
 use vulkano::device::Device;
 use vulkano::instance::Instance;
+use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::swapchain::Surface;
 use vulkano_win::create_surface_from_winit;
 use winit::window::WindowBuilder;
@@ -47,6 +48,9 @@ reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABL
 });
 reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Init<Queues>) => |init, _| init.instance.clone());
 reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Init<Queues>) => |init, _| init.device.clone());
+reinit!(pub GLOBAL_ALLOCATOR: StandardMemoryAllocator = (DEVICE: Arc<Device>) => |device, _| {
+	StandardMemoryAllocator::new_default((*device).clone())
+});
 
 // TODO WindowBuilder is not Send, needs separate config type
 // reinit!(WINDOW_CONFIG: Mutex<WindowBuilder> = () => |_| Mutex::new(WindowBuilder::new()));
@@ -59,4 +63,6 @@ reinit_future!(pub WINDOW_SIZE: [u32; 2] = (EVENT_LOOP_ACCESS: EventLoopAccess, 
 reinit_future!(pub SURFACE: Arc<Surface> = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, INSTANCE: Arc<Instance>) => |event_loop, window, instance, _| {
 	event_loop.spawn(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), (*instance).clone()).unwrap())
 });
-reinit!(pub SWAPCHAIN: Swapchain = (DEVICE: Arc<Device>, WINDOW_SIZE: [u32; 2], SURFACE: Arc<Surface>) => |device, window_size, surface, restart| Swapchain::new(device, *window_size, surface, restart));
+reinit!(pub SWAPCHAIN: Swapchain = (DEVICE: Arc<Device>, WINDOW_SIZE: [u32; 2], SURFACE: Arc<Surface>) => |device, window_size, surface, restart| {
+	Swapchain::new(device, *window_size, surface, restart)
+});
