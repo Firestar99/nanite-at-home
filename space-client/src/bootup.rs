@@ -13,7 +13,7 @@ use space_engine::vulkan::init::{init, Init, Plugin};
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use space_engine::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess};
-use space_engine::vulkan::window::swapchain::Swapchain;
+use space_engine::vulkan::window::swapchain::{Swapchain, SwapchainState};
 use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
 
@@ -57,12 +57,13 @@ reinit!(pub GLOBAL_ALLOCATOR: StandardMemoryAllocator = (DEVICE: Arc<Device>) =>
 reinit_future!(pub WINDOW: WindowRef = (EVENT_LOOP_ACCESS: EventLoopAccess) => |event_loop, _| {
 	event_loop.spawn(move |event_loop| WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
 });
-reinit_future!(pub WINDOW_SIZE: [u32; 2] = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef) => |event_loop, window, _| {
-	event_loop.spawn(move |event_loop| window.get(event_loop).inner_size().into())
-});
 reinit_future!(pub SURFACE: Arc<Surface> = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, INSTANCE: Arc<Instance>) => |event_loop, window, instance, _| {
 	event_loop.spawn(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), (*instance).clone()).unwrap())
 });
-reinit!(pub SWAPCHAIN: Swapchain = (DEVICE: Arc<Device>, WINDOW_SIZE: [u32; 2], SURFACE: Arc<Surface>) => |device, window_size, surface, restart| {
-	Swapchain::new(device, *window_size, surface, restart)
-});
+reinit!(SWAPCHAIN_STATE: SwapchainState = SwapchainState::default());
+reinit_future!(pub SWAPCHAIN: Swapchain = (DEVICE: Arc<Device>, EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, SURFACE: Arc<Surface>, SWAPCHAIN_STATE: SwapchainState) =>
+	|device, event_loop, window, surface, state, restart|event_loop.spawn(move |event_loop| {
+		let size = window.get(event_loop).inner_size().into();
+		Swapchain::new(device, size, surface, state, restart)
+	})
+);

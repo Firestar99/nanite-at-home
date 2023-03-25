@@ -9,7 +9,6 @@ use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::swapchain::SwapchainPresentInfo;
-use vulkano::sync;
 use vulkano::sync::{FenceSignalFuture, GpuFuture};
 
 use space_engine::CallOnDrop;
@@ -71,7 +70,7 @@ impl Inner {
 					Ok(e) => e,
 					Err(_) => {
 						forget(_stop);
-						return;
+						break;
 					}
 				};
 				let swapchain_image_index = swapchain_acquire.image_index();
@@ -89,8 +88,7 @@ impl Inner {
 					.end_render_pass().unwrap();
 				let draw_cmd = draw_cmd.build().unwrap();
 
-				if let Some(mut fence) = prev_frame_fence {
-					fence.cleanup_finished();
+				if let Some(fence) = prev_frame_fence {
 					fence.wait(None).unwrap();
 				}
 				self.model.update(start.elapsed().as_secs_f32() / 6.);
@@ -99,7 +97,8 @@ impl Inner {
 					.then_execute(graphics_main.clone(), draw_cmd).unwrap()
 					.then_swapchain_present(graphics_main.clone(), SwapchainPresentInfo::swapchain_image_index((*self.swapchain).clone(), swapchain_image_index))
 					.boxed()
-					.then_signal_fence_and_flush().unwrap());
+					.then_signal_fence_and_flush().unwrap()
+				);
 			}
 		})
 	}
