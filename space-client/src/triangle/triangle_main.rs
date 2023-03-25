@@ -1,4 +1,6 @@
+use std::mem::forget;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_global_executor::{spawn, Task};
 use vulkano::buffer::TypedBufferAccess;
@@ -8,7 +10,7 @@ use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::swapchain::SwapchainPresentInfo;
 use vulkano::sync;
-use vulkano::sync::GpuFuture;
+use vulkano::sync::{FenceSignalFuture, GpuFuture};
 
 use space_engine::CallOnDrop;
 use space_engine::reinit::{ReinitRef, Target};
@@ -61,10 +63,17 @@ impl Inner {
 				depth_range: 0f32..1f32,
 			};
 			let allocator = StandardCommandBufferAllocator::new(self.init.device.clone(), Default::default());
+			let start = Instant::now();
 
-			let mut prev_frame_fence = Some(sync::now(self.init.device.clone()).boxed());
+			let mut prev_frame_fence: Option<FenceSignalFuture<Box<dyn GpuFuture>>> = None;
 			loop {
-				let swapchain_acquire = self.swapchain.acquire_image(None).unwrap();
+				let swapchain_acquire = match self.swapchain.acquire_image(None) {
+					Ok(e) => e,
+					Err(_) => {
+						forget(_stop);
+						return;
+					}
+				};
 				let swapchain_image_index = swapchain_acquire.image_index();
 
 				let mut draw_cmd = AutoCommandBufferBuilder::primary(&allocator, self.init.queues.client.graphics_main.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
@@ -80,12 +89,17 @@ impl Inner {
 					.end_render_pass().unwrap();
 				let draw_cmd = draw_cmd.build().unwrap();
 
-				prev_frame_fence.as_mut().unwrap().cleanup_finished();
-				prev_frame_fence = Some(prev_frame_fence.take().unwrap().join(swapchain_acquire)
+				if let Some(mut fence) = prev_frame_fence {
+					fence.cleanup_finished();
+					fence.wait(None).unwrap();
+				}
+				self.model.update(start.elapsed().as_secs_f32() / 6.);
+
+				prev_frame_fence = Some(swapchain_acquire
 					.then_execute(graphics_main.clone(), draw_cmd).unwrap()
 					.then_swapchain_present(graphics_main.clone(), SwapchainPresentInfo::swapchain_image_index((*self.swapchain).clone(), swapchain_image_index))
-					.then_signal_fence_and_flush().unwrap()
-					.boxed());
+					.boxed()
+					.then_signal_fence_and_flush().unwrap());
 			}
 		})
 	}
