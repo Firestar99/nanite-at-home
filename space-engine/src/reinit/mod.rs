@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::fmt::{Debug, Display, Formatter};
 use std::hint::spin_loop;
-use std::mem::{forget, MaybeUninit, replace, transmute};
+use std::mem::{forget, MaybeUninit, transmute};
 use std::ops::Deref;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
@@ -9,6 +9,8 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use parking_lot::{Mutex, MutexGuard};
 
+pub use macros::*;
+pub use no_restart::*;
 pub use target::*;
 pub use variants::*;
 
@@ -16,12 +18,14 @@ use crate::reinit::NeedIncType::{EnsureInitialized, NeedInc};
 
 mod target;
 mod variants;
+mod macros;
+mod no_restart;
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests;
 
-pub struct Reinit<T: 'static> {
+pub struct Reinit<T: Send + Sync + 'static> {
 	// members for figuring out if this works
 	/// counter for how many times this is used by others, >0 means that this reinit should start, =0 that it should stop
 	need_count: AtomicU32,
@@ -49,9 +53,9 @@ pub struct Reinit<T: 'static> {
 	details: &'static dyn ReinitDetails<T>,
 }
 
-unsafe impl<T> Send for Reinit<T> where T: Send {}
+unsafe impl<T: Send + Sync + 'static> Send for Reinit<T> {}
 
-unsafe impl<T> Sync for Reinit<T> where T: Sync {}
+unsafe impl<T: Send + Sync + 'static> Sync for Reinit<T> {}
 
 #[repr(u8)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -62,7 +66,7 @@ pub enum State {
 	Destructing,
 }
 
-pub trait ReinitDetails<T: 'static>: 'static {
+pub trait ReinitDetails<T: Send + Sync + 'static>: 'static {
 	/// register callbacks on Dependencies
 	fn init(&'static self, parent: &'static Reinit<T>);
 
@@ -81,11 +85,11 @@ pub trait ReinitDetails<T: 'static>: 'static {
 
 // ReinitRef
 #[repr(transparent)]
-pub struct ReinitRef<T: 'static> {
+pub struct ReinitRef<T: Send + Sync + 'static> {
 	inner: &'static Reinit<T>,
 }
 
-impl<T> ReinitRef<T> {
+impl<T: Send + Sync + 'static> ReinitRef<T> {
 	/// SAFETY: inner has to be in state Initialized
 	#[inline]
 	unsafe fn new(inner: &'static Reinit<T>) -> Self {
@@ -99,7 +103,7 @@ impl<T> ReinitRef<T> {
 	}
 }
 
-impl<T> Clone for ReinitRef<T> {
+impl<T: Send + Sync + 'static> Clone for ReinitRef<T> {
 	#[inline]
 	fn clone(&self) -> Self {
 		unsafe {
@@ -109,7 +113,7 @@ impl<T> Clone for ReinitRef<T> {
 	}
 }
 
-impl<T> Drop for ReinitRef<T> {
+impl<T: Send + Sync + 'static> Drop for ReinitRef<T> {
 	#[inline]
 	fn drop(&mut self) {
 		unsafe {
@@ -119,7 +123,7 @@ impl<T> Drop for ReinitRef<T> {
 	}
 }
 
-impl<T> Deref for ReinitRef<T> {
+impl<T: Send + Sync + 'static> Deref for ReinitRef<T> {
 	type Target = T;
 
 	#[inline]
@@ -131,19 +135,19 @@ impl<T> Deref for ReinitRef<T> {
 	}
 }
 
-impl<T: Debug> Debug for ReinitRef<T> {
+impl<T: Debug + Send + Sync + 'static> Debug for ReinitRef<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T: Display> Display for ReinitRef<T> {
+impl<T: Display + Send + Sync + 'static> Display for ReinitRef<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.deref().fmt(f)
 	}
 }
 
-impl<T> Reinit<T> {
+impl<T: Send + Sync + 'static> Reinit<T> {
 	#[inline]
 	unsafe fn ref_inc(&'static self) {
 		debug_assert!(self.ref_cnt.load(Relaxed) > 0);
@@ -167,7 +171,7 @@ impl<T> Reinit<T> {
 
 
 // Reinit impl
-impl<T> Reinit<T>
+impl<T: Send + Sync + 'static> Reinit<T>
 {
 	#[inline]
 	const fn new<D: ReinitDetails<T>>(initial_countdown: u32, details: &'static D) -> Reinit<T>
@@ -192,7 +196,7 @@ enum NeedIncType {
 	EnsureInitialized,
 }
 
-impl<T> Reinit<T>
+impl<T: Send + Sync + 'static> Reinit<T>
 {
 	unsafe fn need_inc(&'static self) {
 		self.need_inc_internal(NeedInc)
@@ -358,17 +362,19 @@ impl<T> Reinit<T>
 	}
 
 	fn constructed(&'static self, t: T) {
+		// initialize self.instance
 		{
-			let _guard = self.state_lock.lock();
-			// initialize self.instance
 			{
-				assert_eq!(self.ref_cnt.load(Relaxed), 0);
-				unsafe {
+				let instance = unsafe {
 					// SAFETY: as ref_cnt == 0 no references must exist on instance, so we can grab &mut
 					&mut *self.instance.get()
-				}.write(t);
-				self.ref_cnt.store(1, Release);
+				};
+				instance.write(t);
+				// instance.assume_init_ref()
 			}
+
+			debug_assert_eq!(self.ref_cnt.load(Relaxed), 0);
+			self.ref_cnt.store(1, Release);
 		}
 		// total ordering continues to be ensured: as state is still Destructing no other thread should mess with this object
 
@@ -451,13 +457,13 @@ impl<T> Reinit<T>
 	}
 }
 
-struct Hook<T: 'static, C: 'static> {
+struct Hook<T: Send + Sync + 'static, C: 'static> {
 	callee: &'static C,
 	accept: fn(&'static C, &ReinitRef<T>),
 	request_drop: fn(&'static C),
 }
 
-impl<T: 'static, C: 'static> Hook<T, C> {
+impl<T: Send + Sync + 'static, C: 'static> Hook<T, C> {
 	fn new(callee: &'static C, accept: fn(&'static C, &ReinitRef<T>), request_drop: fn(&'static C)) -> Self {
 		Self { callee, accept, request_drop }
 	}
@@ -477,7 +483,7 @@ impl<T: 'static, C: 'static> Hook<T, C> {
 	}
 }
 
-impl<T> Drop for Reinit<T> {
+impl<T: Send + Sync + 'static> Drop for Reinit<T> {
 	fn drop(&mut self) {
 		// guarantees that self.instance has dropped already
 		debug_assert_eq!(self.ref_cnt.load(Relaxed), 0, "self.t must have already dropped at this point");
@@ -485,31 +491,56 @@ impl<T> Drop for Reinit<T> {
 }
 
 
-// Restart
-pub struct Restart<T: 'static> {
-	parent: &'static Reinit<T>,
+// global reinit counter
+static GLOBAL_NEED_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+pub(crate) unsafe fn global_need_init<T: Target>(target: &'static Reinit<T>) -> NeedGuard<T> {
+	GLOBAL_NEED_COUNTER.compare_exchange(0, 1, Relaxed, Relaxed).unwrap();
+	let need = target.need();
+	global_need_dec();
+	need
 }
 
-impl<T> Restart<T> {
-	pub fn new(parent: &'static Reinit<T>) -> Self {
-		Self { parent }
+unsafe fn global_need_inc() {
+	if GLOBAL_NEED_COUNTER.fetch_add(1, Relaxed) == 0 {
+		global_need_inc_panic();
 	}
+}
 
+#[cfg(not(test))]
+unsafe fn global_need_inc_panic() {
+	panic!("global need_inc() before initialization!");
+}
+
+#[cfg(test)]
+unsafe fn global_need_inc_panic() {}
+
+unsafe fn global_need_dec() {
+	if GLOBAL_NEED_COUNTER.fetch_sub(1, Relaxed) == 1 {
+		crate::vulkan::window::event_loop::last_reinit_dropped();
+	}
+}
+
+
+// Restart allows one to restart referenced Reinit
+pub struct Restart<T: Send + Sync + 'static>(&'static Reinit<T>);
+
+impl<T: Send + Sync + 'static> Restart<T> {
 	pub fn restart(&self) {
-		self.parent.restart();
+		self.0.restart();
 	}
 }
 
 /// #[derive[Clone]) doesn't work as it requires T: Clone which it must not
-impl<T> Clone for Restart<T> {
+impl<T: Send + Sync + 'static> Clone for Restart<T> {
 	fn clone(&self) -> Self {
-		Self { parent: self.parent }
+		Self(self.0)
 	}
 }
 
-impl<T> Copy for Restart<T> {}
+impl<T: Send + Sync + 'static> Copy for Restart<T> {}
 
-impl<T> Debug for Restart<T> {
+impl<T: Send + Sync + 'static> Debug for Restart<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str("Restart<")?;
 		f.write_str(stringify!(T))?;
@@ -518,14 +549,24 @@ impl<T> Debug for Restart<T> {
 }
 
 
-// Dependency
-struct Dependency<T: 'static>
+// Constructed allows access once to the constructed() method
+pub struct Constructed<T: Send + Sync + 'static> (&'static Reinit<T>);
+
+impl<T: Send + Sync + 'static> Constructed<T> {
+	pub fn constructed(self, t: T) {
+		self.0.constructed(t);
+	}
+}
+
+
+// Dependency for variants to use
+struct Dependency<T: Send + Sync + 'static>
 {
 	reinit: &'static Reinit<T>,
 	value: UnsafeCell<Option<ReinitRef<T>>>,
 }
 
-impl<T> Dependency<T> {
+impl<T: Send + Sync + 'static> Dependency<T> {
 	const fn new(reinit: &'static Reinit<T>) -> Self {
 		Self {
 			reinit,
@@ -562,13 +603,13 @@ impl<T> Dependency<T> {
 
 
 // Reinit0
-pub struct Reinit0<T: 'static>
+pub struct Reinit0<T: Send + Sync + 'static>
 {
-	constructor: fn(Restart<T>) -> T,
+	constructor: fn(Restart<T>, Constructed<T>),
 }
 
-impl<T: 'static> Reinit0<T> {
-	pub const fn new(constructor: fn(Restart<T>) -> T) -> Self
+impl<T: Send + Sync + 'static> Reinit0<T> {
+	pub const fn new(constructor: fn(Restart<T>, Constructed<T>)) -> Self
 	{
 		Self { constructor }
 	}
@@ -578,94 +619,101 @@ impl<T: 'static> Reinit0<T> {
 	}
 }
 
-impl<T: 'static> ReinitDetails<T> for Reinit0<T>
+impl<T: Send + Sync + 'static> ReinitDetails<T> for Reinit0<T>
 {
 	fn init(&'static self, _: &'static Reinit<T>) {}
 
-	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
+	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {
+		global_need_inc()
+	}
 
-	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
+	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {
+		global_need_dec()
+	}
 
 	fn request_construction(&'static self, parent: &'static Reinit<T>) {
-		parent.constructed((self.constructor)(Restart::new(parent)))
+		(self.constructor)(Restart::<T>(parent), Constructed(parent))
 	}
 }
 
 
-// ReinitNoRestart
-pub struct ReinitNoRestart<T: 'static>
-{
-	constructor: UnsafeCell<Option<fn() -> T>>,
-}
-
-// member constructor is not Sync
-unsafe impl<T: 'static> Sync for ReinitNoRestart<T> {}
-
-impl<T: 'static> ReinitNoRestart<T> {
-	pub const fn new(constructor: fn() -> T) -> Self
-	{
-		Self {
-			constructor: UnsafeCell::new(Some(constructor))
-		}
-	}
-
-	pub const fn create_reinit(&'static self) -> Reinit<T> {
-		Reinit::new(0, self)
-	}
-}
-
-#[macro_export]
-macro_rules! reinit_no_restart {
-	($name:ident: $t:ty = $f:expr) => (paste::paste!{
-		static [<$name _DETAILS>]: $crate::reinit::ReinitNoRestart<$t> = $crate::reinit::ReinitNoRestart::new(|| $f);
-		static $name: $crate::reinit::Reinit<$t> = [<$name _DETAILS>].create_reinit();
-	});
-}
-
-impl<T: 'static> ReinitDetails<T> for ReinitNoRestart<T>
-{
-	fn init(&'static self, _: &'static Reinit<T>) {}
-
-	unsafe fn on_need_inc(&'static self, _: &'static Reinit<T>) {}
-
-	unsafe fn on_need_dec(&'static self, _: &'static Reinit<T>) {}
-
-	fn request_construction(&'static self, parent: &'static Reinit<T>) {
-		// this may not be atomic, but that's ok as Reinit will act as a Mutex for this method
-		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
-		parent.constructed((constructor.expect("Constructed more than once!"))())
-	}
-}
-
-
-// tests
-#[cfg(test)]
-impl<T> Reinit<T> {
+// asserts and tests
+impl<T: Send + Sync + 'static> Reinit<T> {
 	#[inline]
-	pub fn test_instance(&self) -> &T {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
-		unsafe {
-			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
-			(*self.instance.get()).assume_init_ref()
-		}
-	}
-
-	#[inline]
-	pub fn test_ref(&'static self) -> ReinitRef<T> {
-		assert!(self.ref_cnt.load(Relaxed) > 0);
-		unsafe {
-			// SAFETY: asserted self is initialized above, BUT does not account for multithreading
-			ReinitRef::new(self)
-		}
-	}
-
-	#[inline]
-	pub fn test_get_state(&'static self) -> State {
+	pub fn get_state(&'static self) -> State {
 		self.state_lock.lock().get()
 	}
 
 	#[inline]
-	pub fn test_restart(&'static self) {
-		self.restart();
+	pub fn assert_state(&'static self, state: State) {
+		assert_eq!(self.get_state(), state);
+	}
+}
+
+#[cfg(test)]
+mod test_helper {
+	use std::thread::sleep;
+	use std::time::{Duration, Instant};
+
+	use super::*;
+
+	impl<T: Send + Sync + 'static> Reinit<T> {
+		#[inline]
+		pub fn test_instance(&self) -> &T {
+			assert!(self.ref_cnt.load(Relaxed) > 0);
+			unsafe {
+				// SAFETY: asserted self is initialized above, BUT does not account for multithreading
+				(*self.instance.get()).assume_init_ref()
+			}
+		}
+
+		#[inline]
+		pub fn test_ref(&'static self) -> ReinitRef<T> {
+			assert!(self.ref_cnt.load(Relaxed) > 0);
+			unsafe {
+				// SAFETY: asserted self is initialized above, BUT does not account for multithreading
+				ReinitRef::new(self)
+			}
+		}
+
+		#[inline]
+		pub fn test_restart(&'static self) {
+			self.test_restart_timeout(Duration::from_secs(1));
+		}
+
+		#[inline]
+		pub fn test_restart_timeout(&'static self, timeout: Duration) {
+			self.restart();
+			// restart flag is consumed when construction initiates.
+			// However when the clearing of this flag is visible, the state update to Constructing may not yet be!
+			// But that's ok it will be at least in state Uninitialized which is all we need.
+			// Also we may double the timeout but that's fine tests aren't time sensitive.
+			busy_wait_loop(timeout, Some(|| String::from("Restart flag to be consumed")), || !self.queued_restart.load(Relaxed));
+			busy_wait_loop(timeout, Some(|| String::from("Reinit Initialized after restart")), || self.get_state() == State::Initialized);
+		}
+
+		pub fn busy_wait_until_state(&'static self, state: State, timeout: Duration) {
+			busy_wait_loop(timeout, Some(|| format!("Reinit in state {:?}", state)), || self.get_state() == state);
+		}
+	}
+
+	pub fn busy_wait_loop<F, R>(timeout: Duration, timeout_reason: Option<R>, f: F)
+		where
+			F: Fn() -> bool,
+			R: Fn() -> String,
+	{
+		let start = Instant::now();
+		loop {
+			if f() {
+				return;
+			}
+			if start.elapsed() > timeout {
+				let reason = timeout_reason.map(|r| (" while waiting for ", r())).unwrap_or_else(|| ("", String::new()));
+				panic!("timeout after {:?}{}{}!", timeout, reason.0, reason.1);
+			}
+			// sleep(1ms) instead of spin_loop() as we don't know how long it may take
+			// for a Reinit to initialize and need to back off from lock()-ing Mutexes
+			sleep(Duration::from_millis(1));
+		}
 	}
 }

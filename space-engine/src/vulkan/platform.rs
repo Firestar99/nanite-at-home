@@ -1,48 +1,67 @@
 use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::mem;
 use std::ops::Deref;
-use std::pin::Pin;
+use std::sync::Arc;
 
-use vulkano::instance::{InstanceExtensions, LayerProperties, layers_list};
+use vulkano::instance::LayerProperties;
+use vulkano::VulkanLibrary;
 
-pub struct VkPlatform {
-	pub instance_extensions: InstanceExtensions,
-	pub validation_layers: HashSet<LayerPropertiesWrapper>,
+pub struct VulkanLayers {
+	validation_layers: HashSet<LayerPropertiesWrapper>,
+}
+
+impl VulkanLayers {
+	pub fn new(lib: &Arc<VulkanLibrary>) -> Self {
+		VulkanLayers {
+			validation_layers: lib.layer_properties().unwrap().map(LayerPropertiesWrapper::new).collect(),
+		}
+	}
+}
+
+impl Deref for VulkanLayers {
+	type Target = HashSet<LayerPropertiesWrapper>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.validation_layers
+	}
 }
 
 pub struct LayerPropertiesWrapper {
-	name: Pin<&'static str>,
-	layer_properties: LayerProperties,
+	inner: LayerProperties,
 }
 
 impl LayerPropertiesWrapper {
 	fn new(layer_properties: LayerProperties) -> LayerPropertiesWrapper {
 		LayerPropertiesWrapper {
-			name: Pin::new(unsafe {
-				mem::transmute::<&str, &'static str>(layer_properties.name())
-			}),
-			layer_properties,
+			inner: layer_properties,
 		}
+	}
+}
+
+impl Deref for LayerPropertiesWrapper {
+	type Target = LayerProperties;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
 	}
 }
 
 impl Borrow<str> for LayerPropertiesWrapper {
 	fn borrow(&self) -> &str {
-		&self.name
+		self.name()
 	}
 }
 
 impl AsRef<LayerProperties> for LayerPropertiesWrapper {
 	fn as_ref(&self) -> &LayerProperties {
-		&self.layer_properties
+		&self.inner
 	}
 }
 
 impl PartialEq<Self> for LayerPropertiesWrapper {
 	fn eq(&self, other: &Self) -> bool {
-		self.name.deref().eq(other.name.deref())
+		self.name().deref().eq(other.name().deref())
 	}
 }
 
@@ -50,15 +69,6 @@ impl Eq for LayerPropertiesWrapper {}
 
 impl Hash for LayerPropertiesWrapper {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.name.hash(state)
-	}
-}
-
-impl VkPlatform {
-	pub fn new() -> Self {
-		VkPlatform {
-			instance_extensions: InstanceExtensions::supported_by_core().unwrap(),
-			validation_layers: layers_list().unwrap().map(|l| LayerPropertiesWrapper::new(l)).collect(),
-		}
+		self.name().hash(state)
 	}
 }

@@ -1,12 +1,24 @@
+use std::future::ready;
 use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
+use std::thread::current;
 
 use parking_lot::Mutex;
 
 use crate::reinit;
 use crate::reinit::{Reinit, ReinitRef, Restart, State};
+use crate::reinit_future;
+use crate::reinit_map;
 use crate::reinit_no_restart;
+use crate::reinit_no_restart_future;
+use crate::reinit_no_restart_map;
+
+fn inc(v: &mut i32) -> i32 {
+	let old = *v;
+	*v += 1;
+	old
+}
 
 #[derive(Default, Eq, PartialEq, Debug, Copy, Clone)]
 struct Calls {
@@ -75,12 +87,12 @@ impl Default for Shared {
 	}
 }
 
-struct AT<T: 'static> {
+struct AT<T: Send + Sync + 'static> {
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T> AT<T> {
+impl<T: Send + Sync + 'static> AT<T> {
 	fn new(shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.a.new);
 		Self { shared, t }
@@ -96,19 +108,19 @@ impl<T> AT<T> {
 	}
 }
 
-impl<T> Drop for AT<T> {
+impl<T: Send + Sync + 'static> Drop for AT<T> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.a.drop);
 	}
 }
 
-struct BT<T: 'static, A: 'static> {
+struct BT<T: Send + Sync + 'static, A: Send + Sync + 'static> {
 	a: ReinitRef<A>,
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T, A> BT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> BT<T, A> {
 	fn new(a: ReinitRef<A>, shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.b.new);
 		Self { a, shared, t }
@@ -124,19 +136,19 @@ impl<T, A> BT<T, A> {
 	}
 }
 
-impl<T, A> Drop for BT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> Drop for BT<T, A> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.b.drop);
 	}
 }
 
-struct CT<T: 'static, A: 'static> {
+struct CT<T: Send + Sync + 'static, A: Send + Sync + 'static> {
 	a: ReinitRef<A>,
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T, A> CT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> CT<T, A> {
 	fn new(a: ReinitRef<A>, shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.c.new);
 		Self { a, shared, t }
@@ -152,20 +164,20 @@ impl<T, A> CT<T, A> {
 	}
 }
 
-impl<T, A> Drop for CT<T, A> {
+impl<T: Send + Sync + 'static, A: Send + Sync + 'static> Drop for CT<T, A> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.c.drop);
 	}
 }
 
-struct DT<T: 'static, B: 'static, C: 'static> {
+struct DT<T: Send + Sync + 'static, B: Send + Sync + 'static, C: Send + Sync + 'static> {
 	b: ReinitRef<B>,
 	c: ReinitRef<C>,
 	shared: &'static SharedRef,
 	t: T,
 }
 
-impl<T, B, C> DT<T, B, C> {
+impl<T: Send + Sync + 'static, B: Send + Sync + 'static, C: Send + Sync + 'static> DT<T, B, C> {
 	fn new(b: ReinitRef<B>, c: ReinitRef<C>, shared: &'static SharedRef, t: T) -> Self {
 		shared.lock().register(|s| &mut s.d.new);
 		Self { b, c, shared, t }
@@ -181,7 +193,7 @@ impl<T, B, C> DT<T, B, C> {
 	}
 }
 
-impl<T, B, C> Drop for DT<T, B, C> {
+impl<T: Send + Sync + 'static, B: Send + Sync + 'static, C: Send + Sync + 'static> Drop for DT<T, B, C> {
 	fn drop(&mut self) {
 		self.shared.lock().register(|s| &mut s.d.drop);
 	}
@@ -205,6 +217,8 @@ fn test_shared_reset() {
 }
 
 mod test_functions_panic {
+	#![allow(unreachable_code)]
+
 	use super::*;
 
 	reinit!(REINIT: i32 = {
@@ -214,25 +228,25 @@ mod test_functions_panic {
 	#[test]
 	#[should_panic]
 	fn test_ref_panic() {
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		REINIT.test_ref();
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_instance_panic() {
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		REINIT.test_instance();
 	}
 }
-
 
 mod reinit0_basic {
 	use super::*;
 
 	static INITED: AtomicBool = AtomicBool::new(false);
-	reinit!(REINIT: () = () => |_| {
+	reinit!(REINIT: i32 = () => |_| {
 		INITED.store(true, Relaxed);
+		122
 	});
 
 	#[test]
@@ -240,15 +254,82 @@ mod reinit0_basic {
 		assert!(!INITED.load(Relaxed));
 
 		let _need = REINIT.test_need();
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert_eq!(REINIT.countdown.load(Relaxed), 0);
 		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
 		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
+		assert_eq!(*REINIT.test_instance(), 122);
 	}
 }
 
-mod reinit0_reset_manual {
+mod reinit0_threading {
+	use super::*;
+
+	static THREAD_NAME: Mutex<Option<String>> = Mutex::new(None);
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit!(REINIT: i32 = () => |_| {
+		*THREAD_NAME.try_lock().unwrap() = current().name().map(String::from);
+		INITED.store(true, Relaxed);
+		123
+	});
+
+	#[test]
+	fn reinit0_threading() {
+		assert!(!INITED.load(Relaxed));
+
+		let _need = REINIT.test_need();
+		assert!(INITED.load(Relaxed));
+		assert_eq!(*REINIT.test_instance(), 123);
+		assert_ne!(THREAD_NAME.try_lock().unwrap().as_ref().unwrap(), current().name().unwrap());
+	}
+}
+
+mod reinit0_map {
+	use super::*;
+
+	static THREAD_NAME: Mutex<Option<String>> = Mutex::new(None);
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit_map!(REINIT: i32 = () => |_| {
+		*THREAD_NAME.try_lock().unwrap() = current().name().map(String::from);
+		INITED.store(true, Relaxed);
+		124
+	});
+
+	#[test]
+	fn reinit0_map() {
+		assert!(!INITED.load(Relaxed));
+
+		let _need = REINIT.test_need();
+		assert!(INITED.load(Relaxed));
+		assert_eq!(*REINIT.test_instance(), 124);
+		assert_eq!(THREAD_NAME.try_lock().unwrap().as_ref().unwrap(), current().name().unwrap());
+	}
+}
+
+mod reinit0_future {
+	use super::*;
+
+	static THREAD_NAME: Mutex<Option<String>> = Mutex::new(None);
+	static INITED: AtomicBool = AtomicBool::new(false);
+	reinit_future!(REINIT: i32 = () => |_| {
+		*THREAD_NAME.try_lock().unwrap() = current().name().map(String::from);
+		INITED.store(true, Relaxed);
+		ready(125)
+	});
+
+	#[test]
+	fn reinit0_future() {
+		assert!(!INITED.load(Relaxed));
+
+		let _need = REINIT.test_need();
+		assert!(INITED.load(Relaxed));
+		assert_eq!(*REINIT.test_instance(), 125);
+		assert_ne!(THREAD_NAME.try_lock().unwrap().as_ref().unwrap(), current().name().unwrap());
+	}
+}
+
+mod reinit0_restart_manual {
 	use super::*;
 
 	struct Shared {
@@ -262,7 +343,7 @@ mod reinit0_reset_manual {
 
 	static RESTARTING: AtomicBool = AtomicBool::new(false);
 	static SHARED: Mutex<Shared> = Mutex::new(Shared { a: None, is_callback_init: true, next_value: 42, received: None, freed: false, restart: None });
-	reinit!(A: i32 = () => |restart| {
+	reinit_map!(A: i32 = () => |restart| {
 		let mut s = SHARED.lock();
 		s.restart = Some(restart);
 		s.next_value
@@ -272,21 +353,21 @@ mod reinit0_reset_manual {
 	fn reinit0_reset_manual() {
 		SHARED.lock().a = Some(&A);
 		let _need = A.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
 
 		// add callback
 		A.add_callback(&SHARED, |shared, v| {
 			let mut s = shared.lock();
 			if RESTARTING.load(Relaxed) {
-				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Constructing));
+				assert!(matches!(s.a.as_ref().unwrap().get_state(), State::Constructing));
 			} else {
-				assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Initialized));
+				assert!(matches!(s.a.as_ref().unwrap().get_state(), State::Initialized));
 			}
 			assert_eq!(s.received, None);
 			s.received = Some(**v);
 		}, |shared| {
 			let mut s = shared.lock();
-			assert!(matches!(s.a.as_ref().unwrap().test_get_state(), State::Destructing));
+			assert!(matches!(s.a.as_ref().unwrap().get_state(), State::Destructing));
 			assert!(!s.freed);
 			assert_eq!(s.received, None, "must not give value and then clear it");
 			s.freed = true;
@@ -311,7 +392,7 @@ mod reinit0_reset_manual {
 		RESTARTING.store(false, Relaxed);
 		{
 			let s = SHARED.lock();
-			assert!(matches!(A.test_get_state(), State::Initialized));
+			assert!(matches!(A.get_state(), State::Initialized));
 			assert!(s.freed);
 			assert_eq!(s.received, Some(127));
 		}
@@ -325,7 +406,7 @@ mod reinit0_reset_manual {
 		drop(_need);
 		{
 			let s = SHARED.lock();
-			assert!(matches!(A.test_get_state(), State::Uninitialized));
+			assert!(matches!(A.get_state(), State::Uninitialized));
 			assert!(s.freed);
 			assert_eq!(s.received, None);
 		}
@@ -403,17 +484,17 @@ mod reinit0_need {
 
 	#[test]
 	fn reinit0_need() {
-		assert!(matches!(REINIT.test_get_state(), State::Uninitialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		assert!(!FREED.load(Relaxed));
 
 		// init
 		let _need = REINIT.test_need();
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert!(!FREED.load(Relaxed));
 
 		// drop
 		drop(_need);
-		assert!(matches!(REINIT.test_get_state(), State::Uninitialized));
+		assert!(matches!(REINIT.get_state(), State::Uninitialized));
 		assert!(FREED.load(Relaxed), "T was not freed by Reinit!");
 	}
 }
@@ -440,13 +521,13 @@ mod reinit1_basic {
 
 	#[test]
 	fn reinit1_basic() {
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 
 		// init
 		let _need = B.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
-		assert!(matches!(B.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
+		assert!(matches!(B.get_state(), State::Initialized));
 
 		assert_eq!(A.test_instance() as *const A, B.test_instance().a.deref() as *const A);
 		assert_eq!(A.test_instance().t.0.get(), 0);
@@ -456,8 +537,8 @@ mod reinit1_basic {
 
 		// drop
 		drop(_need);
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 	}
 }
 
@@ -473,8 +554,8 @@ mod reinit1_restart {
 
 	#[test]
 	fn reinit1_restart() {
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 
 		A::register_callbacks(&A, &SHARED);
 		B::register_callbacks(&B, &SHARED);
@@ -482,8 +563,8 @@ mod reinit1_restart {
 
 		// init
 		let _need = B.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
-		assert!(matches!(B.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
+		assert!(matches!(B.get_state(), State::Initialized));
 
 		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
@@ -523,8 +604,8 @@ mod reinit1_restart {
 
 		// drop
 		drop(_need);
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
-		assert!(matches!(B.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
+		assert!(matches!(B.get_state(), State::Uninitialized));
 		assert_eq!(*SHARED.lock(), Shared {
 			a: Calls {
 				callback_drop: 3,
@@ -557,10 +638,10 @@ mod reinit2_diamond {
 		use super::*;
 
 		static SHARED: SharedRef = Shared::new();
-		reinit!(A: A = A::new(&SHARED, ()));
-		reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
-		reinit!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
-		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
+		reinit_map!(A: A = A::new(&SHARED, ()));
+		reinit_map!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
+		reinit_map!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
+		reinit_map!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
 
 		#[test]
 		fn reinit2_diamond_b_then_c() {
@@ -572,10 +653,10 @@ mod reinit2_diamond {
 		use super::*;
 
 		static SHARED: SharedRef = Shared::new();
-		reinit!(A: A = A::new(&SHARED, ()));
-		reinit!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
-		reinit!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
-		reinit!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
+		reinit_map!(A: A = A::new(&SHARED, ()));
+		reinit_map!(B: B = (A: A) => |a, _| B::new(a.clone(), &SHARED, ()));
+		reinit_map!(C: C = (A: A) => |a, _| C::new(a.clone(), &SHARED, ()));
+		reinit_map!(D: D = (B: B, C: C) => |b, c, _| D::new(b.clone(), c.clone(), &SHARED, ()));
 
 		#[test]
 		fn reinit2_diamond_c_then_b() {
@@ -826,13 +907,13 @@ mod reinit_restart_while_not_needed {
 
 		// restart without need should noop
 		A.restart();
-		assert!(matches!(A.test_get_state(), State::Uninitialized));
+		assert!(matches!(A.get_state(), State::Uninitialized));
 		assert_eq!(*SHARED.lock(), Shared::def());
 
 		// needing later should not restart
 		ALLOW_CONSTRUCT.store(true, Relaxed);
 		let _need = A.test_need();
-		assert!(matches!(A.test_get_state(), State::Initialized));
+		assert!(matches!(A.get_state(), State::Initialized));
 		let expected = Shared {
 			a: Calls {
 				new: 1,
@@ -850,19 +931,21 @@ mod reinit_no_restart_basic {
 	use super::*;
 
 	static INITED: AtomicBool = AtomicBool::new(false);
-	reinit_no_restart!(REINIT: () = {
+	reinit_no_restart!(REINIT: i32 = {
 		INITED.store(true, Relaxed);
+		23
 	});
 
 	#[test]
 	fn reinit_no_restart_basic() {
 		let _need = REINIT.test_need();
 
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
 		assert_eq!(REINIT.countdown.load(Relaxed), 0);
 		assert!(INITED.load(Relaxed));
 		assert!(!REINIT.queued_restart.load(Relaxed));
 		assert!(REINIT.ref_cnt.load(Relaxed) > 0);
+		assert_eq!(*REINIT.test_instance(), 23);
 	}
 }
 
@@ -875,7 +958,116 @@ mod reinit_no_restart_restarted {
 	#[should_panic(expected = "Constructed more than once!")]
 	fn reinit_no_restart_restarted() {
 		let _need = REINIT.test_need();
-		assert!(matches!(REINIT.test_get_state(), State::Initialized));
+		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert_eq!(*REINIT.test_instance(), 42);
 		REINIT.test_restart();
+	}
+}
+
+mod reinit_no_restart_future {
+	use super::*;
+
+	reinit_no_restart_future!(REINIT: i32 = ready(53));
+
+	#[test]
+	fn reinit_no_restart_future() {
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert_eq!(*REINIT.test_instance(), 53);
+	}
+}
+
+mod reinit_no_restart_map {
+	use super::*;
+
+	reinit_no_restart_map!(REINIT: i32 = 123);
+
+	#[test]
+	fn reinit_no_restart_map() {
+		let _need = REINIT.test_need();
+		assert!(matches!(REINIT.get_state(), State::Initialized));
+		assert_eq!(*REINIT.test_instance(), 123);
+	}
+}
+
+mod reinit_ref_free_ordering {
+	use super::*;
+
+	#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+	struct Tracker {
+		counter: i32,
+		a_freed: Option<i32>,
+		b_freed: Option<i32>,
+	}
+
+	impl Tracker {
+		const fn default() -> Self {
+			Self {
+				counter: 0,
+				a_freed: None,
+				b_freed: None,
+			}
+		}
+	}
+
+	struct A(i32);
+
+	impl Drop for A {
+		fn drop(&mut self) {
+			let mut guard = STATE.try_lock().unwrap();
+			guard.a_freed = Some(inc(&mut guard.counter));
+		}
+	}
+
+	struct B(i32);
+
+	impl Drop for B {
+		fn drop(&mut self) {
+			let mut guard = STATE.try_lock().unwrap();
+			guard.b_freed = Some(inc(&mut guard.counter));
+		}
+	}
+
+	static STATE: Mutex<Tracker> = Mutex::new(Tracker::default());
+
+	reinit!(RA: A = A(42));
+	reinit!(RB: B = (RA: A) => |a, _| B(a.0 + 5));
+
+	/// this test does the same as reinit1_* tests, but the values do NOT store a ReinitRef themselves,
+	/// so it relies on ReinitDetails holding any ReinitRefs and freeing them in the correct order.
+	/// This was meant to show the order of instructions in ReinitX::request_drop_X() matter, but it
+	/// actually does not due to Reinit::check_state_internal()'s deconstruct branch holding onto the
+	/// last ref_dec() call for after request_drop callbacks are called.
+	#[test]
+	fn reinit_ref_free_ordering() {
+		assert!(matches!(RA.get_state(), State::Uninitialized));
+		assert!(matches!(RB.get_state(), State::Uninitialized));
+		*STATE.try_lock().unwrap() = Tracker::default();
+
+		let correct_free_order = Tracker {
+			counter: 2,
+			a_freed: Some(1),
+			b_freed: Some(0),
+		};
+
+		{
+			let _need_b = RB.test_need();
+			assert!(matches!(RA.get_state(), State::Initialized));
+			assert!(matches!(RB.get_state(), State::Initialized));
+			assert_eq!(*STATE.try_lock().unwrap(), Tracker::default());
+
+			{
+				RA.test_restart();
+				assert!(matches!(RA.get_state(), State::Initialized));
+				assert!(matches!(RB.get_state(), State::Initialized));
+				assert_eq!(*STATE.try_lock().unwrap(), correct_free_order);
+				*STATE.try_lock().unwrap() = Tracker::default();
+			}
+		}
+
+		assert!(matches!(RA.get_state(), State::Uninitialized));
+		assert!(matches!(RB.get_state(), State::Uninitialized));
+		assert_eq!(*STATE.try_lock().unwrap(), correct_free_order);
+		*STATE.try_lock().unwrap() = Tracker::default();
 	}
 }
