@@ -4,15 +4,15 @@ use vulkano::device::Device;
 use vulkano::memory::allocator::StandardMemoryAllocator;
 
 use space_engine::reinit;
+use space_engine::space::bootup::{DEVICE, GLOBAL_ALLOCATOR, SWAPCHAIN, VULKAN_INIT};
+use space_engine::space::queue_allocation::Queues;
 use space_engine::vulkan::init::Init;
 use space_engine::vulkan::window::swapchain::Swapchain;
 
-use crate::bootup::{DEVICE, GLOBAL_ALLOCATOR, SWAPCHAIN, VULKAN_INIT};
 use crate::triangle::triangle_main::TriangleMain;
 use crate::triangle::triangle_model::TriangleModel;
 use crate::triangle::triangle_pipeline::TrianglePipeline;
 use crate::triangle::triangle_renderpass::{TriangleFramebuffer, TriangleRenderpass};
-use crate::vulkan::Queues;
 
 pub mod triangle_pipeline;
 pub mod triangle_model;

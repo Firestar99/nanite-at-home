@@ -13,6 +13,7 @@ use vulkano::sync::{FenceSignalFuture, GpuFuture};
 
 use space_engine::CallOnDrop;
 use space_engine::reinit::{ReinitRef, Target};
+use space_engine::space::queue_allocation::Queues;
 use space_engine::vulkan::init::Init;
 use space_engine::vulkan::window::event_loop::stop;
 use space_engine::vulkan::window::swapchain::Swapchain;
@@ -20,7 +21,6 @@ use space_engine::vulkan::window::swapchain::Swapchain;
 use crate::triangle::triangle_model::TriangleModel;
 use crate::triangle::triangle_pipeline::TrianglePipeline;
 use crate::triangle::triangle_renderpass::TriangleFramebuffer;
-use crate::vulkan::Queues;
 
 struct Inner {
 	init: ReinitRef<Init<Queues>>,

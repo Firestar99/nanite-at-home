@@ -1571,7 +1571,6 @@ dependencies = [
  "async-global-executor",
  "async-std",
  "bytemuck",
- "clap",
  "futures",
  "parking_lot",
  "space-engine",
@@ -1587,6 +1586,7 @@ version = "0.1.0"
 dependencies = [
  "async-global-executor",
  "async-std",
+ "clap",
  "futures",
  "konst",
  "num-derive",

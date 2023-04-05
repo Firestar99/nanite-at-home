@@ -23,5 +23,4 @@ async-std = { workspace = true }
 async-global-executor = { workspace = true }
 
 # other
-clap = { workspace = true }
 parking_lot = { workspace = true }

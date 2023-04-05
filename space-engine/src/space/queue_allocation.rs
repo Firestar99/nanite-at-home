@@ -4,8 +4,8 @@ use vulkano::device::{Queue, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::Instance;
 
-use space_engine::vulkan::init::{QueueAllocation, QueueAllocator};
-use space_engine::vulkan::queue_allocation_helper::{Priority, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocatorHelper};
+use crate::vulkan::init::{QueueAllocation, QueueAllocator};
+use crate::vulkan::queue_allocation_helper::{Priority, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocatorHelper};
 
 // queues
 #[derive(Default)]
