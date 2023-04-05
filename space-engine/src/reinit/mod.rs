@@ -517,9 +517,17 @@ unsafe fn global_need_inc_panic() {}
 
 unsafe fn global_need_dec() {
 	if GLOBAL_NEED_COUNTER.fetch_sub(1, Relaxed) == 1 {
-		crate::vulkan::window::event_loop::last_reinit_dropped();
+		global_need_last_dec();
 	}
 }
+
+#[cfg(not(test))]
+unsafe fn global_need_last_dec() {
+	crate::vulkan::window::event_loop::last_reinit_dropped();
+}
+
+#[cfg(test)]
+unsafe fn global_need_last_dec() {}
 
 
 // Restart allows one to restart referenced Reinit
