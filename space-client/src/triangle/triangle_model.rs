@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "spirv"))]
+
 use std::f32::consts::PI;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;

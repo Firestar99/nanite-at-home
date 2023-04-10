@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "spirv"))]
+
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -18,38 +20,24 @@ impl TrianglePipeline {
 	pub fn new(device: &Arc<Device>, render_pass: &TriangleRenderpass) -> Self {
 		mod vs {
 			vulkano_shaders::shader! {
-            ty: "vertex",
-            src: "
-				#version 450
-
-				layout(location = 0) in vec2 position;
-
-				void main() {
-					gl_Position = vec4(position, 0.0, 1.0);
-				}
-			"
-        }
+				bytes: "../target/spirv-builder/spirv-unknown-spv1.3/release/deps/space_client.spvs/triangle-triangle_shader-bla_vs.spv",
+				ty: "vertex",
+				exact_entrypoint_interface: true,
+        	}
 		}
 
 		mod fs {
 			vulkano_shaders::shader! {
-            ty: "fragment",
-            src: "
-				#version 450
-
-				layout(location = 0) out vec4 f_color;
-
-				void main() {
-					f_color = vec4(1.0, 0.0, 0.0, 1.0);
-				}
-			"
-        }
+				bytes: "../target/spirv-builder/spirv-unknown-spv1.3/release/deps/space_client.spvs/triangle-triangle_shader-bla_fs.spv",
+            	ty: "fragment",
+				exact_entrypoint_interface: true,
+			}
 		}
 
 		let vs: Arc<ShaderModule> = vs::load(device.clone()).unwrap();
-		let vs = vs.entry_point("main").unwrap();
+		let vs = vs.entry_point("triangle::triangle_shader::bla_vs").unwrap();
 		let fs: Arc<ShaderModule> = fs::load(device.clone()).unwrap();
-		let fs = fs.entry_point("main").unwrap();
+		let fs = fs.entry_point("triangle::triangle_shader::bla_fs").unwrap();
 
 		let pipeline = GraphicsPipeline::start()
 			.render_pass(render_pass.subpass(MAIN))

@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "spirv"))]
+
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;

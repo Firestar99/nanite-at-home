@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "spirv"))]
+
 use std::mem::forget;
 use std::sync::Arc;
 use std::time::Instant;

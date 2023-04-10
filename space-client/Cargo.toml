@@ -6,7 +6,19 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = ["use-installed-tools"]
+use-installed-tools = ["spirv-builder/use-installed-tools"]
+use-compiled-tools = ["spirv-builder/use-compiled-tools"]
+
+[lib]
+crate-type = ["lib", "dylib"]
+
 [dependencies]
+spirv-std = { workspace = true }
+
+# dependencies for management code only, may use std
+[target.'cfg(not(target_arch = "spirv"))'.dependencies]
 # my projects
 space-engine = { path = "../space-engine" }
 winit = { workspace = true }
@@ -24,3 +36,6 @@ async-global-executor = { workspace = true }
 
 # other
 parking_lot = { workspace = true }
+
+[build-dependencies]
+spirv-builder = { workspace = true }
