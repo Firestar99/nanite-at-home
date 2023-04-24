@@ -1,40 +1,42 @@
 #![cfg(not(target_arch = "spirv"))]
 
 use std::f32::consts::PI;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::impl_vertex;
-use vulkano::memory::allocator::MemoryAllocator;
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryUsage};
+use vulkano::pipeline::graphics::vertex_input::Vertex;
 
-pub struct TriangleModel(pub Arc<CpuAccessibleBuffer<[Vertex]>>);
+pub struct TriangleModel(pub Subbuffer<[TriangleVertex]>);
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Zeroable, Pod)]
-pub struct Vertex {
+#[derive(Clone, Copy, Debug, Default, Zeroable, Pod, Vertex)]
+pub struct TriangleVertex {
+	#[format(R32G32B32_SFLOAT)]
 	position: [f32; 2],
 }
 
-impl_vertex!(Vertex, position);
-
 impl TriangleModel {
 	pub fn new_basic_model(allocator: &(impl MemoryAllocator + ?Sized)) -> TriangleModel {
-		let buffer = CpuAccessibleBuffer::from_iter(
+		let buffer = Buffer::from_iter(
 			allocator,
-			BufferUsage {
-				vertex_buffer: true,
-				..BufferUsage::empty()
+			BufferCreateInfo {
+				usage: BufferUsage::VERTEX_BUFFER,
+				..BufferCreateInfo::default()
 			},
-			false,
+			AllocationCreateInfo {
+				usage: MemoryUsage::Upload,
+				..Default::default()
+			},
 			TriangleModel::state(0f32),
 		).unwrap();
 
 		TriangleModel(buffer)
 	}
 
-	fn state(time: f32) -> [Vertex; 3] {
+	fn state(time: f32) -> [TriangleVertex; 3] {
 		// [
 		// 	Vertex {
 		// 		position: [-0.5, -0.25],
@@ -49,16 +51,16 @@ impl TriangleModel {
 
 		[0., 120., 240.]
 			.map(|x| (time + (x / 360.)) * 2. * PI)
-			.map(|x| Vertex { position: [x.sin(), x.cos()] })
+			.map(|x| TriangleVertex { position: [x.sin(), x.cos()] })
 	}
 
 	pub fn update(&self, time: f32) {
-		self.0.write().unwrap().deref_mut().copy_from_slice(TriangleModel::state(time).as_slice());
+		self.0.write().unwrap().copy_from_slice(TriangleModel::state(time).as_slice());
 	}
 }
 
 impl Deref for TriangleModel {
-	type Target = Arc<CpuAccessibleBuffer<[Vertex]>>;
+	type Target = Subbuffer<[TriangleVertex]>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0

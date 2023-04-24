@@ -14,11 +14,11 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-vulkano = "0.32"
-vulkano-shaders = "0.32"
-vulkano-win = "0.32"
+vulkano = "0.33"
+vulkano-shaders = "0.33"
+vulkano-win = "0.33"
 bytemuck = { version = "1.7" } # in sync with vulkano-win
-winit = "0.27" # in sync with vulkano-win
+winit = "0.28" # in sync with vulkano-win
 
 # rust-gpu
 spirv-builder = { version = "0.6", default-features = false }

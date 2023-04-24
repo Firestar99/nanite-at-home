@@ -5,13 +5,13 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_global_executor::{spawn, Task};
-use vulkano::buffer::TypedBufferAccess;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassContents};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::swapchain::SwapchainPresentInfo;
-use vulkano::sync::{FenceSignalFuture, GpuFuture};
+use vulkano::sync::future::FenceSignalFuture;
+use vulkano::sync::GpuFuture;
 
 use space_engine::CallOnDrop;
 use space_engine::reinit::{ReinitRef, Target};

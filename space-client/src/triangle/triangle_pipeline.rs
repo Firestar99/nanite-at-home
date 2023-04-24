@@ -5,12 +5,12 @@ use std::sync::Arc;
 
 use vulkano::device::Device;
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
-use vulkano::pipeline::graphics::vertex_input::BuffersDefinition;
+use vulkano::pipeline::graphics::vertex_input::Vertex;
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::GraphicsPipeline;
 use vulkano::shader::ShaderModule;
 
-use crate::triangle::triangle_model::Vertex;
+use crate::triangle::triangle_model::{TriangleVertex};
 use crate::triangle::triangle_renderpass::TriangleRenderpass;
 use crate::triangle::triangle_renderpass::TriangleRenderpassSubpass::MAIN;
 
@@ -22,7 +22,6 @@ impl TrianglePipeline {
 			vulkano_shaders::shader! {
 				bytes: "../target/spirv-builder/spirv-unknown-spv1.3/release/deps/space_client.spvs/triangle-triangle_shader-bla_vs.spv",
 				ty: "vertex",
-				exact_entrypoint_interface: true,
         	}
 		}
 
@@ -30,7 +29,6 @@ impl TrianglePipeline {
 			vulkano_shaders::shader! {
 				bytes: "../target/spirv-builder/spirv-unknown-spv1.3/release/deps/space_client.spvs/triangle-triangle_shader-bla_fs.spv",
             	ty: "fragment",
-				exact_entrypoint_interface: true,
 			}
 		}
 
@@ -41,7 +39,7 @@ impl TrianglePipeline {
 
 		let pipeline = GraphicsPipeline::start()
 			.render_pass(render_pass.subpass(MAIN))
-			.vertex_input_state(BuffersDefinition::new().vertex::<Vertex>())
+			.vertex_input_state(TriangleVertex::per_vertex())
 			.input_assembly_state(InputAssemblyState::new())
 			.vertex_shader(vs, ())
 			.viewport_state(ViewportState::viewport_dynamic_scissor_irrelevant())

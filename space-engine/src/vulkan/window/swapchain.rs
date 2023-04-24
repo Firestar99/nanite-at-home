@@ -72,10 +72,7 @@ impl Swapchain {
 					image_format: Some(format.0),
 					image_color_space: format.1,
 					image_extent: window_size,
-					image_usage: ImageUsage {
-						color_attachment: true,
-						..Default::default()
-					},
+					image_usage: ImageUsage::COLOR_ATTACHMENT,
 					image_sharing: Sharing::Exclusive,
 					composite_alpha: CompositeAlpha::Opaque,
 					present_mode,

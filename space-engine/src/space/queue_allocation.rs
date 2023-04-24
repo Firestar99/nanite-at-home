@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use vulkano::device::{Queue, QueueCreateInfo};
+use vulkano::device::{Queue, QueueCreateInfo, QueueFlags};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::Instance;
 
@@ -46,15 +46,16 @@ impl QueueAllocator<Queues, SpaceQueueAllocation> for SpaceQueueAllocator {
 		let queue_allocator = QueueAllocatorHelper::new(_physical_device);
 
 		// graphics_main (compute and graphics) queue
-		let graphics_family = queue_allocator.queues().find(|q| q.queue_flags.graphics && q.queue_flags.compute)
+		let graphics_family = queue_allocator.queues().find(|q| q.queue_flags.contains(QueueFlags::GRAPHICS & QueueFlags::COMPUTE))
 			.expect("No graphics and compute queue available!");
 		let client_graphics_main = graphics_family.add(Priority(1.0));
 
 		// async_compute queue
-		// 1. compute but not graphics
-		let async_compute_family = queue_allocator.queues().find(|q| q.queue_flags.compute && !q.queue_flags.graphics)
+		let async_compute_family = queue_allocator.queues()
+			// 1. compute but not graphics
+			.find(|q| q.queue_flags.contains(QueueFlags::COMPUTE) && !q.queue_flags.contains(QueueFlags::GRAPHICS))
 			// 2. compute but not selected graphics_family
-			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.compute && *q != graphics_family))
+			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.contains(QueueFlags::COMPUTE) && *q != graphics_family))
 			// 3. inherit from graphics_family if additional queues are available
 			.or_else(|| (graphics_family.queue_count > 1).then_some(graphics_family));
 		let client_async_compute = if let Some(async_compute) = async_compute_family {
@@ -65,10 +66,11 @@ impl QueueAllocator<Queues, SpaceQueueAllocation> for SpaceQueueAllocator {
 		};
 
 		// transfer queue
-		// 1. explicit transfer but not compute or graphics
-		let transfer_family = queue_allocator.queues().find(|q| q.queue_flags.transfer && !q.queue_flags.graphics && !q.queue_flags.compute)
+		let transfer_family = queue_allocator.queues()
+			// 1. explicit transfer but not compute or graphics
+			.find(|q| q.queue_flags.contains(QueueFlags::TRANSFER) && !q.queue_flags.intersects(QueueFlags::GRAPHICS & QueueFlags::COMPUTE))
 			// 2. explicit transfer but not selected graphics_family or async_compute_family
-			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.transfer && *q != graphics_family && async_compute_family.as_ref().map_or(true, |f| *q != *f)))
+			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.contains(QueueFlags::TRANSFER) && *q != graphics_family && async_compute_family.as_ref().map_or(true, |f| *q != *f)))
 			// 3. inherit from async_compute_family if additional queues are available
 			.or_else(|| async_compute_family.and_then(|f| (f.queue_count > 1).then_some(f)))
 			// 4. inherit from graphics_family if additional queues are available
