@@ -40,8 +40,8 @@ impl Swapchain {
 
 				let format;
 				{
-					let formats = device.physical_device().surface_formats(&surface, Default::default()).unwrap();
-					formats.iter().for_each(|f| assert_eq!(f.1, SrgbNonLinear));
+					let formats: Vec<_> = device.physical_device().surface_formats(&surface, Default::default()).unwrap()
+						.into_iter().filter(|f| f.1 == SrgbNonLinear).collect();
 					format = *formats.iter().find(|f| f.0 == Format::B8G8R8A8_SRGB)
 						.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_SRGB))
 						.or_else(|| formats.iter().find(|f| f.0 == Format::B8G8R8A8_UNORM))
