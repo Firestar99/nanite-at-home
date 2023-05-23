@@ -89,3 +89,4 @@ fabric.properties
 .idea/**/hotswap_agent.xml
 .idea/**/jarRepositories.xml
 .idea/**/modules.xml
+.idea/**/deployment.xml
