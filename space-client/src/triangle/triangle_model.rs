@@ -14,7 +14,7 @@ pub struct TriangleModel(pub Subbuffer<[TriangleVertex]>);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Zeroable, Pod, Vertex)]
 pub struct TriangleVertex {
-	#[format(R32G32B32_SFLOAT)]
+	#[format(R32G32_SFLOAT)]
 	position: [f32; 2],
 }
 

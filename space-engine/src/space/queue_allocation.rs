@@ -68,7 +68,7 @@ impl QueueAllocator<Queues, SpaceQueueAllocation> for SpaceQueueAllocator {
 		// transfer queue
 		let transfer_family = queue_allocator.queues()
 			// 1. explicit transfer but not compute or graphics
-			.find(|q| q.queue_flags.contains(QueueFlags::TRANSFER) && !q.queue_flags.intersects(QueueFlags::GRAPHICS & QueueFlags::COMPUTE))
+			.find(|q| q.queue_flags.contains(QueueFlags::TRANSFER) && !q.queue_flags.intersects(QueueFlags::GRAPHICS | QueueFlags::COMPUTE))
 			// 2. explicit transfer but not selected graphics_family or async_compute_family
 			.or_else(|| queue_allocator.queues().find(|q| q.queue_flags.contains(QueueFlags::TRANSFER) && *q != graphics_family && async_compute_family.as_ref().map_or(true, |f| *q != *f)))
 			// 3. inherit from async_compute_family if additional queues are available
