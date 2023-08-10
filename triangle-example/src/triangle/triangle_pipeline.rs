@@ -20,15 +20,17 @@ impl TrianglePipeline {
 	pub fn new(device: &Arc<Device>, render_pass: &TriangleRenderpass) -> Self {
 		mod vs {
 			vulkano_shaders::shader! {
-				bytes: "../target/spirv-builder/spirv-unknown-spv1.3/release/deps/triangle_example.spvs/triangle-triangle_shader-bla_vs.spv",
 				ty: "vertex",
+				root_path_env: "SHADER_OUT_DIR",
+				bytes: "triangle-triangle_shader-bla_vs.spv",
         	}
 		}
 
 		mod fs {
 			vulkano_shaders::shader! {
-				bytes: "../target/spirv-builder/spirv-unknown-spv1.3/release/deps/triangle_example.spvs/triangle-triangle_shader-bla_fs.spv",
             	ty: "fragment",
+				root_path_env: "SHADER_OUT_DIR",
+				bytes: "triangle-triangle_shader-bla_fs.spv",
 			}
 		}
 

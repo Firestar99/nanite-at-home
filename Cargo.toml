@@ -14,15 +14,16 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-vulkano = "0.33"
-vulkano-shaders = "0.33"
-vulkano-win = "0.33"
+# vulkano 0.33 with this PR included https://github.com/vulkano-rs/vulkano/pull/2180
+vulkano = { git = "https://github.com/vulkano-rs/vulkano", rev = "62ff8b45a51489b64db4679148b169df18bc565f" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano", rev = "62ff8b45a51489b64db4679148b169df18bc565f" }
+vulkano-win = { git = "https://github.com/vulkano-rs/vulkano", rev = "62ff8b45a51489b64db4679148b169df18bc565f" }
 bytemuck = { version = "1.7" } # in sync with vulkano-win
 winit = "0.28" # in sync with vulkano-win
 
 # rust-gpu
-spirv-builder = { version = "0.6", default-features = false }
-spirv-std = { version = "0.6" }
+spirv-builder = { version = "0.9", default-features = false }
+spirv-std = { version = "0.9" }
 
 # async
 futures = "0.3"

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use clap::Parser;
 use vulkano::device::Device;
 use vulkano::instance::Instance;
 use vulkano::memory::allocator::StandardMemoryAllocator;
@@ -7,14 +8,13 @@ use vulkano::swapchain::Surface;
 use vulkano_win::create_surface_from_winit;
 use winit::window::WindowBuilder;
 
-use clap::Parser;
-
 use crate::{reinit, reinit_future, reinit_map, reinit_no_restart};
 use crate::space::cli_args::Cli;
 use crate::space::engine_config::get_config;
 use crate::space::queue_allocation::{Queues, SpaceQueueAllocator};
 use crate::vulkan::init::{init, Init, Plugin};
 use crate::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
+use crate::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use crate::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use crate::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess};
 use crate::vulkan::window::swapchain::{Swapchain, SwapchainState};
@@ -41,6 +41,8 @@ reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABL
 		if *window_system {
 			plugins.push(&mut window_plugin);
 		}
+		let mut rust_gpu_workaround = RustGpuWorkaround;
+		plugins.push(&mut rust_gpu_workaround);
 
 		let init = init(get_config().application_config, plugins, SpaceQueueAllocator::new());
 		println!("{}", init.device.physical_device().properties().device_name);
