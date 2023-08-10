@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	}
 
 	let manifest_dir = env!("CARGO_MANIFEST_DIR");
-	// let crate_path = [manifest_dir, "..", "space-client-shader"].iter().copied().collect::<PathBuf>();
+	// let crate_path = [manifest_dir, "..", "triangle-example-shader"].iter().copied().collect::<PathBuf>();
 	let crate_path = PathBuf::from(manifest_dir);
 	let result = SpirvBuilder::new(crate_path, "spirv-unknown-spv1.3")
 		.multimodule(true)

@@ -1604,24 +1604,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "space-client"
-version = "0.1.0"
-dependencies = [
- "async-global-executor",
- "async-std",
- "bytemuck",
- "futures",
- "parking_lot",
- "space-engine",
- "spirv-builder",
- "spirv-std",
- "vulkano",
- "vulkano-shaders",
- "vulkano-win",
- "winit",
-]
-
-[[package]]
 name = "space-engine"
 version = "0.1.0"
 dependencies = [
@@ -1870,6 +1852,24 @@ dependencies = [
  "indexmap",
  "nom8",
  "toml_datetime",
+]
+
+[[package]]
+name = "triangle-example"
+version = "0.1.0"
+dependencies = [
+ "async-global-executor",
+ "async-std",
+ "bytemuck",
+ "futures",
+ "parking_lot",
+ "space-engine",
+ "spirv-builder",
+ "spirv-std",
+ "vulkano",
+ "vulkano-shaders",
+ "vulkano-win",
+ "winit",
 ]
 
 [[package]]

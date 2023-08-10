@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "space-engine",
-    "space-client",
+    "triangle-example",
 ]
 resolver = "2"
 
