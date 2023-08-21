@@ -5,6 +5,11 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/space-engine/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/triangle-example/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/asteroids-common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/asteroids-shader/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/asteroids/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shader-symbols-builder/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/shader-symbols/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
