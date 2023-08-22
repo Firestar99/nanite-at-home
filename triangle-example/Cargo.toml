@@ -36,6 +36,7 @@ async-global-executor = { workspace = true }
 
 # other
 parking_lot = { workspace = true }
+smallvec = { workspace = true }
 
 [build-dependencies]
 spirv-builder = { workspace = true }

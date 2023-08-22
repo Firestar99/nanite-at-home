@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vulkano::{Version, VulkanLibrary};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
-use vulkano::instance::{Instance, InstanceCreateInfo, InstanceExtensions};
+use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions};
 
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::debug::Debug;
@@ -16,7 +16,7 @@ pub enum DevicePriority {
 	Allow(i32),
 }
 
-pub trait Plugin {
+pub trait Plugin: Send + Sync {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.
 	/// Note that you must check that said InstanceExtensions or validation layers are available,
 	/// requesting something that the PhysicalDevice does not support will panic!
@@ -86,14 +86,13 @@ pub fn init<Q, ALLOCATOR, ALLOCATION>(application_config: ApplicationConfig, mut
 
 	// instance
 	let instance = Instance::new(library.clone(), InstanceCreateInfo {
+		flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
 		engine_name: Some(String::from(ENGINE_APPLICATION_CONFIG.name)),
 		engine_version: Version::from(ENGINE_APPLICATION_CONFIG.version),
 		application_name: Some(String::from(application_config.name)),
 		application_version: Version::from(application_config.version),
 		enabled_extensions: extensions,
 		enabled_layers: layers,
-		// allow MoltenVK
-		enumerate_portability: true,
 		..Default::default()
 	}).unwrap();
 

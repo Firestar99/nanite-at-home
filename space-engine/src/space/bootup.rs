@@ -5,7 +5,6 @@ use vulkano::device::Device;
 use vulkano::instance::Instance;
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::swapchain::Surface;
-use vulkano_win::create_surface_from_winit;
 use winit::window::WindowBuilder;
 
 use crate::{reinit, reinit_future, reinit_map, reinit_no_restart};
@@ -25,8 +24,8 @@ reinit_no_restart!(pub WINDOW_SYSTEM: bool = true);
 reinit_no_restart!(pub CLI: Cli = Cli::parse());
 reinit_map!(pub RENDERDOC_ENABLE: bool = (CLI: Cli) => |cli, _| cli.renderdoc);
 reinit_map!(pub VALIDATION_LAYER: bool = (CLI: Cli) => |cli, _| cli.validation_layer);
-reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABLE: bool, WINDOW_SYSTEM: bool) =>
-	|validation_layer, renderdoc_enable, window_system, _| {
+reinit_future!(pub VULKAN_INIT: Init<Queues> = (EVENT_LOOP_ACCESS: EventLoopAccess, VALIDATION_LAYER: bool, RENDERDOC_ENABLE: bool, WINDOW_SYSTEM: bool) =>
+	|event_loop, validation_layer, renderdoc_enable, window_system, _| { async {
 		let mut plugins: Vec<&mut dyn Plugin> = vec![];
 
 		let mut standard_validation_plugin = StandardValidationLayerPlugin;
@@ -37,7 +36,10 @@ reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABL
 		if *renderdoc_enable {
 			plugins.push(&mut renderdoc_plugin);
 		}
-		let mut window_plugin = WindowPlugin;
+
+		// FIXME Window extensions since vulkano 0.34 are derived from EventLoop, but on headless constructing EventLoop will panic due to no window system being found.
+		// so we cannot just enable window extensions on "we may need it in the future"
+		let mut window_plugin = WindowPlugin::new(*event_loop).await;
 		if *window_system {
 			plugins.push(&mut window_plugin);
 		}
@@ -47,7 +49,7 @@ reinit!(pub VULKAN_INIT: Init<Queues> = (VALIDATION_LAYER: bool, RENDERDOC_ENABL
 		let init = init(get_config().application_config, plugins, SpaceQueueAllocator::new());
 		println!("{}", init.device.physical_device().properties().device_name);
 		init
-});
+}});
 reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Init<Queues>) => |init, _| init.instance.clone());
 reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Init<Queues>) => |init, _| init.device.clone());
 reinit!(pub GLOBAL_ALLOCATOR: StandardMemoryAllocator = (DEVICE: Arc<Device>) => |device, _| {
@@ -60,7 +62,7 @@ reinit_future!(pub WINDOW: WindowRef = (EVENT_LOOP_ACCESS: EventLoopAccess) => |
 	event_loop.spawn(move |event_loop| WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
 });
 reinit_future!(pub SURFACE: Arc<Surface> = (EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, INSTANCE: Arc<Instance>) => |event_loop, window, instance, _| {
-	event_loop.spawn(move |event_loop| create_surface_from_winit(window.get_arc(event_loop).clone(), (*instance).clone()).unwrap())
+	event_loop.spawn(move |event_loop| Surface::from_window((*instance).clone(), window.get_arc(event_loop).clone()).unwrap())
 });
 reinit!(SWAPCHAIN_STATE: SwapchainState = SwapchainState::default());
 reinit_future!(pub SWAPCHAIN: Swapchain = (DEVICE: Arc<Device>, EVENT_LOOP_ACCESS: EventLoopAccess, WINDOW: WindowRef, SURFACE: Arc<Surface>, SWAPCHAIN_STATE: SwapchainState) =>

@@ -102,7 +102,7 @@ impl<'a> ModNode<'a> {
 		quote! {
 			use std::sync::Arc;
 			use vulkano::device::Device;
-			use shader_symbols::Shader;
+			use vulkano::shader::EntryPoint;
 			use vulkano_shaders::shader;
 
 			#content
@@ -121,11 +121,8 @@ impl<'a> ModNode<'a> {
 					bytes: #path,
 				}
 
-				pub fn new(device: Arc<Device>) -> Shader {
-					Shader {
-						shader_module: load(device).unwrap(),
-						entry_point: #full_name
-					}
+				pub fn new(device: Arc<Device>) -> EntryPoint {
+					load(device).unwrap().entry_point(#full_name).unwrap()
 				}
 			}
 		}

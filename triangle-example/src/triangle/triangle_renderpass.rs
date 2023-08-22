@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use vulkano::device::Device;
-use vulkano::image::ImageAccess;
+use vulkano::image::Image;
 use vulkano::image::view::ImageView;
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::swapchain::Swapchain;
@@ -24,20 +24,20 @@ pub enum TriangleRenderpassSubpass {
 impl TriangleRenderpass {
 	pub fn new(device: &Arc<Device>, swapchain: &Arc<Swapchain>) -> TriangleRenderpass {
 		let renderpass = vulkano::single_pass_renderpass!(
-        device.clone(),
-        attachments: {
-            color: {
-                load: Clear,
-                store: Store,
-                format: swapchain.image_format(),
-                samples: 1,
-            }
-        },
-        pass: {
-            color: [color],
-            depth_stencil: {}
-        }
-    ).unwrap();
+			device.clone(),
+			attachments: {
+				color: {
+					format: swapchain.image_format(),
+					samples: 1,
+					load_op: Clear,
+					store_op: Store,
+				}
+			},
+			pass: {
+				color: [color],
+				depth_stencil: {}
+			}
+		).unwrap();
 		TriangleRenderpass { renderpass }
 	}
 
@@ -61,7 +61,7 @@ pub struct TriangleFramebuffer {
 }
 
 impl TriangleFramebuffer {
-	pub fn new<'a>(renderpass: &TriangleRenderpass, images: impl Iterator<Item=&'a Arc<impl ImageAccess + Debug + 'static>>) -> Self {
+	pub fn new<'a>(renderpass: &TriangleRenderpass, images: impl Iterator<Item=&'a Arc<Image>>) -> Self {
 		Self {
 			renderpass: renderpass.clone(),
 			framebuffer: images.map(|i| {

@@ -3,14 +3,19 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
+use smallvec::{smallvec, SmallVec};
 use vulkano::device::Device;
+use vulkano::pipeline::{GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::graphics::color_blend::ColorBlendState;
+use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
-use vulkano::pipeline::graphics::vertex_input::Vertex;
+use vulkano::pipeline::graphics::multisample::MultisampleState;
+use vulkano::pipeline::graphics::rasterization::RasterizationState;
+use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::GraphicsPipeline;
-use vulkano::shader::ShaderModule;
+use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 
-use crate::triangle::triangle_model::{TriangleVertex};
+use crate::triangle::triangle_model::TriangleVertex;
 use crate::triangle::triangle_renderpass::TriangleRenderpass;
 use crate::triangle::triangle_renderpass::TriangleRenderpassSubpass::MAIN;
 
@@ -34,20 +39,32 @@ impl TrianglePipeline {
 			}
 		}
 
-		let vs: Arc<ShaderModule> = vs::load(device.clone()).unwrap();
-		let vs = vs.entry_point("triangle::triangle_shader::bla_vs").unwrap();
-		let fs: Arc<ShaderModule> = fs::load(device.clone()).unwrap();
-		let fs = fs.entry_point("triangle::triangle_shader::bla_fs").unwrap();
+		let stages: SmallVec<[PipelineShaderStageCreateInfo; 5]> = smallvec![
+			PipelineShaderStageCreateInfo::new(vs::load(device.clone()).unwrap().entry_point("triangle::triangle_shader::bla_vs").unwrap()),
+			PipelineShaderStageCreateInfo::new(fs::load(device.clone()).unwrap().entry_point("triangle::triangle_shader::bla_fs").unwrap()),
+		];
 
-		let pipeline = GraphicsPipeline::start()
-			.render_pass(render_pass.subpass(MAIN))
-			.vertex_input_state(TriangleVertex::per_vertex())
-			.input_assembly_state(InputAssemblyState::new())
-			.vertex_shader(vs, ())
-			.viewport_state(ViewportState::viewport_dynamic_scissor_irrelevant())
-			.fragment_shader(fs, ())
-			.build(device.clone())
+		let vertex_input_state = TriangleVertex::per_vertex()
+			.definition(&stages.first().unwrap().entry_point.info().input_interface)
 			.unwrap();
+		let layout = PipelineLayout::new(
+			device.clone(),
+			PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
+				.into_pipeline_layout_create_info(device.clone())
+				.unwrap(),
+		).unwrap();
+
+		let pipeline = GraphicsPipeline::new(device.clone(), None, GraphicsPipelineCreateInfo {
+			stages,
+			subpass: Some(render_pass.subpass(MAIN).into()),
+			vertex_input_state: vertex_input_state.into(),
+			input_assembly_state: InputAssemblyState::default().into(),
+			rasterization_state: RasterizationState::default().into(),
+			viewport_state: ViewportState::viewport_dynamic_scissor_irrelevant().into(),
+			multisample_state: MultisampleState::default().into(),
+			color_blend_state: ColorBlendState::default().into(),
+			..GraphicsPipelineCreateInfo::layout(layout)
+		}).unwrap();
 
 		Self(pipeline)
 	}

@@ -117,8 +117,8 @@ dependencies = [
  "bytemuck",
  "futures",
  "parking_lot",
- "shader-symbols",
  "shader-symbols-builder",
+ "smallvec",
  "space-engine",
  "spirv-std",
  "vulkano",
@@ -1703,13 +1703,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shader-symbols"
-version = "0.1.0"
-dependencies = [
- "vulkano",
-]
-
-[[package]]
 name = "shader-symbols-builder"
 version = "0.1.0"
 dependencies = [
@@ -2067,6 +2060,7 @@ dependencies = [
  "bytemuck",
  "futures",
  "parking_lot",
+ "smallvec",
  "space-engine",
  "spirv-builder",
  "spirv-std",
@@ -2114,9 +2108,9 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "vk-parse"
-version = "0.8.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6a0bda9bbe6b9e50e6456c80aa8fe4cca3b21e4311a1130c41e4915ec2e32a"
+checksum = "81086c28be67a8759cd80cbb3c8f7b520e0874605fc5eb74d5a1c9c2d1878e79"
 dependencies = [
  "xml-rs",
 ]
@@ -2124,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "vulkano"
 version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=62ff8b45a51489b64db4679148b169df18bc565f#62ff8b45a51489b64db4679148b169df18bc565f"
+source = "git+https://github.com/vulkano-rs/vulkano?rev=a1dca4261d421fc6008498b6fbc6f27f5de6a2a0#a1dca4261d421fc6008498b6fbc6f27f5de6a2a0"
 dependencies = [
  "ahash 0.8.3",
  "ash",
@@ -2133,13 +2127,14 @@ dependencies = [
  "crossbeam-queue",
  "half",
  "heck",
- "indexmap 1.9.3",
- "libloading 0.7.4",
+ "indexmap 2.0.0",
+ "libloading 0.8.0",
  "objc",
  "once_cell",
  "parking_lot",
  "proc-macro2",
  "quote",
+ "raw-window-handle",
  "regex",
  "serde",
  "serde_json",
@@ -2152,7 +2147,7 @@ dependencies = [
 [[package]]
 name = "vulkano-macros"
 version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=62ff8b45a51489b64db4679148b169df18bc565f#62ff8b45a51489b64db4679148b169df18bc565f"
+source = "git+https://github.com/vulkano-rs/vulkano?rev=a1dca4261d421fc6008498b6fbc6f27f5de6a2a0#a1dca4261d421fc6008498b6fbc6f27f5de6a2a0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2163,21 +2158,21 @@ dependencies = [
 [[package]]
 name = "vulkano-shaders"
 version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=62ff8b45a51489b64db4679148b169df18bc565f#62ff8b45a51489b64db4679148b169df18bc565f"
+source = "git+https://github.com/vulkano-rs/vulkano?rev=a1dca4261d421fc6008498b6fbc6f27f5de6a2a0#a1dca4261d421fc6008498b6fbc6f27f5de6a2a0"
 dependencies = [
  "ahash 0.8.3",
  "heck",
  "proc-macro2",
  "quote",
  "shaderc",
- "syn 1.0.109",
+ "syn 2.0.28",
  "vulkano",
 ]
 
 [[package]]
 name = "vulkano-win"
 version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=62ff8b45a51489b64db4679148b169df18bc565f#62ff8b45a51489b64db4679148b169df18bc565f"
+source = "git+https://github.com/vulkano-rs/vulkano?rev=a1dca4261d421fc6008498b6fbc6f27f5de6a2a0#a1dca4261d421fc6008498b6fbc6f27f5de6a2a0"
 dependencies = [
  "core-graphics-types",
  "objc",

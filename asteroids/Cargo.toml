@@ -15,7 +15,6 @@ use-compiled-tools = ["shader-symbols-builder/use-compiled-tools"]
 # my projects
 asteroids-common = { path = "../asteroids-common" }
 space-engine = { path = "../space-engine" }
-shader-symbols = { path = "../shader-symbols" }
 
 # vulkan
 vulkano = { workspace = true }
@@ -32,6 +31,7 @@ async-global-executor = { workspace = true }
 # other
 spirv-std = { workspace = true }
 parking_lot = { workspace = true }
+smallvec = { workspace = true }
 
 [build-dependencies]
 shader-symbols-builder = { path = "../shader-symbols-builder", features = ["use-pretty-print"] }

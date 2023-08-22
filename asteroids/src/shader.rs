@@ -1,1 +1,1 @@
-shader_symbols::include_shader!();
+include!(concat!(env!("OUT_DIR"), "/shader_symbols.rs"));

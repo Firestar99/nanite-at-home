@@ -1,11 +1,11 @@
 #![cfg(not(target_arch = "spirv"))]
 
-use std::mem::forget;
 use std::sync::Arc;
 use std::time::Instant;
 
 use async_global_executor::{spawn, Task};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassContents};
+use smallvec::smallvec;
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
@@ -58,23 +58,17 @@ impl Inner {
 			let _stop = CallOnDrop(stop);
 
 			let graphics_main = &self.init.queues.client.graphics_main;
-			let viewport = Viewport {
-				origin: [0f32, 0f32],
-				dimensions: self.swapchain.image_extent().map(|x| x as f32),
-				depth_range: 0f32..1f32,
-			};
+			let viewport = smallvec![ Viewport {
+				offset: [0f32, 0f32],
+				extent: self.swapchain.image_extent().map(|x| x as f32),
+				depth_range: 0f32..=1f32,
+			}];
 			let allocator = StandardCommandBufferAllocator::new(self.init.device.clone(), Default::default());
 			let start = Instant::now();
 
 			let mut prev_frame_fence: Option<FenceSignalFuture<Box<dyn GpuFuture>>> = None;
 			loop {
-				let swapchain_acquire = match self.swapchain.acquire_image(None) {
-					Ok(e) => e,
-					Err(_) => {
-						forget(_stop);
-						break;
-					}
-				};
+				let swapchain_acquire = self.swapchain.acquire_image(None);
 				let swapchain_image_index = swapchain_acquire.image_index();
 
 				let mut draw_cmd = AutoCommandBufferBuilder::primary(&allocator, self.init.queues.client.graphics_main.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
@@ -82,12 +76,12 @@ impl Inner {
 					.begin_render_pass(RenderPassBeginInfo {
 						clear_values: vec![Some(ClearValue::Float([0.0f32; 4]))],
 						..RenderPassBeginInfo::framebuffer(self.framebuffer.framebuffer(swapchain_image_index).unwrap().clone())
-					}, SubpassContents::Inline).unwrap()
-					.set_viewport(0, [viewport.clone()])
-					.bind_pipeline_graphics((*self.pipeline).clone())
-					.bind_vertex_buffers(0, (**self.model).clone())
+					}, SubpassBeginInfo::default()).unwrap()
+					.set_viewport(0, viewport.clone()).unwrap()
+					.bind_pipeline_graphics((*self.pipeline).clone()).unwrap()
+					.bind_vertex_buffers(0, (**self.model).clone()).unwrap()
 					.draw(self.model.0.len() as u32, 1, 0, 0).unwrap()
-					.end_render_pass().unwrap();
+					.end_render_pass(SubpassEndInfo::default()).unwrap();
 				let draw_cmd = draw_cmd.build().unwrap();
 
 				if let Some(fence) = prev_frame_fence {

@@ -2,11 +2,10 @@
 
 use std::f32::consts::PI;
 use std::ops::Deref;
-use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryUsage};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryAllocator, MemoryTypeFilter};
 use vulkano::pipeline::graphics::vertex_input::Vertex;
 
 pub struct TriangleModel(pub Subbuffer<[TriangleVertex]>);
@@ -27,7 +26,8 @@ impl TriangleModel {
 				..BufferCreateInfo::default()
 			},
 			AllocationCreateInfo {
-				usage: MemoryUsage::Upload,
+				allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
+				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 				..Default::default()
 			},
 			TriangleModel::state(0f32),

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vulkano::device::Device;
 use vulkano::format::Format;
 use vulkano::image::ImageLayout;
-use vulkano::render_pass::{AttachmentDescription, AttachmentReference, LoadOp, RenderPass, RenderPassCreateInfo, StoreOp, Subpass, SubpassDescription};
+use vulkano::render_pass::{AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp, RenderPass, RenderPassCreateInfo, Subpass, SubpassDescription};
 
 pub struct RenderPass3D {
 	renderpass: Arc<RenderPass>,
@@ -15,19 +15,19 @@ impl RenderPass3D {
 			renderpass: RenderPass::new(device.clone(), RenderPassCreateInfo {
 				attachments: vec![
 					AttachmentDescription {
-						format: Some(Format::R8G8B8A8_SRGB),
+						format: Format::R8G8B8A8_SRGB,
 						initial_layout: ImageLayout::Undefined,
 						final_layout: ImageLayout::PresentSrc,
-						load_op: LoadOp::Clear,
-						store_op: StoreOp::Store,
+						load_op: AttachmentLoadOp::Clear,
+						store_op: AttachmentStoreOp::Store,
 						..Default::default()
 					},
 					AttachmentDescription {
-						format: Some(Format::D32_SFLOAT),
+						format: Format::D32_SFLOAT,
 						initial_layout: ImageLayout::Undefined,
 						final_layout: ImageLayout::Undefined,
-						load_op: LoadOp::Clear,
-						store_op: StoreOp::Store,
+						load_op: AttachmentLoadOp::Clear,
+						store_op: AttachmentStoreOp::Store,
 						..Default::default()
 					},
 				],
