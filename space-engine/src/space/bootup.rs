@@ -12,6 +12,7 @@ use crate::space::cli_args::Cli;
 use crate::space::engine_config::get_config;
 use crate::space::queue_allocation::{Queues, SpaceQueueAllocator};
 use crate::vulkan::init::{init, Init, Plugin};
+use crate::vulkan::plugins::default_device_selection_plugin::DefaultDeviceSelectionPlugin;
 use crate::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use crate::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use crate::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
@@ -45,6 +46,9 @@ reinit_future!(pub VULKAN_INIT: Init<Queues> = (EVENT_LOOP_ACCESS: EventLoopAcce
 		}
 		let mut rust_gpu_workaround = RustGpuWorkaround;
 		plugins.push(&mut rust_gpu_workaround);
+
+		let mut b = DefaultDeviceSelectionPlugin;
+		plugins.push(&mut b);
 
 		let init = init(get_config().application_config, plugins, SpaceQueueAllocator::new());
 		println!("{}", init.device.physical_device().properties().device_name);
