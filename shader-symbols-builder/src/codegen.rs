@@ -41,7 +41,7 @@ pub fn codegen_shader_symbols<'a>(shaders: impl Iterator<Item=(&'a str, &'a Path
 	// when pretty printing fails, always write plain version, then error
 	let (content, error) = codegen_try_pretty_print(tokens);
 	let content = format!("{}{}", SHADER_TYPE_WARNING, content);
-	fs::write(out_path, content).map_err(|e| CodegenError::IOError(e))?;
+	fs::write(out_path, content).map_err(CodegenError::IOError)?;
 	match error {
 		None => Ok(()),
 		Some(e) => Err(e),

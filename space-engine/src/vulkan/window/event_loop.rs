@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::future::Future;
 use std::hint::spin_loop;
-use std::mem::{MaybeUninit, replace};
+use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::process::exit;
 use std::sync::Arc;
@@ -285,7 +285,7 @@ pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 
 pub(crate) fn last_reinit_dropped() {
 	let mut guard = SENDER.lock();
-	let (sender, notify) = replace(&mut *guard, None).expect("EventLoop was not initialized!");
+	let (sender, notify) = guard.take().expect("EventLoop was not initialized!");
 	drop(sender);
 	if let Some(notify) = notify {
 		notify.send_event(()).unwrap();

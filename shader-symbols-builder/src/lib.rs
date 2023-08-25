@@ -40,7 +40,7 @@ impl ShaderSymbolsBuilder {
 	}
 
 	pub fn build(self) -> Result<ShaderSymbolsResult, ShaderSymbolsError> {
-		let spirv_result = self.spirv_builder.build().map_err(|o| ShaderSymbolsError::SpirvBuilderError(o))?;
+		let spirv_result = self.spirv_builder.build().map_err(ShaderSymbolsError::SpirvBuilderError)?;
 		let codegen_out_path = if let Some(codegen) = &self.codegen {
 			let out_path = Path::new(&env::var("OUT_DIR").unwrap()).join(&codegen.shader_symbols_path);
 			match &spirv_result.module {
@@ -50,7 +50,7 @@ impl ShaderSymbolsBuilder {
 				ModuleResult::MultiModule(m) => {
 					codegen_shader_symbols(m.iter().map(|(name, path)| (name.as_str(), path)), &out_path, codegen)
 				}
-			}.map_err(|e| ShaderSymbolsError::CodegenError(e))?;
+			}.map_err(ShaderSymbolsError::CodegenError)?;
 			Some(out_path)
 		} else {
 			None

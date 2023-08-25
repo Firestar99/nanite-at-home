@@ -92,7 +92,7 @@ impl Swapchain {
 			swapchain::Swapchain::new(
 				device.deref().clone(),
 				surface.deref().clone(),
-				info.clone(),
+				info,
 			).unwrap()
 		})();
 

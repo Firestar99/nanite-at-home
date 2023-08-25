@@ -32,6 +32,7 @@ struct Inner {
 	model: ReinitRef<TriangleModel>,
 }
 
+#[allow(dead_code)]
 pub struct TriangleMain {
 	main: Arc<Inner>,
 	worker: Task<()>,
