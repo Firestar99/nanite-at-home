@@ -100,9 +100,13 @@ impl<'a> ModNode<'a> {
 	fn emit(&self) -> TokenStream {
 		let content = self.emit_loop();
 		quote! {
+			#[allow(unused_imports)]
 			use std::sync::Arc;
+			#[allow(unused_imports)]
 			use vulkano::device::Device;
+			#[allow(unused_imports)]
 			use vulkano::shader::EntryPoint;
+			#[allow(unused_imports)]
 			use vulkano_shaders::shader;
 
 			#content
