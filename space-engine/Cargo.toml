@@ -9,7 +9,6 @@ repository.workspace = true
 [dependencies]
 # vulkan
 vulkano = { workspace = true }
-vulkano-win = { workspace = true }
 winit = { workspace = true }
 
 # async

@@ -25,7 +25,6 @@ winit = { workspace = true }
 
 # vulkan
 vulkano = { workspace = true }
-vulkano-win = { workspace = true }
 vulkano-shaders = { workspace = true }
 bytemuck = { workspace = true }
 

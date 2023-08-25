@@ -18,7 +18,6 @@ space-engine = { path = "../space-engine" }
 
 # vulkan
 vulkano = { workspace = true }
-vulkano-win = { workspace = true }
 vulkano-shaders = { workspace = true }
 winit = { workspace = true }
 bytemuck = { workspace = true }
