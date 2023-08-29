@@ -10,6 +10,8 @@
       <sourceFolder url="file://$MODULE_DIR$/asteroids/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/shader-symbols-builder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/shader-symbols/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-engine-common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-engine-shader/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

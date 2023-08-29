@@ -1809,8 +1809,29 @@ dependencies = [
  "num-traits",
  "parking_lot",
  "paste",
+ "shader-symbols-builder",
+ "smallvec",
+ "space-engine-common",
  "vulkano",
+ "vulkano-shaders",
  "winit",
+]
+
+[[package]]
+name = "space-engine-common"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "spirv-std",
+]
+
+[[package]]
+name = "space-engine-shader"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "space-engine-common",
+ "spirv-std",
 ]
 
 [[package]]

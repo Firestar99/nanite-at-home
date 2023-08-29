@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use vulkano::device::{DeviceExtensions, Features};
 use vulkano::device::physical::PhysicalDevice;
-use vulkano::instance::{Instance, InstanceExtensions};
+use vulkano::instance::InstanceExtensions;
 use vulkano::swapchain::Surface;
 use vulkano::VulkanLibrary;
 
@@ -27,7 +27,7 @@ impl Plugin for WindowPlugin {
 		(self.window_extensions, Vec::new())
 	}
 
-	fn device_config(&mut self, _library: &Arc<VulkanLibrary>, _instance: &Arc<Instance>, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
+	fn device_config(&mut self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
 		(DeviceExtensions {
 			khr_swapchain: true,
 			..Default::default()

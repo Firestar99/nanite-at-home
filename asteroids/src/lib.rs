@@ -1,2 +1,3 @@
-pub mod shader;
-pub mod renderer;
+pub(crate) mod shader;
+pub mod bootup;
+pub mod mainloop;

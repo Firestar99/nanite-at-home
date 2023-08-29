@@ -3,4 +3,6 @@
 // otherwise you won't see any warnings
 #![deny(warnings)]
 
-pub mod renderer;
+// at least one shader or this import is required, otherwise compile will fail
+#[allow(unused_imports)]
+use spirv_std::spirv;

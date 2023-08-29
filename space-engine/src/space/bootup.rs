@@ -10,9 +10,11 @@ use winit::window::WindowBuilder;
 use crate::{reinit, reinit_future, reinit_map, reinit_no_restart};
 use crate::space::cli_args::Cli;
 use crate::space::engine_config::get_config;
-use crate::space::queue_allocation::{Queues, SpaceQueueAllocator};
-use crate::vulkan::init::{init, Init, Plugin};
+use crate::space::Init;
+use crate::space::queue_allocation::SpaceQueueAllocator;
+use crate::vulkan::init::Plugin;
 use crate::vulkan::plugins::default_device_selection_plugin::DefaultDeviceSelectionPlugin;
+use crate::vulkan::plugins::dynamic_rendering::DynamicRendering;
 use crate::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use crate::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use crate::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
@@ -25,7 +27,7 @@ reinit_no_restart!(pub WINDOW_SYSTEM: bool = true);
 reinit_no_restart!(pub CLI: Cli = Cli::parse());
 reinit_map!(pub RENDERDOC_ENABLE: bool = (CLI: Cli) => |cli, _| cli.renderdoc);
 reinit_map!(pub VALIDATION_LAYER: bool = (CLI: Cli) => |cli, _| cli.validation_layer);
-reinit_future!(pub VULKAN_INIT: Init<Queues> = (EVENT_LOOP_ACCESS: EventLoopAccess, VALIDATION_LAYER: bool, RENDERDOC_ENABLE: bool, WINDOW_SYSTEM: bool) =>
+reinit_future!(pub VULKAN_INIT: Init = (EVENT_LOOP_ACCESS: EventLoopAccess, VALIDATION_LAYER: bool, RENDERDOC_ENABLE: bool, WINDOW_SYSTEM: bool) =>
 	|event_loop, validation_layer, renderdoc_enable, window_system, _| { async {
 		let mut plugins: Vec<&mut dyn Plugin> = vec![];
 
@@ -37,6 +39,8 @@ reinit_future!(pub VULKAN_INIT: Init<Queues> = (EVENT_LOOP_ACCESS: EventLoopAcce
 		if *renderdoc_enable {
 			plugins.push(&mut renderdoc_plugin);
 		}
+		let mut dynamic_rendering = DynamicRendering;
+		plugins.push(&mut dynamic_rendering);
 
 		// FIXME Window extensions since vulkano 0.34 are derived from EventLoop, but on headless constructing EventLoop will panic due to no window system being found.
 		// so we cannot just enable window extensions on "we may need it in the future"
@@ -50,12 +54,12 @@ reinit_future!(pub VULKAN_INIT: Init<Queues> = (EVENT_LOOP_ACCESS: EventLoopAcce
 		let mut b = DefaultDeviceSelectionPlugin;
 		plugins.push(&mut b);
 
-		let init = init(get_config().application_config, plugins, SpaceQueueAllocator::new());
+		let init = Init::new(get_config().application_config, plugins, SpaceQueueAllocator::new());
 		println!("{}", init.device.physical_device().properties().device_name);
 		init
 }});
-reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Init<Queues>) => |init, _| init.instance.clone());
-reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Init<Queues>) => |init, _| init.device.clone());
+reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Init) => |init, _| init.instance().clone());
+reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Init) => |init, _| init.device.clone());
 reinit!(pub GLOBAL_ALLOCATOR: StandardMemoryAllocator = (DEVICE: Arc<Device>) => |device, _| {
 	StandardMemoryAllocator::new_default((*device).clone())
 });

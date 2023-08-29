@@ -8,12 +8,12 @@ use crate::vulkan::init::{QueueAllocation, QueueAllocator};
 use crate::vulkan::queue_allocation_helper::{Priority, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocatorHelper};
 
 // queues
-#[derive(Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct QueuesGeneric<T> {
 	pub client: ClientQueuesGeneric<T>,
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct ClientQueuesGeneric<T> {
 	/// graphics and compute queue
 	pub graphics_main: T,

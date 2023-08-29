@@ -5,12 +5,12 @@ use vulkano::device::physical::PhysicalDevice;
 
 use crate::vulkan::init::Plugin;
 
-pub struct RustGpuWorkaround;
+pub struct DynamicRendering;
 
-impl Plugin for RustGpuWorkaround {
+impl Plugin for DynamicRendering {
 	fn device_config(&mut self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
-		(DeviceExtensions::empty(), Features {
-			vulkan_memory_model: true,
+		(DeviceExtensions::default(), Features {
+			dynamic_rendering: true,
 			..Features::default()
 		})
 	}
