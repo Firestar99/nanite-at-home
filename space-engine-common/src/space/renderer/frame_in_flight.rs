@@ -127,9 +127,9 @@ impl<T> Index<FrameInFlight> for ResourceInFlight<T> {
 	fn index(&self, index: FrameInFlight) -> &Self::Output {
 		assert_eq!(self.seed, index.seed);
 		// SAFETY: self.seed.frames_in_flight is the initialized size of the array,
-		// the assert above verifies that index is not greater than frames_in_flight_max
+		// the assert above verifies that index is not greater than frames_in_flight
 		unsafe {
-			self.vec[usize::from(index)].assume_init_ref()
+			self.vec.get_unchecked(usize::from(index)).assume_init_ref()
 		}
 	}
 }
@@ -139,9 +139,9 @@ impl<T> IndexMut<FrameInFlight> for ResourceInFlight<T> {
 	fn index_mut(&mut self, index: FrameInFlight) -> &mut Self::Output {
 		assert_eq!(self.seed, index.seed);
 		// SAFETY: self.seed.frames_in_flight is the initialized size of the array,
-		// the assert above verifies that index is not greater than frames_in_flight_max
+		// the assert above verifies that index is not greater than frames_in_flight
 		unsafe {
-			self.vec[usize::from(index)].assume_init_mut()
+			self.vec.get_unchecked_mut(usize::from(index)).assume_init_mut()
 		}
 	}
 }
@@ -151,7 +151,7 @@ impl<T: Clone> Clone for ResourceInFlight<T> {
 		// SAFETY: Self::from_function() will call f() exactly self.seed.frames_in_flight times
 		// and self.seed.frames_in_flight is the initialized size of the array
 		unsafe {
-			ResourceInFlight::from_function(self.seed, |i| self.vec[i as usize].assume_init_ref().clone())
+			ResourceInFlight::from_function(self.seed, |i| self.vec.get_unchecked(i as usize).assume_init_ref().clone())
 		}
 	}
 }
