@@ -2076,24 +2076,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "triangle-example"
-version = "0.1.0"
-dependencies = [
- "async-global-executor",
- "async-std",
- "bytemuck",
- "futures",
- "parking_lot",
- "smallvec",
- "space-engine",
- "spirv-builder",
- "spirv-std",
- "vulkano",
- "vulkano-shaders",
- "winit",
-]
-
-[[package]]
 name = "ttf-parser"
 version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

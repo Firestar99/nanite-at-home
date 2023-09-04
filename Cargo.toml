@@ -3,7 +3,6 @@ members = [
     "asteroids",
     "asteroids-shader",
     "asteroids-common",
-    "triangle-example",
     "shader-symbols-builder",
     "space-engine",
     "space-engine-common",
