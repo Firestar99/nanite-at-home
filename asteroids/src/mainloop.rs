@@ -9,7 +9,7 @@ use vulkano::sync::{GpuFuture, now};
 use space_engine::CallOnDrop;
 use space_engine::reinit::{ReinitRef, Target};
 use space_engine::space::queue_allocation::Queues;
-use space_engine::space::renderer::lodobj;
+use space_engine::space::renderer::lod_obj;
 use space_engine::vulkan::init::Init;
 use space_engine::vulkan::window::event_loop::stop;
 use space_engine::vulkan::window::swapchain::Swapchain;
@@ -17,7 +17,7 @@ use space_engine::vulkan::window::swapchain::Swapchain;
 struct Inner {
 	init: ReinitRef<Init<Queues>>,
 	swapchain: ReinitRef<Swapchain>,
-	lodobj_rendertask: ReinitRef<lodobj::render_task::RenderTask>,
+	lodobj_rendertask: ReinitRef<lod_obj::render_task::RenderTask>,
 }
 
 #[allow(dead_code)]
@@ -32,7 +32,7 @@ impl MainLoop {
 	pub fn new(
 		init: ReinitRef<Init<Queues>>,
 		swapchain: ReinitRef<Swapchain>,
-		lodobj_rendertask: ReinitRef<lodobj::render_task::RenderTask>,
+		lodobj_rendertask: ReinitRef<lod_obj::render_task::RenderTask>,
 	) -> MainLoop {
 		let main = Arc::new(Inner { init, swapchain, lodobj_rendertask });
 		MainLoop { worker: main.clone().run(), main }

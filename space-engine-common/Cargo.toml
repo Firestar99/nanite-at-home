@@ -8,4 +8,6 @@ repository.workspace = true
 
 [dependencies]
 bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+glam = { workspace = true }
 spirv-std = { workspace = true }

@@ -14,4 +14,6 @@ crate-type = ["dylib"]
 space-engine-common = { path = "../space-engine-common" }
 
 bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+glam = { workspace = true }
 spirv-std = { workspace = true }

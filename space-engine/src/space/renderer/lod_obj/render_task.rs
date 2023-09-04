@@ -8,9 +8,9 @@ use vulkano::image::view::ImageView;
 use vulkano::pipeline::graphics::subpass::PipelineRenderingCreateInfo;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
-use crate::reinit::ReinitRef;
 
-use crate::space::renderer::lodobj::opaque::OpaquePipeline;
+use crate::reinit::ReinitRef;
+use crate::space::renderer::lod_obj::opaque::OpaquePipeline;
 
 pub fn rendering_info() -> PipelineRenderingCreateInfo {
 	PipelineRenderingCreateInfo {
@@ -47,7 +47,7 @@ impl RenderTask {
 				offset: [0f32, 0f32],
 				extent: [image_extent[0] as f32, image_extent[1] as f32],
 				depth_range: 0f32..=1f32,
-			}]
+			}],
 		}
 	}
 

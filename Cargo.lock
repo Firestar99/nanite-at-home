@@ -797,6 +797,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42218cb640844e3872cc3c153dc975229e080a6c4733b34709ef445610550226"
 dependencies = [
+ "bytemuck",
  "libm",
 ]
 
@@ -1822,6 +1823,8 @@ name = "space-engine-common"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "bytemuck_derive",
+ "glam",
  "spirv-std",
 ]
 
@@ -1830,6 +1833,8 @@ name = "space-engine-shader"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "bytemuck_derive",
+ "glam",
  "space-engine-common",
  "spirv-std",
 ]

@@ -169,9 +169,8 @@ impl<T> Drop for ResourceInFlight<T> {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use std::rc::Rc;
-
-	use crate::renderer::frame_in_flight::{FrameInFlight, FRAMES_LIMIT, ResourceInFlight, SeedInFlight};
 
 	#[test]
 	fn seed_happy() {

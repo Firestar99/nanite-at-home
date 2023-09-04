@@ -23,7 +23,6 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 # vulkano 0.34 prerelease
 vulkano = { git = "https://github.com/vulkano-rs/vulkano", rev = "a1dca4261d421fc6008498b6fbc6f27f5de6a2a0" }
 vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano", rev = "a1dca4261d421fc6008498b6fbc6f27f5de6a2a0" }
-bytemuck = { version = "1.7" } # in sync with vulkano-win
 winit = "0.28" # in sync with vulkano-win
 
 # rust-gpu
@@ -43,13 +42,18 @@ paste = "1.0"
 konst = "0.3"
 prettyplease = "0.2"
 
-# other
-once_cell = "1.18"
-smallvec = "1.11"
-parking_lot = "0.12"
-clap = { version = "3.2", features = ["derive"] }
+# bytes and numbers
+bytemuck = "1.13"
+bytemuck_derive = "1.4"
 num-traits = "0.2"
 num-derive = "0.3"
+glam = { version = "0.24", default-features = false, features = ["libm", "bytemuck"] }
+
+# other
+once_cell = "1.18"
+smallvec = { version = "1.11", features = ["const_generics", "const_new"] }
+parking_lot = "0.12"
+clap = { version = "3.2", features = ["derive"] }
 
 # Following is copied from rust-gpu workspace cargo.toml
 # Enable incremental by default in release mode.

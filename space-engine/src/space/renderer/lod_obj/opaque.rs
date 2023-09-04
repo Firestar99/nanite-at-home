@@ -14,8 +14,8 @@ use vulkano::pipeline::graphics::vertex_input::VertexInputState;
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 
-use crate::shader::renderer::lodobj::opaque::{opaque_fs, opaque_vs};
-use crate::space::renderer::lodobj::render_task::rendering_info;
+use crate::shader::space::renderer::lod_obj::opaque::{opaque_fs, opaque_vs};
+use crate::space::renderer::lod_obj::render_task::rendering_info;
 
 #[derive(Clone, Debug)]
 pub struct OpaquePipeline(pub Arc<GraphicsPipeline>);
