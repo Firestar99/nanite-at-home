@@ -281,6 +281,8 @@ pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 	});
 }
 
+/// unused when building for tests
+#[allow(dead_code)]
 pub(crate) fn last_reinit_dropped() {
 	let mut guard = SENDER.lock();
 	let (sender, notify) = guard.take().expect("EventLoop was not initialized!");

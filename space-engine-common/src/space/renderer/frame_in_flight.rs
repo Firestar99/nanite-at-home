@@ -1,5 +1,7 @@
-use core::mem::MaybeUninit;
+use core::mem::{MaybeUninit, size_of};
 use core::ops::{Index, IndexMut};
+
+use static_assertions::const_assert_eq;
 
 pub const FRAMES_LIMIT: u32 = 3;
 
@@ -8,15 +10,17 @@ pub const FRAMES_LIMIT: u32 = 3;
 #[repr(C)]
 pub struct FrameInFlight {
 	seed: SeedInFlight,
-	index: u32,
+	index: u8,
 }
+const_assert_eq!(size_of::<FrameInFlight>(), 4);
 
 impl FrameInFlight {
 	/// SAFETY: index has to be valid
 	unsafe fn new(seed: SeedInFlight, index: u32) -> Self {
+		assert!(index < seed.frames_in_flight());
 		Self {
 			seed,
-			index,
+			index: index as u8,
 		}
 	}
 }
@@ -29,7 +33,7 @@ impl From<FrameInFlight> for usize {
 
 impl From<FrameInFlight> for u32 {
 	fn from(value: FrameInFlight) -> Self {
-		value.index
+		value.index as u32
 	}
 }
 
@@ -40,30 +44,34 @@ impl From<FrameInFlight> for u32 {
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 #[repr(C)]
 pub struct SeedInFlight {
-	seed: u16,
-	frames_in_flight: u16,
+	/// this is a `[u8; 2]` instead of an `u16` to make `FrameInFlight` be 32 bits instead of 48, due to sizeof struct rounding to nearest alignment.
+	/// This may allow an alignment of 8 bits, but at the end of the day the most important operation is equality and that should not care.
+	seed: [u8; 2],
+	frames_in_flight: u8,
 }
+const_assert_eq!(size_of::<SeedInFlight>(), 3);
 
 impl SeedInFlight {
 	#[cfg(not(target_arch = "spirv"))]
 	#[must_use]
 	pub fn new(frames_in_flight: u32) -> Self {
-		use std::sync::atomic::AtomicU32;
+		use std::sync::atomic::AtomicU16;
 		use std::sync::atomic::Ordering::Relaxed;
 
-		static SEED_CNT: AtomicU32 = AtomicU32::new(42);
+		static SEED_CNT: AtomicU16 = AtomicU16::new(42);
 		let seed = SEED_CNT.fetch_add(1, Relaxed);
+		// SAFETY: global atomic counter ensures seeds are unique
 		unsafe { Self::assemble(seed, frames_in_flight) }
 	}
 
-	/// SAFETY: the seed must never repeat. Where the atomic in new() to get too large, this would assert.
+	/// SAFETY: Only there for internal testing. The seed must never repeat, which `Self::new()` ensures.
 	#[must_use]
-	unsafe fn assemble(seed: u32, frames_in_flight: u32) -> Self {
+	unsafe fn assemble(seed: u16, frames_in_flight: u32) -> Self {
 		assert!(frames_in_flight <= FRAMES_LIMIT, "frames_in_flight_max of {} is over FRAMES_IN_FLIGHT_LIMIT {}", frames_in_flight, FRAMES_LIMIT);
 		Self {
-			seed: seed.try_into().unwrap(),
+			seed: seed.to_ne_bytes(),
 			// conversion will always succeed with assert above
-			frames_in_flight: frames_in_flight as u16,
+			frames_in_flight: frames_in_flight as u8,
 		}
 	}
 
@@ -75,8 +83,8 @@ impl SeedInFlight {
 	/// for testing only
 	#[must_use]
 	#[allow(dead_code)]
-	fn seed(&self) -> u32 {
-		self.seed as u32
+	fn seed(&self) -> u16 {
+		u16::from_ne_bytes(self.seed)
 	}
 }
 
@@ -169,14 +177,15 @@ impl<T> Drop for ResourceInFlight<T> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::rc::Rc;
+
+	use super::*;
 
 	#[test]
 	fn seed_happy() {
 		unsafe {
 			for i in 0..=FRAMES_LIMIT {
-				let seed = 0xDEADu32 + i;
+				let seed = 0xDEAD + i as u16;
 				let s = SeedInFlight::assemble(seed, i);
 				assert_eq!(s.frames_in_flight(), i);
 				assert_eq!(s.seed(), seed);
