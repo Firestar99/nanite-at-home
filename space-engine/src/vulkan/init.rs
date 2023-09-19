@@ -2,9 +2,11 @@ use std::ops::BitOr;
 use std::sync::Arc;
 
 use vulkano::{Version, VulkanLibrary};
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
+use vulkano::memory::allocator::StandardMemoryAllocator;
 
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::debug::Debug;
@@ -55,6 +57,8 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
+	pub memory_allocator: StandardMemoryAllocator,
+	pub descriptor_allocator: StandardDescriptorSetAllocator,
 	_debug: Debug,
 }
 
@@ -145,9 +149,14 @@ impl<Q: Clone> Init<Q> {
 		}).unwrap();
 		let queues = allocation.take(queues.collect());
 
+		let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
+		let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
+
 		Self {
 			device,
 			queues,
+			memory_allocator,
+			descriptor_allocator,
 			_debug,
 		}
 	}

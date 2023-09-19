@@ -1813,6 +1813,7 @@ dependencies = [
  "shader-symbols-builder",
  "smallvec",
  "space-engine-common",
+ "static_assertions",
  "vulkano",
  "vulkano-shaders",
  "winit",

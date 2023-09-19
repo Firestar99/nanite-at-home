@@ -28,6 +28,7 @@ num-traits = { workspace = true }
 num-derive = { workspace = true }
 clap = { workspace = true }
 smallvec = { workspace = true }
+static_assertions = { workspace = true }
 
 [build-dependencies]
 shader-symbols-builder = { path = "../shader-symbols-builder", features = ["use-pretty-print"] }
