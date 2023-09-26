@@ -5,7 +5,8 @@ use std::time::Duration;
 use parking_lot::Mutex;
 use vulkano::device::{Device, DeviceOwned};
 use vulkano::format::Format;
-use vulkano::image::{Image, ImageUsage};
+use vulkano::image::ImageUsage;
+use vulkano::image::view::ImageView;
 use vulkano::swapchain;
 use vulkano::swapchain::{acquire_next_image, CompositeAlpha, Surface, SwapchainAcquireFuture, SwapchainCreateInfo};
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
@@ -26,7 +27,7 @@ impl Default for SwapchainState {
 
 pub struct Swapchain {
 	swapchain: Arc<swapchain::Swapchain>,
-	images: Vec<Arc<Image>>,
+	images: Vec<Arc<ImageView>>,
 	restart: Restart<Self>,
 }
 
@@ -96,6 +97,8 @@ impl Swapchain {
 			).unwrap()
 		})();
 
+		let images = images.into_iter().map(|image| ImageView::new_default(image).unwrap()).collect();
+
 		*old = Arc::downgrade(&swapchain);
 		Self { swapchain, images, restart }
 	}
@@ -108,16 +111,17 @@ pub enum AcquireError {
 }
 
 impl Swapchain {
-	pub fn acquire_image(&self, timeout: Option<Duration>) -> SwapchainAcquireFuture {
+	pub fn acquire_image(&self, timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>) {
 		let (_, suboptimal, future) = acquire_next_image(self.swapchain.clone(), timeout).unwrap();
 		if suboptimal {
 			self.restart.restart();
 		}
-		future
+		let image = &self.images[future.image_index() as usize];
+		(future, image)
 	}
 
-	pub fn images(&self) -> impl Iterator<Item=&Arc<Image>> {
-		self.images.iter()
+	pub fn images(&self) -> &[Arc<ImageView>] {
+		&self.images
 	}
 }
 

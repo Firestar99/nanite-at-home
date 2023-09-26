@@ -1,23 +1,24 @@
 use std::sync::Arc;
 
 use async_global_executor::{spawn, Task};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
-use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
+use spirv_std::glam::{Affine3A, Mat4};
 use vulkano::swapchain::SwapchainPresentInfo;
-use vulkano::sync::{GpuFuture, now};
+use vulkano::sync::GpuFuture;
 
 use space_engine::CallOnDrop;
 use space_engine::reinit::{ReinitRef, Target};
 use space_engine::space::queue_allocation::Queues;
-use space_engine::space::renderer::lod_obj;
+use space_engine::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
+use space_engine::space::renderer::render_graph::context::RenderContext;
 use space_engine::vulkan::init::Init;
 use space_engine::vulkan::window::event_loop::stop;
 use space_engine::vulkan::window::swapchain::Swapchain;
+use space_engine_common::space::renderer::camera::Camera;
+use space_engine_common::space::renderer::frame_data::FrameData;
 
 struct Inner {
-	init: ReinitRef<Init<Queues>>,
+	init: ReinitRef<Arc<Init<Queues>>>,
 	swapchain: ReinitRef<Swapchain>,
-	lodobj_rendertask: ReinitRef<lod_obj::render_task::RenderTask>,
 }
 
 #[allow(dead_code)]
@@ -30,11 +31,10 @@ impl Target for MainLoop {}
 
 impl MainLoop {
 	pub fn new(
-		init: ReinitRef<Init<Queues>>,
+		init: ReinitRef<Arc<Init<Queues>>>,
 		swapchain: ReinitRef<Swapchain>,
-		lodobj_rendertask: ReinitRef<lod_obj::render_task::RenderTask>,
 	) -> MainLoop {
-		let main = Arc::new(Inner { init, swapchain, lodobj_rendertask });
+		let main = Arc::new(Inner { init, swapchain });
 		MainLoop { worker: main.clone().run(), main }
 	}
 }
@@ -44,25 +44,26 @@ impl Inner {
 		spawn(async move {
 			let _stop = CallOnDrop(stop);
 
+			let (render_context, new_frame) = RenderContext::new((*self.init).clone(), self.swapchain.image_format(), 2);
+			let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
+
 			let graphics_main = &self.init.queues.client.graphics_main;
-			let allocator = StandardCommandBufferAllocator::new(self.init.device.clone(), Default::default());
-
-			let mut prev_frame_fence: Box<dyn GpuFuture> = now(self.init.device.clone()).boxed();
 			loop {
-				let swapchain_acquire = self.swapchain.acquire_image(None);
-				let fif_index = swapchain_acquire.image_index();
+				let (swapchain_acquire, output_image) = self.swapchain.acquire_image(None);
 
-				let mut cmd = AutoCommandBufferBuilder::primary(&allocator, self.init.queues.client.graphics_main.queue_family_index(), CommandBufferUsage::OneTimeSubmit).unwrap();
-				self.lodobj_rendertask.record(fif_index as usize, &mut cmd);
-				let draw_cmd = cmd.build().unwrap();
-
-				prev_frame_fence.cleanup_finished();
-				prev_frame_fence = swapchain_acquire
-					.join(prev_frame_fence)
-					.then_execute(graphics_main.clone(), draw_cmd).unwrap()
-					.then_swapchain_present(graphics_main.clone(), SwapchainPresentInfo::swapchain_image_index((*self.swapchain).clone(), fif_index))
-					.then_signal_fence_and_flush().unwrap()
-					.boxed();
+				let frame_data = FrameData {
+					camera: Camera {
+						camera: Affine3A::default(),
+						perspective: Mat4::default(),
+						perspective_inverse: Mat4::default(),
+					},
+				};
+				new_frame.new_frame(output_image.clone(), frame_data, |frame_context, prev_frame| {
+					let prev_frame = prev_frame.join(swapchain_acquire);
+					let opaque_future = opaque_render_task.record(&frame_context, prev_frame);
+					let present_future = opaque_future.then_swapchain_present(graphics_main.clone(), SwapchainPresentInfo::swapchain_image_index((**self.swapchain).clone(), swapchain_acquire.image_index()));
+					present_future.boxed().then_signal_fence_and_flush().unwrap()
+				});
 			}
 		})
 	}

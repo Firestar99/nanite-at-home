@@ -2,6 +2,7 @@ use std::ops::BitOr;
 use std::sync::Arc;
 
 use vulkano::{Version, VulkanLibrary};
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
@@ -59,6 +60,7 @@ pub struct Init<Q> {
 	pub queues: Q,
 	pub memory_allocator: StandardMemoryAllocator,
 	pub descriptor_allocator: StandardDescriptorSetAllocator,
+	pub cmdbuffer_allocator: StandardCommandBufferAllocator,
 	_debug: Debug,
 }
 
@@ -151,12 +153,14 @@ impl<Q: Clone> Init<Q> {
 
 		let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
 		let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
+		let cmdbuffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
 
 		Self {
 			device,
 			queues,
 			memory_allocator,
 			descriptor_allocator,
+			cmdbuffer_allocator,
 			_debug,
 		}
 	}

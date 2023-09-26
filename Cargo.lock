@@ -120,6 +120,7 @@ dependencies = [
  "shader-symbols-builder",
  "smallvec",
  "space-engine",
+ "space-engine-common",
  "spirv-std",
  "vulkano",
  "vulkano-shaders",

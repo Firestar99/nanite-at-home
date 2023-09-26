@@ -27,7 +27,7 @@ reinit_no_restart!(pub WINDOW_SYSTEM: bool = true);
 reinit_no_restart!(pub CLI: Cli = Cli::parse());
 reinit_map!(pub RENDERDOC_ENABLE: bool = (CLI: Cli) => |cli, _| cli.renderdoc);
 reinit_map!(pub VALIDATION_LAYER: bool = (CLI: Cli) => |cli, _| cli.validation_layer);
-reinit_future!(pub VULKAN_INIT: Init = (EVENT_LOOP_ACCESS: EventLoopAccess, VALIDATION_LAYER: bool, RENDERDOC_ENABLE: bool, WINDOW_SYSTEM: bool) =>
+reinit_future!(pub VULKAN_INIT: Arc<Init> = (EVENT_LOOP_ACCESS: EventLoopAccess, VALIDATION_LAYER: bool, RENDERDOC_ENABLE: bool, WINDOW_SYSTEM: bool) =>
 	|event_loop, validation_layer, renderdoc_enable, window_system, _| { async {
 		let mut plugins: Vec<&mut dyn Plugin> = vec![];
 
@@ -54,12 +54,12 @@ reinit_future!(pub VULKAN_INIT: Init = (EVENT_LOOP_ACCESS: EventLoopAccess, VALI
 		let mut b = DefaultDeviceSelectionPlugin;
 		plugins.push(&mut b);
 
-		let init = Init::new(get_config().application_config, plugins, SpaceQueueAllocator::new());
+		let init = Arc::new(Init::new(get_config().application_config, plugins, SpaceQueueAllocator::new()));
 		println!("{}", init.device.physical_device().properties().device_name);
 		init
 }});
-reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Init) => |init, _| init.instance().clone());
-reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Init) => |init, _| init.device.clone());
+reinit_map!(pub INSTANCE: Arc<Instance> = (VULKAN_INIT: Arc<Init>) => |init, _| init.instance().clone());
+reinit_map!(pub DEVICE: Arc<Device> = (VULKAN_INIT: Arc<Init>) => |init, _| init.device.clone());
 reinit!(pub GLOBAL_ALLOCATOR: StandardMemoryAllocator = (DEVICE: Arc<Device>) => |device, _| {
 	StandardMemoryAllocator::new_default((*device).clone())
 });

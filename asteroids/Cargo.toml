@@ -15,6 +15,7 @@ use-compiled-tools = ["shader-symbols-builder/use-compiled-tools"]
 # my projects
 asteroids-common = { path = "../asteroids-common" }
 space-engine = { path = "../space-engine" }
+space-engine-common = { path = "../space-engine-common" }
 
 # vulkan
 vulkano = { workspace = true }
