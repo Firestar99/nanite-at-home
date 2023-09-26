@@ -29,10 +29,11 @@ impl<T> ResourceInFlight<T> {
 	/// for each fif. The function receives an instance of [`FrameInFlight`] for it's index so that one may access other `ResourceInFlight` with the same index
 	/// one may depend upon for construction.
 	#[must_use]
-	pub fn new<F>(seed: SeedInFlight, mut f: F) -> Self
+	pub fn new<F>(seed: impl Into<SeedInFlight>, mut f: F) -> Self
 		where
 			F: FnMut(FrameInFlight) -> T,
 	{
+		let seed = seed.into();
 		// just using arrays and a counter, instead of Slices and try_into() array, as it prevents heap allocation
 		let mut i = 0;
 		let vec = [(); FRAMES_LIMIT as usize].map(|_| {
@@ -53,7 +54,8 @@ impl<T> ResourceInFlight<T> {
 	}
 
 	#[must_use]
-	pub fn new_array<const N: usize>(seed: SeedInFlight, resources: [T; N]) -> Self {
+	pub fn new_array<const N: usize>(seed: impl Into<SeedInFlight>, resources: [T; N]) -> Self {
+		let seed = seed.into();
 		// implies that N < FRAMES_LIMIT
 		assert_eq!(seed.frames_in_flight(), N.try_into().unwrap());
 		let mut iter = resources.into_iter();
@@ -94,6 +96,7 @@ impl<T> ResourceInFlight<T>
 }
 
 impl<T: Clone> Clone for ResourceInFlight<T> {
+	#[must_use]
 	fn clone(&self) -> Self {
 		// SAFETY: Self::from_function() will call f() exactly self.seed.frames_in_flight times
 		// and self.seed.frames_in_flight is the initialized size of the array
@@ -111,6 +114,12 @@ impl<T> Drop for ResourceInFlight<T> {
 				self.vec[i].assume_init_drop();
 			}
 		}
+	}
+}
+
+impl<T> From<&ResourceInFlight<T>> for SeedInFlight {
+	fn from(value: &ResourceInFlight<T>) -> Self {
+		value.seed()
 	}
 }
 

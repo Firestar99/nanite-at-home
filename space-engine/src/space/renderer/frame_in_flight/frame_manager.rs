@@ -80,3 +80,9 @@ impl FrameManager {
 		self.prev_frame.seed()
 	}
 }
+
+impl From<&FrameManager> for SeedInFlight {
+	fn from(value: &FrameManager) -> Self {
+		value.seed()
+	}
+}

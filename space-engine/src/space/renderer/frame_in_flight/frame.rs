@@ -25,13 +25,16 @@ impl<'a> FrameInFlight<'a> {
 	/// # Safety
 	/// One may not use the `FrameInFlight` to access a Resource that is currently in use.
 	#[inline]
-	pub unsafe fn new(seed: SeedInFlight, index: u32) -> Self {
-		assert!(index < seed.frames_in_flight());
-		Self {
-			seed,
-			index: index as u8,
-			phantom: Default::default(),
+	pub unsafe fn new(seed: impl Into<SeedInFlight>, index: u32) -> Self {
+		fn inner<'a>(seed: SeedInFlight, index: u32) -> FrameInFlight<'a> {
+			assert!(index < seed.frames_in_flight());
+			FrameInFlight {
+				seed,
+				index: index as u8,
+				phantom: Default::default(),
+			}
 		}
+		inner(seed.into(), index)
 	}
 
 	#[inline(always)]
@@ -54,6 +57,12 @@ impl<'a> From<FrameInFlight<'a>> for usize {
 impl<'a> From<FrameInFlight<'a>> for u32 {
 	fn from(value: FrameInFlight) -> Self {
 		value.index as u32
+	}
+}
+
+impl<'a> From<&FrameInFlight<'a>> for SeedInFlight {
+	fn from(value: &FrameInFlight<'a>) -> Self {
+		value.seed()
 	}
 }
 
