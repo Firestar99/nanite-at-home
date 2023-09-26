@@ -7,5 +7,5 @@ use spirv_std::glam::{Affine3A, Mat4};
 pub struct Camera {
 	pub perspective: Mat4,
 	pub perspective_inverse: Mat4,
-	pub camera: Affine3A,
+	pub transform: Affine3A,
 }

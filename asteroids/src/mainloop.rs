@@ -44,7 +44,7 @@ impl Inner {
 		spawn(async move {
 			let _stop = CallOnDrop(stop);
 
-			let (render_context, new_frame) = RenderContext::new((*self.init).clone(), self.swapchain.image_format(), 2);
+			let (render_context, mut new_frame) = RenderContext::new((*self.init).clone(), self.swapchain.image_format(), 2);
 			let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
 
 			let graphics_main = &self.init.queues.client.graphics_main;
@@ -53,15 +53,19 @@ impl Inner {
 
 				let frame_data = FrameData {
 					camera: Camera {
-						camera: Affine3A::default(),
+						transform: Affine3A::default(),
 						perspective: Mat4::default(),
 						perspective_inverse: Mat4::default(),
 					},
 				};
-				new_frame.new_frame(output_image.clone(), frame_data, |frame_context, prev_frame| {
-					let prev_frame = prev_frame.join(swapchain_acquire);
-					let opaque_future = opaque_render_task.record(&frame_context, prev_frame);
-					let present_future = opaque_future.then_swapchain_present(graphics_main.clone(), SwapchainPresentInfo::swapchain_image_index((**self.swapchain).clone(), swapchain_acquire.image_index()));
+
+				new_frame.new_frame(output_image.clone(), frame_data, |frame_context| {
+					let image_index = swapchain_acquire.image_index();
+					let opaque_future = opaque_render_task.record(&frame_context, swapchain_acquire);
+					let present_future = opaque_future.then_swapchain_present(
+						graphics_main.clone(),
+						SwapchainPresentInfo::swapchain_image_index((**self.swapchain).clone(), image_index),
+					);
 					present_future.boxed().then_signal_fence_and_flush().unwrap()
 				});
 			}

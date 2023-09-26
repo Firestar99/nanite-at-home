@@ -80,7 +80,6 @@ impl OpaqueDrawPipeline {
 			.bind_descriptor_sets(PipelineBindPoint::Graphics, self.pipeline.layout().clone(), 0,
 								  self.descriptor_set.index(frame_context.frame_in_flight).clone()
 			).unwrap()
-			.draw(3, 1, 0, 0).unwrap()
-			.end_rendering().unwrap();
+			.draw(3, 1, 0, 0).unwrap();
 	}
 }

@@ -73,16 +73,16 @@ assert_not_impl_any!(RenderContextNewFrame: Clone);
 impl RenderContextNewFrame {
 	pub fn new_frame<F>(self: &mut Self, output_image: Arc<ImageView>, frame_data: FrameData, f: F)
 		where
-			F: FnOnce(FrameContext, &dyn GpuFuture) -> FenceSignalFuture<Box<dyn GpuFuture>>,
+			F: FnOnce(FrameContext) -> FenceSignalFuture<Box<dyn GpuFuture>>,
 	{
-		self.frame_manager.new_frame(|frame_in_flight, prev_frame| {
+		self.frame_manager.new_frame(|frame_in_flight| {
 			assert_eq!(output_image.format(), self.render_context.output_format, "ImageView format must match constructed format");
 			let extent = output_image.image().extent();
 			assert_eq!(extent[2], 1, "must be a 2D image");
 
 			self.render_context.frame_data_uniform.upload(frame_in_flight, frame_data);
 
-			let context = FrameContext {
+			f(FrameContext {
 				render_context: self.render_context.clone(),
 				frame_in_flight,
 				frame_data,
@@ -93,8 +93,7 @@ impl RenderContextNewFrame {
 					depth_range: 0f32..=1f32,
 				},
 				_private: PhantomData::default(),
-			};
-			f(context, prev_frame)
+			})
 		});
 	}
 }

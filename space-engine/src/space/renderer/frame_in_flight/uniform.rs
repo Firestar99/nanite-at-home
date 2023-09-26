@@ -4,12 +4,11 @@ use std::sync::Arc;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::DeviceSize;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryTypeFilter};
-use vulkano::sync::Sharing;
 
 use crate::space::Init;
 use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
-use crate::vulkan::unique_queue_families;
+use crate::vulkan::concurrent_sharing;
 
 pub struct UniformInFlight<T: BufferContents> {
 	sub: ResourceInFlight<Subbuffer<T>>,
@@ -22,10 +21,10 @@ impl<T: BufferContents> UniformInFlight<T> {
 				&init.memory_allocator,
 				BufferCreateInfo {
 					usage: BufferUsage::UNIFORM_BUFFER,
-					sharing: Sharing::Concurrent(unique_queue_families(&[
+					sharing: concurrent_sharing(&[
 						&init.queues.client.graphics_main,
 						&init.queues.client.async_compute,
-					])),
+					]),
 					..BufferCreateInfo::default()
 				},
 				AllocationCreateInfo {
