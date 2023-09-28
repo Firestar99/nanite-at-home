@@ -19,7 +19,6 @@ use crate::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use crate::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use crate::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use crate::vulkan::window::event_loop::{EVENT_LOOP_ACCESS, EventLoopAccess};
-use crate::vulkan::window::swapchain::{Swapchain, SwapchainState};
 use crate::vulkan::window::window_plugin::WindowPlugin;
 use crate::vulkan::window::window_ref::WindowRef;
 

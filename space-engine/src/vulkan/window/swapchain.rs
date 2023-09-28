@@ -1,51 +1,45 @@
 use std::ops::Deref;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 
-use parking_lot::Mutex;
-use vulkano::device::{Device, DeviceOwned};
+use smallvec::SmallVec;
+use vulkano::{swapchain, VulkanError};
+use vulkano::device::Device;
 use vulkano::format::Format;
 use vulkano::image::ImageUsage;
 use vulkano::image::view::ImageView;
-use vulkano::swapchain;
-use vulkano::swapchain::{acquire_next_image, CompositeAlpha, Surface, SwapchainAcquireFuture, SwapchainCreateInfo};
+use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentMode, Surface, SwapchainAcquireFuture, SwapchainCreateInfo};
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
 use vulkano::swapchain::PresentMode::{Fifo, Mailbox};
 use vulkano::sync::Sharing;
 
-use crate::reinit::{ReinitRef, Restart};
-
-pub struct SwapchainState {
-	old: Mutex<Weak<swapchain::Swapchain>>,
-}
-
-impl Default for SwapchainState {
-	fn default() -> Self {
-		Self { old: Mutex::new(Weak::new()) }
-	}
-}
-
 pub struct Swapchain {
-	swapchain: Arc<swapchain::Swapchain>,
-	images: Vec<Arc<ImageView>>,
-	restart: Restart<Self>,
+	device: Arc<Device>,
+	surface: Arc<Surface>,
+	format: Format,
+	colorspace: ColorSpace,
+	present_mode: PresentMode,
+	image_count: u32,
+	image_usage: ImageUsage,
 }
 
 impl Swapchain {
-	pub fn new(device: ReinitRef<Arc<Device>>, window_size: [u32; 2], surface: ReinitRef<Arc<Surface>>, state: ReinitRef<SwapchainState>, restart: Restart<Self>) -> Self {
-		let mut old = state.old.lock();
-
+	pub fn new(device: Arc<Device>, surface: Arc<Surface>, window_size: [u32; 2]) -> (Arc<Swapchain>, SwapchainController) {
 		let surface_capabilities = device.physical_device().surface_capabilities(&surface, Default::default()).unwrap();
+		let image_usage = surface_capabilities.supported_usage_flags;
 
 		let format;
+		let colorspace;
 		{
-			let formats: Vec<_> = device.physical_device().surface_formats(&surface, Default::default()).unwrap()
+			let formats: SmallVec<[_; 8]> = device.physical_device().surface_formats(&surface, Default::default()).unwrap()
 				.into_iter().filter(|f| f.1 == SrgbNonLinear).collect();
-			format = *formats.iter().find(|f| f.0 == Format::B8G8R8A8_SRGB)
+			let f = *formats.iter().find(|f| f.0 == Format::B8G8R8A8_SRGB)
 				.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_SRGB))
 				.or_else(|| formats.iter().find(|f| f.0 == Format::B8G8R8A8_UNORM))
 				.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_UNORM))
 				.unwrap_or_else(|| &formats[0]);
+			format = f.0;
+			colorspace = f.1;
 		}
 
 		let present_mode;
@@ -63,72 +57,114 @@ impl Swapchain {
 				// Fifo just uses min_image_count
 				surface_capabilities.min_image_count
 			};
-			image_count = surface_capabilities.min_image_count.min(best_count).max(surface_capabilities.max_image_count.unwrap_or(best_count))
+			image_count = surface_capabilities.min_image_count.min(best_count)
+				.max(surface_capabilities.max_image_count.unwrap_or(best_count))
 		}
 
-		let info = SwapchainCreateInfo {
-			min_image_count: image_count,
-			image_format: format.0,
-			image_color_space: format.1,
+		let swapchain = Arc::new(Swapchain {
+			device,
+			surface,
+			format,
+			colorspace,
+			present_mode,
+			image_count,
+			image_usage,
+		});
+		(swapchain.clone(), SwapchainController::new(swapchain, window_size))
+	}
+
+	pub fn surface(&self) -> &Arc<Surface> {
+		&self.surface
+	}
+	pub fn format(&self) -> Format {
+		self.format
+	}
+	pub fn colorspace(&self) -> ColorSpace {
+		self.colorspace
+	}
+	pub fn present_mode(&self) -> PresentMode {
+		self.present_mode
+	}
+	pub fn image_count(&self) -> u32 {
+		self.image_count
+	}
+	pub fn image_usage(&self) -> ImageUsage {
+		self.image_usage
+	}
+
+	fn create_info(self, window_size: [u32; 2]) -> SwapchainCreateInfo {
+		SwapchainCreateInfo {
+			image_format: self.format,
+			image_color_space: self.colorspace,
+			present_mode: self.present_mode,
+			min_image_count: self.image_count,
+			image_usage: self.image_usage,
 			image_extent: window_size,
-			image_usage: ImageUsage::COLOR_ATTACHMENT,
 			image_sharing: Sharing::Exclusive,
 			composite_alpha: CompositeAlpha::Opaque,
-			present_mode,
 			..Default::default()
-		};
+		}
+	}
+}
 
-		let (swapchain, images) = (|| {
-			// attempt recreation
-			if let Some(old) = old.upgrade() {
-				if *old.device() == *device && *old.surface() == *surface {
-					return swapchain::Swapchain::recreate(
-						&old,
-						info,
-					).unwrap();
-				}
+pub struct SwapchainController {
+	parent: Arc<Swapchain>,
+	swapchain: Arc<swapchain::Swapchain>,
+	images: SmallVec<[Arc<ImageView>; 4]>,
+	should_recreate: bool,
+}
+
+impl SwapchainController {
+	fn new(p: Arc<Swapchain>, window_size: [u32; 2]) -> Self {
+		let (swapchain, images) = swapchain::Swapchain::new(p.device.clone(), p.surface.clone(), p.create_info(window_size)).unwrap();
+		Self {
+			parent: p,
+			swapchain,
+			images: images.into_iter().map(|i| ImageView::new_default(i).unwrap()).collect(),
+			should_recreate: false,
+		}
+	}
+
+	pub fn acquire_image(&mut self, window_size: [u32; 2], timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>) {
+		const RECREATE_ATTEMPTS: u32 = 10;
+		for _ in 0..RECREATE_ATTEMPTS {
+			if self.should_recreate {
+				self.should_recreate = false;
+
+				let new = self.swapchain.recreate(self.parent.create_info(window_size)).unwrap();
+				self.swapchain = new.0;
+				self.images = new.1.into_iter().map(|i| ImageView::new_default(i).unwrap()).collect();
 			}
 
-			// fallback: create new
-			swapchain::Swapchain::new(
-				device.deref().clone(),
-				surface.deref().clone(),
-				info,
-			).unwrap()
-		})();
-
-		let images = images.into_iter().map(|image| ImageView::new_default(image).unwrap()).collect();
-
-		*old = Arc::downgrade(&swapchain);
-		Self { swapchain, images, restart }
-	}
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum AcquireError {
-	Timeout,
-	Restart,
-}
-
-impl Swapchain {
-	pub fn acquire_image(&self, timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>) {
-		let (_, suboptimal, future) = acquire_next_image(self.swapchain.clone(), timeout).unwrap();
-		if suboptimal {
-			self.restart.restart();
+			match acquire_next_image(self.swapchain.clone(), timeout) {
+				Ok((_, suboptimal, future)) => {
+					if suboptimal {
+						// suboptimal recreates swapchain next frame, recreating without presenting this frame is bugged in vulkano
+						// https://github.com/vulkano-rs/vulkano/issues/2229
+						self.should_recreate = true;
+					}
+					let image = &self.images[future.image_index() as usize];
+					return (future, image);
+				}
+				Err(e) => {
+					match e.unwrap() {
+						VulkanError::OutOfDate => {
+							// failed to acquire images, recreate swapchain this frame
+							self.should_recreate = true;
+						}
+						e => panic!("{}", e),
+					}
+				}
+			}
 		}
-		let image = &self.images[future.image_index() as usize];
-		(future, image)
-	}
-
-	pub fn images(&self) -> &[Arc<ImageView>] {
-		&self.images
+		panic!("looped {} times trying to acquire swapchain image and failed repeatedly!", RECREATE_ATTEMPTS);
 	}
 }
 
-impl Deref for Swapchain {
-	type Target = Arc<swapchain::Swapchain>;
+impl Deref for SwapchainController {
+	type Target = Arc<Swapchain>;
 
 	fn deref(&self) -> &Self::Target {
-		&self.swapchain
+		&self.parent
 	}
 }

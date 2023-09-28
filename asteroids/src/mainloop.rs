@@ -1,3 +1,4 @@
+use std::mem::forget;
 use std::sync::Arc;
 
 use async_global_executor::{spawn, Task};
@@ -49,7 +50,14 @@ impl Inner {
 
 			let graphics_main = &self.init.queues.client.graphics_main;
 			loop {
-				let (swapchain_acquire, output_image) = self.swapchain.acquire_image(None);
+				let (swapchain_acquire, output_image) = match self.swapchain.acquire_image(None) {
+					Ok(e) => e,
+					Err(_) => {
+						forget(_stop);
+						println!("break");
+						break;
+					}
+				};
 
 				let frame_data = FrameData {
 					camera: Camera {
