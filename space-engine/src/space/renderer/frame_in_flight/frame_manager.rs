@@ -21,7 +21,7 @@ impl FrameManager {
 	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> Self {
 		let seed = SeedInFlight::new(frames_in_flight);
 		Self {
-			frame_id_mod: 0,
+			frame_id_mod: seed.frames_in_flight() - 1,
 			prev_frame: ResourceInFlight::new(seed, |_| None),
 			init,
 		}
