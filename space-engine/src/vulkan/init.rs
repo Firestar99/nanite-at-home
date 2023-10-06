@@ -41,7 +41,7 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
-	pub memory_allocator: StandardMemoryAllocator,
+	pub memory_allocator: Arc<StandardMemoryAllocator>,
 	pub descriptor_allocator: StandardDescriptorSetAllocator,
 	pub cmd_buffer_allocator: StandardCommandBufferAllocator,
 	_debug: Debug,
@@ -118,7 +118,7 @@ impl<Q: Clone> Init<Q> {
 		}).unwrap();
 		let queues = allocation.take(queues.collect());
 
-		let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
+		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 		let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
 		let cmd_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
 
