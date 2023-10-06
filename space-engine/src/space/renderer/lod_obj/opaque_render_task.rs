@@ -22,7 +22,7 @@ impl OpaqueRenderTask {
 
 	pub fn record(&self, frame_context: &FrameContext, future: impl GpuFuture) -> impl GpuFuture {
 		let graphics = &frame_context.render_context.init.queues.client.graphics_main;
-		let mut cmd = AutoCommandBufferBuilder::primary(&frame_context.render_context.init.cmdbuffer_allocator, graphics.queue_family_index(), OneTimeSubmit).unwrap();
+		let mut cmd = AutoCommandBufferBuilder::primary(&frame_context.render_context.init.cmd_buffer_allocator, graphics.queue_family_index(), OneTimeSubmit).unwrap();
 		cmd.begin_rendering(RenderingInfo {
 			color_attachments: vec![Some(RenderingAttachmentInfo {
 				load_op: AttachmentLoadOp::Clear,

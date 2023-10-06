@@ -5,14 +5,15 @@ use std::time::Duration;
 use smallvec::SmallVec;
 use vulkano::{swapchain, VulkanError};
 use vulkano::device::Device;
-use vulkano::format::Format;
+use vulkano::format::{Format, FormatFeatures};
 use vulkano::image::ImageUsage;
 use vulkano::image::view::ImageView;
-use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentMode, Surface, SwapchainAcquireFuture, SwapchainCreateInfo};
+use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentMode, Surface, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
 use vulkano::swapchain::PresentMode::{Fifo, Mailbox};
 use vulkano::sync::Sharing;
 
+#[derive(Debug)]
 pub struct Swapchain {
 	device: Arc<Device>,
 	surface: Arc<Surface>,
@@ -26,7 +27,6 @@ pub struct Swapchain {
 impl Swapchain {
 	pub fn new(device: Arc<Device>, surface: Arc<Surface>, window_size: [u32; 2]) -> (Arc<Swapchain>, SwapchainController) {
 		let surface_capabilities = device.physical_device().surface_capabilities(&surface, Default::default()).unwrap();
-		let image_usage = surface_capabilities.supported_usage_flags;
 
 		let format;
 		let colorspace;
@@ -54,11 +54,40 @@ impl Swapchain {
 				// try to request a 3 image swapchain if we use MailBox
 				3
 			} else {
-				// Fifo just uses min_image_count
-				surface_capabilities.min_image_count
+				// Fifo wants 2 images
+				2
 			};
 			image_count = surface_capabilities.min_image_count.min(best_count)
 				.max(surface_capabilities.max_image_count.unwrap_or(best_count))
+		}
+
+		let image_usage;
+		{
+			let features = device.physical_device().format_properties(format).unwrap().optimal_tiling_features;
+			let mut format_usage = ImageUsage::default();
+			if features.contains(FormatFeatures::TRANSFER_SRC) {
+				format_usage |= ImageUsage::TRANSFER_SRC;
+			}
+			if features.contains(FormatFeatures::TRANSFER_DST) {
+				format_usage |= ImageUsage::TRANSFER_DST;
+			}
+			if features.contains(FormatFeatures::SAMPLED_IMAGE) {
+				format_usage |= ImageUsage::SAMPLED;
+			}
+			if features.contains(FormatFeatures::STORAGE_IMAGE) {
+				format_usage |= ImageUsage::STORAGE;
+			}
+			if features.contains(FormatFeatures::COLOR_ATTACHMENT) {
+				format_usage |= ImageUsage::COLOR_ATTACHMENT;
+			}
+			if features.contains(FormatFeatures::DEPTH_STENCIL_ATTACHMENT) {
+				format_usage |= ImageUsage::DEPTH_STENCIL_ATTACHMENT;
+			}
+			// fixme no idea what feature it must support
+			// if features.contains(FormatFeatures::ATTACH) {
+			// 	format_usage |= ImageUsage::INPUT_ATTACHMENT;
+			// }
+			image_usage = surface_capabilities.supported_usage_flags & format_usage;
 		}
 
 		let swapchain = Arc::new(Swapchain {
@@ -92,7 +121,7 @@ impl Swapchain {
 		self.image_usage
 	}
 
-	fn create_info(self, window_size: [u32; 2]) -> SwapchainCreateInfo {
+	fn create_info(&self, window_size: [u32; 2]) -> SwapchainCreateInfo {
 		SwapchainCreateInfo {
 			image_format: self.format,
 			image_color_space: self.colorspace,
@@ -125,7 +154,7 @@ impl SwapchainController {
 		}
 	}
 
-	pub fn acquire_image(&mut self, window_size: [u32; 2], timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>) {
+	pub fn acquire_image(&mut self, window_size: [u32; 2], timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>, SwapchainPresentInfo) {
 		const RECREATE_ATTEMPTS: u32 = 10;
 		for _ in 0..RECREATE_ATTEMPTS {
 			if self.should_recreate {
@@ -144,7 +173,8 @@ impl SwapchainController {
 						self.should_recreate = true;
 					}
 					let image = &self.images[future.image_index() as usize];
-					return (future, image);
+					let present_info = SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), future.image_index());
+					return (future, image, present_info);
 				}
 				Err(e) => {
 					match e.unwrap() {
