@@ -1,8 +1,14 @@
 [workspace]
 members = [
+    "asteroids",
+    "asteroids-shader",
+    "asteroids-common",
+    "shader-symbols-builder",
     "space-engine",
-    "space-client",
+    "space-engine-common",
+    "space-engine-shader",
 ]
+resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
@@ -13,21 +19,54 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-vulkano = "0.32"
-vulkano-shaders = "0.32"
-vulkano-win = "0.32"
-bytemuck = { version = "1.7" } # in sync with vulkano-win
-winit = "0.27" # in sync with vulkano-win
+# vulkano 0.34 prerelease
+vulkano = { git = "https://github.com/vulkano-rs/vulkano", rev = "a1dca4261d421fc6008498b6fbc6f27f5de6a2a0" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano", rev = "a1dca4261d421fc6008498b6fbc6f27f5de6a2a0" }
+winit = "0.28" # in sync with vulkano-win
+
+# rust-gpu
+spirv-builder = { version = "0.9", default-features = false }
+spirv-std = { version = "0.9" }
 
 # async
 futures = "0.3"
 async-global-executor = { version = "2.3.1" }
 async-std = { version = "1.12", features = ["attributes"] }
 
-# other
-parking_lot = "0.12"
-clap = { version = "3.2", features = ["derive"] }
-konst = "0.3.4"
-paste = "1.0.9"
+# codegen
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = "2.0"
+paste = "1.0"
+konst = "0.3"
+prettyplease = "0.2"
+
+# bytes and numbers
+bytemuck = "1.13"
+bytemuck_derive = "1.4"
 num-traits = "0.2"
 num-derive = "0.3"
+glam = { version = "0.24", default-features = false, features = ["libm", "bytemuck"] }
+
+# other
+once_cell = "1.18"
+smallvec = { version = "1.11", features = ["const_generics", "const_new"] }
+static_assertions = "1.1.0"
+parking_lot = "0.12"
+clap = { version = "3.2", features = ["derive"] }
+
+# Following is copied from rust-gpu workspace cargo.toml
+# Enable incremental by default in release mode.
+[profile.release]
+incremental = true
+# HACK(eddyb) this is the default but without explicitly specifying it, Cargo
+# will treat the identical settings in `[profile.release.build-override]` below
+# as different sets of `rustc` flags and will not reuse artifacts between them.
+codegen-units = 256
+
+# Compile build-dependencies in release mode with the same settings
+# as regular dependencies (including the incremental enabled above).
+[profile.release.build-override]
+opt-level = 3
+incremental = true
+codegen-units = 256

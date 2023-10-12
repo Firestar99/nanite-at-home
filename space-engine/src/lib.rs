@@ -1,14 +1,15 @@
 extern crate core;
 
+pub use async_global_executor::spawn as spawn;
 /// for macro use
 pub use paste;
-pub use async_global_executor::spawn as spawn;
-
-pub use vulkan::window::event_loop::event_loop_init as init;
 
 pub mod reinit;
 pub mod vulkan;
 pub mod application_config;
+pub mod space;
+
+pub(crate) mod shader;
 
 /// Call function on drop
 pub struct CallOnDrop<F: FnMut()>(pub F);

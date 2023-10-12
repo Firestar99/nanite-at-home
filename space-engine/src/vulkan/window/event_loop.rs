@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 use std::future::Future;
 use std::hint::spin_loop;
-use std::mem::{MaybeUninit, replace};
+use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::process::exit;
 use std::sync::Arc;
@@ -9,7 +9,6 @@ use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release};
 use std::sync::mpsc::{channel, Sender, TryRecvError};
 use std::task::{Context, Poll, Waker};
-use std::thread::yield_now;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
@@ -215,7 +214,6 @@ pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 
 	// need target
 	// SAFETY: this method is exactly made for this case, and should not be called from anywhere else
-	// fixme what to do with the need?
 	let need = unsafe { global_need_init(target) };
 	*ROOT_NEED.lock() = Some(Box::new(need));
 
@@ -283,9 +281,11 @@ pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 	});
 }
 
+/// unused when building for tests
+#[allow(dead_code)]
 pub(crate) fn last_reinit_dropped() {
 	let mut guard = SENDER.lock();
-	let (sender, notify) = replace(&mut *guard, None).expect("EventLoop was not initialized!");
+	let (sender, notify) = guard.take().expect("EventLoop was not initialized!");
 	drop(sender);
 	if let Some(notify) = notify {
 		notify.send_event(()).unwrap();
@@ -313,12 +313,13 @@ impl<T: Target> NeedGuardTrait for NeedGuard<T> {}
 static ROOT_NEED: Mutex<Option<Box<dyn NeedGuardTrait>>> = Mutex::new(None);
 
 pub fn stop() {
+	// should basically never loop
 	loop {
 		if let Some(need) = ROOT_NEED.lock().take() {
 			drop(need);
 			return;
 		}
-		yield_now();
+		spin_loop();
 	}
 }
 

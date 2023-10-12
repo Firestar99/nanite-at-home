@@ -1,0 +1,20 @@
+[package]
+name = "space-engine-shader"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+# my projects
+space-engine-common = { path = "../space-engine-common" }
+
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+glam = { workspace = true }
+spirv-std = { workspace = true }
+static_assertions = { workspace = true }

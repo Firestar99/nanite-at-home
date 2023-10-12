@@ -86,6 +86,7 @@ fabric.properties
 
 ### custom
 .idea/**/misc.xml
-.idea/**/hotswap_agent.xml
 .idea/**/jarRepositories.xml
 .idea/**/modules.xml
+.idea/**/deployment.xml
+*.autosave.xopp

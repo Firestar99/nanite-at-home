@@ -1,5 +1,4 @@
 use std::cell::UnsafeCell;
-use std::mem::replace;
 
 use crate::reinit::{Constructed, global_need_dec, global_need_inc, Reinit, ReinitDetails};
 
@@ -72,8 +71,8 @@ impl<T: Send + Sync + 'static> ReinitDetails<T> for ReinitNoRestart<T>
 	}
 
 	fn request_construction(&'static self, parent: &'static Reinit<T>) {
-		// this may not be atomic, but that's ok as Reinit will act as a Mutex for this method
-		let constructor = replace(unsafe { &mut *self.constructor.get() }, None);
+		// SAFETY: this may not be atomic, but that's ok as Reinit will act as a Mutex for this method
+		let constructor = unsafe { &mut *self.constructor.get() }.take();
 		(constructor.expect("Constructed more than once!"))(Constructed(parent));
 	}
 }

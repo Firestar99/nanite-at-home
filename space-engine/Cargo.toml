@@ -7,9 +7,12 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# my projects
+space-engine-common = { path = "../space-engine-common" }
+
 # vulkan
 vulkano = { workspace = true }
-vulkano-win = { workspace = true }
+vulkano-shaders = { workspace = true }
 winit = { workspace = true }
 
 # async
@@ -23,3 +26,9 @@ parking_lot = { workspace = true }
 paste = { workspace = true }
 num-traits = { workspace = true }
 num-derive = { workspace = true }
+clap = { workspace = true }
+smallvec = { workspace = true }
+static_assertions = { workspace = true }
+
+[build-dependencies]
+shader-symbols-builder = { path = "../shader-symbols-builder", features = ["use-pretty-print"] }

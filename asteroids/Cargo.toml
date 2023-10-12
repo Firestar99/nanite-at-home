@@ -1,0 +1,37 @@
+[package]
+name = "asteroids"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["use-installed-tools"]
+use-installed-tools = ["shader-symbols-builder/use-installed-tools"]
+use-compiled-tools = ["shader-symbols-builder/use-compiled-tools"]
+
+[dependencies]
+# my projects
+asteroids-common = { path = "../asteroids-common" }
+space-engine = { path = "../space-engine" }
+space-engine-common = { path = "../space-engine-common" }
+
+# vulkan
+vulkano = { workspace = true }
+vulkano-shaders = { workspace = true }
+winit = { workspace = true }
+bytemuck = { workspace = true }
+
+# async
+futures = { workspace = true }
+async-std = { workspace = true }
+async-global-executor = { workspace = true }
+
+# other
+spirv-std = { workspace = true }
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+
+[build-dependencies]
+shader-symbols-builder = { path = "../shader-symbols-builder", features = ["use-pretty-print"] }
