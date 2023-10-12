@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use smallvec::SmallVec;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use vulkano::{swapchain, VulkanError};
 use vulkano::device::Device;
 use vulkano::format::{Format, FormatFeatures};
@@ -12,10 +13,14 @@ use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, Present
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
 use vulkano::swapchain::PresentMode::{Fifo, Mailbox};
 use vulkano::sync::Sharing;
+use winit::event_loop::EventLoopWindowTarget;
 
-#[derive(Debug)]
+use crate::vulkan::window::event_loop::EventLoopExecutor;
+use crate::vulkan::window::window_ref::WindowRef;
+
 pub struct Swapchain {
 	device: Arc<Device>,
+	window: WindowRef,
 	surface: Arc<Surface>,
 	format: Format,
 	colorspace: ColorSpace,
@@ -24,82 +29,100 @@ pub struct Swapchain {
 	image_usage: ImageUsage,
 }
 
+assert_impl_all!(Swapchain: Send, Sync);
+
 impl Swapchain {
-	pub fn new(device: Arc<Device>, surface: Arc<Surface>, window_size: [u32; 2]) -> (Arc<Swapchain>, SwapchainController) {
-		let surface_capabilities = device.physical_device().surface_capabilities(&surface, Default::default()).unwrap();
+	pub async fn new(device: Arc<Device>, event_loop: EventLoopExecutor, window: WindowRef) -> (Arc<Swapchain>, SwapchainController) {
+		let (swapchain, vulkano_swapchain, images) = event_loop.spawn(move |event_loop| {
+			let surface = Surface::from_window(device.instance().clone(), window.get_arc(event_loop).clone()).unwrap();
+			let surface_capabilities = device.physical_device().surface_capabilities(&surface, Default::default()).unwrap();
 
-		let format;
-		let colorspace;
-		{
-			let formats: SmallVec<[_; 8]> = device.physical_device().surface_formats(&surface, Default::default()).unwrap()
-				.into_iter().filter(|f| f.1 == SrgbNonLinear).collect();
-			let f = *formats.iter().find(|f| f.0 == Format::B8G8R8A8_SRGB)
-				.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_SRGB))
-				.or_else(|| formats.iter().find(|f| f.0 == Format::B8G8R8A8_UNORM))
-				.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_UNORM))
-				.unwrap_or_else(|| &formats[0]);
-			format = f.0;
-			colorspace = f.1;
-		}
+			let format;
+			let colorspace;
+			{
+				let formats: SmallVec<[_; 8]> = device.physical_device().surface_formats(&surface, Default::default()).unwrap()
+					.into_iter().filter(|f| f.1 == SrgbNonLinear).collect();
+				let f = *formats.iter().find(|f| f.0 == Format::B8G8R8A8_SRGB)
+					.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_SRGB))
+					.or_else(|| formats.iter().find(|f| f.0 == Format::B8G8R8A8_UNORM))
+					.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_UNORM))
+					.unwrap_or_else(|| &formats[0]);
+				format = f.0;
+				colorspace = f.1;
+			}
 
-		let present_mode;
-		{
-			let present_modes = || device.physical_device().surface_present_modes(&surface).unwrap();
-			present_mode = present_modes().find(|p| *p == Mailbox).unwrap_or(Fifo);
-		}
+			let present_mode;
+			{
+				let present_modes = || device.physical_device().surface_present_modes(&surface).unwrap();
+				present_mode = present_modes().find(|p| *p == Mailbox).unwrap_or(Fifo);
+			}
 
-		let image_count;
-		{
-			let best_count = if present_mode == Mailbox {
-				// try to request a 3 image swapchain if we use MailBox
-				3
-			} else {
-				// Fifo wants 2 images
-				2
-			};
-			image_count = surface_capabilities.min_image_count.min(best_count)
-				.max(surface_capabilities.max_image_count.unwrap_or(best_count))
-		}
+			let image_count;
+			{
+				let best_count = if present_mode == Mailbox {
+					// try to request a 3 image swapchain if we use MailBox
+					3
+				} else {
+					// Fifo wants 2 images
+					2
+				};
+				image_count = surface_capabilities.min_image_count.min(best_count)
+					.max(surface_capabilities.max_image_count.unwrap_or(best_count))
+			}
 
-		let image_usage;
-		{
-			let features = device.physical_device().format_properties(format).unwrap().optimal_tiling_features;
-			let mut format_usage = ImageUsage::default();
-			if features.contains(FormatFeatures::TRANSFER_SRC) {
-				format_usage |= ImageUsage::TRANSFER_SRC;
+			let image_usage;
+			{
+				let features = device.physical_device().format_properties(format).unwrap().optimal_tiling_features;
+				let mut format_usage = ImageUsage::default();
+				if features.contains(FormatFeatures::TRANSFER_SRC) {
+					format_usage |= ImageUsage::TRANSFER_SRC;
+				}
+				if features.contains(FormatFeatures::TRANSFER_DST) {
+					format_usage |= ImageUsage::TRANSFER_DST;
+				}
+				if features.contains(FormatFeatures::SAMPLED_IMAGE) {
+					format_usage |= ImageUsage::SAMPLED;
+				}
+				if features.contains(FormatFeatures::STORAGE_IMAGE) {
+					format_usage |= ImageUsage::STORAGE;
+				}
+				if features.contains(FormatFeatures::COLOR_ATTACHMENT) {
+					format_usage |= ImageUsage::COLOR_ATTACHMENT;
+				}
+				if features.contains(FormatFeatures::DEPTH_STENCIL_ATTACHMENT) {
+					format_usage |= ImageUsage::DEPTH_STENCIL_ATTACHMENT;
+				}
+				// fixme no idea what feature it must support
+				// if features.contains(FormatFeatures::ATTACH) {
+				// 	format_usage |= ImageUsage::INPUT_ATTACHMENT;
+				// }
+				image_usage = surface_capabilities.supported_usage_flags & format_usage;
 			}
-			if features.contains(FormatFeatures::TRANSFER_DST) {
-				format_usage |= ImageUsage::TRANSFER_DST;
-			}
-			if features.contains(FormatFeatures::SAMPLED_IMAGE) {
-				format_usage |= ImageUsage::SAMPLED;
-			}
-			if features.contains(FormatFeatures::STORAGE_IMAGE) {
-				format_usage |= ImageUsage::STORAGE;
-			}
-			if features.contains(FormatFeatures::COLOR_ATTACHMENT) {
-				format_usage |= ImageUsage::COLOR_ATTACHMENT;
-			}
-			if features.contains(FormatFeatures::DEPTH_STENCIL_ATTACHMENT) {
-				format_usage |= ImageUsage::DEPTH_STENCIL_ATTACHMENT;
-			}
-			// fixme no idea what feature it must support
-			// if features.contains(FormatFeatures::ATTACH) {
-			// 	format_usage |= ImageUsage::INPUT_ATTACHMENT;
-			// }
-			image_usage = surface_capabilities.supported_usage_flags & format_usage;
-		}
 
-		let swapchain = Arc::new(Swapchain {
-			device,
-			surface,
-			format,
-			colorspace,
-			present_mode,
-			image_count,
-			image_usage,
-		});
-		(swapchain.clone(), SwapchainController::new(swapchain, window_size))
+			let swapchain = Arc::new(Swapchain {
+				device,
+				window,
+				surface,
+				format,
+				colorspace,
+				present_mode,
+				image_count,
+				image_usage,
+			});
+			let (vulkano_swapchain, images) = swapchain::Swapchain::new(swapchain.device.clone(), swapchain.surface.clone(), swapchain.create_info(event_loop)).unwrap();
+			let images = images.into_iter().map(|i| ImageView::new_default(i).unwrap()).collect();
+			(swapchain, vulkano_swapchain, images)
+		}).await;
+
+		// needs to be constructed outside of EventLoopExecutor::spawn() to be able to move the event_loop
+		let controller = SwapchainController {
+			parent: swapchain.clone(),
+			event_loop,
+			vulkano_swapchain,
+			images,
+			should_recreate: false,
+		};
+		(swapchain, controller)
 	}
 
 	pub fn surface(&self) -> &Arc<Surface> {
@@ -121,14 +144,14 @@ impl Swapchain {
 		self.image_usage
 	}
 
-	fn create_info(&self, window_size: [u32; 2]) -> SwapchainCreateInfo {
+	fn create_info(&self, event_loop: &EventLoopWindowTarget<()>) -> SwapchainCreateInfo {
 		SwapchainCreateInfo {
 			image_format: self.format,
 			image_color_space: self.colorspace,
 			present_mode: self.present_mode,
 			min_image_count: self.image_count,
 			image_usage: self.image_usage,
-			image_extent: window_size,
+			image_extent: self.window.get(event_loop).inner_size().into(),
 			image_sharing: Sharing::Exclusive,
 			composite_alpha: CompositeAlpha::Opaque,
 			..Default::default()
@@ -138,42 +161,41 @@ impl Swapchain {
 
 pub struct SwapchainController {
 	parent: Arc<Swapchain>,
-	swapchain: Arc<swapchain::Swapchain>,
+	event_loop: EventLoopExecutor,
+	vulkano_swapchain: Arc<swapchain::Swapchain>,
 	images: SmallVec<[Arc<ImageView>; 4]>,
 	should_recreate: bool,
 }
 
-impl SwapchainController {
-	fn new(p: Arc<Swapchain>, window_size: [u32; 2]) -> Self {
-		let (swapchain, images) = swapchain::Swapchain::new(p.device.clone(), p.surface.clone(), p.create_info(window_size)).unwrap();
-		Self {
-			parent: p,
-			swapchain,
-			images: images.into_iter().map(|i| ImageView::new_default(i).unwrap()).collect(),
-			should_recreate: false,
-		}
-	}
+assert_impl_all!(SwapchainController: Send);
+assert_not_impl_all!(SwapchainController: Sync);
 
-	pub fn acquire_image(&mut self, window_size: [u32; 2], timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>, SwapchainPresentInfo) {
+impl SwapchainController {
+	pub async fn acquire_image(&mut self, timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>, SwapchainPresentInfo) {
 		const RECREATE_ATTEMPTS: u32 = 10;
 		for _ in 0..RECREATE_ATTEMPTS {
 			if self.should_recreate {
 				self.should_recreate = false;
 
-				let new = self.swapchain.recreate(self.parent.create_info(window_size)).unwrap();
-				self.swapchain = new.0;
+				let vulkano_swapchain = self.vulkano_swapchain.clone();
+				let parent = self.parent.clone();
+				let new = self.event_loop.spawn(move |event_loop| {
+					vulkano_swapchain.recreate(parent.create_info(event_loop)).unwrap()
+				}).await;
+				self.vulkano_swapchain = new.0;
 				self.images = new.1.into_iter().map(|i| ImageView::new_default(i).unwrap()).collect();
 			}
 
-			match acquire_next_image(self.swapchain.clone(), timeout) {
+			match acquire_next_image(self.vulkano_swapchain.clone(), timeout) {
 				Ok((_, suboptimal, future)) => {
 					if suboptimal {
 						// suboptimal recreates swapchain next frame, recreating without presenting this frame is bugged in vulkano
+						// and I think also not allowed in vulkan, except via an extension?
 						// https://github.com/vulkano-rs/vulkano/issues/2229
 						self.should_recreate = true;
 					}
 					let image = &self.images[future.image_index() as usize];
-					let present_info = SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), future.image_index());
+					let present_info = SwapchainPresentInfo::swapchain_image_index(self.vulkano_swapchain.clone(), future.image_index());
 					return (future, image, present_info);
 				}
 				Err(e) => {

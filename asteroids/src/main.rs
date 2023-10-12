@@ -3,7 +3,6 @@ use std::thread;
 
 use futures::executor::block_on;
 use spirv_std::glam::{Affine3A, Mat4};
-use vulkano::swapchain::Surface;
 use vulkano::sync::GpuFuture;
 use winit::event::Event;
 use winit::window::WindowBuilder;
@@ -24,7 +23,6 @@ use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
 use space_engine_common::space::renderer::camera::Camera;
 use space_engine_common::space::renderer::frame_data::FrameData;
-
 
 fn main() {
 	event_loop_init(|event_loop, input| {
@@ -54,23 +52,16 @@ async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, ()>>
 		init = Init::new(generate_application_config!(), &vec, SpaceQueueAllocator::new());
 	}
 
-	// FIXME dimensions is constant and never re-queried
-	let (_window, surface, dimensions) = {
-		let init = init.clone();
-		event_loop.spawn(move |event_loop| {
-			let window = WindowRef::new(WindowBuilder::new().build(event_loop).unwrap());
-			let surface = Surface::from_window(init.instance().clone(), window.get_arc(event_loop).clone()).unwrap();
-			let dimensions = window.get(event_loop).inner_size().into();
-			(window, surface, dimensions)
-		}).await
-	};
-	let (swapchain, mut swapchain_controller) = Swapchain::new(init.device.clone(), surface.clone(), dimensions);
+	let window = event_loop.spawn(move |event_loop| {
+		WindowRef::new(WindowBuilder::new().build(event_loop).unwrap())
+	}).await;
+	let (swapchain, mut swapchain_controller) = Swapchain::new(init.device.clone(), event_loop, window.clone()).await;
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
 	let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
 
 	let graphics_main = &init.queues.client.graphics_main;
 	loop {
-		let (swapchain_acquire, output_image, present_info) = swapchain_controller.acquire_image(dimensions, None);
+		let (swapchain_acquire, output_image, present_info) = swapchain_controller.acquire_image(None).await;
 
 		let frame_data = FrameData {
 			camera: Camera {
