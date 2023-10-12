@@ -5,21 +5,22 @@ use std::time::Duration;
 use smallvec::SmallVec;
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 use vulkano::{swapchain, VulkanError};
-use vulkano::device::Device;
+use vulkano::device::{Device, DeviceOwned, Queue};
 use vulkano::format::{Format, FormatFeatures};
 use vulkano::image::ImageUsage;
 use vulkano::image::view::ImageView;
-use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentMode, Surface, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
+use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentFuture, PresentMode, Surface, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
 use vulkano::swapchain::PresentMode::{Fifo, Mailbox};
-use vulkano::sync::Sharing;
+use vulkano::sync::{GpuFuture, Sharing};
+use vulkano::sync::future::FenceSignalFuture;
 use winit::event_loop::EventLoopWindowTarget;
 
 use crate::vulkan::window::event_loop::EventLoopExecutor;
 use crate::vulkan::window::window_ref::WindowRef;
 
 pub struct Swapchain {
-	device: Arc<Device>,
+	queue: Arc<Queue>,
 	window: WindowRef,
 	surface: Arc<Surface>,
 	format: Format,
@@ -32,8 +33,9 @@ pub struct Swapchain {
 assert_impl_all!(Swapchain: Send, Sync);
 
 impl Swapchain {
-	pub async fn new(device: Arc<Device>, event_loop: EventLoopExecutor, window: WindowRef) -> (Arc<Swapchain>, SwapchainController) {
+	pub async fn new(queue: Arc<Queue>, event_loop: EventLoopExecutor, window: WindowRef) -> (Arc<Swapchain>, SwapchainController) {
 		let (swapchain, vulkano_swapchain, images) = event_loop.spawn(move |event_loop| {
+			let device = queue.device();
 			let surface = Surface::from_window(device.instance().clone(), window.get_arc(event_loop).clone()).unwrap();
 			let surface_capabilities = device.physical_device().surface_capabilities(&surface, Default::default()).unwrap();
 
@@ -100,7 +102,7 @@ impl Swapchain {
 			}
 
 			let swapchain = Arc::new(Swapchain {
-				device,
+				queue,
 				window,
 				surface,
 				format,
@@ -109,7 +111,7 @@ impl Swapchain {
 				image_count,
 				image_usage,
 			});
-			let (vulkano_swapchain, images) = swapchain::Swapchain::new(swapchain.device.clone(), swapchain.surface.clone(), swapchain.create_info(event_loop)).unwrap();
+			let (vulkano_swapchain, images) = swapchain::Swapchain::new(swapchain.device().clone(), swapchain.surface.clone(), swapchain.create_info(event_loop)).unwrap();
 			let images = images.into_iter().map(|i| ImageView::new_default(i).unwrap()).collect();
 			(swapchain, vulkano_swapchain, images)
 		}).await;
@@ -125,21 +127,35 @@ impl Swapchain {
 		(swapchain, controller)
 	}
 
+	#[inline]
+	pub fn queue(&self) -> &Arc<Queue> {
+		&self.queue
+	}
+	#[inline]
+	pub fn device(&self) -> &Arc<Device> {
+		&self.queue.device()
+	}
+	#[inline]
 	pub fn surface(&self) -> &Arc<Surface> {
 		&self.surface
 	}
+	#[inline]
 	pub fn format(&self) -> Format {
 		self.format
 	}
+	#[inline]
 	pub fn colorspace(&self) -> ColorSpace {
 		self.colorspace
 	}
+	#[inline]
 	pub fn present_mode(&self) -> PresentMode {
 		self.present_mode
 	}
+	#[inline]
 	pub fn image_count(&self) -> u32 {
 		self.image_count
 	}
+	#[inline]
 	pub fn image_usage(&self) -> ImageUsage {
 		self.image_usage
 	}
@@ -171,7 +187,7 @@ assert_impl_all!(SwapchainController: Send);
 assert_not_impl_all!(SwapchainController: Sync);
 
 impl SwapchainController {
-	pub async fn acquire_image(&mut self, timeout: Option<Duration>) -> (SwapchainAcquireFuture, &Arc<ImageView>, SwapchainPresentInfo) {
+	pub async fn acquire_image(&mut self, timeout: Option<Duration>) -> (SwapchainAcquireFuture, AcquiredImage) {
 		const RECREATE_ATTEMPTS: u32 = 10;
 		for _ in 0..RECREATE_ATTEMPTS {
 			if self.should_recreate {
@@ -194,9 +210,11 @@ impl SwapchainController {
 						// https://github.com/vulkano-rs/vulkano/issues/2229
 						self.should_recreate = true;
 					}
-					let image = &self.images[future.image_index() as usize];
-					let present_info = SwapchainPresentInfo::swapchain_image_index(self.vulkano_swapchain.clone(), future.image_index());
-					return (future, image, present_info);
+					let acquired_image = AcquiredImage {
+						controller: self,
+						image_index: future.image_index(),
+					};
+					return (future, acquired_image);
 				}
 				Err(e) => {
 					match e.unwrap() {
@@ -218,5 +236,37 @@ impl Deref for SwapchainController {
 
 	fn deref(&self) -> &Self::Target {
 		&self.parent
+	}
+}
+
+
+/// Opinionated Design: does NOT deref to [`SwapchainController`] to make sure a new image isn't acquired before the previous one is presented
+pub struct AcquiredImage<'a> {
+	controller: &'a mut SwapchainController,
+	image_index: u32,
+}
+
+impl<'a> AcquiredImage<'a> {
+	pub fn image_view(&self) -> &Arc<ImageView> {
+		&self.controller.images[self.image_index as usize]
+	}
+
+	pub fn present<F: GpuFuture>(self, future: F) -> Option<FenceSignalFuture<PresentFuture<F>>> {
+		match future
+			.then_swapchain_present(self.controller.queue.clone(), SwapchainPresentInfo::swapchain_image_index(self.controller.vulkano_swapchain.clone(), self.image_index))
+			.then_signal_fence_and_flush()
+		{
+			Ok(e) => Some(e),
+			Err(e) => {
+				match e.unwrap() {
+					VulkanError::OutOfDate => {
+						// failed to present image, recreate swapchain this frame
+						self.controller.should_recreate = true;
+						None
+					}
+					e => panic!("{}", e),
+				}
+			}
+		}
 	}
 }

@@ -51,17 +51,17 @@ async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, ()>>
 
 		init = Init::new(generate_application_config!(), &vec, SpaceQueueAllocator::new());
 	}
+	let graphics_main = &init.queues.client.graphics_main;
 
 	let window = event_loop.spawn(move |event_loop| {
 		WindowRef::new(WindowBuilder::new().build(event_loop).unwrap())
 	}).await;
-	let (swapchain, mut swapchain_controller) = Swapchain::new(init.device.clone(), event_loop, window.clone()).await;
+	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
 	let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
 
-	let graphics_main = &init.queues.client.graphics_main;
 	loop {
-		let (swapchain_acquire, output_image, present_info) = swapchain_controller.acquire_image(None).await;
+		let (swapchain_acquire, acquired_image) = swapchain_controller.acquire_image(None).await;
 
 		let frame_data = FrameData {
 			camera: Camera {
@@ -71,11 +71,10 @@ async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, ()>>
 			},
 		};
 
-		new_frame.new_frame(output_image.clone(), frame_data, |frame_context| {
+		new_frame.new_frame(acquired_image.image_view().clone(), frame_data, |frame_context| {
 			let opaque_future = opaque_render_task.record(&frame_context, swapchain_acquire);
-			let present_future = opaque_future.then_swapchain_present(graphics_main.clone(), present_info);
-			// FIXME presenting may fail with out of date swapchain
-			present_future.boxed().then_signal_fence_and_flush().unwrap()
+			let present_future = acquired_image.present(opaque_future)?;
+			Some(present_future.boxed().then_signal_fence_and_flush().unwrap())
 		});
 	}
 }
