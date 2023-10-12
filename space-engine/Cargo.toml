@@ -17,8 +17,7 @@ winit = { workspace = true }
 
 # async
 futures = { workspace = true }
-async-std = { workspace = true }
-async-global-executor = { workspace = true }
+smol = { workspace = true }
 
 # other
 konst = { workspace = true }

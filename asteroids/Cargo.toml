@@ -25,8 +25,7 @@ bytemuck = { workspace = true }
 
 # async
 futures = { workspace = true }
-async-std = { workspace = true }
-async-global-executor = { workspace = true }
+smol = { workspace = true }
 
 # other
 spirv-std = { workspace = true }
