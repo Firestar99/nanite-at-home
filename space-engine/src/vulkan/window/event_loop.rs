@@ -1,13 +1,13 @@
-use std::cell::{Cell, UnsafeCell};
+use std::cell::{Cell, RefCell, UnsafeCell};
 use std::future::Future;
 use std::hint::spin_loop;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::process::exit;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release};
-use std::sync::mpsc::{channel, Sender, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::task::{Context, Poll, Waker};
 
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -16,15 +16,13 @@ use parking_lot::Mutex;
 use winit::event::Event;
 use winit::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
 
-use crate::reinit::{global_need_init, NeedGuard, Reinit, Target};
-use crate::reinit_no_restart_map;
 use crate::vulkan::window::event_loop::TaskState::*;
 
-trait RunOnEventLoop: Send + Sync {
-	fn run(self: Arc<Self>, event_loop: &EventLoopWindowTarget<()>);
+// EventLoop Task
+trait EventLoopTaskTrait: Send + Sync {
+	fn run(&self, event_loop: &EventLoopWindowTarget<()>);
 }
 
-// TaskInner
 #[repr(u8)]
 #[derive(FromPrimitive, ToPrimitive)]
 enum TaskState {
@@ -35,10 +33,11 @@ enum TaskState {
 	ResultTaken,
 }
 
-struct TaskInner<R, F>
+struct EventLoopTaskInner<R, F>
 	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
 		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {
 	state: AtomicU8,
 	// has to be an Option tracking it's own existence, as it may be alive or dead while Running, Waker* and is only definitively dead in Finished and ResultToken
@@ -48,18 +47,20 @@ struct TaskInner<R, F>
 	waker: UnsafeCell<MaybeUninit<Waker>>,
 }
 
-unsafe impl<R, F> Sync for TaskInner<R, F>
+unsafe impl<R, F> Sync for EventLoopTaskInner<R, F>
 	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
 		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {}
 
-impl<R, F> RunOnEventLoop for TaskInner<R, F>
+impl<R, F> EventLoopTaskTrait for EventLoopTaskInner<R, F>
 	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
 		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {
-	fn run(self: Arc<Self>, event_loop: &EventLoopWindowTarget<()>) {
+	fn run(&self, event_loop: &EventLoopWindowTarget<()>) {
 		let func = self.func.replace(None).expect("Task ran twice?");
 		let result = func(event_loop);
 		// SAFETY: as long as state != Finished we are the only ones who have access to self.result, and this is only called by the main thread
@@ -97,13 +98,14 @@ impl<R, F> RunOnEventLoop for TaskInner<R, F>
 	}
 }
 
-impl<R, F> TaskInner<R, F>
+impl<R, F> EventLoopTaskInner<R, F>
 	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
 		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {
-	fn new(func: F) -> TaskInner<R, F> {
-		TaskInner {
+	fn new(func: F) -> EventLoopTaskInner<R, F> {
+		EventLoopTaskInner {
 			state: AtomicU8::new(Running as u8),
 			func: Cell::new(Some(func)),
 			result: UnsafeCell::new(MaybeUninit::uninit()),
@@ -144,10 +146,11 @@ impl<R, F> TaskInner<R, F>
 	}
 }
 
-impl<R, F> Drop for TaskInner<R, F>
+impl<R, F> Drop for EventLoopTaskInner<R, F>
 	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
 		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {
 	fn drop(&mut self) {
 		match TaskState::from_u8(self.state.load(Relaxed)).unwrap() {
@@ -167,15 +170,17 @@ impl<R, F> Drop for TaskInner<R, F>
 }
 
 #[derive(Clone)]
-struct Task<R, F>(Arc<TaskInner<R, F>>)
+struct EventLoopTask<R, F>(Arc<EventLoopTaskInner<R, F>>)
 	where
-		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static;
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
+		R: Send + 'static;
 
-impl<R, F> Future for Task<R, F>
+impl<R, F> Future for EventLoopTask<R, F>
 	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
 		R: Send + 'static,
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
 {
 	type Output = R;
 
@@ -185,67 +190,89 @@ impl<R, F> Future for Task<R, F>
 }
 
 
-// Messages sent to main loop
-enum Message {
-	InitEventLoop,
-	RunOnEventLoop(Arc<dyn RunOnEventLoop>),
+// EventLoop execution
+static NOTIFY_CREATED: AtomicBool = AtomicBool::new(false);
+static NOTIFY: Mutex<Option<EventLoopProxy<()>>> = Mutex::new(None);
+
+#[derive(Clone)]
+pub struct EventLoopExecutor {
+	sender: Sender<Arc<dyn EventLoopTaskTrait>>,
+	notify: RefCell<Option<EventLoopProxy<()>>>,
 }
 
-#[allow(clippy::type_complexity)]
-static SENDER: Mutex<Option<(Sender<Message>, Option<EventLoopProxy<()>>)>> = Mutex::new(None);
-
-fn send(msg: Message) {
-	let guard = SENDER.lock();
-	let (sender, notify) = guard.as_ref().expect("EventLoop was not initialized!");
-	sender.send(msg).unwrap();
-	if let Some(notify) = notify {
-		notify.send_event(()).unwrap();
+impl EventLoopExecutor {
+	fn new(sender: Sender<Arc<dyn EventLoopTaskTrait>>) -> Self {
+		Self {
+			sender,
+			notify: RefCell::new(None),
+		}
 	}
-}
 
-pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
-{
-	// plain setup
-	let (tx, exec_rx) = channel();
+	pub fn spawn<R, F>(&self, f: F) -> impl Future<Output=R>
+		where
+			F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+			F: Send + 'static,
+			R: Send + 'static,
 	{
-		let mut guard = SENDER.lock();
-		*guard = Some((tx, None));
+		let task = EventLoopTask(Arc::new(EventLoopTaskInner::new(f)));
+		self.send(task.0.clone());
+		task
 	}
 
-	// need target
-	// SAFETY: this method is exactly made for this case, and should not be called from anywhere else
-	let need = unsafe { global_need_init(target) };
-	*ROOT_NEED.lock() = Some(Box::new(need));
-
-	// plain loop without EventLoop
-	loop {
-		match exec_rx.recv() {
-			Ok(msg) => {
-				match msg {
-					Message::InitEventLoop => {
-						break;
-					}
-					Message::RunOnEventLoop(_) => {
-						panic!("EventLoop is not yet initialized!");
-					}
+	fn send(&self, message: Arc<dyn EventLoopTaskTrait>) {
+		self.sender.send(message).unwrap();
+		let mut notify = self.notify.borrow_mut();
+		match notify.as_ref() {
+			None => {
+				if NOTIFY_CREATED.load(Relaxed) {
+					let n = NOTIFY.lock().as_ref().unwrap().clone();
+					n.send_event(()).unwrap();
+					*notify = Some(n);
 				}
 			}
-			Err(_) => {
-				// is always a disconnect
-				exit(0);
-			}
-		};
+			Some(notify) => notify.send_event(()).unwrap(),
+		}
 	}
+}
 
-	// EventLoop setup
-	println!("[Info] Main: transitioning to Queue with EventLoop");
-	let event_loop = EventLoop::new();
+pub fn event_loop_init<F>(launch: F) -> !
+	where
+		F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>)
+{
+	// plain setup
+	let (exec_tx, exec_rx) = channel();
+	let (event_tx, event_rx) = channel();
+	launch(EventLoopExecutor::new(exec_tx), event_rx);
+
+	// plain loop without EventLoop
+	let event_loop;
 	{
-		let mut guard = SENDER.lock();
-		let proxy = event_loop.create_proxy();
-		// there may be Messages remaining on the queue which need handling
-		proxy.send_event(()).unwrap();
-		guard.as_mut().unwrap().1 = Some(proxy);
+		let forward_msg;
+		loop {
+			match exec_rx.recv() {
+				Ok(msg) => {
+					forward_msg = msg;
+					break;
+				}
+				Err(_) => {
+					// fail is always a disconnect
+					exit(0);
+				}
+			};
+		}
+
+		// EventLoop setup
+		// FIXME replace with log
+		println!("[Info] Main: transitioning to Queue with EventLoop");
+		event_loop = EventLoop::new();
+		{
+			let notify = event_loop.create_proxy();
+			// there may be Messages remaining on the queue which need handling
+			notify.send_event(()).unwrap();
+			*NOTIFY.lock() = Some(notify);
+			NOTIFY_CREATED.store(true, Release);
+		}
+		forward_msg.run(&event_loop);
 	}
 
 	// EventLoop loop
@@ -255,10 +282,7 @@ pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 				loop {
 					match exec_rx.try_recv() {
 						Ok(msg) => {
-							match msg {
-								Message::InitEventLoop => { panic!("already inited EventLoop!") }
-								Message::RunOnEventLoop(run) => { run.run(b) }
-							}
+							msg.run(&b)
 						}
 						Err(e) => {
 							if matches!(e, TryRecvError::Disconnected) {
@@ -271,80 +295,11 @@ pub fn event_loop_init(target: &'static Reinit<impl Target>) -> !
 				}
 			}
 			event => {
-				// fixme
-				drop(event);
-				// if let Some(event) = event.to_static() {
-				// 	let _ = event_tx.send(event);
-				// }
+				if let Some(event) = event.to_static() {
+					// ignore that channel may have closed
+					let _ = event_tx.send(event);
+				}
 			}
 		}
 	});
-}
-
-/// unused when building for tests
-#[allow(dead_code)]
-pub(crate) fn last_reinit_dropped() {
-	let mut guard = SENDER.lock();
-	let (sender, notify) = guard.take().expect("EventLoop was not initialized!");
-	drop(sender);
-	if let Some(notify) = notify {
-		notify.send_event(()).unwrap();
-	}
-}
-
-
-// stop
-// FIXME: idea how to handle this better
-// need system is great for eg. a client starting up an internal server, or a connection to a server, etc.
-// How to manage the Lifetime of Client, the root Target of the Application?
-// Idea: allow a Target to manage it's own lifetime using their own Instance of NeedGuard
-// allows ReinitNoRestart to stay permanently initialized
-// allows client to un-need itself to shut down
-// Even if a NeedGuard may be dropped immediately, it still needs to construct the Reinit as it may need itself
-// Questions:
-// Maybe separate these "root"-Targets from normal Targets using a different trait?
-// Maybe get rid of current Target (allow every Reinit to be need()) and make it the new root-Target?
-// May need a new type of reinit! macro? NO, would suck cause it'll need normal, map and future variant again.
-// Maybe couple construction of the self-need onto impl Restart<T: Target>, as we're passing that already?
-trait NeedGuardTrait: Send + Sync {}
-
-impl<T: Target> NeedGuardTrait for NeedGuard<T> {}
-
-static ROOT_NEED: Mutex<Option<Box<dyn NeedGuardTrait>>> = Mutex::new(None);
-
-pub fn stop() {
-	// should basically never loop
-	loop {
-		if let Some(need) = ROOT_NEED.lock().take() {
-			drop(need);
-			return;
-		}
-		spin_loop();
-	}
-}
-
-
-// EventLoopAccess
-#[derive(Copy, Clone)]
-pub struct EventLoopAccess(EventLoopAccessSecret);
-
-// prevent external construction using this secret
-#[derive(Copy, Clone)]
-struct EventLoopAccessSecret;
-
-reinit_no_restart_map!(pub EVENT_LOOP_ACCESS: EventLoopAccess = {
-	send(Message::InitEventLoop);
-	EventLoopAccess(EventLoopAccessSecret)
-});
-
-impl EventLoopAccess {
-	pub fn spawn<R, F>(&self, f: F) -> impl Future<Output=R>
-		where
-			R: Send + 'static,
-			F: FnOnce(&EventLoopWindowTarget<()>) -> R + Send + 'static,
-	{
-		let task = Arc::new(TaskInner::new(f));
-		send(Message::RunOnEventLoop(task.clone()));
-		Task(task)
-	}
 }

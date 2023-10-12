@@ -18,7 +18,7 @@ impl<T: BufferContents> UniformInFlight<T> {
 	pub fn new(init: &Arc<Init>, seed: impl Into<SeedInFlight>, dedicated_alloc: bool) -> Self {
 		fn inner<T: BufferContents>(init: &Arc<Init>, seed: SeedInFlight, dedicated_alloc: bool) -> UniformInFlight<T> {
 			let buffer = Buffer::new_slice::<T>(
-				&init.memory_allocator,
+				init.memory_allocator.clone(),
 				BufferCreateInfo {
 					usage: BufferUsage::UNIFORM_BUFFER,
 					sharing: concurrent_sharing(&[

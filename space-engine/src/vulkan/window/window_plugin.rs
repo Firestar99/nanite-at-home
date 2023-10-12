@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use smallvec::SmallVec;
 
 use vulkano::device::{DeviceExtensions, Features};
 use vulkano::device::physical::PhysicalDevice;
@@ -7,15 +8,15 @@ use vulkano::swapchain::Surface;
 use vulkano::VulkanLibrary;
 
 use crate::vulkan::init::Plugin;
-use crate::vulkan::platform::VulkanLayers;
-use crate::vulkan::window::event_loop::EventLoopAccess;
+use crate::vulkan::validation_layers::ValidationLayers;
+use crate::vulkan::window::event_loop::EventLoopExecutor;
 
 pub struct WindowPlugin {
 	window_extensions: InstanceExtensions,
 }
 
 impl WindowPlugin {
-	pub async fn new(event_loop: EventLoopAccess) -> Self {
+	pub async fn new(event_loop: &EventLoopExecutor) -> Self {
 		Self {
 			window_extensions: event_loop.spawn(|event_loop| Surface::required_extensions(event_loop)).await,
 		}
@@ -23,11 +24,11 @@ impl WindowPlugin {
 }
 
 impl Plugin for WindowPlugin {
-	fn instance_config(&mut self, _library: &Arc<VulkanLibrary>, _layers: &VulkanLayers) -> (InstanceExtensions, Vec<&'static str>) {
-		(self.window_extensions, Vec::new())
+	fn instance_config(&self, _library: &Arc<VulkanLibrary>, _layers: &ValidationLayers) -> (InstanceExtensions, SmallVec<[String; 1]>) {
+		(self.window_extensions, SmallVec::new())
 	}
 
-	fn device_config(&mut self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
+	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
 		(DeviceExtensions {
 			khr_swapchain: true,
 			..Default::default()

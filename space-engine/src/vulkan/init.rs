@@ -1,48 +1,31 @@
-use std::ops::BitOr;
 use std::sync::Arc;
 
+use smallvec::SmallVec;
 use vulkano::{Version, VulkanLibrary};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
-use vulkano::device::physical::PhysicalDevice;
+use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::debug::Debug;
 use crate::vulkan::ENGINE_APPLICATION_CONFIG;
-use crate::vulkan::init::DevicePriority::{Allow, Disallow};
-use crate::vulkan::platform::VulkanLayers;
+use crate::vulkan::validation_layers::ValidationLayers;
 
-pub enum DevicePriority {
-	Disallow,
-	Allow(i32),
-}
-
-pub trait Plugin: Send + Sync {
+pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.
 	/// Note that you must check that said InstanceExtensions or validation layers are available,
 	/// requesting something that the PhysicalDevice does not support will panic!
-	fn instance_config(&mut self, _library: &Arc<VulkanLibrary>, _layers: &VulkanLayers) -> (InstanceExtensions, Vec<&'static str>) {
-		(InstanceExtensions::empty(), Vec::new())
-	}
-
-	/// Check a PhysicalDevice and either disallow it or give it a score to be selected.
-	/// All scores are accumulated and the highest PhysicalDevice allowed by everyone wins.
-	///
-	/// # Returns
-	/// * to disallow a device return `Disallow`
-	/// * to set a priority for a Device return `Allow(priority)`
-	/// * allow the device without any priority changes return `Allow(0)`
-	fn physical_device_filter(&mut self, _physical_device: &PhysicalDevice) -> DevicePriority {
-		Allow(0)
+	fn instance_config(&self, _library: &Arc<VulkanLibrary>, _layers: &ValidationLayers) -> (InstanceExtensions, SmallVec<[String; 1]>) {
+		(InstanceExtensions::empty(), SmallVec::new())
 	}
 
 	/// Return what DeviceExtensions and Features you would like to be enabled.
 	/// Note that you must check that said DeviceExtensions or Features are available on the
 	/// PhysicalDevice, requesting something that the PhysicalDevice does not support will panic!
-	fn device_config(&mut self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
+	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
 		(DeviceExtensions::empty(), Features::empty())
 	}
 }
@@ -58,14 +41,14 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
-	pub memory_allocator: StandardMemoryAllocator,
+	pub memory_allocator: Arc<StandardMemoryAllocator>,
 	pub descriptor_allocator: StandardDescriptorSetAllocator,
-	pub cmdbuffer_allocator: StandardCommandBufferAllocator,
+	pub cmd_buffer_allocator: StandardCommandBufferAllocator,
 	_debug: Debug,
 }
 
 impl<Q: Clone> Init<Q> {
-	pub fn new<ALLOCATOR, ALLOCATION>(application_config: ApplicationConfig, mut plugins: Vec<&mut dyn Plugin>, queue_allocator: ALLOCATOR) -> Self
+	pub fn new<ALLOCATOR, ALLOCATION>(application_config: ApplicationConfig, plugins: &[&dyn Plugin], queue_allocator: ALLOCATOR) -> Arc<Self>
 		where
 			Q: 'static,
 			ALLOCATOR: QueueAllocator<Q, ALLOCATION>,
@@ -77,28 +60,23 @@ impl<Q: Clone> Init<Q> {
 		let extensions;
 		let layers;
 		{
-			let platform = VulkanLayers::new(&library);
-			let configs: Vec<_> = plugins.iter_mut()
-				.map(|p| p.instance_config(&library, &platform))
-				.collect();
-			extensions = configs.iter()
-				.map(|e| e.0)
-				.reduce(|a, b| a.union(&b))
-				.unwrap_or(InstanceExtensions::empty())
-				.bitor(InstanceExtensions {
-					// force enable debug utils
-					ext_debug_utils: true,
-					..InstanceExtensions::default()
+			let validation_layers = ValidationLayers::new(&library);
+			let result = plugins.iter()
+				.map(|p| p.instance_config(&library, &validation_layers))
+				.fold((InstanceExtensions::default(), Vec::new()), |mut a, b| {
+					a.1.extend(b.1);
+					(a.0 | b.0, a.1)
 				});
-			layers = configs.into_iter()
-				.flat_map(|e| e.1)
-				.map(String::from)
-				.collect();
+			extensions = result.0 | InstanceExtensions {
+				ext_debug_utils: true,
+				..InstanceExtensions::default()
+			};
+			layers = result.1;
 		}
 
 		// instance
 		let instance = Instance::new(library, InstanceCreateInfo {
-			flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
+			flags: InstanceCreateFlags::empty(),
 			engine_name: Some(String::from(ENGINE_APPLICATION_CONFIG.name)),
 			engine_version: Version::from(ENGINE_APPLICATION_CONFIG.version),
 			application_name: Some(String::from(application_config.name)),
@@ -113,33 +91,22 @@ impl<Q: Clone> Init<Q> {
 
 		// physical device selection
 		let physical_device = instance.enumerate_physical_devices().unwrap()
-			.filter_map(|phy| {
-				let priority = plugins.iter_mut()
-					.map(|p| p.physical_device_filter(&phy))
-					.reduce(|a, b| match a {
-						Disallow => { Disallow }
-						Allow(ap) => {
-							match b {
-								Disallow => { Disallow }
-								Allow(bp) => { Allow(ap + bp) }
-							}
-						}
-					})
-					.unwrap_or(Allow(0));
-				match priority {
-					Disallow => { None }
-					Allow(p) => { Some((phy, p)) }
+			.min_by_key(|phy| {
+				match phy.properties().device_type {
+					PhysicalDeviceType::DiscreteGpu => 4,
+					PhysicalDeviceType::IntegratedGpu => 3,
+					PhysicalDeviceType::VirtualGpu => 2,
+					PhysicalDeviceType::Cpu => 1,
+					PhysicalDeviceType::Other => 0,
+					_ => -1,
 				}
 			})
-			.min_by_key(|(_, priority)| *priority)
-			.expect("No suitable PhysicalDevice was found!")
-			.0;
+			.expect("No PhysicalDevice found!");
 
 		// device extensions and features
-		let (device_extensions, device_features) = plugins.iter_mut()
+		let (device_extensions, device_features) = plugins.iter()
 			.map(|p| p.device_config(&physical_device))
-			.reduce(|a, b| (DeviceExtensions::union(&a.0, &b.0), Features::union(&a.1, &b.1)))
-			.unwrap_or((DeviceExtensions::empty(), Features::empty()));
+			.fold((DeviceExtensions::empty(), Features::empty()), |a, b| (a.0 | b.0, a.1 | b.1));
 
 		// device
 		let (allocation, queue_create_infos) = queue_allocator.alloc(&instance, &physical_device);
@@ -151,18 +118,18 @@ impl<Q: Clone> Init<Q> {
 		}).unwrap();
 		let queues = allocation.take(queues.collect());
 
-		let memory_allocator = StandardMemoryAllocator::new_default(device.clone());
+		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 		let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
-		let cmdbuffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+		let cmd_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
 
-		Self {
+		Arc::new(Self {
 			device,
 			queues,
 			memory_allocator,
 			descriptor_allocator,
-			cmdbuffer_allocator,
+			cmd_buffer_allocator,
 			_debug,
-		}
+		})
 	}
 
 	pub fn instance(&self) -> &Arc<Instance> {

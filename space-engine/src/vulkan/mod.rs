@@ -8,7 +8,7 @@ use vulkano::sync::Sharing::{Concurrent, Exclusive};
 use crate::application_config::ApplicationConfig;
 use crate::generate_application_config;
 
-pub mod platform;
+pub mod validation_layers;
 pub mod debug;
 pub mod queue_allocation_helper;
 pub mod init;

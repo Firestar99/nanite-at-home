@@ -73,7 +73,7 @@ assert_not_impl_any!(RenderContextNewFrame: Clone);
 impl RenderContextNewFrame {
 	pub fn new_frame<F>(self: &mut Self, output_image: Arc<ImageView>, frame_data: FrameData, f: F)
 		where
-			F: FnOnce(FrameContext) -> FenceSignalFuture<Box<dyn GpuFuture>>,
+			F: FnOnce(FrameContext) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		self.frame_manager.new_frame(|frame_in_flight| {
 			assert_eq!(output_image.format(), self.render_context.output_format, "ImageView format must match constructed format");

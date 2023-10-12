@@ -1,10 +1,12 @@
-use asteroids::bootup::MAINLOOP;
-use space_engine::generate_application_config;
-use space_engine::space::engine_config::EngineConfig;
-use space_engine::space::init;
+use std::thread;
+
+use futures::executor::block_on;
+
+use asteroids::main_loop::run;
+use space_engine::event_loop_init;
 
 fn main() {
-	init(EngineConfig {
-		application_config: generate_application_config!()
-	}, &MAINLOOP);
+	event_loop_init(|event_loop, input| {
+		thread::spawn(move || block_on(run(event_loop, input)));
+	});
 }

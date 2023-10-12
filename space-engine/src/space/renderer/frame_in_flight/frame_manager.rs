@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use vulkano::sync::GpuFuture;
 use vulkano::sync::future::FenceSignalFuture;
+use vulkano::sync::GpuFuture;
 
 use crate::space::Init;
 use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
@@ -21,22 +21,26 @@ impl FrameManager {
 	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> Self {
 		let seed = SeedInFlight::new(frames_in_flight);
 		Self {
-			frame_id_mod: 0,
+			frame_id_mod: seed.frames_in_flight() - 1,
 			prev_frame: ResourceInFlight::new(seed, |_| None),
 			init,
 		}
 	}
 
-	/// starts work on a new frame
+	/// Starts work on a new frame. The function supplied should return a [`FenceSignalFuture`] to indicate when the frame has finished rendering.
+	/// If rendering or especially presenting fails, it should just return [`None`]. On error Vulkano does not create a GpuFuture and instead calls [`device_wait_idle`]
+	/// to ensure all resources used by this potentially half way executed command buffer are no longer in flight.
 	///
 	/// # Impl-Note
 	/// * `frame`: the current "new" frame that should be rendered
 	/// * `*_prev`: the previous frame that came immediately before this frame
 	/// * `*_last`: the last frame with the same frame in flight index,
 	/// GPU execution of this frame must complete before this frame can start being recorded due to them sharing resources
+	///
+	/// [`device_wait_idle`]: vulkano::device::Device::wait_idle
 	pub fn new_frame<F>(&mut self, f: F)
 		where
-			F: FnOnce(FrameInFlight) -> FenceSignalFuture<Box<dyn GpuFuture>>,
+			F: FnOnce(FrameInFlight) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		// SAFETY: this function ensures the FramesInFlight are never launched concurrently
 		let fif;
@@ -55,7 +59,7 @@ impl FrameManager {
 
 		// do the render, write back GpuFuture
 		let fence_rendered = f(fif);
-		*self.prev_frame.index_mut(fif) = Some(Frame {
+		*self.prev_frame.index_mut(fif) = fence_rendered.map(|fence_rendered| Frame {
 			fence_rendered
 		})
 	}
