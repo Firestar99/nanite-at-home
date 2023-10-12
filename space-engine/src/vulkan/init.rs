@@ -91,7 +91,7 @@ impl<Q: Clone> Init<Q> {
 
 		// physical device selection
 		let physical_device = instance.enumerate_physical_devices().unwrap()
-			.min_by_key(|phy| {
+			.max_by_key(|phy| {
 				match phy.properties().device_type {
 					PhysicalDeviceType::DiscreteGpu => 4,
 					PhysicalDeviceType::IntegratedGpu => 3,
@@ -102,6 +102,8 @@ impl<Q: Clone> Init<Q> {
 				}
 			})
 			.expect("No PhysicalDevice found!");
+
+		println!("Selecting physical device `{:?}`", physical_device.properties().device_name);
 
 		// device extensions and features
 		let (device_extensions, device_features) = plugins.iter()
