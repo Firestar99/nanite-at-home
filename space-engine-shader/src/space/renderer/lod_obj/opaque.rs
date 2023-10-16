@@ -19,8 +19,14 @@ pub fn opaque_vs(
 ) {
 	let camera = frame_data.camera;
 	let vtx = &VERTICES[vertex_id as usize];
-	let position = camera.transform.transform_vector3a(vtx.position);
-	*out_pos = (position, 1.).into();
+
+	let position;
+	{
+		let p = camera.transform.transform_point3a(vtx.position);
+		position = camera.perspective * Vec4::from((p, 1.));
+	}
+
+	*out_pos = position;
 }
 
 #[spirv(fragment)]

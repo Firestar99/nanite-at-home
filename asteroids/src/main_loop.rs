@@ -1,8 +1,9 @@
+use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 
-use spirv_std::glam::{Affine3A, Mat4};
+use spirv_std::glam::{Mat4, UVec3, Vec3};
 use vulkano::sync::GpuFuture;
-use winit::event::Event;
+use winit::event::{Event, WindowEvent};
 use winit::window::WindowBuilder;
 
 use space_engine::generate_application_config;
@@ -22,9 +23,12 @@ use space_engine::vulkan::window::window_ref::WindowRef;
 use space_engine_common::space::renderer::camera::Camera;
 use space_engine_common::space::renderer::frame_data::FrameData;
 
+use crate::delta_time::DeltaTimeTimer;
+use crate::fps_camera_controller::FpsCameraController;
+
 pub async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, ()>>) {
-	let layer_renderdoc = false;
-	let layer_validation = true;
+	let layer_renderdoc = true;
+	let layer_validation = false;
 
 	let init;
 	{
@@ -52,15 +56,32 @@ pub async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, 
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
 	let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
 
+	let mut camera_controls = FpsCameraController::new();
+	let mut last_frame = DeltaTimeTimer::new();
 	loop {
+		for event in _input.try_iter() {
+			camera_controls.handle_input(&event);
+			match event {
+				Event::WindowEvent {
+					event: WindowEvent::CloseRequested,
+					..
+				} => {
+					break;
+				}
+
+				_ => ()
+			}
+		}
+
 		let (swapchain_acquire, acquired_image) = swapchain_controller.acquire_image(None).await;
 
+		let delta_time = last_frame.next();
+		let image = UVec3::from_array(acquired_image.image_view().image().extent());
 		let frame_data = FrameData {
-			camera: Camera {
-				transform: Affine3A::default(),
-				perspective: Mat4::default(),
-				perspective_inverse: Mat4::default(),
-			},
+			camera: Camera::new(
+				Mat4::perspective_rh(90. / 360. * 2. * PI, image.x as f32 / image.y as f32, 0.001, 100.),
+				camera_controls.update(delta_time),
+			),
 		};
 
 		new_frame.new_frame(acquired_image.image_view().clone(), frame_data, |frame_context| {
