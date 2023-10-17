@@ -4,8 +4,8 @@ use smallvec::smallvec;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
 use vulkano::format::Format;
-use vulkano::pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
-use vulkano::pipeline::graphics::color_blend::ColorBlendState;
+use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
@@ -55,15 +55,21 @@ impl OpaqueDrawPipeline {
 				vertex_input_state: VertexInputState::default().into(),
 				input_assembly_state: InputAssemblyState::default().into(),
 				rasterization_state: RasterizationState::default().into(),
-				viewport_state: ViewportState::viewport_dynamic_scissor_irrelevant().into(),
+				viewport_state: ViewportState::default().into(),
 				multisample_state: MultisampleState::default().into(),
-				color_blend_state: ColorBlendState::default().into(),
+				color_blend_state: ColorBlendState {
+					attachments: vec![
+						ColorBlendAttachmentState::default(),
+					],
+					..Default::default()
+				}.into(),
 				subpass: PipelineSubpassType::BeginRendering(PipelineRenderingCreateInfo {
 					color_attachment_formats: vec![
 						Some(format_color),
 					],
 					..PipelineRenderingCreateInfo::default()
 				}).into(),
+				dynamic_state: [DynamicState::Viewport].into_iter().collect(),
 				..GraphicsPipelineCreateInfo::layout(layout)
 			}).unwrap();
 
@@ -78,7 +84,7 @@ impl OpaqueDrawPipeline {
 			.bind_pipeline_graphics(self.pipeline.clone()).unwrap()
 			.set_viewport(0, frame_context.viewport_smallvec()).unwrap()
 			.bind_descriptor_sets(PipelineBindPoint::Graphics, self.pipeline.layout().clone(), 0,
-								  self.descriptor_set.index(frame_context.frame_in_flight).clone()
+								  self.descriptor_set.index(frame_context.frame_in_flight).clone(),
 			).unwrap()
 			.draw(3, 1, 0, 0).unwrap();
 	}

@@ -9,7 +9,7 @@ use vulkano::device::{Device, DeviceOwned, Queue};
 use vulkano::format::{Format, FormatFeatures};
 use vulkano::image::ImageUsage;
 use vulkano::image::view::ImageView;
-use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentFuture, PresentMode, Surface, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
+use vulkano::swapchain::{acquire_next_image, ColorSpace, CompositeAlpha, PresentFuture, PresentMode, Surface, SurfaceInfo, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
 use vulkano::swapchain::PresentMode::{Fifo, Mailbox};
 use vulkano::sync::{GpuFuture, Sharing};
@@ -55,7 +55,7 @@ impl Swapchain {
 
 			let present_mode;
 			{
-				let present_modes = || device.physical_device().surface_present_modes(&surface).unwrap();
+				let present_modes = || device.physical_device().surface_present_modes(&surface, SurfaceInfo::default()).unwrap();
 				present_mode = present_modes().find(|p| *p == Mailbox).unwrap_or(Fifo);
 			}
 
