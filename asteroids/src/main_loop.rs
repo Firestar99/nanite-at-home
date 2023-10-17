@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 
-use spirv_std::glam::{Mat4, UVec3, Vec3};
+use spirv_std::glam::{Mat4, UVec3};
 use vulkano::sync::GpuFuture;
 use winit::event::{Event, WindowEvent};
 use winit::window::WindowBuilder;
@@ -26,7 +26,7 @@ use space_engine_common::space::renderer::frame_data::FrameData;
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 
-pub async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, ()>>) {
+pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, ()>>) {
 	let layer_renderdoc = true;
 	let layer_validation = false;
 
@@ -58,15 +58,15 @@ pub async fn run(event_loop: EventLoopExecutor, _input: Receiver<Event<'static, 
 
 	let mut camera_controls = FpsCameraController::new();
 	let mut last_frame = DeltaTimeTimer::new();
-	loop {
-		for event in _input.try_iter() {
+	'outer: loop {
+		for event in inputs.try_iter() {
 			camera_controls.handle_input(&event);
-			match event {
+			match &event {
 				Event::WindowEvent {
 					event: WindowEvent::CloseRequested,
 					..
 				} => {
-					break;
+					break 'outer;
 				}
 
 				_ => ()
