@@ -13,6 +13,7 @@ use std::task::{Context, Poll, Waker};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use parking_lot::Mutex;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use winit::event::Event;
 use winit::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
 
@@ -196,14 +197,17 @@ static NOTIFY: Mutex<Option<EventLoopProxy<()>>> = Mutex::new(None);
 
 #[derive(Clone)]
 pub struct EventLoopExecutor {
-	sender: Sender<Arc<dyn EventLoopTaskTrait>>,
+	sender: Option<Sender<Arc<dyn EventLoopTaskTrait>>>,
 	notify: RefCell<Option<EventLoopProxy<()>>>,
 }
+
+assert_impl_all!(EventLoopExecutor: Send);
+assert_not_impl_all!(EventLoopExecutor: Sync);
 
 impl EventLoopExecutor {
 	fn new(sender: Sender<Arc<dyn EventLoopTaskTrait>>) -> Self {
 		Self {
-			sender,
+			sender: Some(sender),
 			notify: RefCell::new(None),
 		}
 	}
@@ -220,7 +224,11 @@ impl EventLoopExecutor {
 	}
 
 	fn send(&self, message: Arc<dyn EventLoopTaskTrait>) {
-		self.sender.send(message).unwrap();
+		self.sender.as_ref().unwrap().send(message).unwrap();
+		self.wake();
+	}
+
+	fn wake(&self) {
 		let mut notify = self.notify.borrow_mut();
 		match notify.as_ref() {
 			None => {
@@ -232,6 +240,13 @@ impl EventLoopExecutor {
 			}
 			Some(notify) => notify.send_event(()).unwrap(),
 		}
+	}
+}
+
+impl Drop for EventLoopExecutor {
+	fn drop(&mut self) {
+		drop(self.sender.take());
+		self.wake();
 	}
 }
 
