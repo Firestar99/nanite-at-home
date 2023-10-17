@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::task::{Context, Poll, Waker};
+use std::thread;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
@@ -252,12 +253,12 @@ impl Drop for EventLoopExecutor {
 
 pub fn event_loop_init<F>(launch: F) -> !
 	where
-		F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>)
+		F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>) + Send + 'static
 {
 	// plain setup
 	let (exec_tx, exec_rx) = channel();
 	let (event_tx, event_rx) = channel();
-	launch(EventLoopExecutor::new(exec_tx), event_rx);
+	let mut render_join_handle = Some(thread::spawn(|| launch(EventLoopExecutor::new(exec_tx), event_rx)));
 
 	// plain loop without EventLoop
 	let event_loop;
@@ -301,7 +302,12 @@ pub fn event_loop_init<F>(launch: F) -> !
 						}
 						Err(e) => {
 							if matches!(e, TryRecvError::Disconnected) {
-								// received disconnect from last_reinit_dropped()
+								// Only exit when all other threads have exited!
+								// Otherwise the system start cleaning up vulkan objects while we're also at it, causing Segfaults.
+								// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
+								if let Some(join_handle) = render_join_handle.take() {
+									join_handle.join().ok();
+								}
 								control_flow.set_exit();
 							}
 							break;
