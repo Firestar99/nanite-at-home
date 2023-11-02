@@ -113,14 +113,18 @@ version = "0.1.0"
 dependencies = [
  "asteroids-common",
  "bytemuck",
+ "bytemuck_derive",
  "futures",
+ "glam",
+ "num-derive",
+ "num-traits",
  "parking_lot",
  "shader-symbols-builder",
  "smallvec",
  "smol",
  "space-engine",
  "space-engine-common",
- "spirv-std",
+ "static_assertions",
  "vulkano",
  "vulkano-shaders",
  "winit",
@@ -131,7 +135,12 @@ name = "asteroids-common"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "num-derive",
+ "num-traits",
  "spirv-std",
+ "static_assertions",
 ]
 
 [[package]]
@@ -140,7 +149,12 @@ version = "0.1.0"
 dependencies = [
  "asteroids-common",
  "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "num-derive",
+ "num-traits",
  "spirv-std",
+ "static_assertions",
 ]
 
 [[package]]
@@ -1820,8 +1834,11 @@ dependencies = [
 name = "space-engine"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
  "clap",
  "futures",
+ "glam",
  "konst",
  "num-derive",
  "num-traits",
@@ -1844,6 +1861,8 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "glam",
+ "num-derive",
+ "num-traits",
  "spirv-std",
  "static_assertions",
 ]
@@ -1855,6 +1874,8 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "glam",
+ "num-derive",
+ "num-traits",
  "space-engine-common",
  "spirv-std",
  "static_assertions",

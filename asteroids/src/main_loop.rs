@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 
-use spirv_std::glam::{Mat4, UVec3};
+use glam::{Mat4, UVec3};
 use vulkano::sync::GpuFuture;
 use winit::event::{Event, WindowEvent};
 use winit::window::WindowBuilder;
