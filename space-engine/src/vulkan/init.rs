@@ -3,7 +3,7 @@ use std::sync::Arc;
 use smallvec::SmallVec;
 use vulkano::{Version, VulkanLibrary};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
@@ -121,7 +121,7 @@ impl<Q: Clone> Init<Q> {
 		let queues = allocation.take(queues.collect());
 
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-		let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone());
+		let descriptor_allocator = StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default());
 		let cmd_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
 
 		Arc::new(Self {

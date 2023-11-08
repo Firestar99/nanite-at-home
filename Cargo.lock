@@ -2164,8 +2164,9 @@ dependencies = [
 
 [[package]]
 name = "vulkano"
-version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=9d1251e457644e35be93912933802af7b12b1c06#9d1251e457644e35be93912933802af7b12b1c06"
+version = "0.34.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70f4278f76307b3c388679234b397b4f90de29cdba53873c26b624ed82653d75"
 dependencies = [
  "ahash 0.8.3",
  "ash",
@@ -2193,8 +2194,9 @@ dependencies = [
 
 [[package]]
 name = "vulkano-macros"
-version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=9d1251e457644e35be93912933802af7b12b1c06#9d1251e457644e35be93912933802af7b12b1c06"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52be622d364272fd77e298e7f68e8547ae66e7687cb86eb85335412cee7e3965"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2204,8 +2206,9 @@ dependencies = [
 
 [[package]]
 name = "vulkano-shaders"
-version = "0.33.0"
-source = "git+https://github.com/vulkano-rs/vulkano?rev=9d1251e457644e35be93912933802af7b12b1c06#9d1251e457644e35be93912933802af7b12b1c06"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1f63401297565d74afb96e9add12587d8e46235140cee325a8eb6ba4602f4ee"
 dependencies = [
  "ahash 0.8.3",
  "heck",
