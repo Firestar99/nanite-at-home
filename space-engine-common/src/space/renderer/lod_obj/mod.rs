@@ -1,14 +1,15 @@
-use spirv_std::glam::Vec3A;
+use bytemuck_derive::AnyBitPattern;
+use glam::Vec3;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, AnyBitPattern)]
 pub struct VertexInput {
-	pub position: Vec3A,
+    pub position: Vec3,
 }
 
 impl VertexInput {
-	pub const fn new(position: Vec3A) -> Self {
-		Self {
-			position
-		}
-	}
+    pub const fn new(position: Vec3) -> Self {
+        Self {
+            position
+        }
+    }
 }

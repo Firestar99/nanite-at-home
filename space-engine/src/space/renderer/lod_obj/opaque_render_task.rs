@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use glam::vec3;
 
 use vulkano::command_buffer::{AutoCommandBufferBuilder, RenderingAttachmentInfo, RenderingInfo, SubpassContents};
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
@@ -6,17 +7,31 @@ use vulkano::format::{ClearValue, Format};
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
 
+use space_engine_common::space::renderer::lod_obj::VertexInput;
+
 use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
+use crate::space::renderer::lod_obj::opaque_model::OpaqueModel;
 use crate::space::renderer::render_graph::context::{FrameContext, RenderContext};
 
 pub struct OpaqueRenderTask {
 	pipeline_opaque: OpaqueDrawPipeline,
+	opaque_model: OpaqueModel,
 }
+
+const MODEL_VERTEX_INPUT: [VertexInput; 4] = [
+	VertexInput::new(vec3(-1., -1., 0.)),
+	VertexInput::new(vec3(-1., 1., 0.)),
+	VertexInput::new(vec3(1., 1., 0.)),
+	VertexInput::new(vec3(1., -1., 0.)),
+];
 
 impl OpaqueRenderTask {
 	pub fn new<'a>(context: &Arc<RenderContext>, format: Format) -> Self {
+		let pipeline_opaque = OpaqueDrawPipeline::new(context, format);
+		let opaque_model = OpaqueModel::new(&context, &pipeline_opaque, MODEL_VERTEX_INPUT.iter().copied());
 		Self {
-			pipeline_opaque: OpaqueDrawPipeline::new(context, format),
+			pipeline_opaque,
+			opaque_model,
 		}
 	}
 
@@ -33,7 +48,7 @@ impl OpaqueRenderTask {
 			contents: SubpassContents::Inline,
 			..RenderingInfo::default()
 		}).unwrap();
-		self.pipeline_opaque.draw(frame_context, &mut cmd);
+		self.pipeline_opaque.draw(frame_context, &mut cmd, &self.opaque_model);
 		cmd.end_rendering().unwrap();
 
 		future.then_execute(graphics.clone(), cmd.build().unwrap()).unwrap()

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use smallvec::smallvec;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
+use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::format::Format;
 use vulkano::pipeline::{DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
@@ -15,8 +16,9 @@ use vulkano::pipeline::graphics::vertex_input::VertexInputState;
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 
-use crate::shader::space::renderer::lod_obj::opaque::{opaque_fs, opaque_vs};
+use crate::shader::space::renderer::lod_obj::opaque_shader::{opaque_fs, opaque_vs};
 use crate::space::renderer::frame_in_flight::ResourceInFlight;
+use crate::space::renderer::lod_obj::opaque_model::OpaqueModel;
 use crate::space::renderer::render_graph::context::{FrameContext, RenderContext};
 
 #[derive(Clone)]
@@ -79,13 +81,18 @@ impl OpaqueDrawPipeline {
 		}
 	}
 
-	pub fn draw(&self, frame_context: &FrameContext, cmd: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) {
+	pub fn draw(&self, frame_context: &FrameContext, cmd: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>, model: &OpaqueModel) {
 		cmd
 			.bind_pipeline_graphics(self.pipeline.clone()).unwrap()
 			.set_viewport(0, frame_context.viewport_smallvec()).unwrap()
-			.bind_descriptor_sets(PipelineBindPoint::Graphics, self.pipeline.layout().clone(), 0,
-								  self.descriptor_set.index(frame_context.frame_in_flight).clone(),
-			).unwrap()
+			.bind_descriptor_sets(PipelineBindPoint::Graphics, self.pipeline.layout().clone(), 0, (
+				self.descriptor_set.index(frame_context.frame_in_flight).clone(),
+				model.descriptor.clone(),
+			)).unwrap()
 			.draw(3, 1, 0, 0).unwrap();
+	}
+
+	pub fn descriptor_set_layout_model(&self) -> &Arc<DescriptorSetLayout> {
+		&self.pipeline.layout().set_layouts()[1]
 	}
 }
