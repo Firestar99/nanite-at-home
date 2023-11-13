@@ -16,7 +16,7 @@ pub fn opaque_vs(
 
 	let position;
 	{
-		let p = camera.transform.transform_point3(vertex_input.position);
+		let p = camera.transform.transform_point3(vertex_input.position.into());
 		position = camera.perspective * Vec4::from((p, 1.));
 	}
 
