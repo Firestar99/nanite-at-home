@@ -4,15 +4,17 @@ use std::hint::spin_loop;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
 use std::process::exit;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release};
+use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
+use std::thread;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use parking_lot::Mutex;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use winit::event::Event;
 use winit::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
 
@@ -34,10 +36,10 @@ enum TaskState {
 }
 
 struct EventLoopTaskInner<R, F>
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static,
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static,
 {
 	state: AtomicU8,
 	// has to be an Option tracking it's own existence, as it may be alive or dead while Running, Waker* and is only definitively dead in Finished and ResultToken
@@ -48,17 +50,18 @@ struct EventLoopTaskInner<R, F>
 }
 
 unsafe impl<R, F> Sync for EventLoopTaskInner<R, F>
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static,
-{}
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static,
+{
+}
 
 impl<R, F> EventLoopTaskTrait for EventLoopTaskInner<R, F>
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static,
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static,
 {
 	fn run(&self, event_loop: &EventLoopWindowTarget<()>) {
 		let func = self.func.replace(None).expect("Task ran twice?");
@@ -71,7 +74,10 @@ impl<R, F> EventLoopTaskTrait for EventLoopTaskInner<R, F>
 			state_old = match TaskState::from_u8(state_old).unwrap() {
 				WakerSubmitted => {
 					// AcqRel instead of just Release so we can read Waker
-					match self.state.compare_exchange_weak(WakerSubmitted as u8, Finished as u8, AcqRel, Relaxed) {
+					match self
+						.state
+						.compare_exchange_weak(WakerSubmitted as u8, Finished as u8, AcqRel, Relaxed)
+					{
 						Ok(_) => {
 							// SAFETY: WakerSubmitted means a Waker is present that must be read, awoken and dropped
 							unsafe { (*self.waker.get()).assume_init_read() }.wake();
@@ -86,7 +92,10 @@ impl<R, F> EventLoopTaskTrait for EventLoopTaskInner<R, F>
 					self.state.load(Relaxed)
 				}
 				Running => {
-					match self.state.compare_exchange_weak(Running as u8, Finished as u8, Release, Relaxed) {
+					match self
+						.state
+						.compare_exchange_weak(Running as u8, Finished as u8, Release, Relaxed)
+					{
 						Ok(_) => break,
 						Err(e) => e,
 					}
@@ -99,10 +108,10 @@ impl<R, F> EventLoopTaskTrait for EventLoopTaskInner<R, F>
 }
 
 impl<R, F> EventLoopTaskInner<R, F>
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static,
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static,
 {
 	fn new(func: F) -> EventLoopTaskInner<R, F> {
 		EventLoopTaskInner {
@@ -119,11 +128,19 @@ impl<R, F> EventLoopTaskInner<R, F>
 			state_old = match TaskState::from_u8(state_old).unwrap() {
 				WakerSubmitted | WakerSubmitting => unreachable!("poll called with waker already present"),
 				Running => {
-					match self.state.compare_exchange_weak(Running as u8, WakerSubmitting as u8, Relaxed, Relaxed) {
+					match self
+						.state
+						.compare_exchange_weak(Running as u8, WakerSubmitting as u8, Relaxed, Relaxed)
+					{
 						Ok(_) => {
 							// SAFETY: by setting state to WakerSubmitting we effectively locked self.waker for ourselves
 							unsafe { &mut *self.waker.get() }.write(cx.waker().clone());
-							match self.state.compare_exchange(WakerSubmitting as u8, WakerSubmitted as u8, Release, Relaxed) {
+							match self.state.compare_exchange(
+								WakerSubmitting as u8,
+								WakerSubmitted as u8,
+								Release,
+								Relaxed,
+							) {
 								Ok(_) => return Poll::Pending,
 								Err(_) => unreachable!(),
 							}
@@ -132,12 +149,15 @@ impl<R, F> EventLoopTaskInner<R, F>
 					}
 				}
 				Finished => {
-					match self.state.compare_exchange_weak(Finished as u8, ResultTaken as u8, Acquire, Relaxed) {
+					match self
+						.state
+						.compare_exchange_weak(Finished as u8, ResultTaken as u8, Acquire, Relaxed)
+					{
 						Ok(_) => {
 							// SAFETY: Finished indicates that result must be present
 							return Poll::Ready(unsafe { (*self.result.get()).assume_init_read() });
 						}
-						Err(e) => e
+						Err(e) => e,
 					}
 				}
 				ResultTaken => unreachable!("poll called with result already being retrieved"),
@@ -147,10 +167,10 @@ impl<R, F> EventLoopTaskInner<R, F>
 }
 
 impl<R, F> Drop for EventLoopTaskInner<R, F>
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static,
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static,
 {
 	fn drop(&mut self) {
 		match TaskState::from_u8(self.state.load(Relaxed)).unwrap() {
@@ -171,16 +191,16 @@ impl<R, F> Drop for EventLoopTaskInner<R, F>
 
 #[derive(Clone)]
 struct EventLoopTask<R, F>(Arc<EventLoopTaskInner<R, F>>)
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static;
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static;
 
 impl<R, F> Future for EventLoopTask<R, F>
-	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-		F: Send + 'static,
-		R: Send + 'static,
+where
+	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: Send + 'static,
+	R: Send + 'static,
 {
 	type Output = R;
 
@@ -189,30 +209,32 @@ impl<R, F> Future for EventLoopTask<R, F>
 	}
 }
 
-
 // EventLoop execution
 static NOTIFY_CREATED: AtomicBool = AtomicBool::new(false);
 static NOTIFY: Mutex<Option<EventLoopProxy<()>>> = Mutex::new(None);
 
 #[derive(Clone)]
 pub struct EventLoopExecutor {
-	sender: Sender<Arc<dyn EventLoopTaskTrait>>,
+	sender: Option<Sender<Arc<dyn EventLoopTaskTrait>>>,
 	notify: RefCell<Option<EventLoopProxy<()>>>,
 }
+
+assert_impl_all!(EventLoopExecutor: Send);
+assert_not_impl_all!(EventLoopExecutor: Sync);
 
 impl EventLoopExecutor {
 	fn new(sender: Sender<Arc<dyn EventLoopTaskTrait>>) -> Self {
 		Self {
-			sender,
+			sender: Some(sender),
 			notify: RefCell::new(None),
 		}
 	}
 
-	pub fn spawn<R, F>(&self, f: F) -> impl Future<Output=R>
-		where
-			F: FnOnce(&EventLoopWindowTarget<()>) -> R,
-			F: Send + 'static,
-			R: Send + 'static,
+	pub fn spawn<R, F>(&self, f: F) -> impl Future<Output = R>
+	where
+		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: Send + 'static,
+		R: Send + 'static,
 	{
 		let task = EventLoopTask(Arc::new(EventLoopTaskInner::new(f)));
 		self.send(task.0.clone());
@@ -220,7 +242,11 @@ impl EventLoopExecutor {
 	}
 
 	fn send(&self, message: Arc<dyn EventLoopTaskTrait>) {
-		self.sender.send(message).unwrap();
+		self.sender.as_ref().unwrap().send(message).unwrap();
+		self.wake();
+	}
+
+	fn wake(&self) {
 		let mut notify = self.notify.borrow_mut();
 		match notify.as_ref() {
 			None => {
@@ -235,14 +261,21 @@ impl EventLoopExecutor {
 	}
 }
 
+impl Drop for EventLoopExecutor {
+	fn drop(&mut self) {
+		drop(self.sender.take());
+		self.wake();
+	}
+}
+
 pub fn event_loop_init<F>(launch: F) -> !
-	where
-		F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>)
+where
+	F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>) + Send + 'static,
 {
 	// plain setup
 	let (exec_tx, exec_rx) = channel();
 	let (event_tx, event_rx) = channel();
-	launch(EventLoopExecutor::new(exec_tx), event_rx);
+	let mut render_join_handle = Some(thread::spawn(|| launch(EventLoopExecutor::new(exec_tx), event_rx)));
 
 	// plain loop without EventLoop
 	let event_loop;
@@ -281,12 +314,15 @@ pub fn event_loop_init<F>(launch: F) -> !
 			Event::UserEvent(_) => {
 				loop {
 					match exec_rx.try_recv() {
-						Ok(msg) => {
-							msg.run(&b)
-						}
+						Ok(msg) => msg.run(&b),
 						Err(e) => {
 							if matches!(e, TryRecvError::Disconnected) {
-								// received disconnect from last_reinit_dropped()
+								// Only exit when all other threads have exited!
+								// Otherwise the system start cleaning up vulkan objects while we're also at it, causing Segfaults.
+								// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
+								if let Some(join_handle) = render_join_handle.take() {
+									join_handle.join().ok();
+								}
 								control_flow.set_exit();
 							}
 							break;

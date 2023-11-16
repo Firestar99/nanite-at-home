@@ -1,1 +1,1 @@
-pub mod opaque;
+pub mod opaque_shader;

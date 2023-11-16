@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use static_assertions::assert_not_impl_any;
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
@@ -12,10 +12,11 @@ use vulkano::sync::GpuFuture;
 
 use space_engine_common::space::renderer::frame_data::FrameData;
 
-use crate::space::Init;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::renderer::frame_in_flight::frame_manager::FrameManager;
 use crate::space::renderer::frame_in_flight::uniform::UniformInFlight;
+use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::space::Init;
+use crate::vulkan::concurrent_sharing;
 
 /// `RenderContext` is the main instance of the renderer, talking care of rendering frames and most notable ensuring no
 /// data races when multiple frames are currently in flight.
@@ -29,10 +30,15 @@ pub struct RenderContext {
 
 impl RenderContext {
 	pub fn new(init: Arc<Init>, output_format: Format, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
-		let frame_manager = FrameManager::new(init.clone(), frames_in_flight);
+		let frame_manager = FrameManager::new(frames_in_flight);
 		let seed = frame_manager.seed();
 		let render_context = Arc::new(Self {
-			frame_data_uniform: UniformInFlight::new(&init, seed, true),
+			frame_data_uniform: UniformInFlight::new(
+				init.memory_allocator.clone(),
+				concurrent_sharing(&[&init.queues.client.graphics_main, &init.queues.client.async_compute]),
+				seed,
+				true,
+			),
 			init,
 			seed,
 			output_format,
@@ -60,7 +66,6 @@ impl From<&Arc<RenderContext>> for SeedInFlight {
 	}
 }
 
-
 /// `RenderContextNewFrame` is like [`RenderContext`], but may not be cloned to guarantee exclusive access, which
 /// allows generating [`RenderContextNewFrame::new_frame()`].
 pub struct RenderContextNewFrame {
@@ -72,15 +77,21 @@ assert_not_impl_any!(RenderContextNewFrame: Clone);
 
 impl RenderContextNewFrame {
 	pub fn new_frame<F>(self: &mut Self, output_image: Arc<ImageView>, frame_data: FrameData, f: F)
-		where
-			F: FnOnce(FrameContext) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+	where
+		F: FnOnce(FrameContext) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		self.frame_manager.new_frame(|frame_in_flight| {
-			assert_eq!(output_image.format(), self.render_context.output_format, "ImageView format must match constructed format");
+			assert_eq!(
+				output_image.format(),
+				self.render_context.output_format,
+				"ImageView format must match constructed format"
+			);
 			let extent = output_image.image().extent();
 			assert_eq!(extent[2], 1, "must be a 2D image");
 
-			self.render_context.frame_data_uniform.upload(frame_in_flight, frame_data);
+			self.render_context
+				.frame_data_uniform
+				.upload(frame_in_flight, frame_data);
 
 			f(FrameContext {
 				render_context: self.render_context.clone(),
@@ -105,7 +116,6 @@ impl Deref for RenderContextNewFrame {
 		&self.render_context
 	}
 }
-
 
 /// A `FrameContext` is created once per Frame rendered, containing frame-specific information and access to resources.
 pub struct FrameContext<'a> {

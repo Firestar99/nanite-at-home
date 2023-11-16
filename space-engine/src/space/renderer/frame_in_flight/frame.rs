@@ -1,7 +1,7 @@
+use crate::space::renderer::frame_in_flight::FRAMES_LIMIT;
+use static_assertions::const_assert_eq;
 use std::marker::PhantomData;
 use std::mem::size_of;
-use static_assertions::const_assert_eq;
-use crate::space::renderer::frame_in_flight::FRAMES_LIMIT;
 
 /// The index of a frame that is in flight. See [mod](self) for docs.
 #[derive(Copy, Clone)]
@@ -93,7 +93,12 @@ impl SeedInFlight {
 	/// SAFETY: Only there for internal testing. The seed must never repeat, which `Self::new()` ensures.
 	#[must_use]
 	unsafe fn assemble(seed: u16, frames_in_flight: u32) -> Self {
-		assert!(frames_in_flight <= FRAMES_LIMIT, "frames_in_flight_max of {} is over FRAMES_IN_FLIGHT_LIMIT {}", frames_in_flight, FRAMES_LIMIT);
+		assert!(
+			frames_in_flight <= FRAMES_LIMIT,
+			"frames_in_flight_max of {} is over FRAMES_IN_FLIGHT_LIMIT {}",
+			frames_in_flight,
+			FRAMES_LIMIT
+		);
 		Self {
 			seed: seed.to_ne_bytes(),
 			// conversion will always succeed with assert above
@@ -105,11 +110,10 @@ impl SeedInFlight {
 	///
 	/// # Safety
 	/// The returned FrameInFlight may be used to access any ResourceInFlight, of which some indexes which may be in use right now.
-	pub unsafe fn iter(&self) -> impl Iterator<Item=FrameInFlight> {
+	pub unsafe fn iter(&self) -> impl Iterator<Item = FrameInFlight> {
 		unsafe {
 			let seed = *self;
-			(0..self.frames_in_flight())
-				.map(move |frame| FrameInFlight::new(seed, frame))
+			(0..self.frames_in_flight()).map(move |frame| FrameInFlight::new(seed, frame))
 		}
 	}
 

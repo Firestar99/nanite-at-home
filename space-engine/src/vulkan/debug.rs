@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
-use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessengerCallback, DebugUtilsMessengerCallbackData};
 use vulkano::instance::debug::DebugUtilsMessageType;
 use vulkano::instance::debug::DebugUtilsMessenger;
 use vulkano::instance::debug::DebugUtilsMessengerCreateInfo;
+use vulkano::instance::debug::{
+	DebugUtilsMessageSeverity, DebugUtilsMessengerCallback, DebugUtilsMessengerCallbackData,
+};
 use vulkano::instance::Instance;
 
 pub struct Debug {
@@ -15,17 +17,32 @@ impl Debug {
 		// SAFETY: the user_callback may not make any vulkan calls
 		unsafe {
 			Debug {
-				_debug_callback: DebugUtilsMessenger::new(instance.clone(), DebugUtilsMessengerCreateInfo {
-					message_type: DebugUtilsMessageType::GENERAL | DebugUtilsMessageType::PERFORMANCE | DebugUtilsMessageType::VALIDATION,
-					message_severity: DebugUtilsMessageSeverity::ERROR | DebugUtilsMessageSeverity::WARNING | DebugUtilsMessageSeverity::INFO | DebugUtilsMessageSeverity::VERBOSE,
-					..DebugUtilsMessengerCreateInfo::user_callback(DebugUtilsMessengerCallback::new(Self::debug_message))
-				}).unwrap()
+				_debug_callback: DebugUtilsMessenger::new(
+					instance.clone(),
+					DebugUtilsMessengerCreateInfo {
+						message_type: DebugUtilsMessageType::GENERAL
+							| DebugUtilsMessageType::PERFORMANCE
+							| DebugUtilsMessageType::VALIDATION,
+						message_severity: DebugUtilsMessageSeverity::ERROR
+							| DebugUtilsMessageSeverity::WARNING
+							| DebugUtilsMessageSeverity::INFO
+							| DebugUtilsMessageSeverity::VERBOSE,
+						..DebugUtilsMessengerCreateInfo::user_callback(DebugUtilsMessengerCallback::new(
+							Self::debug_message,
+						))
+					},
+				)
+				.unwrap(),
 			}
 		}
 	}
 
 	/// SAFETY: the user_callback may not make any vulkan calls
-	fn debug_message(severity: DebugUtilsMessageSeverity, ty: DebugUtilsMessageType, data: DebugUtilsMessengerCallbackData<'_>) {
+	fn debug_message(
+		severity: DebugUtilsMessageSeverity,
+		ty: DebugUtilsMessageType,
+		data: DebugUtilsMessengerCallbackData<'_>,
+	) {
 		let error = format!(
 			"[{}] {}{}: {}",
 			Self::debug_severity_string(severity),

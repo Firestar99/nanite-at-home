@@ -1,30 +1,37 @@
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use smallvec::SmallVec;
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryAllocator, MemoryTypeFilter};
+use vulkano::sync::Sharing;
 use vulkano::DeviceSize;
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryTypeFilter};
 
-use crate::space::Init;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
-use crate::vulkan::concurrent_sharing;
+use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 
 pub struct UniformInFlight<T: BufferContents> {
 	sub: ResourceInFlight<Subbuffer<T>>,
 }
 
 impl<T: BufferContents> UniformInFlight<T> {
-	pub fn new(init: &Arc<Init>, seed: impl Into<SeedInFlight>, dedicated_alloc: bool) -> Self {
-		fn inner<T: BufferContents>(init: &Arc<Init>, seed: SeedInFlight, dedicated_alloc: bool) -> UniformInFlight<T> {
+	pub fn new(
+		allocator: Arc<dyn MemoryAllocator>,
+		sharing: Sharing<SmallVec<[u32; 4]>>,
+		seed: impl Into<SeedInFlight>,
+		dedicated_alloc: bool,
+	) -> Self {
+		fn inner<T: BufferContents>(
+			allocator: Arc<dyn MemoryAllocator>,
+			sharing: Sharing<SmallVec<[u32; 4]>>,
+			seed: SeedInFlight,
+			dedicated_alloc: bool,
+		) -> UniformInFlight<T> {
 			let buffer = Buffer::new_slice::<T>(
-				init.memory_allocator.clone(),
+				allocator,
 				BufferCreateInfo {
 					usage: BufferUsage::UNIFORM_BUFFER,
-					sharing: concurrent_sharing(&[
-						&init.queues.client.graphics_main,
-						&init.queues.client.async_compute,
-					]),
+					sharing,
 					..BufferCreateInfo::default()
 				},
 				AllocationCreateInfo {
@@ -37,14 +44,15 @@ impl<T: BufferContents> UniformInFlight<T> {
 					..AllocationCreateInfo::default()
 				},
 				seed.frames_in_flight() as DeviceSize,
-			).unwrap();
+			)
+			.unwrap();
 
 			// this will clone the buffer once too many times, and drop it afterwards
 			UniformInFlight {
 				sub: ResourceInFlight::new(seed, |i| buffer.clone().index(i.index() as DeviceSize)),
 			}
 		}
-		inner(init, seed.into(), dedicated_alloc)
+		inner(allocator, sharing, seed.into(), dedicated_alloc)
 	}
 
 	pub fn upload(&self, frame: FrameInFlight, data: T) {

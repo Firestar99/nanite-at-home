@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use smallvec::SmallVec;
+use std::sync::Arc;
 
-use vulkano::device::{DeviceExtensions, Features};
 use vulkano::device::physical::PhysicalDevice;
+use vulkano::device::{DeviceExtensions, Features};
 use vulkano::instance::InstanceExtensions;
 use vulkano::swapchain::Surface;
 use vulkano::VulkanLibrary;
@@ -18,20 +18,29 @@ pub struct WindowPlugin {
 impl WindowPlugin {
 	pub async fn new(event_loop: &EventLoopExecutor) -> Self {
 		Self {
-			window_extensions: event_loop.spawn(|event_loop| Surface::required_extensions(event_loop)).await,
+			window_extensions: event_loop
+				.spawn(|event_loop| Surface::required_extensions(event_loop))
+				.await,
 		}
 	}
 }
 
 impl Plugin for WindowPlugin {
-	fn instance_config(&self, _library: &Arc<VulkanLibrary>, _layers: &ValidationLayers) -> (InstanceExtensions, SmallVec<[String; 1]>) {
+	fn instance_config(
+		&self,
+		_library: &Arc<VulkanLibrary>,
+		_layers: &ValidationLayers,
+	) -> (InstanceExtensions, SmallVec<[String; 1]>) {
 		(self.window_extensions, SmallVec::new())
 	}
 
 	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
-		(DeviceExtensions {
-			khr_swapchain: true,
-			..Default::default()
-		}, Features::empty())
+		(
+			DeviceExtensions {
+				khr_swapchain: true,
+				..Default::default()
+			},
+			Features::empty(),
+		)
 	}
 }

@@ -1,5 +1,5 @@
+use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight, FRAMES_LIMIT};
 use std::mem::MaybeUninit;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, FRAMES_LIMIT, SeedInFlight};
 
 /// A `ResourceInFlight` is a resource that is allocated once per frame that may be in flight at the same time. See [mod](super) for docs.
 ///
@@ -30,8 +30,8 @@ impl<T> ResourceInFlight<T> {
 	/// one may depend upon for construction.
 	#[must_use]
 	pub fn new<F>(seed: impl Into<SeedInFlight>, mut f: F) -> Self
-		where
-			F: FnMut(FrameInFlight) -> T,
+	where
+		F: FnMut(FrameInFlight) -> T,
 	{
 		let seed = seed.into();
 		// just using arrays and a counter, instead of Slices and try_into() array, as it prevents heap allocation
@@ -47,10 +47,7 @@ impl<T> ResourceInFlight<T> {
 			i += 1;
 			ret
 		});
-		Self {
-			seed,
-			vec,
-		}
+		Self { seed, vec }
 	}
 
 	#[must_use]
@@ -70,17 +67,14 @@ impl<T> ResourceInFlight<T> {
 
 /// See [`ResourceInFlight#Indexing`]
 #[allow(clippy::should_implement_trait)]
-impl<T> ResourceInFlight<T>
-{
+impl<T> ResourceInFlight<T> {
 	#[must_use]
 	#[inline]
 	pub fn index<'a>(&'a self, index: FrameInFlight<'a>) -> &'a T {
 		assert_eq!(self.seed, index.seed());
 		// SAFETY: self.seed.frames_in_flight is the initialized size of the array,
 		// the assert above verifies that index is not greater than frames_in_flight
-		unsafe {
-			self.vec.get_unchecked(index.index()).assume_init_ref()
-		}
+		unsafe { self.vec.get_unchecked(index.index()).assume_init_ref() }
 	}
 
 	#[must_use]
@@ -89,9 +83,7 @@ impl<T> ResourceInFlight<T>
 		assert_eq!(self.seed, index.seed());
 		// SAFETY: self.seed.frames_in_flight is the initialized size of the array,
 		// the assert above verifies that index is not greater than frames_in_flight
-		unsafe {
-			self.vec.get_unchecked_mut(index.index()).assume_init_mut()
-		}
+		unsafe { self.vec.get_unchecked_mut(index.index()).assume_init_mut() }
 	}
 }
 
@@ -101,7 +93,9 @@ impl<T: Clone> Clone for ResourceInFlight<T> {
 		// SAFETY: Self::from_function() will call f() exactly self.seed.frames_in_flight times
 		// and self.seed.frames_in_flight is the initialized size of the array
 		unsafe {
-			ResourceInFlight::new(self.seed, |i| self.vec.get_unchecked(i.index()).assume_init_ref().clone())
+			ResourceInFlight::new(self.seed, |i| {
+				self.vec.get_unchecked(i.index()).assume_init_ref().clone()
+			})
 		}
 	}
 }
@@ -125,8 +119,8 @@ impl<T> From<&ResourceInFlight<T>> for SeedInFlight {
 
 #[cfg(test)]
 mod tests {
-	use std::rc::Rc;
 	use super::*;
+	use std::rc::Rc;
 
 	#[test]
 	fn resource_happy() {

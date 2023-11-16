@@ -1,14 +1,10 @@
-use std::sync::Arc;
-
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
 
-use crate::space::Init;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
+use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 
 pub struct FrameManager {
-	pub init: Arc<Init>,
 	frame_id_mod: u32,
 	prev_frame: ResourceInFlight<Option<Frame>>,
 }
@@ -18,12 +14,11 @@ struct Frame {
 }
 
 impl FrameManager {
-	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> Self {
+	pub fn new(frames_in_flight: u32) -> Self {
 		let seed = SeedInFlight::new(frames_in_flight);
 		Self {
 			frame_id_mod: seed.frames_in_flight() - 1,
 			prev_frame: ResourceInFlight::new(seed, |_| None),
-			init,
 		}
 	}
 
@@ -39,8 +34,8 @@ impl FrameManager {
 	///
 	/// [`device_wait_idle`]: vulkano::device::Device::wait_idle
 	pub fn new_frame<F>(&mut self, f: F)
-		where
-			F: FnOnce(FrameInFlight) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+	where
+		F: FnOnce(FrameInFlight) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		// SAFETY: this function ensures the FramesInFlight are never launched concurrently
 		let fif;
@@ -59,9 +54,7 @@ impl FrameManager {
 
 		// do the render, write back GpuFuture
 		let fence_rendered = f(fif);
-		*self.prev_frame.index_mut(fif) = fence_rendered.map(|fence_rendered| Frame {
-			fence_rendered
-		})
+		*self.prev_frame.index_mut(fif) = fence_rendered.map(|fence_rendered| Frame { fence_rendered })
 	}
 
 	#[inline(always)]

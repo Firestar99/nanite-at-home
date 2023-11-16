@@ -32,7 +32,7 @@ pub use resource::*;
 mod frame;
 mod resource;
 
-pub mod uniform;
 pub mod frame_manager;
+pub mod uniform;
 
 pub const FRAMES_LIMIT: u32 = 3;

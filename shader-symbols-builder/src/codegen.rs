@@ -1,8 +1,8 @@
-use std::{fs, io};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+use std::{fs, io};
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -35,7 +35,11 @@ impl Display for CodegenError {
 
 impl Error for CodegenError {}
 
-pub fn codegen_shader_symbols<'a>(shaders: impl Iterator<Item=(&'a str, &'a PathBuf)>, out_path: &PathBuf, _options: &CodegenOptions) -> Result<(), CodegenError> {
+pub fn codegen_shader_symbols<'a>(
+	shaders: impl Iterator<Item = (&'a str, &'a PathBuf)>,
+	out_path: &PathBuf,
+	_options: &CodegenOptions,
+) -> Result<(), CodegenError> {
 	let tokens = ModNode::new(shaders).emit();
 
 	// when pretty printing fails, always write plain version, then error
@@ -77,7 +81,7 @@ struct ModNode<'a> {
 }
 
 impl<'a> ModNode<'a> {
-	fn new(shaders: impl Iterator<Item=(&'a str, &'a PathBuf)>) -> Self {
+	fn new(shaders: impl Iterator<Item = (&'a str, &'a PathBuf)>) -> Self {
 		let mut root = Self::default();
 		for shader in shaders {
 			root.insert(shader.0.split("::"), shader);
@@ -85,7 +89,7 @@ impl<'a> ModNode<'a> {
 		root
 	}
 
-	fn insert(&mut self, mut path: impl Iterator<Item=&'a str>, shader: (&'a str, &'a PathBuf)) {
+	fn insert(&mut self, mut path: impl Iterator<Item = &'a str>, shader: (&'a str, &'a PathBuf)) {
 		match path.next() {
 			None => {
 				assert!(matches!(self.shader, None), "Duplicate shader name!");
