@@ -7,10 +7,10 @@ use winit::event::{Event, WindowEvent};
 use winit::window::WindowBuilder;
 
 use space_engine::generate_application_config;
-use space_engine::space::Init;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
 use space_engine::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
 use space_engine::space::renderer::render_graph::context::RenderContext;
+use space_engine::space::Init;
 use space_engine::vulkan::init::Plugin;
 use space_engine::vulkan::plugins::dynamic_rendering::DynamicRendering;
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
@@ -33,11 +33,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 	let init;
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
-		let mut vec: Vec<&dyn Plugin> = vec![
-			&DynamicRendering,
-			&RustGpuWorkaround,
-			&window_plugin,
-		];
+		let mut vec: Vec<&dyn Plugin> = vec![&DynamicRendering, &RustGpuWorkaround, &window_plugin];
 		if layer_renderdoc {
 			vec.push(&RenderdocLayerPlugin);
 		}
@@ -49,9 +45,9 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 	}
 	let graphics_main = &init.queues.client.graphics_main;
 
-	let window = event_loop.spawn(move |event_loop| {
-		WindowRef::new(WindowBuilder::new().build(event_loop).unwrap())
-	}).await;
+	let window = event_loop
+		.spawn(move |event_loop| WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
+		.await;
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
 	let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
@@ -69,7 +65,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 					break 'outer;
 				}
 
-				_ => ()
+				_ => (),
 			}
 		}
 

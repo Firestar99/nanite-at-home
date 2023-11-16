@@ -1,4 +1,4 @@
-use glam::{Vec4, vec4};
+use glam::{vec4, Vec4};
 use spirv_std::spirv;
 
 use space_engine_common::space::renderer::frame_data::FrameData;

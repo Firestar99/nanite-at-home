@@ -17,9 +17,9 @@ pub struct OpaqueModel {
 
 impl OpaqueModel {
 	pub fn new<I>(context: &Arc<RenderContext>, opaque_draw_pipeline: &OpaqueDrawPipeline, vertex_input: I) -> Self
-		where
-			I: IntoIterator<Item=VertexInput>,
-			I::IntoIter: ExactSizeIterator,
+	where
+		I: IntoIterator<Item = VertexInput>,
+		I::IntoIter: ExactSizeIterator,
 	{
 		let init = &context.init;
 		let vertex_input_buffer = Buffer::from_iter(
@@ -34,13 +34,15 @@ impl OpaqueModel {
 				..AllocationCreateInfo::default()
 			},
 			vertex_input,
-		).unwrap();
+		)
+		.unwrap();
 		let descriptor = PersistentDescriptorSet::new(
 			&init.descriptor_allocator,
 			opaque_draw_pipeline.descriptor_set_layout_model().clone(),
 			[WriteDescriptorSet::buffer(0, vertex_input_buffer.clone())],
 			[],
-		).unwrap();
+		)
+		.unwrap();
 		Self {
 			vertex_input_buffer,
 			descriptor,

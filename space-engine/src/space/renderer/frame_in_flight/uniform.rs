@@ -2,12 +2,12 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
-use vulkano::DeviceSize;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryTypeFilter};
+use vulkano::DeviceSize;
 
-use crate::space::Init;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
+use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::space::Init;
 use crate::vulkan::concurrent_sharing;
 
 pub struct UniformInFlight<T: BufferContents> {
@@ -37,7 +37,8 @@ impl<T: BufferContents> UniformInFlight<T> {
 					..AllocationCreateInfo::default()
 				},
 				seed.frames_in_flight() as DeviceSize,
-			).unwrap();
+			)
+			.unwrap();
 
 			// this will clone the buffer once too many times, and drop it afterwards
 			UniformInFlight {

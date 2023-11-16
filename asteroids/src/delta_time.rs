@@ -25,9 +25,7 @@ pub struct DeltaTimeTimer {
 
 impl DeltaTimeTimer {
 	pub fn new() -> Self {
-		Self {
-			last: Instant::now(),
-		}
+		Self { last: Instant::now() }
 	}
 
 	pub fn next(&mut self) -> DeltaTime {

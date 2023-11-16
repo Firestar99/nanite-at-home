@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use vulkano::device::{Queue, QueueCreateInfo, QueueFamilyProperties};
 use vulkano::device::physical::PhysicalDevice;
+use vulkano::device::{Queue, QueueCreateInfo, QueueFamilyProperties};
 
 #[derive(Debug)]
 pub struct QueueAllocatorHelper {
@@ -26,12 +26,16 @@ impl QueueAllocatorHelper {
 		}
 	}
 
-	pub fn queues(&self) -> impl Iterator<Item=QueueFamilyInfo> {
-		self.physical_device.queue_family_properties().iter().enumerate().map(|q| QueueFamilyInfo {
-			parent: self,
-			id: q.0 as u32,
-			properties: q.1,
-		})
+	pub fn queues(&self) -> impl Iterator<Item = QueueFamilyInfo> {
+		self.physical_device
+			.queue_family_properties()
+			.iter()
+			.enumerate()
+			.map(|q| QueueFamilyInfo {
+				parent: self,
+				id: q.0 as u32,
+				properties: q.1,
+			})
 	}
 }
 
@@ -87,7 +91,9 @@ impl QueueAllocatorHelper {
 	pub fn build(self) -> (QueueAllocationHelper, Vec<QueueCreateInfo>) {
 		let mut index: u32 = 0;
 		let mut build_infos = Vec::with_capacity(self.priorities.len());
-		let create_infos = self.priorities.into_iter()
+		let create_infos = self
+			.priorities
+			.into_iter()
 			.enumerate()
 			.filter_map(|mut q| {
 				build_infos.push(index);
@@ -101,7 +107,13 @@ impl QueueAllocatorHelper {
 				..Default::default()
 			})
 			.collect();
-		(QueueAllocationHelper { physical_device: self.physical_device, build_infos }, create_infos)
+		(
+			QueueAllocationHelper {
+				physical_device: self.physical_device,
+				build_infos,
+			},
+			create_infos,
+		)
 	}
 }
 
@@ -123,14 +135,28 @@ impl QueueAllocationHelper {
 	}
 
 	pub fn get_queue<'a>(&self, queues: &'a [Arc<Queue>], entry: &QueueAllocationHelperEntry<1>) -> &'a Arc<Queue> {
-		assert_eq!(**queues.first().unwrap().device().physical_device(), *self.physical_device, "A different physical device between QueueAllocatorHelper and submitted queueus!");
+		assert_eq!(
+			**queues.first().unwrap().device().physical_device(),
+			*self.physical_device,
+			"A different physical device between QueueAllocatorHelper and submitted queueus!"
+		);
 		let start = self.get_start_index(entry) as usize;
 		&queues[start]
 	}
 
-	pub fn get_queues<'a, const N: usize>(&self, queues: &'a [Arc<Queue>], entry: &QueueAllocationHelperEntry<N>) -> &'a [Arc<Queue>; N] {
-		assert_eq!(**queues.first().unwrap().device().physical_device(), *self.physical_device, "A different physical device between QueueAllocatorHelper and submitted queueus!");
+	pub fn get_queues<'a, const N: usize>(
+		&self,
+		queues: &'a [Arc<Queue>],
+		entry: &QueueAllocationHelperEntry<N>,
+	) -> &'a [Arc<Queue>; N] {
+		assert_eq!(
+			**queues.first().unwrap().device().physical_device(),
+			*self.physical_device,
+			"A different physical device between QueueAllocatorHelper and submitted queueus!"
+		);
 		let start = self.get_start_index(entry) as usize;
-		queues[start..(start + N)].try_into().expect("Allocated queues don't match QueueAllocatorHelper state!")
+		queues[start..(start + N)]
+			.try_into()
+			.expect("Allocated queues don't match QueueAllocatorHelper state!")
 	}
 }

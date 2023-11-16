@@ -26,20 +26,20 @@ pub struct ApplicationConfig {
 pub const fn compile_time_parse(input: &'static str) -> u32 {
 	match konst::primitive::parse_u32(input) {
 		Ok(e) => e,
-		Err(_) => unreachable!()
+		Err(_) => unreachable!(),
 	}
 }
 
 #[macro_export]
 macro_rules! generate_application_config {
-    () => {
-        $crate::application_config::ApplicationConfig {
-            name: env!("CARGO_PKG_NAME"),
-            version: $crate::application_config::ApplicationVersion {
-                major: $crate::application_config::compile_time_parse(env!("CARGO_PKG_VERSION_MAJOR")),
-                minor: $crate::application_config::compile_time_parse(env!("CARGO_PKG_VERSION_MINOR")),
-                patch: $crate::application_config::compile_time_parse(env!("CARGO_PKG_VERSION_PATCH")),
-            }
-        }
-    };
+	() => {
+		$crate::application_config::ApplicationConfig {
+			name: env!("CARGO_PKG_NAME"),
+			version: $crate::application_config::ApplicationVersion {
+				major: $crate::application_config::compile_time_parse(env!("CARGO_PKG_VERSION_MAJOR")),
+				minor: $crate::application_config::compile_time_parse(env!("CARGO_PKG_VERSION_MINOR")),
+				patch: $crate::application_config::compile_time_parse(env!("CARGO_PKG_VERSION_PATCH")),
+			},
+		}
+	};
 }

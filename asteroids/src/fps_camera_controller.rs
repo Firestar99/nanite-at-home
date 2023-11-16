@@ -1,10 +1,10 @@
 use std::f32;
 use std::f32::consts::PI;
 
-use glam::{Affine3A, DVec2, Quat, Vec3, vec3};
+use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
-use winit::event::{DeviceEvent, Event, KeyboardInput};
 use winit::event::ElementState::Pressed;
+use winit::event::{DeviceEvent, Event, KeyboardInput};
 
 use crate::delta_time::DeltaTime;
 
@@ -41,10 +41,7 @@ impl FpsCameraController {
 				self.handle_keyboard_input(*input);
 			}
 			Event::DeviceEvent {
-				event: DeviceEvent::MouseMotion {
-					delta,
-					..
-				},
+				event: DeviceEvent::MouseMotion { delta, .. },
 				..
 			} => {
 				self.handle_mouse_input(*delta);

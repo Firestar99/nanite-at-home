@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use glam::vec3;
+use std::sync::Arc;
 
-use vulkano::command_buffer::{AutoCommandBufferBuilder, RenderingAttachmentInfo, RenderingInfo, SubpassContents};
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
+use vulkano::command_buffer::{AutoCommandBufferBuilder, RenderingAttachmentInfo, RenderingInfo, SubpassContents};
 use vulkano::format::{ClearValue, Format};
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
@@ -37,7 +37,12 @@ impl OpaqueRenderTask {
 
 	pub fn record(&self, frame_context: &FrameContext, future: impl GpuFuture) -> impl GpuFuture {
 		let graphics = &frame_context.render_context.init.queues.client.graphics_main;
-		let mut cmd = AutoCommandBufferBuilder::primary(&frame_context.render_context.init.cmd_buffer_allocator, graphics.queue_family_index(), OneTimeSubmit).unwrap();
+		let mut cmd = AutoCommandBufferBuilder::primary(
+			&frame_context.render_context.init.cmd_buffer_allocator,
+			graphics.queue_family_index(),
+			OneTimeSubmit,
+		)
+		.unwrap();
 		cmd.begin_rendering(RenderingInfo {
 			color_attachments: vec![Some(RenderingAttachmentInfo {
 				load_op: AttachmentLoadOp::Clear,
@@ -47,7 +52,8 @@ impl OpaqueRenderTask {
 			})],
 			contents: SubpassContents::Inline,
 			..RenderingInfo::default()
-		}).unwrap();
+		})
+		.unwrap();
 		self.pipeline_opaque.draw(frame_context, &mut cmd, &self.opaque_model);
 		cmd.end_rendering().unwrap();
 

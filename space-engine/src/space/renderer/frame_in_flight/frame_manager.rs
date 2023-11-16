@@ -3,9 +3,9 @@ use std::sync::Arc;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
 
-use crate::space::Init;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
+use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::space::Init;
 
 pub struct FrameManager {
 	pub init: Arc<Init>,
@@ -39,8 +39,8 @@ impl FrameManager {
 	///
 	/// [`device_wait_idle`]: vulkano::device::Device::wait_idle
 	pub fn new_frame<F>(&mut self, f: F)
-		where
-			F: FnOnce(FrameInFlight) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+	where
+		F: FnOnce(FrameInFlight) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		// SAFETY: this function ensures the FramesInFlight are never launched concurrently
 		let fif;
@@ -59,9 +59,7 @@ impl FrameManager {
 
 		// do the render, write back GpuFuture
 		let fence_rendered = f(fif);
-		*self.prev_frame.index_mut(fif) = fence_rendered.map(|fence_rendered| Frame {
-			fence_rendered
-		})
+		*self.prev_frame.index_mut(fif) = fence_rendered.map(|fence_rendered| Frame { fence_rendered })
 	}
 
 	#[inline(always)]

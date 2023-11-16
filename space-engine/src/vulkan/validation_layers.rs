@@ -75,6 +75,4 @@ impl PartialEq<Self> for LayerProperties {
 	}
 }
 
-impl Eq for LayerProperties {
-
-}
+impl Eq for LayerProperties {}
