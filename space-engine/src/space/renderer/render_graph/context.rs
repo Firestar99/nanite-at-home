@@ -16,6 +16,7 @@ use crate::space::renderer::frame_in_flight::frame_manager::FrameManager;
 use crate::space::renderer::frame_in_flight::uniform::UniformInFlight;
 use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
 use crate::space::Init;
+use crate::vulkan::concurrent_sharing;
 
 /// `RenderContext` is the main instance of the renderer, talking care of rendering frames and most notable ensuring no
 /// data races when multiple frames are currently in flight.
@@ -29,10 +30,15 @@ pub struct RenderContext {
 
 impl RenderContext {
 	pub fn new(init: Arc<Init>, output_format: Format, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
-		let frame_manager = FrameManager::new(init.clone(), frames_in_flight);
+		let frame_manager = FrameManager::new(frames_in_flight);
 		let seed = frame_manager.seed();
 		let render_context = Arc::new(Self {
-			frame_data_uniform: UniformInFlight::new(&init, seed, true),
+			frame_data_uniform: UniformInFlight::new(
+				init.memory_allocator.clone(),
+				concurrent_sharing(&[&init.queues.client.graphics_main, &init.queues.client.async_compute]),
+				seed,
+				true,
+			),
 			init,
 			seed,
 			output_format,

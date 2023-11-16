@@ -1,14 +1,10 @@
-use std::sync::Arc;
-
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
 
 use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
 use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
-use crate::space::Init;
 
 pub struct FrameManager {
-	pub init: Arc<Init>,
 	frame_id_mod: u32,
 	prev_frame: ResourceInFlight<Option<Frame>>,
 }
@@ -18,12 +14,11 @@ struct Frame {
 }
 
 impl FrameManager {
-	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> Self {
+	pub fn new(frames_in_flight: u32) -> Self {
 		let seed = SeedInFlight::new(frames_in_flight);
 		Self {
 			frame_id_mod: seed.frames_in_flight() - 1,
 			prev_frame: ResourceInFlight::new(seed, |_| None),
-			init,
 		}
 	}
 
