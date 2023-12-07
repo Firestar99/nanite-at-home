@@ -2,17 +2,17 @@ use glam::{vec4, Vec4};
 use spirv_std::spirv;
 
 use space_engine_common::space::renderer::frame_data::FrameData;
-use space_engine_common::space::renderer::lod_obj::VertexInput;
+use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
 
 #[spirv(vertex)]
 pub fn opaque_vs(
 	#[spirv(vertex_index)] vertex_id: u32,
 	#[spirv(position, invariant)] out_pos: &mut Vec4,
 	#[spirv(descriptor_set = 0, binding = 0, uniform)] frame_data: &FrameData,
-	#[spirv(descriptor_set = 1, binding = 0, storage_buffer)] vertex_input_buffer: &[VertexInput],
+	#[spirv(descriptor_set = 1, binding = 0, storage_buffer)] vertex_data: &[ModelVertex],
 ) {
 	let camera = frame_data.camera;
-	let vertex_input = vertex_input_buffer[vertex_id as usize];
+	let vertex_input = vertex_data[vertex_id as usize];
 
 	let position;
 	{

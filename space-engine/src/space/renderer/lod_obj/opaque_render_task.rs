@@ -1,34 +1,37 @@
-use glam::vec3;
 use std::sync::Arc;
 
+use glam::vec3;
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, RenderingAttachmentInfo, RenderingInfo, SubpassContents};
 use vulkano::format::{ClearValue, Format};
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
 
-use space_engine_common::space::renderer::lod_obj::VertexInput;
+use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
 
 use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
-use crate::space::renderer::lod_obj::opaque_model::OpaqueModel;
-use crate::space::renderer::render_graph::context::{FrameContext, RenderContext};
+use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::model::model_descriptor_set::ModelDescriptorSetLayout;
+use crate::space::renderer::render_graph::context::FrameContext;
+use crate::space::Init;
 
 pub struct OpaqueRenderTask {
 	pipeline_opaque: OpaqueDrawPipeline,
 	opaque_model: OpaqueModel,
 }
 
-const MODEL_VERTEX_INPUT: [VertexInput; 4] = [
-	VertexInput::new(vec3(-1., -1., 0.)),
-	VertexInput::new(vec3(-1., 1., 0.)),
-	VertexInput::new(vec3(1., 1., 0.)),
-	VertexInput::new(vec3(1., -1., 0.)),
+const MODEL_VERTEX_INPUT: [ModelVertex; 4] = [
+	ModelVertex::new(vec3(-1., -1., 0.)),
+	ModelVertex::new(vec3(-1., 1., 0.)),
+	ModelVertex::new(vec3(1., 1., 0.)),
+	ModelVertex::new(vec3(1., -1., 0.)),
 ];
 
 impl OpaqueRenderTask {
-	pub fn new<'a>(context: &Arc<RenderContext>, format: Format) -> Self {
-		let pipeline_opaque = OpaqueDrawPipeline::new(context, format);
-		let opaque_model = OpaqueModel::new(&context, &pipeline_opaque, MODEL_VERTEX_INPUT.iter().copied());
+	pub fn new(init: &Arc<Init>, format: Format) -> Self {
+		let pipeline_opaque = OpaqueDrawPipeline::new(&init, format);
+		let model_descriptor_set_layout = ModelDescriptorSetLayout::new(init);
+		let opaque_model = OpaqueModel::new(&init, &model_descriptor_set_layout, MODEL_VERTEX_INPUT.iter().copied());
 		Self {
 			pipeline_opaque,
 			opaque_model,

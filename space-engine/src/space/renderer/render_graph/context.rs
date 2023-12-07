@@ -14,7 +14,8 @@ use space_engine_common::space::renderer::frame_data::FrameData;
 
 use crate::space::renderer::frame_in_flight::frame_manager::FrameManager;
 use crate::space::renderer::frame_in_flight::uniform::UniformInFlight;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::space::renderer::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
+use crate::space::renderer::global_descriptor_set::{GlobalDescriptorSet, GlobalDescriptorSetLayout};
 use crate::space::Init;
 use crate::vulkan::concurrent_sharing;
 
@@ -25,6 +26,7 @@ pub struct RenderContext {
 	pub seed: SeedInFlight,
 	pub output_format: Format,
 	pub frame_data_uniform: UniformInFlight<FrameData>,
+	pub global_descriptor_set: ResourceInFlight<GlobalDescriptorSet>,
 	_private: PhantomData<()>,
 }
 
@@ -32,17 +34,28 @@ impl RenderContext {
 	pub fn new(init: Arc<Init>, output_format: Format, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
 		let frame_manager = FrameManager::new(frames_in_flight);
 		let seed = frame_manager.seed();
+		let frame_data_uniform = UniformInFlight::new(
+			init.memory_allocator.clone(),
+			concurrent_sharing(&[&init.queues.client.graphics_main, &init.queues.client.async_compute]),
+			seed,
+			true,
+		);
+		let global_descriptor_set_layout = GlobalDescriptorSetLayout::new(&init);
+		let global_descriptor_set = ResourceInFlight::new(seed, |fif| {
+			GlobalDescriptorSet::new(
+				&init,
+				&global_descriptor_set_layout,
+				frame_data_uniform.index(fif).clone(),
+			)
+		});
+		let _private = Default::default();
 		let render_context = Arc::new(Self {
-			frame_data_uniform: UniformInFlight::new(
-				init.memory_allocator.clone(),
-				concurrent_sharing(&[&init.queues.client.graphics_main, &init.queues.client.async_compute]),
-				seed,
-				true,
-			),
 			init,
 			seed,
 			output_format,
-			_private: Default::default(),
+			frame_data_uniform,
+			global_descriptor_set,
+			_private,
 		});
 		let new_frame = RenderContextNewFrame {
 			render_context: render_context.clone(),
@@ -93,8 +106,10 @@ impl RenderContextNewFrame {
 				.frame_data_uniform
 				.upload(frame_in_flight, frame_data);
 
+			let render_context = self.render_context.clone();
+			let global_descriptor_set = self.render_context.global_descriptor_set.index(frame_in_flight).clone();
 			f(FrameContext {
-				render_context: self.render_context.clone(),
+				render_context,
 				frame_in_flight,
 				frame_data,
 				output_image,
@@ -103,6 +118,7 @@ impl RenderContextNewFrame {
 					extent: [extent[0] as f32, extent[1] as f32],
 					depth_range: 0f32..=1f32,
 				},
+				global_descriptor_set,
 				_private: PhantomData::default(),
 			})
 		});
@@ -124,6 +140,7 @@ pub struct FrameContext<'a> {
 	pub frame_data: FrameData,
 	pub output_image: Arc<ImageView>,
 	pub viewport: Viewport,
+	pub global_descriptor_set: GlobalDescriptorSet,
 	_private: PhantomData<()>,
 }
 

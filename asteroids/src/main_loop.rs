@@ -50,7 +50,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 		.await;
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
-	let opaque_render_task = OpaqueRenderTask::new(&render_context, render_context.output_format);
+	let opaque_render_task = OpaqueRenderTask::new(&init, render_context.output_format);
 
 	let mut camera_controls = FpsCameraController::new();
 	let mut last_frame = DeltaTimeTimer::new();
