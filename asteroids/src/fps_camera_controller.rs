@@ -77,7 +77,7 @@ impl FpsCameraController {
 		const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
 		let delta = DVec2::from(delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST;
 		self.rotation_yaw -= delta.x;
-		self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI, PI);
+		self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
 	}
 
 	pub fn update(&mut self, delta_time: DeltaTime) -> Affine3A {
