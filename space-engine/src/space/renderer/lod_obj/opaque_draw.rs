@@ -4,7 +4,7 @@ use smallvec::smallvec;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::format::Format;
-use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
@@ -60,7 +60,10 @@ impl OpaqueDrawPipeline {
 				viewport_state: ViewportState::default().into(),
 				multisample_state: MultisampleState::default().into(),
 				color_blend_state: ColorBlendState {
-					attachments: vec![ColorBlendAttachmentState::default()],
+					attachments: vec![ColorBlendAttachmentState {
+						blend: AttachmentBlend::alpha().into(),
+						..ColorBlendAttachmentState::default()
+					}],
 					..Default::default()
 				}
 				.into(),
@@ -98,7 +101,7 @@ impl OpaqueDrawPipeline {
 				),
 			)
 			.unwrap()
-			.draw(3, 1, 0, 0)
+			.draw(model.vertex_buffer.len() as u32, 1, 0, 0)
 			.unwrap();
 	}
 

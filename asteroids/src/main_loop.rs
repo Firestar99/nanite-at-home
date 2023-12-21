@@ -9,6 +9,7 @@ use winit::window::WindowBuilder;
 use space_engine::generate_application_config;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
 use space_engine::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
+use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine::space::renderer::render_graph::context::RenderContext;
 use space_engine::space::Init;
 use space_engine::vulkan::init::Plugin;
@@ -25,6 +26,7 @@ use space_engine_common::space::renderer::frame_data::FrameData;
 
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
+use crate::sample_scene::load_scene;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, ()>>) {
 	let layer_renderdoc = true;
@@ -50,7 +52,9 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 		.await;
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
-	let opaque_render_task = OpaqueRenderTask::new(&init, render_context.output_format);
+	let texture_manager = TextureManager::new(&init);
+	let models = load_scene(&init, &texture_manager).await;
+	let opaque_render_task = OpaqueRenderTask::new(&init, render_context.output_format, models);
 
 	let mut camera_controls = FpsCameraController::new();
 	let mut last_frame = DeltaTimeTimer::new();
