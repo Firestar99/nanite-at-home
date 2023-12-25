@@ -29,8 +29,8 @@ use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scene::load_scene;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, ()>>) {
-	let layer_renderdoc = true;
-	let layer_validation = false;
+	let layer_renderdoc = false;
+	let layer_validation = true;
 
 	let init;
 	{
@@ -43,7 +43,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 			vec.push(&StandardValidationLayerPlugin);
 		}
 
-		init = Init::new(generate_application_config!(), &vec, SpaceQueueAllocator::new());
+		init = Init::new(generate_application_config!(), &vec, SpaceQueueAllocator::new()).await;
 	}
 	let graphics_main = &init.queues.client.graphics_main;
 
@@ -90,4 +90,6 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 			Some(present_future.boxed().then_signal_fence_and_flush().unwrap())
 		});
 	}
+
+	init.pipeline_cache.write().await.ok();
 }

@@ -10,6 +10,7 @@ use crate::generate_application_config;
 
 pub mod debug;
 pub mod init;
+pub mod pipeline_cache;
 pub mod plugins;
 pub mod queue_allocation_helper;
 pub mod validation_layers;

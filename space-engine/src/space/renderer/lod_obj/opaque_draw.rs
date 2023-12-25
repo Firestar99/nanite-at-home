@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::Arc;
 
 use smallvec::smallvec;
@@ -51,7 +52,7 @@ impl OpaqueDrawPipeline {
 
 		let pipeline = GraphicsPipeline::new(
 			device.clone(),
-			None,
+			Some(init.pipeline_cache.deref().clone()),
 			GraphicsPipelineCreateInfo {
 				stages,
 				vertex_input_state: VertexInputState::default().into(),
