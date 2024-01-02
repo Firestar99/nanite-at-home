@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
 use winit::event::ElementState::Pressed;
-use winit::event::{DeviceEvent, Event, KeyboardInput};
+use winit::event::{DeviceEvent, Event, KeyboardInput, WindowEvent};
 
 use crate::delta_time::DeltaTime;
 
@@ -34,8 +34,8 @@ impl FpsCameraController {
 
 	pub fn handle_input(&mut self, event: &Event<'static, ()>) {
 		match event {
-			Event::DeviceEvent {
-				event: DeviceEvent::Key(input),
+			Event::WindowEvent {
+				event: WindowEvent::KeyboardInput { input, .. },
 				..
 			} => {
 				self.handle_keyboard_input(*input);

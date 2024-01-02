@@ -4,7 +4,7 @@ use std::sync::mpsc::Receiver;
 use glam::{Mat4, UVec3};
 use vulkano::sync::GpuFuture;
 use winit::event::{Event, WindowEvent};
-use winit::window::WindowBuilder;
+use winit::window::{CursorGrabMode, WindowBuilder};
 
 use space_engine::generate_application_config;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
@@ -48,7 +48,14 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, 
 	let graphics_main = &init.queues.client.graphics_main;
 
 	let window = event_loop
-		.spawn(move |event_loop| WindowRef::new(WindowBuilder::new().build(event_loop).unwrap()))
+		.spawn(move |event_loop| {
+			WindowRef::new({
+				let window = WindowBuilder::new().build(event_loop).unwrap();
+				window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+				window.set_cursor_visible(false);
+				window
+			})
+		})
 		.await;
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 	let (render_context, mut new_frame) = RenderContext::new(init.clone(), swapchain.format(), 2);
