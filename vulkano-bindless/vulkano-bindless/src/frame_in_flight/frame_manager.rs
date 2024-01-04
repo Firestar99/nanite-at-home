@@ -1,8 +1,8 @@
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
 
-use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::frame_in_flight::resource::ResourceInFlight;
+use crate::frame_in_flight::{FrameInFlight, SeedInFlight};
 
 pub struct FrameManager {
 	frame_id_mod: u32,

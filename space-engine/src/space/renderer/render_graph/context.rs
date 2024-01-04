@@ -10,12 +10,12 @@ use vulkano::sync::GpuFuture;
 
 use space_engine_common::space::renderer::frame_data::FrameData;
 
-use crate::space::renderer::frame_in_flight::frame_manager::FrameManager;
-use crate::space::renderer::frame_in_flight::uniform::UniformInFlight;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 use crate::space::renderer::global_descriptor_set::{GlobalDescriptorSet, GlobalDescriptorSetLayout};
 use crate::space::Init;
 use crate::vulkan::concurrent_sharing;
+use vulkano_bindless::frame_in_flight::frame_manager::FrameManager;
+use vulkano_bindless::frame_in_flight::uniform::UniformInFlight;
+use vulkano_bindless::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 
 /// `RenderContext` is the main instance of the renderer, talking care of rendering frames and most notable ensuring no
 /// data races when multiple frames are currently in flight.
@@ -64,13 +64,6 @@ impl RenderContext {
 impl From<&RenderContext> for SeedInFlight {
 	#[inline]
 	fn from(value: &RenderContext) -> Self {
-		value.seed
-	}
-}
-
-impl From<&Arc<RenderContext>> for SeedInFlight {
-	#[inline]
-	fn from(value: &Arc<RenderContext>) -> Self {
 		value.seed
 	}
 }
@@ -156,6 +149,6 @@ impl<'a> DerefMut for FrameContext<'a> {
 impl<'a> From<&FrameContext<'a>> for SeedInFlight {
 	#[inline]
 	fn from(value: &FrameContext<'a>) -> Self {
-		(&value.render_context).into()
+		(&*value.render_context).into()
 	}
 }

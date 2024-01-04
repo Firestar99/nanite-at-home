@@ -7,8 +7,8 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference,
 use vulkano::sync::Sharing;
 use vulkano::DeviceSize;
 
-use crate::space::renderer::frame_in_flight::resource::ResourceInFlight;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::frame_in_flight::resource::ResourceInFlight;
+use crate::frame_in_flight::{FrameInFlight, SeedInFlight};
 
 pub struct UniformInFlight<T: BufferContents> {
 	sub: ResourceInFlight<Subbuffer<T>>,

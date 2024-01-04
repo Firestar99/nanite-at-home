@@ -1,5 +1,6 @@
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight, FRAMES_LIMIT};
 use std::mem::MaybeUninit;
+
+use crate::frame_in_flight::{FrameInFlight, SeedInFlight, FRAMES_LIMIT};
 
 /// A `ResourceInFlight` is a resource that is allocated once per frame that may be in flight at the same time. See [mod](super) for docs.
 ///
@@ -119,8 +120,9 @@ impl<T> From<&ResourceInFlight<T>> for SeedInFlight {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::rc::Rc;
+
+	use super::*;
 
 	#[test]
 	fn resource_happy() {
