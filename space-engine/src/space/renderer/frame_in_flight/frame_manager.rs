@@ -39,17 +39,27 @@ impl FrameManager {
 	{
 		// SAFETY: this function ensures the FramesInFlight are never launched concurrently
 		let fif;
+		let fif_prev;
 		unsafe {
 			let frame_id_prev = self.frame_id_mod;
 			let frame_id = (frame_id_prev + 1) % self.seed().frames_in_flight();
 			self.frame_id_mod = frame_id;
 			fif = FrameInFlight::new(self.seed(), frame_id);
+			fif_prev = FrameInFlight::new(self.seed(), frame_id_prev);
 		}
 
-		// Wait for last frame to finish execution, so resources are not contested.
-		// Should only wait when CPU is faster than GPU or vsync.
-		if let Some(last_frame) = self.prev_frame.index_mut(fif).take() {
-			last_frame.fence_rendered.wait(None).unwrap();
+		// disabled: see below
+		// // Wait for last frame to finish execution, so resources are not contested.
+		// // Should only wait when CPU is faster than GPU or vsync.
+		// if let Some(last_frame) = self.prev_frame.index_mut(fif).take() {
+		// 	last_frame.fence_rendered.wait(None).unwrap();
+		// }
+
+		// FIXME Wait for previous frame to finish on the GPU. Incredibly sad way to do things, as it will stall both
+		// CPU and GPU. But without cloning GpuFutures or at least splitting them into a GPU semaphore and CPU fence
+		// there is nothing we can do to get this right.
+		if let Some(prev_frame) = self.prev_frame.index_mut(fif_prev).take() {
+			prev_frame.fence_rendered.wait(None).unwrap();
 		}
 
 		// do the render, write back GpuFuture
