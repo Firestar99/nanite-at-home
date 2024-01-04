@@ -2224,6 +2224,7 @@ dependencies = [
  "space-engine-common",
  "static_assertions",
  "vulkano",
+ "vulkano-bindless",
  "vulkano-shaders",
  "winit",
 ]
@@ -2619,6 +2620,35 @@ dependencies = [
  "thread_local",
  "vk-parse",
  "vulkano-macros",
+]
+
+[[package]]
+name = "vulkano-bindless"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "futures",
+ "glam",
+ "konst",
+ "num-derive",
+ "num-traits",
+ "once_cell",
+ "parking_lot",
+ "paste",
+ "smallvec",
+ "smol",
+ "static_assertions",
+ "vulkano",
+ "vulkano-shaders",
+ "winit",
+]
+
+[[package]]
+name = "vulkano-bindless-shaders-rust"
+version = "0.1.0"
+dependencies = [
+ "spirv-std",
 ]
 
 [[package]]

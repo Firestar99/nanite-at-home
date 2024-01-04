@@ -7,6 +7,8 @@ members = [
     "space-engine",
     "space-engine-common",
     "space-engine-shader",
+    "vulkano-bindless/vulkano-bindless",
+    "vulkano-bindless/vulkano-bindless-shaders-rust",
 ]
 resolver = "2"
 
