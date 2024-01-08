@@ -268,9 +268,9 @@ impl Drop for EventLoopExecutor {
 	}
 }
 
-pub fn event_loop_init<F>(launch: F) -> !
+pub fn event_loop_init<F>(launch: F)
 where
-	F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>) + Send + 'static,
+	F: FnOnce(EventLoopExecutor, Receiver<Event<()>>) + Send + 'static,
 {
 	// plain setup
 	let (exec_tx, exec_rx) = channel();
@@ -297,7 +297,7 @@ where
 		// EventLoop setup
 		// FIXME replace with log
 		println!("[Info] Main: transitioning to Queue with EventLoop");
-		event_loop = EventLoop::new();
+		event_loop = EventLoop::new().unwrap();
 		{
 			let notify = event_loop.create_proxy();
 			// there may be Messages remaining on the queue which need handling
@@ -309,33 +309,32 @@ where
 	}
 
 	// EventLoop loop
-	event_loop.run(move |event, b, control_flow| {
-		match event {
-			Event::UserEvent(_) => {
-				loop {
-					match exec_rx.try_recv() {
-						Ok(msg) => msg.run(&b),
-						Err(e) => {
-							if matches!(e, TryRecvError::Disconnected) {
-								// Only exit when all other threads have exited!
-								// Otherwise the system start cleaning up vulkan objects while we're also at it, causing Segfaults.
-								// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
-								if let Some(join_handle) = render_join_handle.take() {
-									join_handle.join().ok();
+	event_loop
+		.run(move |event, b| {
+			match event {
+				Event::UserEvent(_) => {
+					loop {
+						match exec_rx.try_recv() {
+							Ok(msg) => msg.run(&b),
+							Err(e) => {
+								if matches!(e, TryRecvError::Disconnected) {
+									// Only exit when all other threads have exited!
+									// Otherwise the system start cleaning up vulkan objects while we're also at it, causing Segfaults.
+									// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
+									if let Some(join_handle) = render_join_handle.take() {
+										join_handle.join().ok();
+									}
+									b.exit();
 								}
-								control_flow.set_exit();
+								break;
 							}
-							break;
 						}
 					}
 				}
-			}
-			event => {
-				if let Some(event) = event.to_static() {
-					// ignore that channel may have closed
+				event => {
 					let _ = event_tx.send(event);
 				}
 			}
-		}
-	});
+		})
+		.unwrap();
 }

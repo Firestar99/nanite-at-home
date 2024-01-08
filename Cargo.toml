@@ -21,7 +21,7 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 # vulkan
 vulkano = "0.34"
 vulkano-shaders = "0.34"
-winit = "0.28" # in sync with vulkano-win
+winit = { version = "0.29.9", features = ["rwh_05"] }
 
 # rust-gpu
 spirv-builder = { version = "0.9", default-features = false }

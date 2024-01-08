@@ -26,7 +26,7 @@ use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scene::load_scene;
 
-pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<'static, ()>>) {
+pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let layer_renderdoc = false;
 	let layer_validation = true;
 

@@ -4,7 +4,8 @@ use std::f32::consts::PI;
 use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
 use winit::event::ElementState::Pressed;
-use winit::event::{DeviceEvent, Event, KeyboardInput, WindowEvent};
+use winit::event::{DeviceEvent, Event, KeyEvent, WindowEvent};
+use winit::keyboard::PhysicalKey::Code;
 
 use crate::delta_time::DeltaTime;
 
@@ -32,13 +33,13 @@ impl FpsCameraController {
 		}
 	}
 
-	pub fn handle_input(&mut self, event: &Event<'static, ()>) {
+	pub fn handle_input(&mut self, event: &Event<()>) {
 		match event {
 			Event::WindowEvent {
-				event: WindowEvent::KeyboardInput { input, .. },
+				event: WindowEvent::KeyboardInput { event, .. },
 				..
 			} => {
-				self.handle_keyboard_input(*input);
+				self.handle_keyboard_input(event);
 			}
 			Event::DeviceEvent {
 				event: DeviceEvent::MouseMotion { delta, .. },
@@ -50,22 +51,22 @@ impl FpsCameraController {
 		}
 	}
 
-	pub fn handle_keyboard_input(&mut self, input: KeyboardInput) {
+	pub fn handle_keyboard_input(&mut self, input: &KeyEvent) {
 		match input {
-			KeyboardInput {
+			KeyEvent {
 				state,
-				virtual_keycode: Some(keycode),
+				physical_key: Code { 0: code },
 				..
 			} => {
-				use winit::event::VirtualKeyCode::*;
-				let value = state == Pressed;
-				match keycode {
-					A => self.movement_keys[0][0] = value,
-					D => self.movement_keys[0][1] = value,
+				use winit::keyboard::KeyCode::*;
+				let value = *state == Pressed;
+				match code {
+					KeyA => self.movement_keys[0][0] = value,
+					KeyD => self.movement_keys[0][1] = value,
 					Space => self.movement_keys[1][0] = value,
-					LShift => self.movement_keys[1][1] = value,
-					W => self.movement_keys[2][0] = value,
-					S => self.movement_keys[2][1] = value,
+					ShiftLeft => self.movement_keys[1][1] = value,
+					KeyW => self.movement_keys[2][0] = value,
+					KeyS => self.movement_keys[2][1] = value,
 					_ => {}
 				}
 			}
