@@ -1,8 +1,11 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, RenderingAttachmentInfo, RenderingInfo, SubpassContents};
+use vulkano::command_buffer::{
+	CommandBufferBeginInfo, RecordingCommandBuffer, RenderingAttachmentInfo, RenderingInfo, SubpassContents,
+};
 use vulkano::format::{ClearValue, Format};
 use vulkano::image::view::ImageView;
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
@@ -35,10 +38,14 @@ impl OpaqueRenderTask {
 		future: impl GpuFuture,
 	) -> impl GpuFuture {
 		let graphics = &frame_context.render_context.init.queues.client.graphics_main;
-		let mut cmd = AutoCommandBufferBuilder::primary(
-			&frame_context.render_context.init.cmd_buffer_allocator,
+		let mut cmd = RecordingCommandBuffer::new(
+			frame_context.render_context.init.cmd_buffer_allocator.clone(),
 			graphics.queue_family_index(),
-			OneTimeSubmit,
+			Primary,
+			CommandBufferBeginInfo {
+				usage: OneTimeSubmit,
+				..CommandBufferBeginInfo::default()
+			},
 		)
 		.unwrap();
 		cmd.begin_rendering(RenderingInfo {
@@ -64,6 +71,6 @@ impl OpaqueRenderTask {
 		}
 		cmd.end_rendering().unwrap();
 
-		future.then_execute(graphics.clone(), cmd.build().unwrap()).unwrap()
+		future.then_execute(graphics.clone(), cmd.end().unwrap()).unwrap()
 	}
 }

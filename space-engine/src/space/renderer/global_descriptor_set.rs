@@ -4,7 +4,7 @@ use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::descriptor_set::layout::DescriptorType::UniformBuffer;
-use vulkano::descriptor_set::{DescriptorSet, PersistentDescriptorSet, WriteDescriptorSet};
+use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::shader::ShaderStages;
 
 use space_engine_common::space::renderer::frame_data::FrameData;
@@ -36,13 +36,13 @@ impl Deref for GlobalDescriptorSetLayout {
 }
 
 #[derive(Clone)]
-pub struct GlobalDescriptorSet(pub Arc<PersistentDescriptorSet>);
+pub struct GlobalDescriptorSet(pub Arc<DescriptorSet>);
 
 impl GlobalDescriptorSet {
 	pub fn new(init: &Arc<Init>, layout: &GlobalDescriptorSetLayout, frame_data_uniform: Subbuffer<FrameData>) -> Self {
 		GlobalDescriptorSet(
-			PersistentDescriptorSet::new(
-				&init.descriptor_allocator,
+			DescriptorSet::new(
+				init.descriptor_allocator.clone(),
 				layout.0.clone(),
 				[WriteDescriptorSet::buffer(0, frame_data_uniform)],
 				[],
@@ -57,7 +57,7 @@ impl GlobalDescriptorSet {
 }
 
 impl Deref for GlobalDescriptorSet {
-	type Target = Arc<PersistentDescriptorSet>;
+	type Target = Arc<DescriptorSet>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0

@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use image::{DynamicImage, ImageError};
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
+use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::{
-	AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, PrimaryCommandBufferAbstract,
+	CommandBufferBeginInfo, CommandBufferUsage, CopyBufferToImageInfo, RecordingCommandBuffer,
 };
 use vulkano::format::Format;
 use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
@@ -72,17 +73,21 @@ impl TextureManager {
 		.unwrap();
 		let image_view = ImageView::new_default(image.clone()).unwrap();
 
-		let mut builder = AutoCommandBufferBuilder::primary(
-			&init.cmd_buffer_allocator,
+		let mut builder = RecordingCommandBuffer::new(
+			init.cmd_buffer_allocator.clone(),
 			init.queues.client.transfer.queue_family_index(),
-			CommandBufferUsage::OneTimeSubmit,
+			Primary,
+			CommandBufferBeginInfo {
+				usage: CommandBufferUsage::OneTimeSubmit,
+				..CommandBufferBeginInfo::default()
+			},
 		)
 		.unwrap();
 		builder
 			.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(copy_buffer, image.clone()))
 			.unwrap();
 		builder
-			.build()
+			.end()
 			.unwrap()
 			.execute(init.queues.client.transfer.clone())
 			.unwrap()

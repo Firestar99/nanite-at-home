@@ -51,8 +51,8 @@ pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
 	pub memory_allocator: Arc<StandardMemoryAllocator>,
-	pub descriptor_allocator: StandardDescriptorSetAllocator,
-	pub cmd_buffer_allocator: StandardCommandBufferAllocator,
+	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
+	pub cmd_buffer_allocator: Arc<StandardCommandBufferAllocator>,
 	pub pipeline_cache: SpacePipelineCache,
 	_debug: Debug,
 }
@@ -151,9 +151,11 @@ impl<Q: Clone> Init<Q> {
 		let queues = allocation.take(queues.collect());
 
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-		let descriptor_allocator =
-			StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default());
-		let cmd_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+		let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+			device.clone(),
+			StandardDescriptorSetAllocatorCreateInfo::default(),
+		));
+		let cmd_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
 		let pipeline_cache = SpacePipelineCache::new(device.clone()).await;
 
 		Arc::new(Self {

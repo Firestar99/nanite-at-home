@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use smallvec::smallvec;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
+use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::format::Format;
 use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
@@ -89,12 +89,7 @@ impl OpaqueDrawPipeline {
 		Self { pipeline }
 	}
 
-	pub fn draw(
-		&self,
-		frame_context: &FrameContext,
-		cmd: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
-		model: &OpaqueModel,
-	) {
+	pub fn draw(&self, frame_context: &FrameContext, cmd: &mut RecordingCommandBuffer, model: &OpaqueModel) {
 		cmd.bind_pipeline_graphics(self.pipeline.clone())
 			.unwrap()
 			.set_viewport(0, frame_context.viewport_smallvec())
@@ -108,9 +103,10 @@ impl OpaqueDrawPipeline {
 					model.descriptor.clone().0,
 				),
 			)
-			.unwrap()
-			.draw(model.vertex_buffer.len() as u32, 1, 0, 0)
 			.unwrap();
+		unsafe {
+			cmd.draw(model.vertex_buffer.len() as u32, 1, 0, 0).unwrap();
+		}
 	}
 
 	pub fn descriptor_set_layout_model(&self) -> &Arc<DescriptorSetLayout> {

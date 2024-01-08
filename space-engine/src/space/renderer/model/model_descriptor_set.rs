@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use vulkano::buffer::Subbuffer;
 use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorType};
-use vulkano::descriptor_set::{DescriptorSet, PersistentDescriptorSet, WriteDescriptorSet};
+use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::image::sampler::Sampler;
 use vulkano::image::view::ImageView;
 use vulkano::shader::ShaderStages;
@@ -50,7 +50,7 @@ impl Deref for ModelDescriptorSetLayout {
 }
 
 #[derive(Clone)]
-pub struct ModelDescriptorSet(pub Arc<PersistentDescriptorSet>);
+pub struct ModelDescriptorSet(pub Arc<DescriptorSet>);
 
 impl ModelDescriptorSet {
 	pub fn new(
@@ -61,8 +61,8 @@ impl ModelDescriptorSet {
 		sampler: &Arc<Sampler>,
 	) -> Self {
 		Self(
-			PersistentDescriptorSet::new(
-				&init.descriptor_allocator,
+			DescriptorSet::new(
+				init.descriptor_allocator.clone(),
 				layout.0.clone(),
 				[
 					WriteDescriptorSet::buffer(*ModelDescriptorSetLayout::BINDING_MODEL_VERTEX, vertex_data.clone()),
@@ -81,7 +81,7 @@ impl ModelDescriptorSet {
 }
 
 impl Deref for ModelDescriptorSet {
-	type Target = Arc<PersistentDescriptorSet>;
+	type Target = Arc<DescriptorSet>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
