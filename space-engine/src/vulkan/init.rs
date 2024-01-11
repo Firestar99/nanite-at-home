@@ -89,8 +89,6 @@ impl<Q: Clone> Init<Q> {
 				};
 			layers = result.1;
 		}
-
-		// instance
 		let instance = Instance::new(
 			library,
 			InstanceCreateInfo {

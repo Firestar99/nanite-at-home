@@ -2,7 +2,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use vulkano::descriptor_set::layout::{
-	DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo, DescriptorType,
+	DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo,
+	DescriptorType,
 };
 use vulkano::image::sampler::Sampler;
 use vulkano::shader::ShaderStages;
@@ -15,23 +16,17 @@ pub struct DescriptorSetBinding {
 	pub binding_id: u32,
 	pub descriptor_type: DescriptorType,
 	pub descriptor_count: u32,
+	pub flags: DescriptorBindingFlags,
 	pub immutable_samplers: Vec<Arc<Sampler>>,
 }
 
 impl DescriptorSetBinding {
 	pub const fn descriptor_type(binding_id: u32, descriptor_type: DescriptorType) -> Self {
-		Self::descriptor_type_count(binding_id, descriptor_type, 1)
-	}
-
-	pub const fn descriptor_type_count(
-		binding_id: u32,
-		descriptor_type: DescriptorType,
-		descriptor_count: u32,
-	) -> Self {
 		Self {
 			binding_id,
 			descriptor_type,
-			descriptor_count,
+			descriptor_count: 1,
+			flags: DescriptorBindingFlags::empty(),
 			immutable_samplers: Vec::new(),
 		}
 	}
@@ -41,6 +36,7 @@ impl DescriptorSetBinding {
 			self.binding_id,
 			DescriptorSetLayoutBinding {
 				stages,
+				binding_flags: self.flags,
 				descriptor_count: self.descriptor_count,
 				immutable_samplers: self.immutable_samplers,
 				..DescriptorSetLayoutBinding::descriptor_type(self.descriptor_type)

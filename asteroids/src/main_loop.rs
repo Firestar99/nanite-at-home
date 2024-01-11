@@ -15,6 +15,7 @@ use space_engine::vulkan::plugins::dynamic_rendering::DynamicRendering;
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
+use space_engine::vulkan::plugins::vulkano_bindless::VulkanoBindless;
 use space_engine::vulkan::window::event_loop::EventLoopExecutor;
 use space_engine::vulkan::window::swapchain::Swapchain;
 use space_engine::vulkan::window::window_plugin::WindowPlugin;
@@ -33,7 +34,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let init;
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
-		let mut vec: Vec<&dyn Plugin> = vec![&DynamicRendering, &RustGpuWorkaround, &window_plugin];
+		let mut vec: Vec<&dyn Plugin> = vec![&DynamicRendering, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
 		if layer_renderdoc {
 			vec.push(&RenderdocLayerPlugin);
 		}
@@ -59,11 +60,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 
 	// renderer
-	let render_pipeline_main = RenderPipelineMain::new(&init, swapchain.format());
+	let texture_manager = TextureManager::new(&init);
+	let render_pipeline_main = RenderPipelineMain::new(&init, &texture_manager, swapchain.format());
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let texture_manager = TextureManager::new(&init);
 	let models = load_scene(&init, &texture_manager).await;
 	render_pipeline_main.opaque_task.models.lock().extend(models);
 

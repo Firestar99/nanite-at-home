@@ -23,6 +23,9 @@ use crate::shader::space::renderer::lod_obj::opaque_shader::{opaque_fs, opaque_v
 use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
 use crate::space::renderer::model::model::OpaqueModel;
 use crate::space::renderer::model::model_descriptor_set::ModelDescriptorSetLayout;
+use crate::space::renderer::model::texture_array_descriptor_set::{
+	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
+};
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 
@@ -40,6 +43,7 @@ impl OpaqueDrawPipeline {
 				set_layouts: [
 					GlobalDescriptorSetLayout::new(init).0,
 					ModelDescriptorSetLayout::new(init).0,
+					TextureArrayDescriptorSetLayout::new(init).0,
 				]
 				.to_vec(),
 				..PipelineLayoutCreateInfo::default()
@@ -89,7 +93,13 @@ impl OpaqueDrawPipeline {
 		Self { pipeline }
 	}
 
-	pub fn draw(&self, frame_context: &FrameContext, cmd: &mut RecordingCommandBuffer, model: &OpaqueModel) {
+	pub fn draw(
+		&self,
+		frame_context: &FrameContext,
+		cmd: &mut RecordingCommandBuffer,
+		model: &OpaqueModel,
+		texture_array_descriptor_set: &TextureArrayDescriptorSet,
+	) {
 		cmd.bind_pipeline_graphics(self.pipeline.clone())
 			.unwrap()
 			.set_viewport(0, frame_context.viewport_smallvec())
@@ -101,6 +111,7 @@ impl OpaqueDrawPipeline {
 				(
 					frame_context.global_descriptor_set.clone().0,
 					model.descriptor.clone().0,
+					texture_array_descriptor_set.clone().0,
 				),
 			)
 			.unwrap();

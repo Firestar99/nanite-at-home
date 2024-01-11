@@ -11,6 +11,7 @@ use vulkano::sync::GpuFuture;
 use space_engine_common::space::renderer::frame_data::FrameData;
 
 use crate::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
+use crate::space::renderer::model::texture_manager::TextureManager;
 use crate::space::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
 use crate::space::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
 use crate::space::Init;
@@ -23,11 +24,11 @@ pub struct RenderPipelineMain {
 }
 
 impl RenderPipelineMain {
-	pub fn new(init: &Arc<Init>, output_format: Format) -> Arc<Self> {
+	pub fn new(init: &Arc<Init>, texture_manager: &Arc<TextureManager>, output_format: Format) -> Arc<Self> {
 		// always available
 		let depth_format = Format::D32_SFLOAT;
 
-		let opaque_task = OpaqueRenderTask::new(&init, output_format, depth_format);
+		let opaque_task = OpaqueRenderTask::new(&init, &texture_manager, output_format, depth_format);
 		Arc::new(Self {
 			init: init.clone(),
 			output_format,

@@ -27,6 +27,8 @@ impl OpaqueModel {
 		I: IntoIterator<Item = ModelVertex>,
 		I::IntoIter: ExactSizeIterator,
 	{
+		let (_image_view, tex_id) = texture_manager.upload_texture_from_memory(image_data).await.unwrap();
+
 		let vertex_buffer = Buffer::from_iter(
 			init.memory_allocator.clone(),
 			BufferCreateInfo {
@@ -38,16 +40,14 @@ impl OpaqueModel {
 				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 				..AllocationCreateInfo::default()
 			},
-			vertex_data,
+			vertex_data.into_iter().map(|vtx| ModelVertex { tex_id, ..vtx }),
 		)
 		.unwrap();
 
-		let image = texture_manager.upload_texture_from_memory(image_data).await.unwrap();
 		let descriptor = ModelDescriptorSet::new(
 			init,
 			model_descriptor_set_layout,
 			&vertex_buffer,
-			&image,
 			&texture_manager.sampler,
 		);
 		Self {

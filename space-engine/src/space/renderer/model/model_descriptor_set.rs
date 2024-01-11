@@ -5,7 +5,6 @@ use vulkano::buffer::Subbuffer;
 use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorType};
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::image::sampler::Sampler;
-use vulkano::image::view::ImageView;
 use vulkano::shader::ShaderStages;
 
 use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
@@ -20,19 +19,13 @@ impl ModelDescriptorSetLayout {
 	pub const SHADER_STAGES: ShaderStages = ShaderStages::all_graphics().union(ShaderStages::COMPUTE);
 	pub const BINDING_MODEL_VERTEX: DescriptorSetBinding =
 		DescriptorSetBinding::descriptor_type(0, DescriptorType::StorageBuffer);
-	pub const BINDING_MODEL_TEXTURE: DescriptorSetBinding =
-		DescriptorSetBinding::descriptor_type(1, DescriptorType::SampledImage);
 	pub const BINDING_MODEL_SAMPLER: DescriptorSetBinding =
-		DescriptorSetBinding::descriptor_type(2, DescriptorType::Sampler);
+		DescriptorSetBinding::descriptor_type(1, DescriptorType::Sampler);
 
 	pub fn new(init: &Arc<Init>) -> Self {
 		Self(
 			DescriptorSetBinding::create_descriptor_set_layout(
-				&[
-					&Self::BINDING_MODEL_VERTEX,
-					&Self::BINDING_MODEL_TEXTURE,
-					&Self::BINDING_MODEL_SAMPLER,
-				],
+				&[&Self::BINDING_MODEL_VERTEX, &Self::BINDING_MODEL_SAMPLER],
 				init,
 				Self::SHADER_STAGES,
 			)
@@ -57,7 +50,6 @@ impl ModelDescriptorSet {
 		init: &Arc<Init>,
 		layout: &ModelDescriptorSetLayout,
 		vertex_data: &Subbuffer<[ModelVertex]>,
-		image: &Arc<ImageView>,
 		sampler: &Arc<Sampler>,
 	) -> Self {
 		Self(
@@ -66,7 +58,6 @@ impl ModelDescriptorSet {
 				layout.0.clone(),
 				[
 					WriteDescriptorSet::buffer(*ModelDescriptorSetLayout::BINDING_MODEL_VERTEX, vertex_data.clone()),
-					WriteDescriptorSet::image_view(*ModelDescriptorSetLayout::BINDING_MODEL_TEXTURE, image.clone()),
 					WriteDescriptorSet::sampler(*ModelDescriptorSetLayout::BINDING_MODEL_SAMPLER, sampler.clone()),
 				],
 				[],
