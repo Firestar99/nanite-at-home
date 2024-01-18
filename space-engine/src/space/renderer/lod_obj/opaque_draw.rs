@@ -115,8 +115,15 @@ impl OpaqueDrawPipeline {
 				),
 			)
 			.unwrap();
-		unsafe {
-			cmd.draw(model.vertex_buffer.len() as u32, 1, 0, 0).unwrap();
+		if let Some(index_buffer) = &model.index_buffer {
+			cmd.bind_index_buffer(index_buffer.clone()).unwrap();
+			unsafe {
+				cmd.draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).unwrap();
+			}
+		} else {
+			unsafe {
+				cmd.draw(model.vertex_buffer.len() as u32, 1, 0, 0).unwrap();
+			}
 		}
 	}
 
