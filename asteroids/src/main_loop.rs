@@ -74,6 +74,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	'outer: loop {
 		// event handling
 		for event in inputs.try_iter() {
+			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
 			match &event {
 				Event::WindowEvent {

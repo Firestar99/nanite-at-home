@@ -17,6 +17,7 @@ use vulkano::swapchain::{
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
+use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
 
 use crate::vulkan::window::event_loop::EventLoopExecutor;
@@ -268,6 +269,22 @@ impl SwapchainController {
 			"looped {} times trying to acquire swapchain image and failed repeatedly!",
 			RECREATE_ATTEMPTS
 		);
+	}
+
+	pub fn force_recreate(&mut self) {
+		self.should_recreate = true;
+	}
+
+	pub fn handle_input(&mut self, event: &Event<()>) {
+		match event {
+			Event::WindowEvent {
+				event: WindowEvent::Resized(_),
+				..
+			} => {
+				self.should_recreate = true;
+			}
+			_ => (),
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{env, error};
 
+pub use spirv_builder;
 use spirv_builder::{
 	Capability, CompileResult, MetadataPrintout, ModuleResult, SpirvBuilder, SpirvBuilderError, SpirvMetadata,
 };
@@ -10,8 +11,6 @@ use spirv_builder::{
 use crate::codegen::{codegen_shader_symbols, CodegenError, CodegenOptions};
 
 pub mod codegen;
-
-pub use spirv_builder;
 
 pub struct ShaderSymbolsBuilder {
 	spirv_builder: SpirvBuilder,
