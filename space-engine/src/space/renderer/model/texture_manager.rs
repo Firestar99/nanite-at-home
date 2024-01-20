@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use image::{DynamicImage, ImageError};
 use parking_lot::Mutex;
-use space_engine_common::space::renderer::model::model_vertex::ModelTextureId;
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage};
+use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::{
 	CommandBufferBeginInfo, CommandBufferUsage, CopyBufferToImageInfo, RecordingCommandBuffer,
@@ -14,7 +13,9 @@ use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
-use vulkano::sync::GpuFuture;
+use vulkano::sync::{GpuFuture, Sharing};
+
+use space_engine_common::space::renderer::model::model_vertex::ModelTextureId;
 
 use crate::space::renderer::model::texture_array_descriptor_set::{
 	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
@@ -60,13 +61,10 @@ impl TextureManager {
 		&self,
 		image_data: &[u8],
 	) -> Result<(Arc<ImageView>, ModelTextureId), ImageError> {
-		self.upload_texture(image::load_from_memory(image_data).unwrap()).await
+		Ok(self.upload_texture(image::load_from_memory(image_data)?).await)
 	}
 
-	pub async fn upload_texture(
-		&self,
-		image_data: DynamicImage,
-	) -> Result<(Arc<ImageView>, ModelTextureId), ImageError> {
+	pub async fn upload_texture(&self, image_data: DynamicImage) -> (Arc<ImageView>, ModelTextureId) {
 		let init = &self.init;
 		let image_data = image_data.into_rgba8();
 		let (width, height) = image_data.dimensions();
@@ -132,7 +130,7 @@ impl TextureManager {
 			inner.slots.push(image_view.clone());
 			inner.descriptor_set_cache = None;
 		}
-		Ok((image_view, tex_id))
+		(image_view, tex_id)
 	}
 
 	pub fn create_descriptor_set(&self) -> TextureArrayDescriptorSet {
@@ -144,5 +142,27 @@ impl TextureManager {
 				TextureArrayDescriptorSet::new(&self.init, &self.descriptor_set_layout, &inner.slots)
 			})
 			.clone()
+	}
+
+	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> Subbuffer<[T]>
+	where
+		T: BufferContents,
+		ITER: IntoIterator<Item = T>,
+		ITER::IntoIter: ExactSizeIterator,
+	{
+		Buffer::from_iter(
+			self.init.memory_allocator.clone(),
+			BufferCreateInfo {
+				usage,
+				sharing: Sharing::Exclusive,
+				..BufferCreateInfo::default()
+			},
+			AllocationCreateInfo {
+				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+				..AllocationCreateInfo::default()
+			},
+			data.into_iter(),
+		)
+		.unwrap()
 	}
 }

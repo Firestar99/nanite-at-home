@@ -32,6 +32,7 @@ num-traits = { workspace = true }
 num-derive = { workspace = true }
 
 # model loader
+gltf = { workspace = true }
 image = { workspace = true }
 
 # other
