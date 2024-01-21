@@ -19,11 +19,11 @@ pub struct ModelVertex {
 const_assert_eq!(size_of::<ModelVertex>(), 32);
 
 impl ModelVertex {
-	pub const fn new(position: Vec3, tex_coord: Vec2) -> Self {
+	pub const fn new(position: Vec3, tex_coord: Vec2, tex_id: ModelTextureId) -> Self {
 		Self {
 			position: Vec3A::new(position.x, position.y, position.z),
 			tex_coord,
-			tex_id: ModelTextureId(0),
+			tex_id,
 		}
 	}
 }

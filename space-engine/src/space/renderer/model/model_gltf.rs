@@ -1,7 +1,8 @@
+use futures::future::join_all;
 use std::path::Path;
 use std::sync::Arc;
 
-use glam::{Mat4, Vec2, Vec3};
+use glam::{vec4, Mat4, Vec2, Vec3};
 use gltf::image::{Data, Format};
 use gltf::mesh::Mode;
 use gltf::{Document, Node, Scene};
@@ -32,7 +33,14 @@ async fn load_gltf_inner(
 	let (document, buffers, images) = gltf::import(path).unwrap();
 
 	let scene = document.default_scene().unwrap();
-	let nodes_mat = compute_transformations(&document, &scene);
+	let nodes_mat = compute_transformations(
+		&document,
+		&scene,
+		Mat4 {
+			y_axis: vec4(0., -1., 0., 0.),
+			..Mat4::IDENTITY
+		},
+	);
 
 	let (_, white_image) = texture_manager
 		.upload_texture(gltf_image_to_dynamic_image(Data {
@@ -42,58 +50,67 @@ async fn load_gltf_inner(
 			pixels: Vec::from([0xffu8; 4]),
 		}))
 		.await;
-	let images = futures::future::join_all(
+	let images = join_all(
 		images
 			.into_iter()
 			.map(|src| texture_manager.upload_texture(gltf_image_to_dynamic_image(src))),
 	)
 	.await;
 
-	let mut models = Vec::new();
+	let mut vertices = Vec::new();
+	let mut indices = Vec::new();
+	let mut vertices_direct = Vec::new();
 	for node in document.nodes() {
 		let mat = nodes_mat[node.index()];
 		if let Some(mesh) = node.mesh() {
 			for primitive in mesh.primitives() {
 				assert_eq!(primitive.mode(), Mode::Triangles);
 				let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-				let vertices = reader
-					.read_positions()
-					.unwrap()
-					.zip(reader.read_tex_coords(0).unwrap().into_f32())
-					.map(|(pos, tex_coord)| {
-						ModelVertex::new(mat.transform_point3(Vec3::from(pos)), Vec2::from(tex_coord))
-					});
-				let indices = reader.read_indices().map(|v| v.into_u32().map(|i| i as u16));
+
 				let albedo_tex_id = primitive
 					.material()
 					.pbr_metallic_roughness()
 					.base_color_texture()
 					.map(|tex| images[tex.texture().source().index()].1)
 					.unwrap_or(white_image);
-				models.push(if let Some(indices) = indices {
-					OpaqueModel::indexed(
-						init,
-						texture_manager,
-						model_descriptor_set_layout,
-						indices,
-						vertices,
-						albedo_tex_id,
-					)
-					.await
+				let model_vertices = reader
+					.read_positions()
+					.unwrap()
+					.zip(reader.read_tex_coords(0).unwrap().into_f32())
+					.map(|(pos, tex_coord)| {
+						ModelVertex::new(
+							mat.transform_point3(Vec3::from(pos)),
+							Vec2::from(tex_coord),
+							albedo_tex_id,
+						)
+					});
+
+				if let Some(model_indices) = reader.read_indices() {
+					let base_vertices = vertices.len() as u32;
+					vertices.extend(model_vertices);
+					indices.extend(model_indices.into_u32().map(|i| base_vertices + i));
 				} else {
-					OpaqueModel::direct(
-						init,
-						texture_manager,
-						model_descriptor_set_layout,
-						vertices,
-						albedo_tex_id,
-					)
-					.await
-				});
+					vertices_direct.extend(model_vertices);
+				}
 			}
 		}
 	}
-	models
+
+	let opaque_model_indexed = if !indices.is_empty() {
+		Some(OpaqueModel::indexed(init, texture_manager, model_descriptor_set_layout, indices, vertices).await)
+	} else {
+		None
+	};
+	let opaque_model_direct = if !vertices_direct.is_empty() {
+		Some(OpaqueModel::direct(init, texture_manager, model_descriptor_set_layout, vertices_direct).await)
+	} else {
+		None
+	};
+
+	[opaque_model_indexed, opaque_model_direct]
+		.into_iter()
+		.flatten()
+		.collect()
 }
 
 fn gltf_image_to_dynamic_image(src: Data) -> DynamicImage {
@@ -114,7 +131,7 @@ fn gltf_image_to_dynamic_image(src: Data) -> DynamicImage {
 	}
 }
 
-fn compute_transformations(document: &Document, scene: &Scene) -> Vec<Mat4> {
+fn compute_transformations(document: &Document, scene: &Scene, base: Mat4) -> Vec<Mat4> {
 	fn walk(out: &mut Vec<Mat4>, node: Node, mat: Mat4) {
 		let node_mat = mat * Mat4::from_cols_array_2d(&node.transform().matrix());
 		out[node.index()] = node_mat;
@@ -125,7 +142,7 @@ fn compute_transformations(document: &Document, scene: &Scene) -> Vec<Mat4> {
 
 	let mut out = vec![Mat4::IDENTITY; document.nodes().len()];
 	for node in scene.nodes() {
-		walk(&mut out, node, Mat4::IDENTITY);
+		walk(&mut out, node, base);
 	}
 	out
 }

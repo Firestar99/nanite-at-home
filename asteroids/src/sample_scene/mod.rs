@@ -7,7 +7,7 @@ use space_engine::space::renderer::model::model_descriptor_set::ModelDescriptorS
 use space_engine::space::renderer::model::model_gltf::load_gltf;
 use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine::space::Init;
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_common::space::renderer::model::model_vertex::{ModelTextureId, ModelVertex};
 
 pub async fn load_scene(init: &Arc<Init>, texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
 	let model_descriptor_set_layout = ModelDescriptorSetLayout::new(init);
@@ -32,12 +32,12 @@ pub async fn load_rust_vulkano_logos(
 	out: &mut Vec<OpaqueModel>,
 ) {
 	const QUAD_VERTICES: [ModelVertex; 4] = [
-		ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.)),
-		ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.)),
-		ModelVertex::new(vec3(1., -1., 0.), vec2(1., 0.)),
-		ModelVertex::new(vec3(1., 1., 0.), vec2(1., 1.)),
+		ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), ModelTextureId(0)),
+		ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), ModelTextureId(0)),
+		ModelVertex::new(vec3(1., -1., 0.), vec2(1., 0.), ModelTextureId(0)),
+		ModelVertex::new(vec3(1., 1., 0.), vec2(1., 1.), ModelTextureId(0)),
 	];
-	const QUAD_INDICES: [u16; 6] = [0, 1, 2, 1, 2, 3];
+	const QUAD_INDICES: [u32; 6] = [0, 1, 2, 1, 2, 3];
 
 	// unroll indices
 	let (_, vulkano_tex_id) = texture_manager
@@ -48,8 +48,13 @@ pub async fn load_rust_vulkano_logos(
 		init,
 		texture_manager,
 		&model_descriptor_set_layout,
-		QUAD_INDICES.map(|i| QUAD_VERTICES[i as usize]).into_iter(),
-		vulkano_tex_id,
+		QUAD_INDICES
+			.map(|i| QUAD_VERTICES[i as usize])
+			.map(|v| ModelVertex {
+				tex_id: vulkano_tex_id,
+				..v
+			})
+			.into_iter(),
 	);
 
 	// use indices
@@ -64,9 +69,9 @@ pub async fn load_rust_vulkano_logos(
 		QUAD_INDICES.iter().copied(),
 		QUAD_VERTICES.iter().copied().map(|v| ModelVertex {
 			position: v.position + vec3a(0., 0.5, 1.),
+			tex_id: rust_mascot_tex_id,
 			..v
 		}),
-		rust_mascot_tex_id,
 	);
 
 	let vulkano_logo = vulkano_logo.await;
