@@ -32,4 +32,7 @@ pub fn opaque_fs(
 ) {
 	let image = unsafe { images.index(tex_id as usize) };
 	*output = image.sample(*sampler, tex_coord);
+	if output.w < 0.01 {
+		spirv_std::arch::kill();
+	}
 }
