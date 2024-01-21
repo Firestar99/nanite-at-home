@@ -126,15 +126,27 @@ where
 		let mut state_old = self.state.load(Relaxed);
 		loop {
 			state_old = match TaskState::from_u8(state_old).unwrap() {
-				WakerSubmitted | WakerSubmitting => unreachable!("poll called with waker already present"),
-				Running => {
+				// WakerSubmitted | WakerSubmitting => unreachable!("poll called with waker already present"),
+				WakerSubmitting => {
+					// wait for Waker to be written to self.waker
+					spin_loop();
+					self.state.load(Relaxed)
+				}
+				Running | WakerSubmitted => {
 					match self
 						.state
-						.compare_exchange_weak(Running as u8, WakerSubmitting as u8, Relaxed, Relaxed)
+						.compare_exchange_weak(state_old, WakerSubmitting as u8, Relaxed, Relaxed)
 					{
 						Ok(_) => {
 							// SAFETY: by setting state to WakerSubmitting we effectively locked self.waker for ourselves
-							unsafe { &mut *self.waker.get() }.write(cx.waker().clone());
+							let waker_ref = unsafe { &mut *self.waker.get() };
+							if state_old == WakerSubmitted as u8 {
+								// SAFETY: if present, old waker needs to be dropped before being replaced with a new one
+								unsafe {
+									waker_ref.assume_init_drop();
+								}
+							}
+							waker_ref.write(cx.waker().clone());
 							match self.state.compare_exchange(
 								WakerSubmitting as u8,
 								WakerSubmitted as u8,
@@ -142,7 +154,7 @@ where
 								Relaxed,
 							) {
 								Ok(_) => return Poll::Pending,
-								Err(_) => unreachable!(),
+								Err(_) => unreachable!("lock broken"),
 							}
 						}
 						Err(e) => e,
