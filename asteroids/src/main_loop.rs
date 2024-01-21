@@ -103,7 +103,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		let image = UVec3::from_array(acquired_image.image_view().image().extent());
 		let frame_data = FrameData {
 			camera: Camera::new(
-				Mat4::perspective_rh(90. / 360. * 2. * PI, image.x as f32 / image.y as f32, 0.001, 100.),
+				Mat4::perspective_rh(90. / 360. * 2. * PI, image.x as f32 / image.y as f32, 0.001, 1000.),
 				camera_controls.update(delta_time),
 			),
 		};

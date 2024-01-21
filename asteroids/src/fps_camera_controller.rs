@@ -3,8 +3,9 @@ use std::f32::consts::PI;
 
 use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
+use winit::dpi::PhysicalPosition;
 use winit::event::ElementState::Pressed;
-use winit::event::{DeviceEvent, Event, KeyEvent, WindowEvent};
+use winit::event::{DeviceEvent, Event, KeyEvent, MouseScrollDelta, WindowEvent};
 use winit::keyboard::PhysicalKey::Code;
 
 use crate::delta_time::DeltaTime;
@@ -19,6 +20,8 @@ pub struct FpsCameraController {
 
 	pub move_speed: Vec3,
 	pub mouse_speed: f32,
+
+	pub move_speed_exponent: i32,
 }
 
 impl FpsCameraController {
@@ -30,6 +33,7 @@ impl FpsCameraController {
 			movement_keys: Default::default(),
 			move_speed: Vec3::splat(1.),
 			mouse_speed: 0.03,
+			move_speed_exponent: 0,
 		}
 	}
 
@@ -46,6 +50,12 @@ impl FpsCameraController {
 				..
 			} => {
 				self.handle_mouse_input(*delta);
+			}
+			Event::WindowEvent {
+				event: WindowEvent::MouseWheel { delta, .. },
+				..
+			} => {
+				self.handle_scroll_input(*delta);
 			}
 			_ => {}
 		}
@@ -67,6 +77,7 @@ impl FpsCameraController {
 					ShiftLeft => self.movement_keys[1][1] = value,
 					KeyW => self.movement_keys[2][0] = value,
 					KeyS => self.movement_keys[2][1] = value,
+					Home => self.position = Vec3::default(),
 					_ => {}
 				}
 			}
@@ -81,6 +92,15 @@ impl FpsCameraController {
 		self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
 	}
 
+	pub fn handle_scroll_input(&mut self, scroll: MouseScrollDelta) {
+		let y = match scroll {
+			MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => y as f32,
+			MouseScrollDelta::LineDelta(_, y) => y,
+		};
+		let y = -y;
+		self.move_speed_exponent += [-1, 1][(y < 0.) as usize];
+	}
+
 	pub fn update(&mut self, delta_time: DeltaTime) -> Affine3A {
 		let mut movement = Vec3::default();
 		for dir in 0..3 {
@@ -88,7 +108,8 @@ impl FpsCameraController {
 				movement[dir] += [0., [-1., 1.][ud]][usize::from(self.movement_keys[dir][ud])];
 			}
 		}
-		movement *= self.move_speed * *delta_time;
+		let exponent_speed = f32::powf(2., self.move_speed_exponent as f32);
+		movement *= self.move_speed * exponent_speed * *delta_time;
 
 		let quat_yaw = Quat::from_axis_angle(vec3(0., 1., 0.), self.rotation_yaw);
 		self.position += quat_yaw * movement;
