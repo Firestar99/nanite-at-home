@@ -51,7 +51,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		.spawn(move |event_loop| {
 			WindowRef::new({
 				let window = WindowBuilder::new().build(event_loop).unwrap();
-				window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+				window.set_cursor_grab(CursorGrabMode::Locked).ok();
 				window.set_cursor_visible(false);
 				window
 			})

@@ -25,7 +25,7 @@ impl TextureArrayDescriptorSetLayout {
 			// 	.physical_device()
 			// 	.properties()
 			// 	.max_descriptor_set_sampled_images,
-			descriptor_count: 32,
+			descriptor_count: 4096,
 			..DescriptorSetBinding::descriptor_type(0, DescriptorType::SampledImage)
 		}
 	}

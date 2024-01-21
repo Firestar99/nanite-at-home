@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use glam::{Mat4, Vec2, Vec3};
-use gltf::image::Format;
+use gltf::image::{Data, Format};
 use gltf::mesh::Mode;
 use gltf::{Document, Node, Scene};
 use image::DynamicImage;
@@ -32,31 +32,26 @@ async fn load_gltf_inner(
 	let (document, buffers, images) = gltf::import(path).unwrap();
 
 	let scene = document.default_scene().unwrap();
-	let nodes = compute_transformations(&document, &scene);
+	let nodes_mat = compute_transformations(&document, &scene);
 
-	let images = futures::future::join_all(images.into_iter().map(|src| {
-		let image = match src.format {
-			Format::R8 => DynamicImage::ImageLuma8(
-				image::ImageBuffer::<image::Luma<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
-			),
-			Format::R8G8 => DynamicImage::ImageLumaA8(
-				image::ImageBuffer::<image::LumaA<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
-			),
-			Format::R8G8B8 => DynamicImage::ImageRgb8(
-				image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
-			),
-			Format::R8G8B8A8 => DynamicImage::ImageRgba8(
-				image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
-			),
-			e => panic!("unsupported image format: {:?}", e),
-		};
-		texture_manager.upload_texture(image)
-	}))
+	let (_, white_image) = texture_manager
+		.upload_texture(gltf_image_to_dynamic_image(Data {
+			format: Format::R8G8B8A8,
+			width: 1,
+			height: 1,
+			pixels: Vec::from([0xffu8; 4]),
+		}))
+		.await;
+	let images = futures::future::join_all(
+		images
+			.into_iter()
+			.map(|src| texture_manager.upload_texture(gltf_image_to_dynamic_image(src))),
+	)
 	.await;
 
 	let mut models = Vec::new();
 	for node in document.nodes() {
-		let mat = nodes[node.index()];
+		let mat = nodes_mat[node.index()];
 		if let Some(mesh) = node.mesh() {
 			for primitive in mesh.primitives() {
 				assert_eq!(primitive.mode(), Mode::Triangles);
@@ -69,15 +64,12 @@ async fn load_gltf_inner(
 						ModelVertex::new(mat.transform_point3(Vec3::from(pos)), Vec2::from(tex_coord))
 					});
 				let indices = reader.read_indices().map(|v| v.into_u32().map(|i| i as u16));
-				let albedo_tex_id = images[primitive
+				let albedo_tex_id = primitive
 					.material()
 					.pbr_metallic_roughness()
 					.base_color_texture()
-					.unwrap()
-					.texture()
-					.source()
-					.index()]
-				.1;
+					.map(|tex| images[tex.texture().source().index()].1)
+					.unwrap_or(white_image);
 				models.push(if let Some(indices) = indices {
 					OpaqueModel::indexed(
 						init,
@@ -102,6 +94,24 @@ async fn load_gltf_inner(
 		}
 	}
 	models
+}
+
+fn gltf_image_to_dynamic_image(src: Data) -> DynamicImage {
+	match src.format {
+		Format::R8 => DynamicImage::ImageLuma8(
+			image::ImageBuffer::<image::Luma<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
+		),
+		Format::R8G8 => DynamicImage::ImageLumaA8(
+			image::ImageBuffer::<image::LumaA<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
+		),
+		Format::R8G8B8 => DynamicImage::ImageRgb8(
+			image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
+		),
+		Format::R8G8B8A8 => DynamicImage::ImageRgba8(
+			image::ImageBuffer::<image::Rgba<u8>, _>::from_raw(src.width, src.height, src.pixels).unwrap(),
+		),
+		e => panic!("unsupported image format: {:?}", e),
+	}
 }
 
 fn compute_transformations(document: &Document, scene: &Scene) -> Vec<Mat4> {
