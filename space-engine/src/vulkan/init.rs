@@ -11,6 +11,7 @@ use vulkano::{Version, VulkanLibrary};
 
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::debug::Debug;
+use crate::vulkan::pipeline_cache::SpacePipelineCache;
 use crate::vulkan::validation_layers::ValidationLayers;
 use crate::vulkan::ENGINE_APPLICATION_CONFIG;
 
@@ -50,13 +51,14 @@ pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
 	pub memory_allocator: Arc<StandardMemoryAllocator>,
-	pub descriptor_allocator: StandardDescriptorSetAllocator,
-	pub cmd_buffer_allocator: StandardCommandBufferAllocator,
+	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
+	pub cmd_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+	pub pipeline_cache: SpacePipelineCache,
 	_debug: Debug,
 }
 
 impl<Q: Clone> Init<Q> {
-	pub fn new<ALLOCATOR, ALLOCATION>(
+	pub async fn new<ALLOCATOR, ALLOCATION>(
 		application_config: ApplicationConfig,
 		plugins: &[&dyn Plugin],
 		queue_allocator: ALLOCATOR,
@@ -87,8 +89,6 @@ impl<Q: Clone> Init<Q> {
 				};
 			layers = result.1;
 		}
-
-		// instance
 		let instance = Instance::new(
 			library,
 			InstanceCreateInfo {
@@ -149,9 +149,12 @@ impl<Q: Clone> Init<Q> {
 		let queues = allocation.take(queues.collect());
 
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-		let descriptor_allocator =
-			StandardDescriptorSetAllocator::new(device.clone(), StandardDescriptorSetAllocatorCreateInfo::default());
-		let cmd_buffer_allocator = StandardCommandBufferAllocator::new(device.clone(), Default::default());
+		let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+			device.clone(),
+			StandardDescriptorSetAllocatorCreateInfo::default(),
+		));
+		let cmd_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
+		let pipeline_cache = SpacePipelineCache::new(device.clone()).await;
 
 		Arc::new(Self {
 			device,
@@ -159,6 +162,7 @@ impl<Q: Clone> Init<Q> {
 			memory_allocator,
 			descriptor_allocator,
 			cmd_buffer_allocator,
+			pipeline_cache,
 			_debug,
 		})
 	}

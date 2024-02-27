@@ -3,8 +3,10 @@ use std::f32::consts::PI;
 
 use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
+use winit::dpi::PhysicalPosition;
 use winit::event::ElementState::Pressed;
-use winit::event::{DeviceEvent, Event, KeyboardInput};
+use winit::event::{DeviceEvent, Event, KeyEvent, MouseScrollDelta, WindowEvent};
+use winit::keyboard::PhysicalKey::Code;
 
 use crate::delta_time::DeltaTime;
 
@@ -18,6 +20,8 @@ pub struct FpsCameraController {
 
 	pub move_speed: Vec3,
 	pub mouse_speed: f32,
+
+	pub move_speed_exponent: i32,
 }
 
 impl FpsCameraController {
@@ -29,16 +33,17 @@ impl FpsCameraController {
 			movement_keys: Default::default(),
 			move_speed: Vec3::splat(1.),
 			mouse_speed: 0.03,
+			move_speed_exponent: 0,
 		}
 	}
 
-	pub fn handle_input(&mut self, event: &Event<'static, ()>) {
+	pub fn handle_input(&mut self, event: &Event<()>) {
 		match event {
-			Event::DeviceEvent {
-				event: DeviceEvent::Key(input),
+			Event::WindowEvent {
+				event: WindowEvent::KeyboardInput { event, .. },
 				..
 			} => {
-				self.handle_keyboard_input(*input);
+				self.handle_keyboard_input(event);
 			}
 			Event::DeviceEvent {
 				event: DeviceEvent::MouseMotion { delta, .. },
@@ -46,26 +51,33 @@ impl FpsCameraController {
 			} => {
 				self.handle_mouse_input(*delta);
 			}
+			Event::WindowEvent {
+				event: WindowEvent::MouseWheel { delta, .. },
+				..
+			} => {
+				self.handle_scroll_input(*delta);
+			}
 			_ => {}
 		}
 	}
 
-	pub fn handle_keyboard_input(&mut self, input: KeyboardInput) {
+	pub fn handle_keyboard_input(&mut self, input: &KeyEvent) {
 		match input {
-			KeyboardInput {
+			KeyEvent {
 				state,
-				virtual_keycode: Some(keycode),
+				physical_key: Code { 0: code },
 				..
 			} => {
-				use winit::event::VirtualKeyCode::*;
-				let value = state == Pressed;
-				match keycode {
-					A => self.movement_keys[0][0] = value,
-					D => self.movement_keys[0][1] = value,
+				use winit::keyboard::KeyCode::*;
+				let value = *state == Pressed;
+				match code {
+					KeyA => self.movement_keys[0][0] = value,
+					KeyD => self.movement_keys[0][1] = value,
 					Space => self.movement_keys[1][0] = value,
-					LShift => self.movement_keys[1][1] = value,
-					W => self.movement_keys[2][0] = value,
-					S => self.movement_keys[2][1] = value,
+					ShiftLeft => self.movement_keys[1][1] = value,
+					KeyW => self.movement_keys[2][0] = value,
+					KeyS => self.movement_keys[2][1] = value,
+					Home => self.position = Vec3::default(),
 					_ => {}
 				}
 			}
@@ -77,7 +89,16 @@ impl FpsCameraController {
 		const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
 		let delta = DVec2::from(delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST;
 		self.rotation_yaw -= delta.x;
-		self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI, PI);
+		self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
+	}
+
+	pub fn handle_scroll_input(&mut self, scroll: MouseScrollDelta) {
+		let y = match scroll {
+			MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => y as f32,
+			MouseScrollDelta::LineDelta(_, y) => y,
+		};
+		let y = -y;
+		self.move_speed_exponent += [-1, 1][(y < 0.) as usize];
 	}
 
 	pub fn update(&mut self, delta_time: DeltaTime) -> Affine3A {
@@ -87,7 +108,8 @@ impl FpsCameraController {
 				movement[dir] += [0., [-1., 1.][ud]][usize::from(self.movement_keys[dir][ud])];
 			}
 		}
-		movement *= self.move_speed * *delta_time;
+		let exponent_speed = f32::powf(2., self.move_speed_exponent as f32);
+		movement *= self.move_speed * exponent_speed * *delta_time;
 
 		let quat_yaw = Quat::from_axis_angle(vec3(0., 1., 0.), self.rotation_yaw);
 		self.position += quat_yaw * movement;

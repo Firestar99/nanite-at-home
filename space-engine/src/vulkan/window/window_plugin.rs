@@ -19,7 +19,7 @@ impl WindowPlugin {
 	pub async fn new(event_loop: &EventLoopExecutor) -> Self {
 		Self {
 			window_extensions: event_loop
-				.spawn(|event_loop| Surface::required_extensions(event_loop))
+				.spawn(|event_loop| Surface::required_extensions(event_loop).unwrap())
 				.await,
 		}
 	}

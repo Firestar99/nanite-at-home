@@ -126,15 +126,27 @@ where
 		let mut state_old = self.state.load(Relaxed);
 		loop {
 			state_old = match TaskState::from_u8(state_old).unwrap() {
-				WakerSubmitted | WakerSubmitting => unreachable!("poll called with waker already present"),
-				Running => {
+				// WakerSubmitted | WakerSubmitting => unreachable!("poll called with waker already present"),
+				WakerSubmitting => {
+					// wait for Waker to be written to self.waker
+					spin_loop();
+					self.state.load(Relaxed)
+				}
+				Running | WakerSubmitted => {
 					match self
 						.state
-						.compare_exchange_weak(Running as u8, WakerSubmitting as u8, Relaxed, Relaxed)
+						.compare_exchange_weak(state_old, WakerSubmitting as u8, Relaxed, Relaxed)
 					{
 						Ok(_) => {
 							// SAFETY: by setting state to WakerSubmitting we effectively locked self.waker for ourselves
-							unsafe { &mut *self.waker.get() }.write(cx.waker().clone());
+							let waker_ref = unsafe { &mut *self.waker.get() };
+							if state_old == WakerSubmitted as u8 {
+								// SAFETY: if present, old waker needs to be dropped before being replaced with a new one
+								unsafe {
+									waker_ref.assume_init_drop();
+								}
+							}
+							waker_ref.write(cx.waker().clone());
 							match self.state.compare_exchange(
 								WakerSubmitting as u8,
 								WakerSubmitted as u8,
@@ -142,7 +154,7 @@ where
 								Relaxed,
 							) {
 								Ok(_) => return Poll::Pending,
-								Err(_) => unreachable!(),
+								Err(_) => unreachable!("lock broken"),
 							}
 						}
 						Err(e) => e,
@@ -268,9 +280,9 @@ impl Drop for EventLoopExecutor {
 	}
 }
 
-pub fn event_loop_init<F>(launch: F) -> !
+pub fn event_loop_init<F>(launch: F)
 where
-	F: FnOnce(EventLoopExecutor, Receiver<Event<'static, ()>>) + Send + 'static,
+	F: FnOnce(EventLoopExecutor, Receiver<Event<()>>) + Send + 'static,
 {
 	// plain setup
 	let (exec_tx, exec_rx) = channel();
@@ -297,7 +309,7 @@ where
 		// EventLoop setup
 		// FIXME replace with log
 		println!("[Info] Main: transitioning to Queue with EventLoop");
-		event_loop = EventLoop::new();
+		event_loop = EventLoop::new().unwrap();
 		{
 			let notify = event_loop.create_proxy();
 			// there may be Messages remaining on the queue which need handling
@@ -309,33 +321,32 @@ where
 	}
 
 	// EventLoop loop
-	event_loop.run(move |event, b, control_flow| {
-		match event {
-			Event::UserEvent(_) => {
-				loop {
-					match exec_rx.try_recv() {
-						Ok(msg) => msg.run(&b),
-						Err(e) => {
-							if matches!(e, TryRecvError::Disconnected) {
-								// Only exit when all other threads have exited!
-								// Otherwise the system start cleaning up vulkan objects while we're also at it, causing Segfaults.
-								// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
-								if let Some(join_handle) = render_join_handle.take() {
-									join_handle.join().ok();
+	event_loop
+		.run(move |event, b| {
+			match event {
+				Event::UserEvent(_) => {
+					loop {
+						match exec_rx.try_recv() {
+							Ok(msg) => msg.run(&b),
+							Err(e) => {
+								if matches!(e, TryRecvError::Disconnected) {
+									// Only exit when all other threads have exited!
+									// Otherwise the system start cleaning up vulkan objects while we're also at it, causing Segfaults.
+									// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
+									if let Some(join_handle) = render_join_handle.take() {
+										join_handle.join().ok();
+									}
+									b.exit();
 								}
-								control_flow.set_exit();
+								break;
 							}
-							break;
 						}
 					}
 				}
-			}
-			event => {
-				if let Some(event) = event.to_static() {
-					// ignore that channel may have closed
+				event => {
 					let _ = event_tx.send(event);
 				}
 			}
-		}
-	});
+		})
+		.unwrap();
 }

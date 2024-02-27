@@ -11,12 +11,13 @@ use vulkano::image::ImageUsage;
 use vulkano::swapchain::ColorSpace::SrgbNonLinear;
 use vulkano::swapchain::PresentMode::{Fifo, Mailbox};
 use vulkano::swapchain::{
-	acquire_next_image, ColorSpace, CompositeAlpha, PresentFuture, PresentMode, Surface, SurfaceInfo,
-	SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo,
+	acquire_next_image, ColorSpace, CompositeAlpha, PresentMode, Surface, SurfaceInfo, SwapchainAcquireFuture,
+	SwapchainCreateInfo, SwapchainPresentInfo,
 };
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
+use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
 
 use crate::vulkan::window::event_loop::EventLoopExecutor;
@@ -269,6 +270,22 @@ impl SwapchainController {
 			RECREATE_ATTEMPTS
 		);
 	}
+
+	pub fn force_recreate(&mut self) {
+		self.should_recreate = true;
+	}
+
+	pub fn handle_input(&mut self, event: &Event<()>) {
+		match event {
+			Event::WindowEvent {
+				event: WindowEvent::Resized(_),
+				..
+			} => {
+				self.should_recreate = true;
+			}
+			_ => (),
+		}
+	}
 }
 
 impl Deref for SwapchainController {
@@ -290,7 +307,7 @@ impl<'a> AcquiredImage<'a> {
 		&self.controller.images[self.image_index as usize]
 	}
 
-	pub fn present<F: GpuFuture>(self, future: F) -> Option<FenceSignalFuture<PresentFuture<F>>> {
+	pub fn present(self, future: impl GpuFuture + 'static) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>> {
 		match future
 			.then_swapchain_present(
 				self.controller.queue.clone(),
@@ -299,6 +316,7 @@ impl<'a> AcquiredImage<'a> {
 					self.image_index,
 				),
 			)
+			.boxed()
 			.then_signal_fence_and_flush()
 		{
 			Ok(e) => Some(e),

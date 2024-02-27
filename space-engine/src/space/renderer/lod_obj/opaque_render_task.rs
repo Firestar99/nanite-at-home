@@ -1,46 +1,59 @@
-use glam::vec3;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
+use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, RenderingAttachmentInfo, RenderingInfo, SubpassContents};
+use vulkano::command_buffer::{
+	CommandBufferBeginInfo, RecordingCommandBuffer, RenderingAttachmentInfo, RenderingInfo, SubpassContents,
+};
 use vulkano::format::{ClearValue, Format};
+use vulkano::image::view::ImageView;
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
 
-use space_engine_common::space::renderer::lod_obj::VertexInput;
-
 use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
-use crate::space::renderer::lod_obj::opaque_model::OpaqueModel;
-use crate::space::renderer::render_graph::context::{FrameContext, RenderContext};
+use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::model::texture_manager::TextureManager;
+use crate::space::renderer::render_graph::context::FrameContext;
+use crate::space::Init;
 
 pub struct OpaqueRenderTask {
 	pipeline_opaque: OpaqueDrawPipeline,
-	opaque_model: OpaqueModel,
+	texture_manager: Arc<TextureManager>,
+	pub models: Mutex<Vec<OpaqueModel>>,
 }
 
-const MODEL_VERTEX_INPUT: [VertexInput; 4] = [
-	VertexInput::new(vec3(-1., -1., 0.)),
-	VertexInput::new(vec3(-1., 1., 0.)),
-	VertexInput::new(vec3(1., 1., 0.)),
-	VertexInput::new(vec3(1., -1., 0.)),
-];
-
 impl OpaqueRenderTask {
-	pub fn new<'a>(context: &Arc<RenderContext>, format: Format) -> Self {
-		let pipeline_opaque = OpaqueDrawPipeline::new(context, format);
-		let opaque_model = OpaqueModel::new(&context, &pipeline_opaque, MODEL_VERTEX_INPUT.iter().copied());
+	pub fn new(
+		init: &Arc<Init>,
+		texture_manager: &Arc<TextureManager>,
+		format_color: Format,
+		format_depth: Format,
+	) -> Self {
+		let pipeline_opaque = OpaqueDrawPipeline::new(&init, format_color, format_depth);
 		Self {
 			pipeline_opaque,
-			opaque_model,
+			models: Mutex::new(Vec::new()),
+			texture_manager: texture_manager.clone(),
 		}
 	}
 
-	pub fn record(&self, frame_context: &FrameContext, future: impl GpuFuture) -> impl GpuFuture {
+	pub fn record(
+		&self,
+		frame_context: &FrameContext,
+		output_image: &Arc<ImageView>,
+		depth_image: &Arc<ImageView>,
+		future: impl GpuFuture,
+	) -> impl GpuFuture {
 		let graphics = &frame_context.render_context.init.queues.client.graphics_main;
-		let mut cmd = AutoCommandBufferBuilder::primary(
-			&frame_context.render_context.init.cmd_buffer_allocator,
+		let mut cmd = RecordingCommandBuffer::new(
+			frame_context.render_context.init.cmd_buffer_allocator.clone(),
 			graphics.queue_family_index(),
-			OneTimeSubmit,
+			Primary,
+			CommandBufferBeginInfo {
+				usage: OneTimeSubmit,
+				..CommandBufferBeginInfo::default()
+			},
 		)
 		.unwrap();
 		cmd.begin_rendering(RenderingInfo {
@@ -48,15 +61,26 @@ impl OpaqueRenderTask {
 				load_op: AttachmentLoadOp::Clear,
 				store_op: AttachmentStoreOp::Store,
 				clear_value: Some(ClearValue::Float([0.0f32; 4])),
-				..RenderingAttachmentInfo::image_view(frame_context.output_image.clone())
+				..RenderingAttachmentInfo::image_view(output_image.clone())
 			})],
+			depth_attachment: Some(RenderingAttachmentInfo {
+				load_op: AttachmentLoadOp::Clear,
+				store_op: AttachmentStoreOp::Store,
+				// FIXME: what is the clear value, 1 or +INF?
+				clear_value: Some(ClearValue::Depth(1.)),
+				..RenderingAttachmentInfo::image_view(depth_image.clone())
+			}),
 			contents: SubpassContents::Inline,
 			..RenderingInfo::default()
 		})
 		.unwrap();
-		self.pipeline_opaque.draw(frame_context, &mut cmd, &self.opaque_model);
+		let texture_array_descriptor_set = self.texture_manager.create_descriptor_set();
+		for model in &*self.models.lock() {
+			self.pipeline_opaque
+				.draw(frame_context, &mut cmd, model, &texture_array_descriptor_set);
+		}
 		cmd.end_rendering().unwrap();
 
-		future.then_execute(graphics.clone(), cmd.build().unwrap()).unwrap()
+		future.then_execute(graphics.clone(), cmd.end().unwrap()).unwrap()
 	}
 }

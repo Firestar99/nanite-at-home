@@ -3,14 +3,17 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{env, error};
 
-use spirv_builder::{CompileResult, MetadataPrintout, ModuleResult, SpirvBuilder, SpirvBuilderError, SpirvMetadata};
+pub use spirv_builder;
+use spirv_builder::{
+	Capability, CompileResult, MetadataPrintout, ModuleResult, SpirvBuilder, SpirvBuilderError, SpirvMetadata,
+};
 
 use crate::codegen::{codegen_shader_symbols, CodegenError, CodegenOptions};
 
 pub mod codegen;
 
 pub struct ShaderSymbolsBuilder {
-	pub spirv_builder: SpirvBuilder,
+	spirv_builder: SpirvBuilder,
 	pub codegen: Option<CodegenOptions>,
 }
 
@@ -40,6 +43,34 @@ impl ShaderSymbolsBuilder {
 				shader_symbols_path: String::from("shader_symbols.rs"),
 			}),
 		}
+	}
+
+	pub fn with_spirv_builder<F>(self, f: F) -> Self
+	where
+		F: FnOnce(SpirvBuilder) -> SpirvBuilder,
+	{
+		Self {
+			spirv_builder: f(self.spirv_builder),
+			..self
+		}
+	}
+
+	pub fn extension(self, extension: impl Into<String>) -> Self {
+		Self {
+			spirv_builder: self.spirv_builder.extension(extension),
+			..self
+		}
+	}
+
+	pub fn capability(self, capability: Capability) -> Self {
+		Self {
+			spirv_builder: self.spirv_builder.capability(capability),
+			..self
+		}
+	}
+
+	pub fn set_codegen_options(self, codegen: Option<CodegenOptions>) -> Self {
+		Self { codegen, ..self }
 	}
 
 	pub fn build(self) -> Result<ShaderSymbolsResult, ShaderSymbolsError> {

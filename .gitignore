@@ -90,3 +90,4 @@ fabric.properties
 .idea/**/modules.xml
 .idea/**/deployment.xml
 *.autosave.xopp
+pipeline_cache.bin

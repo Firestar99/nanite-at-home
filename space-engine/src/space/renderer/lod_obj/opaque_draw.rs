@@ -1,11 +1,12 @@
+use std::ops::Deref;
 use std::sync::Arc;
 
 use smallvec::smallvec;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer};
+use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
-use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
 use vulkano::format::Format;
-use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
@@ -13,66 +14,73 @@ use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, Pipeline
 use vulkano::pipeline::graphics::vertex_input::VertexInputState;
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
-use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
+use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 
 use crate::shader::space::renderer::lod_obj::opaque_shader::{opaque_fs, opaque_vs};
-use crate::space::renderer::frame_in_flight::ResourceInFlight;
-use crate::space::renderer::lod_obj::opaque_model::OpaqueModel;
-use crate::space::renderer::render_graph::context::{FrameContext, RenderContext};
+use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
+use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::model::model_descriptor_set::ModelDescriptorSetLayout;
+use crate::space::renderer::model::texture_array_descriptor_set::{
+	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
+};
+use crate::space::renderer::render_graph::context::FrameContext;
+use crate::space::Init;
 
 #[derive(Clone)]
 pub struct OpaqueDrawPipeline {
 	pipeline: Arc<GraphicsPipeline>,
-	descriptor_set: ResourceInFlight<Arc<PersistentDescriptorSet>>,
 }
 
 impl OpaqueDrawPipeline {
-	pub fn new(context: &Arc<RenderContext>, format_color: Format) -> Self {
-		let device = &context.init.device;
-		let stages = smallvec![
-			PipelineShaderStageCreateInfo::new(opaque_vs::new(device.clone())),
-			PipelineShaderStageCreateInfo::new(opaque_fs::new(device.clone())),
-		];
+	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
+		let device = &init.device;
 		let layout = PipelineLayout::new(
 			device.clone(),
-			PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-				.into_pipeline_layout_create_info(device.clone())
-				.unwrap(),
+			PipelineLayoutCreateInfo {
+				set_layouts: [
+					GlobalDescriptorSetLayout::new(init).0,
+					ModelDescriptorSetLayout::new(init).0,
+					TextureArrayDescriptorSetLayout::new(init).0,
+				]
+				.to_vec(),
+				..PipelineLayoutCreateInfo::default()
+			},
 		)
 		.unwrap();
-		let descriptor_set = ResourceInFlight::new(context, |frame| {
-			PersistentDescriptorSet::new(
-				&context.init.descriptor_allocator,
-				layout.set_layouts()[0].clone(),
-				[WriteDescriptorSet::buffer(
-					0,
-					context.frame_data_uniform.index(frame).clone(),
-				)],
-				[],
-			)
-			.unwrap()
-		});
 
 		let pipeline = GraphicsPipeline::new(
 			device.clone(),
-			None,
+			Some(init.pipeline_cache.deref().clone()),
 			GraphicsPipelineCreateInfo {
-				stages,
-				vertex_input_state: VertexInputState::default().into(),
-				input_assembly_state: InputAssemblyState::default().into(),
-				rasterization_state: RasterizationState::default().into(),
-				viewport_state: ViewportState::default().into(),
-				multisample_state: MultisampleState::default().into(),
-				color_blend_state: ColorBlendState {
-					attachments: vec![ColorBlendAttachmentState::default()],
+				stages: smallvec![
+					PipelineShaderStageCreateInfo::new(opaque_vs::new(device.clone())),
+					PipelineShaderStageCreateInfo::new(opaque_fs::new(device.clone())),
+				],
+				vertex_input_state: Some(VertexInputState::default()),
+				input_assembly_state: Some(InputAssemblyState::default()),
+				rasterization_state: Some(RasterizationState::default()),
+				viewport_state: Some(ViewportState::default()),
+				multisample_state: Some(MultisampleState::default()),
+				depth_stencil_state: Some(DepthStencilState {
+					depth: Some(DepthState {
+						write_enable: true,
+						compare_op: CompareOp::Less,
+					}),
+					..DepthStencilState::default()
+				}),
+				color_blend_state: Some(ColorBlendState {
+					attachments: vec![ColorBlendAttachmentState {
+						blend: Some(AttachmentBlend::alpha()),
+						..ColorBlendAttachmentState::default()
+					}],
 					..Default::default()
-				}
-				.into(),
+				}),
 				subpass: PipelineSubpassType::BeginRendering(PipelineRenderingCreateInfo {
 					color_attachment_formats: vec![Some(format_color)],
+					depth_attachment_format: Some(format_depth),
 					..PipelineRenderingCreateInfo::default()
 				})
 				.into(),
@@ -82,17 +90,15 @@ impl OpaqueDrawPipeline {
 		)
 		.unwrap();
 
-		Self {
-			pipeline,
-			descriptor_set,
-		}
+		Self { pipeline }
 	}
 
 	pub fn draw(
 		&self,
 		frame_context: &FrameContext,
-		cmd: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+		cmd: &mut RecordingCommandBuffer,
 		model: &OpaqueModel,
+		texture_array_descriptor_set: &TextureArrayDescriptorSet,
 	) {
 		cmd.bind_pipeline_graphics(self.pipeline.clone())
 			.unwrap()
@@ -103,13 +109,22 @@ impl OpaqueDrawPipeline {
 				self.pipeline.layout().clone(),
 				0,
 				(
-					self.descriptor_set.index(frame_context.frame_in_flight).clone(),
-					model.descriptor.clone(),
+					frame_context.global_descriptor_set.clone().0,
+					model.descriptor.clone().0,
+					texture_array_descriptor_set.clone().0,
 				),
 			)
-			.unwrap()
-			.draw(3, 1, 0, 0)
 			.unwrap();
+		if let Some(index_buffer) = &model.index_buffer {
+			cmd.bind_index_buffer(index_buffer.clone()).unwrap();
+			unsafe {
+				cmd.draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).unwrap();
+			}
+		} else {
+			unsafe {
+				cmd.draw(model.vertex_buffer.len() as u32, 1, 0, 0).unwrap();
+			}
+		}
 	}
 
 	pub fn descriptor_set_layout_model(&self) -> &Arc<DescriptorSetLayout> {

@@ -4,45 +4,54 @@ use std::sync::Arc;
 
 use smallvec::{smallvec, SmallVec};
 use static_assertions::assert_not_impl_any;
-use vulkano::format::Format;
-use vulkano::image::view::ImageView;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
 
 use space_engine_common::space::renderer::frame_data::FrameData;
 
-use crate::space::renderer::frame_in_flight::frame_manager::FrameManager;
-use crate::space::renderer::frame_in_flight::uniform::UniformInFlight;
-use crate::space::renderer::frame_in_flight::{FrameInFlight, SeedInFlight};
+use crate::space::renderer::global_descriptor_set::{GlobalDescriptorSet, GlobalDescriptorSetLayout};
 use crate::space::Init;
 use crate::vulkan::concurrent_sharing;
+use vulkano_bindless::frame_in_flight::frame_manager::FrameManager;
+use vulkano_bindless::frame_in_flight::uniform::UniformInFlight;
+use vulkano_bindless::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 
 /// `RenderContext` is the main instance of the renderer, talking care of rendering frames and most notable ensuring no
 /// data races when multiple frames are currently in flight.
 pub struct RenderContext {
 	pub init: Arc<Init>,
 	pub seed: SeedInFlight,
-	pub output_format: Format,
 	pub frame_data_uniform: UniformInFlight<FrameData>,
+	pub global_descriptor_set: ResourceInFlight<GlobalDescriptorSet>,
 	_private: PhantomData<()>,
 }
 
 impl RenderContext {
-	pub fn new(init: Arc<Init>, output_format: Format, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
+	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
 		let frame_manager = FrameManager::new(frames_in_flight);
 		let seed = frame_manager.seed();
+		let frame_data_uniform = UniformInFlight::new(
+			init.memory_allocator.clone(),
+			concurrent_sharing(&[&init.queues.client.graphics_main, &init.queues.client.async_compute]),
+			seed,
+			true,
+		);
+		let global_descriptor_set_layout = GlobalDescriptorSetLayout::new(&init);
+		let global_descriptor_set = ResourceInFlight::new(seed, |fif| {
+			GlobalDescriptorSet::new(
+				&init,
+				&global_descriptor_set_layout,
+				frame_data_uniform.index(fif).clone(),
+			)
+		});
+		let _private = Default::default();
 		let render_context = Arc::new(Self {
-			frame_data_uniform: UniformInFlight::new(
-				init.memory_allocator.clone(),
-				concurrent_sharing(&[&init.queues.client.graphics_main, &init.queues.client.async_compute]),
-				seed,
-				true,
-			),
 			init,
 			seed,
-			output_format,
-			_private: Default::default(),
+			frame_data_uniform,
+			global_descriptor_set,
+			_private,
 		});
 		let new_frame = RenderContextNewFrame {
 			render_context: render_context.clone(),
@@ -59,13 +68,6 @@ impl From<&RenderContext> for SeedInFlight {
 	}
 }
 
-impl From<&Arc<RenderContext>> for SeedInFlight {
-	#[inline]
-	fn from(value: &Arc<RenderContext>) -> Self {
-		value.seed
-	}
-}
-
 /// `RenderContextNewFrame` is like [`RenderContext`], but may not be cloned to guarantee exclusive access, which
 /// allows generating [`RenderContextNewFrame::new_frame()`].
 pub struct RenderContextNewFrame {
@@ -76,33 +78,23 @@ pub struct RenderContextNewFrame {
 assert_not_impl_any!(RenderContextNewFrame: Clone);
 
 impl RenderContextNewFrame {
-	pub fn new_frame<F>(self: &mut Self, output_image: Arc<ImageView>, frame_data: FrameData, f: F)
+	pub fn new_frame<F>(self: &mut Self, viewport: Viewport, frame_data: FrameData, f: F)
 	where
 		F: FnOnce(FrameContext) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		self.frame_manager.new_frame(|frame_in_flight| {
-			assert_eq!(
-				output_image.format(),
-				self.render_context.output_format,
-				"ImageView format must match constructed format"
-			);
-			let extent = output_image.image().extent();
-			assert_eq!(extent[2], 1, "must be a 2D image");
-
 			self.render_context
 				.frame_data_uniform
 				.upload(frame_in_flight, frame_data);
 
+			let render_context = self.render_context.clone();
+			let global_descriptor_set = self.render_context.global_descriptor_set.index(frame_in_flight).clone();
 			f(FrameContext {
-				render_context: self.render_context.clone(),
+				render_context,
 				frame_in_flight,
 				frame_data,
-				output_image,
-				viewport: Viewport {
-					offset: [0f32; 2],
-					extent: [extent[0] as f32, extent[1] as f32],
-					depth_range: 0f32..=1f32,
-				},
+				viewport,
+				global_descriptor_set,
 				_private: PhantomData::default(),
 			})
 		});
@@ -122,8 +114,8 @@ pub struct FrameContext<'a> {
 	pub render_context: Arc<RenderContext>,
 	pub frame_in_flight: FrameInFlight<'a>,
 	pub frame_data: FrameData,
-	pub output_image: Arc<ImageView>,
 	pub viewport: Viewport,
+	pub global_descriptor_set: GlobalDescriptorSet,
 	_private: PhantomData<()>,
 }
 
@@ -157,6 +149,6 @@ impl<'a> DerefMut for FrameContext<'a> {
 impl<'a> From<&FrameContext<'a>> for SeedInFlight {
 	#[inline]
 	fn from(value: &FrameContext<'a>) -> Self {
-		(&value.render_context).into()
+		(&*value.render_context).into()
 	}
 }

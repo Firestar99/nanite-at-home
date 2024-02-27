@@ -1,7 +1,9 @@
-use crate::space::renderer::frame_in_flight::FRAMES_LIMIT;
-use static_assertions::const_assert_eq;
 use std::marker::PhantomData;
 use std::mem::size_of;
+
+use static_assertions::const_assert_eq;
+
+use crate::frame_in_flight::FRAMES_LIMIT;
 
 /// The index of a frame that is in flight. See [mod](self) for docs.
 #[derive(Copy, Clone)]

@@ -7,6 +7,8 @@ members = [
     "space-engine",
     "space-engine-common",
     "space-engine-shader",
+    "vulkano-bindless/vulkano-bindless",
+    "vulkano-bindless/vulkano-bindless-shaders-rust",
 ]
 resolver = "2"
 
@@ -19,9 +21,10 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-vulkano = "0.34"
-vulkano-shaders = "0.34"
-winit = "0.28" # in sync with vulkano-win
+# vulkano 0.35 development
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "e194406ae75bac7b8927e2076c0aae6fe3a42e5b" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "e194406ae75bac7b8927e2076c0aae6fe3a42e5b" }
+winit = { version = "0.29.9", features = ["rwh_05"] }
 
 # rust-gpu
 spirv-builder = { version = "0.9", default-features = false }
@@ -45,6 +48,10 @@ bytemuck = "1.13"
 bytemuck_derive = "1.4"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 num-derive = "0.3"
+
+# model loader
+gltf = "1.4.0"
+image = "0.24.7"
 
 # other
 once_cell = "1.18"
