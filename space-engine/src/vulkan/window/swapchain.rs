@@ -93,10 +93,9 @@ impl Swapchain {
 						// Fifo wants 2 images
 						2
 					};
-					image_count = surface_capabilities
-						.min_image_count
-						.min(best_count)
-						.max(surface_capabilities.max_image_count.unwrap_or(best_count))
+					image_count = best_count
+						.min(surface_capabilities.max_image_count.unwrap_or(best_count))
+						.max(surface_capabilities.min_image_count)
 				}
 
 				let image_usage;
