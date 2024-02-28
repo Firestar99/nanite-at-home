@@ -7,6 +7,7 @@ members = [
     "space-engine",
     "space-engine-common",
     "space-engine-shader",
+    "space-engine-shader-builder",
     "vulkano-bindless/vulkano-bindless",
     "vulkano-bindless/vulkano-bindless-shaders-rust",
 ]

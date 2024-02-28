@@ -129,11 +129,11 @@ dependencies = [
  "num-derive",
  "num-traits",
  "parking_lot",
- "shader-symbols-builder",
  "smallvec",
  "smol",
  "space-engine",
  "space-engine-common",
+ "space-engine-shader-builder",
  "static_assertions",
  "vulkano",
  "vulkano-shaders",
@@ -2120,10 +2120,10 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "paste",
- "shader-symbols-builder",
  "smallvec",
  "smol",
  "space-engine-common",
+ "space-engine-shader-builder",
  "static_assertions",
  "vulkano",
  "vulkano-bindless",
@@ -2156,6 +2156,13 @@ dependencies = [
  "space-engine-common",
  "spirv-std",
  "static_assertions",
+]
+
+[[package]]
+name = "space-engine-shader-builder"
+version = "0.1.0"
+dependencies = [
+ "shader-symbols-builder",
 ]
 
 [[package]]

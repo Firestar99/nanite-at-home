@@ -14,6 +14,7 @@
       <sourceFolder url="file://$MODULE_DIR$/space-engine-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-shaders-rust/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-engine-shader-builder/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
