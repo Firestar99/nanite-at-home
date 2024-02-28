@@ -31,6 +31,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let layer_renderdoc = false;
 	let layer_validation = true;
 
+	if layer_renderdoc {
+		// renderdoc does not yet support wayland
+		std::env::remove_var("WAYLAND_DISPLAY");
+	}
+
 	let init;
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
