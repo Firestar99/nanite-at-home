@@ -1,3 +1,4 @@
+use std::cmp;
 use std::sync::Arc;
 
 use smallvec::SmallVec;
@@ -111,13 +112,15 @@ impl<Q: Clone> Init<Q> {
 		let physical_device = instance
 			.enumerate_physical_devices()
 			.unwrap()
-			.max_by_key(|phy| match phy.properties().device_type {
-				PhysicalDeviceType::DiscreteGpu => 4,
-				PhysicalDeviceType::IntegratedGpu => 3,
-				PhysicalDeviceType::VirtualGpu => 2,
-				PhysicalDeviceType::Cpu => 1,
-				PhysicalDeviceType::Other => 0,
-				_ => -1,
+			.reduce(|x, y| {
+				cmp::max_by_key(y, x, |phy| match phy.properties().device_type {
+					PhysicalDeviceType::DiscreteGpu => 4,
+					PhysicalDeviceType::IntegratedGpu => 3,
+					PhysicalDeviceType::VirtualGpu => 2,
+					PhysicalDeviceType::Cpu => 1,
+					PhysicalDeviceType::Other => 0,
+					_ => -1,
+				})
 			})
 			.expect("No PhysicalDevice found!");
 
