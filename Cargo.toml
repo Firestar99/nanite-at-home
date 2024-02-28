@@ -12,12 +12,16 @@ members = [
 ]
 resolver = "2"
 
+
+
 [workspace.package]
 version = "0.1.0"
 authors = ["Firestar99"]
 edition = "2021"
 license = "MIT"
 repository = "https://gitlab.com/spacegamedev/space-rust"
+
+
 
 [workspace.dependencies]
 # vulkan
@@ -51,7 +55,7 @@ num-derive = "0.3"
 
 # model loader
 gltf = "1.4.0"
-image = "0.24.7"
+image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
 
 # other
 once_cell = "1.18"
@@ -59,6 +63,8 @@ smallvec = { version = "1.11", features = ["const_generics", "const_new"] }
 static_assertions = "1.1.0"
 parking_lot = "0.12"
 clap = { version = "3.2", features = ["derive"] }
+
+
 
 # Following is copied from rust-gpu workspace cargo.toml
 # Enable incremental by default in release mode.
@@ -75,3 +81,20 @@ codegen-units = 256
 opt-level = 3
 incremental = true
 codegen-units = 256
+
+
+
+# Optimize certain crates even in dev mode:
+# model and image loading
+[profile.dev.package.gltf]
+opt-level = 3
+[profile.dev.package.gltf-derive]
+opt-level = 3
+[profile.dev.package.gltf-json]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.jpeg-decoder]
+opt-level = 3
