@@ -5,18 +5,17 @@ use vulkano::buffer::Subbuffer;
 use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorType};
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::image::sampler::Sampler;
-use vulkano::shader::ShaderStages;
 
 use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
 
 use crate::space::renderer::descriptor_set_creator::DescriptorSetBinding;
+use crate::space::renderer::ALL_SHADER_STAGES;
 use crate::space::Init;
 
 #[derive(Clone)]
 pub struct ModelDescriptorSetLayout(pub Arc<DescriptorSetLayout>);
 
 impl ModelDescriptorSetLayout {
-	pub const SHADER_STAGES: ShaderStages = ShaderStages::all_graphics().union(ShaderStages::COMPUTE);
 	pub const BINDING_MODEL_VERTEX: DescriptorSetBinding =
 		DescriptorSetBinding::descriptor_type(0, DescriptorType::StorageBuffer);
 	pub const BINDING_MODEL_SAMPLER: DescriptorSetBinding =
@@ -27,7 +26,7 @@ impl ModelDescriptorSetLayout {
 			DescriptorSetBinding::create_descriptor_set_layout(
 				&[&Self::BINDING_MODEL_VERTEX, &Self::BINDING_MODEL_SAMPLER],
 				init,
-				Self::SHADER_STAGES,
+				ALL_SHADER_STAGES,
 			)
 			.unwrap(),
 		)
