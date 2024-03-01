@@ -1,7 +1,7 @@
-use futures::future::join_all;
 use std::path::Path;
 use std::sync::Arc;
 
+use futures::future::join_all;
 use glam::{vec4, Mat4, Vec2, Vec3};
 use gltf::image::{Data, Format};
 use gltf::mesh::Mode;

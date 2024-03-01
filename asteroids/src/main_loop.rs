@@ -8,10 +8,10 @@ use winit::window::{CursorGrabMode, WindowBuilder};
 use space_engine::generate_application_config;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
 use space_engine::space::renderer::model::texture_manager::TextureManager;
+use space_engine::space::renderer::renderer_plugin::RendererPlugin;
 use space_engine::space::renderer::renderers::main::{RenderPipelineMain, RendererMain};
 use space_engine::space::Init;
 use space_engine::vulkan::init::Plugin;
-use space_engine::vulkan::plugins::dynamic_rendering::DynamicRendering;
 use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
@@ -27,18 +27,23 @@ use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scene::load_scene;
 
+const LAYER_RENDERDOC: bool = false;
+const LAYER_VALIDATION: bool = true;
+
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
-	let layer_renderdoc = false;
-	let layer_validation = true;
+	if LAYER_RENDERDOC {
+		// renderdoc does not yet support wayland
+		std::env::remove_var("WAYLAND_DISPLAY");
+	}
 
 	let init;
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
-		let mut vec: Vec<&dyn Plugin> = vec![&DynamicRendering, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
-		if layer_renderdoc {
+		let mut vec: Vec<&dyn Plugin> = vec![&RendererPlugin, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
+		if LAYER_RENDERDOC {
 			vec.push(&RenderdocLayerPlugin);
 		}
-		if layer_validation {
+		if LAYER_VALIDATION {
 			vec.push(&StandardValidationLayerPlugin);
 		}
 

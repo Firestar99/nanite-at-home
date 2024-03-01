@@ -43,4 +43,4 @@ static_assertions = { workspace = true }
 once_cell = { workspace = true }
 
 [build-dependencies]
-shader-symbols-builder = { path = "../shader-symbols-builder", features = ["use-pretty-print"] }
+space-engine-shader-builder = { path = "../space-engine-shader-builder" }

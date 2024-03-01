@@ -100,30 +100,26 @@ impl OpaqueDrawPipeline {
 		model: &OpaqueModel,
 		texture_array_descriptor_set: &TextureArrayDescriptorSet,
 	) {
-		cmd.bind_pipeline_graphics(self.pipeline.clone())
-			.unwrap()
-			.set_viewport(0, frame_context.viewport_smallvec())
-			.unwrap()
-			.bind_descriptor_sets(
-				PipelineBindPoint::Graphics,
-				self.pipeline.layout().clone(),
-				0,
-				(
-					frame_context.global_descriptor_set.clone().0,
-					model.descriptor.clone().0,
-					texture_array_descriptor_set.clone().0,
-				),
-			)
-			.unwrap();
-		if let Some(index_buffer) = &model.index_buffer {
-			cmd.bind_index_buffer(index_buffer.clone()).unwrap();
-			unsafe {
-				cmd.draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0).unwrap();
-			}
-		} else {
-			unsafe {
-				cmd.draw(model.vertex_buffer.len() as u32, 1, 0, 0).unwrap();
-			}
+		unsafe {
+			cmd.bind_pipeline_graphics(self.pipeline.clone())
+				.unwrap()
+				.set_viewport(0, frame_context.viewport_smallvec())
+				.unwrap()
+				.bind_descriptor_sets(
+					PipelineBindPoint::Graphics,
+					self.pipeline.layout().clone(),
+					0,
+					(
+						frame_context.global_descriptor_set.clone().0,
+						model.descriptor.clone().0,
+						texture_array_descriptor_set.clone().0,
+					),
+				)
+				.unwrap()
+				.bind_index_buffer(model.index_buffer.clone())
+				.unwrap()
+				.draw_indexed(model.index_buffer.len() as u32, 1, 0, 0, 0)
+				.unwrap();
 		}
 	}
 

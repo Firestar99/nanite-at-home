@@ -1,0 +1,10 @@
+[package]
+name = "space-engine-shader-builder"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+shader-symbols-builder = { path = "../shader-symbols-builder", default-features = false, features = ["use-installed-tools"] }

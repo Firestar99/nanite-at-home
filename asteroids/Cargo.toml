@@ -6,11 +6,6 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[features]
-default = ["use-installed-tools"]
-use-installed-tools = ["shader-symbols-builder/use-installed-tools"]
-use-compiled-tools = ["shader-symbols-builder/use-compiled-tools"]
-
 [dependencies]
 # my projects
 asteroids-common = { path = "../asteroids-common" }
@@ -39,4 +34,4 @@ parking_lot = { workspace = true }
 smallvec = { workspace = true }
 
 [build-dependencies]
-shader-symbols-builder = { path = "../shader-symbols-builder", features = ["use-pretty-print"] }
+space-engine-shader-builder = { path = "../space-engine-shader-builder" }

@@ -18,7 +18,10 @@ pub async fn load_scene(init: &Arc<Init>, texture_manager: &Arc<TextureManager>)
 			&init,
 			&texture_manager,
 			&model_descriptor_set_layout,
-			"", // FIXME model path
+			concat!(
+				env!("CARGO_MANIFEST_DIR"),
+				"/src/sample_scene/Lantern/glTF/Lantern.gltf"
+			),
 		)
 		.await,
 	);
