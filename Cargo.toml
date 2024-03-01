@@ -26,9 +26,9 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-# vulkano 0.35 development
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "e194406ae75bac7b8927e2076c0aae6fe3a42e5b" }
-vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "e194406ae75bac7b8927e2076c0aae6fe3a42e5b" }
+# vulkano 0.35 development, PR https://github.com/vulkano-rs/vulkano/pull/2482
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "4c2d7c584adcde6a8e3f4b9c3f24fd2f1b1e28bc" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "4c2d7c584adcde6a8e3f4b9c3f24fd2f1b1e28bc" }
 winit = { version = "0.29.9", features = ["rwh_05"] }
 
 # rust-gpu
