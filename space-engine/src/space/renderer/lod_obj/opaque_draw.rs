@@ -7,11 +7,9 @@ use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::format::Format;
 use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
-use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
-use vulkano::pipeline::graphics::vertex_input::VertexInputState;
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
@@ -19,7 +17,7 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 
-use crate::shader::space::renderer::lod_obj::opaque_shader::{opaque_fs, opaque_vs};
+use crate::shader::space::renderer::lod_obj::opaque_shader;
 use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
 use crate::space::renderer::model::model::OpaqueModel;
 use crate::space::renderer::model::model_descriptor_set::ModelDescriptorSetLayout;
@@ -56,11 +54,9 @@ impl OpaqueDrawPipeline {
 			Some(init.pipeline_cache.deref().clone()),
 			GraphicsPipelineCreateInfo {
 				stages: smallvec![
-					PipelineShaderStageCreateInfo::new(opaque_vs::new(device.clone())),
-					PipelineShaderStageCreateInfo::new(opaque_fs::new(device.clone())),
+					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_mesh::new(device.clone())),
+					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_fs::new(device.clone())),
 				],
-				vertex_input_state: Some(VertexInputState::default()),
-				input_assembly_state: Some(InputAssemblyState::default()),
 				rasterization_state: Some(RasterizationState::default()),
 				viewport_state: Some(ViewportState::default()),
 				multisample_state: Some(MultisampleState::default()),
@@ -116,9 +112,7 @@ impl OpaqueDrawPipeline {
 					),
 				)
 				.unwrap()
-				.bind_index_buffer(model.index_buffer.clone())
-				.unwrap()
-				.draw_indexed(model.index_buffer.len() as u32, 1, 0, 0, 0)
+				.draw_mesh_tasks([(model.index_buffer.len() / 3) as u32, 1, 1])
 				.unwrap();
 		}
 	}

@@ -30,7 +30,7 @@ impl OpaqueModel {
 		let vertex_buffer =
 			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, vertex_data);
 		let index_buffer =
-			texture_manager.upload_buffer(BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST, 0..vertex_len);
+			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, 0..vertex_len);
 		Self::new(
 			init,
 			texture_manager,
@@ -56,7 +56,7 @@ impl OpaqueModel {
 		let vertex_buffer =
 			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, vertex_data);
 		let index_buffer =
-			texture_manager.upload_buffer(BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST, index_data);
+			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, index_data);
 		Self::new(
 			init,
 			texture_manager,
@@ -77,6 +77,7 @@ impl OpaqueModel {
 			init,
 			model_descriptor_set_layout,
 			&vertex_buffer,
+			&index_buffer,
 			&texture_manager.sampler,
 		);
 		Self {
