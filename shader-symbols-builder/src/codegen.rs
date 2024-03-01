@@ -125,8 +125,8 @@ impl<'a> ModNode<'a> {
 				#content
 
 				shader! {
-					ty: "vertex",
 					bytes: #path,
+					generate_structs: false,
 				}
 
 				pub fn new(device: Arc<Device>) -> EntryPoint {
