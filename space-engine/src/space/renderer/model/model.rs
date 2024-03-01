@@ -10,7 +10,7 @@ use crate::space::Init;
 
 pub struct OpaqueModel {
 	pub vertex_buffer: Subbuffer<[ModelVertex]>,
-	pub index_buffer: Option<Subbuffer<[u32]>>,
+	pub index_buffer: Subbuffer<[u32]>,
 	pub descriptor: ModelDescriptorSet,
 }
 
@@ -25,7 +25,19 @@ impl OpaqueModel {
 		V: IntoIterator<Item = ModelVertex>,
 		V::IntoIter: ExactSizeIterator,
 	{
-		Self::new::<Vec<u32>, V>(init, texture_manager, model_descriptor_set_layout, None, vertex_data).await
+		let vertex_data = vertex_data.into_iter();
+		let vertex_len = vertex_data.len() as u32;
+		let vertex_buffer =
+			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, vertex_data);
+		let index_buffer =
+			texture_manager.upload_buffer(BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST, 0..vertex_len);
+		Self::new(
+			init,
+			texture_manager,
+			model_descriptor_set_layout,
+			vertex_buffer,
+			index_buffer,
+		)
 	}
 
 	pub async fn indexed<I, V>(
@@ -41,38 +53,26 @@ impl OpaqueModel {
 		V: IntoIterator<Item = ModelVertex>,
 		V::IntoIter: ExactSizeIterator,
 	{
+		let vertex_buffer =
+			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, vertex_data);
+		let index_buffer =
+			texture_manager.upload_buffer(BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST, index_data);
 		Self::new(
 			init,
 			texture_manager,
 			model_descriptor_set_layout,
-			Some(index_data),
-			vertex_data,
+			vertex_buffer,
+			index_buffer,
 		)
-		.await
 	}
 
-	async fn new<I, V>(
+	fn new(
 		init: &Arc<Init>,
 		texture_manager: &Arc<TextureManager>,
 		model_descriptor_set_layout: &ModelDescriptorSetLayout,
-		index_data: Option<I>,
-		vertex_data: V,
-	) -> Self
-	where
-		I: IntoIterator<Item = u32>,
-		I::IntoIter: ExactSizeIterator,
-		V: IntoIterator<Item = ModelVertex>,
-		V::IntoIter: ExactSizeIterator,
-	{
-		let vertex_buffer = texture_manager.upload_buffer(
-			BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST,
-			vertex_data.into_iter(),
-		);
-
-		let index_buffer = index_data.map(|index_data| {
-			texture_manager.upload_buffer(BufferUsage::INDEX_BUFFER | BufferUsage::TRANSFER_DST, index_data)
-		});
-
+		vertex_buffer: Subbuffer<[ModelVertex]>,
+		index_buffer: Subbuffer<[u32]>,
+	) -> Self {
 		let descriptor = ModelDescriptorSet::new(
 			init,
 			model_descriptor_set_layout,

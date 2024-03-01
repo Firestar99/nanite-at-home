@@ -16,7 +16,7 @@ use crate::space::Init;
 pub struct ModelDescriptorSetLayout(pub Arc<DescriptorSetLayout>);
 
 impl ModelDescriptorSetLayout {
-	pub const BINDING_MODEL_VERTEX: DescriptorSetBinding =
+	pub const BINDING_MODEL_VERTICES: DescriptorSetBinding =
 		DescriptorSetBinding::descriptor_type(0, DescriptorType::StorageBuffer);
 	pub const BINDING_MODEL_SAMPLER: DescriptorSetBinding =
 		DescriptorSetBinding::descriptor_type(1, DescriptorType::Sampler);
@@ -24,7 +24,7 @@ impl ModelDescriptorSetLayout {
 	pub fn new(init: &Arc<Init>) -> Self {
 		Self(
 			DescriptorSetBinding::create_descriptor_set_layout(
-				&[&Self::BINDING_MODEL_VERTEX, &Self::BINDING_MODEL_SAMPLER],
+				&[&Self::BINDING_MODEL_VERTICES, &Self::BINDING_MODEL_SAMPLER],
 				init,
 				ALL_SHADER_STAGES,
 			)
@@ -56,7 +56,7 @@ impl ModelDescriptorSet {
 				init.descriptor_allocator.clone(),
 				layout.0.clone(),
 				[
-					WriteDescriptorSet::buffer(*ModelDescriptorSetLayout::BINDING_MODEL_VERTEX, vertex_data.clone()),
+					WriteDescriptorSet::buffer(*ModelDescriptorSetLayout::BINDING_MODEL_VERTICES, vertex_data.clone()),
 					WriteDescriptorSet::sampler(*ModelDescriptorSetLayout::BINDING_MODEL_SAMPLER, sampler.clone()),
 				],
 				[],
