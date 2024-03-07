@@ -2521,6 +2521,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "parking_lot",
+ "parking_lot_core",
  "paste",
  "smallvec",
  "smol",
