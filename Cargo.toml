@@ -65,6 +65,7 @@ static_assertions = "1.1.0"
 parking_lot = "0.12"
 parking_lot_core = "0.9"
 clap = { version = "3.2", features = ["derive"] }
+loom = "0.7.1"
 
 
 

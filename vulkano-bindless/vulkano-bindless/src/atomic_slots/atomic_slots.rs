@@ -1,13 +1,14 @@
-use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
 use std::ops::Index;
-use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use std::sync::atomic::{AtomicU16, AtomicU64};
 
 use num_traits::FromPrimitive;
-use parking_lot_core::SpinWait;
 use smallvec::SmallVec;
 use static_assertions::{assert_eq_size, const_assert_eq};
+
+use crate::sync::atomic::Ordering::*;
+use crate::sync::atomic::{AtomicU16, AtomicU64};
+use crate::sync::cell::UnsafeCell;
+use crate::sync::SpinWait;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct SlotKey {
@@ -29,6 +30,9 @@ pub struct AtomicSlots<V: Default> {
 	instance_id: u16,
 }
 
+unsafe impl<V: Default> Send for AtomicSlots<V> {}
+unsafe impl<V: Default> Sync for AtomicSlots<V> {}
+
 #[derive(Debug)]
 pub enum AtomicSlotsErr {
 	OutOfSlots,
@@ -45,7 +49,15 @@ impl<V: Default> AtomicSlots<V> {
 	/// `blocks_max` should by default be [`DEFAULT_BLOCK_MAX`], as the internal smallvec has a capacity of that.
 	pub fn new(block_size: u32, blocks_max: u16) -> Self {
 		let block_size_log = block_size.checked_ilog2().expect("Block size may not be zero");
-		static INSTANCE_COUNTER: AtomicU16 = AtomicU16::new(0);
+
+		#[cfg(not(feature = "loom"))]
+		let instance_id = {
+			static INSTANCE_COUNTER: AtomicU16 = AtomicU16::new(0);
+			INSTANCE_COUNTER.fetch_add(1, Relaxed)
+		};
+		#[cfg(feature = "loom")]
+		let instance_id = 0;
+
 		Self {
 			blocks: (0..blocks_max)
 				.map(|_| UnsafeCell::new(MaybeUninit::uninit()))
@@ -53,7 +65,7 @@ impl<V: Default> AtomicSlots<V> {
 			next_free_slot: AtomicU64::new(0),
 			block_size_log,
 			blocks_allocated: AtomicU16::new(0),
-			instance_id: INSTANCE_COUNTER.fetch_add(1, Relaxed),
+			instance_id,
 		}
 	}
 
@@ -91,7 +103,10 @@ impl<V: Default> AtomicSlots<V> {
 								.map(|_| V::default())
 								.collect::<Vec<_>>()
 								.into_boxed_slice();
-							(&mut *self.blocks.get(i as usize).unwrap().get()).write(block);
+							self.blocks
+								.get(i as usize)
+								.unwrap()
+								.with_mut(|block_ref| unsafe { &mut *block_ref }.write(block));
 						}
 					}
 					// also unlocks
@@ -120,16 +135,27 @@ impl<V: Default> AtomicSlots<V> {
 			slot: slot.try_into().unwrap(),
 		}
 	}
-}
 
-impl<V: Default> Index<SlotKey> for AtomicSlots<V> {
-	type Output = V;
-
-	fn index(&self, slot: SlotKey) -> &Self::Output {
+	pub fn check(&self, slot: SlotKey) {
 		assert_eq!(
 			slot.instance_id, self.instance_id,
 			"SlotIndex used with wrong AtomicSlots instance!"
 		);
+	}
+
+	pub fn with<R>(&self, slot: SlotKey, f: impl FnOnce(&V) -> R) -> R {
+		self.check(slot);
+		unsafe { self.blocks[slot.block as usize].with(|block| f(&(&*block).assume_init_ref()[slot.slot as usize])) }
+	}
+}
+
+/// loom cannot track this correctly
+#[cfg(not(feature = "loom"))]
+impl<V: Default> Index<SlotKey> for AtomicSlots<V> {
+	type Output = V;
+
+	fn index(&self, slot: SlotKey) -> &Self::Output {
+		self.check(slot);
 		unsafe { &(&mut *self.blocks[slot.block as usize].get()).assume_init_ref()[slot.slot as usize] }
 	}
 }
@@ -139,14 +165,14 @@ impl<V: Default> Drop for AtomicSlots<V> {
 		// SAFETY: `self.blocks` has at least as many entries populated as `self.blocks_allocated`
 		// (though could be more in case of a panic during allocation)
 		unsafe {
-			for i in 0..*self.blocks_allocated.get_mut() as usize {
-				self.blocks[i].get_mut().assume_init_drop();
+			for i in 0..self.blocks_allocated.load(Relaxed) as usize {
+				self.blocks[i].with_mut(|block| (&mut *block).assume_init_drop())
 			}
 		}
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "loom")))]
 mod tests {
 	use super::*;
 
@@ -277,5 +303,58 @@ mod tests {
 				}
 			}
 		}
+	}
+}
+
+mod loom_tests {
+	use crate::sync::loom;
+	use crate::sync::Arc;
+
+	use super::*;
+
+	#[test]
+	fn loom_alloc_first_block() {
+		loom::model(|| {
+			let mut slots = Arc::new(AtomicSlots::<u32>::new(4, 16));
+			let slots2 = slots.clone();
+			crate::sync::thread::spawn(move || {
+				slots2.allocate().unwrap();
+			});
+			slots.allocate().unwrap();
+			slots.allocate().unwrap();
+		})
+	}
+
+	#[test]
+	fn loom_alloc_next_block() {
+		loom::model(|| {
+			let block_size = 4;
+			let mut slots = Arc::new(AtomicSlots::<u32>::new(block_size, 16));
+			for _ in 0..block_size {
+				slots.allocate().unwrap();
+			}
+
+			let slots2 = slots.clone();
+			crate::sync::thread::spawn(move || {
+				slots2.allocate().unwrap();
+			});
+			slots.allocate().unwrap();
+		})
+	}
+
+	#[test]
+	fn loom_access() {
+		loom::model(|| {
+			let mut slots = Arc::new(AtomicSlots::<u32>::new(4, 16));
+			{
+				let slots = slots.clone();
+				crate::sync::thread::spawn(move || {
+					let key = slots.allocate().unwrap();
+					assert_eq!(slots.with(key, |slot| *slot), 0);
+				});
+			}
+			let key = slots.allocate().unwrap();
+			assert_eq!(slots.with(key, |slot| *slot), 0);
+		})
 	}
 }

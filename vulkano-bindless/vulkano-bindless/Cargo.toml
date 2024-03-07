@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+loom_tests = ["loom"]
+
 [dependencies]
 # vulkan
 vulkano = { workspace = true }
@@ -33,3 +36,4 @@ parking_lot_core = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
+loom = { workspace = true, optional = true }
