@@ -2,12 +2,9 @@ pub use inner::*;
 
 #[cfg(feature = "loom")]
 mod inner {
-	pub use loom::sync::{Arc, Barrier};
-	pub use loom::sync::{Condvar, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, WaitTimeoutResult};
+	pub use ::loom::sync::{Arc, Barrier};
+	pub use ::loom::sync::{Condvar, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, WaitTimeoutResult};
 
-	pub mod cell {
-		pub use loom::cell::{Cell, UnsafeCell};
-	}
 	pub mod hint {
 		pub use loom::hint::{spin_loop, unreachable_unchecked};
 	}
@@ -29,10 +26,33 @@ mod inner {
 		pub use loom::{explore, model, skip_branch, stop_exploring};
 	}
 
+	pub mod cell {
+		pub use loom::cell::Cell;
+
+		#[derive(Debug)]
+		pub struct UnsafeCell<T>(loom::cell::UnsafeCell<T>);
+
+		impl<T> UnsafeCell<T> {
+			pub fn new(data: T) -> UnsafeCell<T> {
+				UnsafeCell(loom::cell::UnsafeCell::new(data))
+			}
+
+			/// SAFETY: same as casting contents to a shared reference
+			pub unsafe fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+				unsafe { self.0.with(|t| f(&*t)) }
+			}
+
+			/// SAFETY: same as casting contents to a mutable exclusive reference
+			pub unsafe fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+				unsafe { self.0.with_mut(|t| f(&mut *t)) }
+			}
+		}
+	}
+
 	pub struct SpinWait;
 
 	#[cfg(feature = "loom")]
-	impl crate::sync::inner::SpinWait {
+	impl SpinWait {
 		pub fn new() -> Self {
 			Self
 		}
@@ -92,12 +112,14 @@ mod inner {
 				UnsafeCell(std::cell::UnsafeCell::new(data))
 			}
 
-			pub fn with<R>(&self, f: impl FnOnce(*const T) -> R) -> R {
-				f(self.0.get())
+			/// SAFETY: same as casting contents to a shared reference
+			pub unsafe fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+				unsafe { f(&*self.0.get()) }
 			}
 
-			pub fn with_mut<R>(&self, f: impl FnOnce(*mut T) -> R) -> R {
-				f(self.0.get())
+			/// SAFETY: same as casting contents to a mutable exclusive reference
+			pub unsafe fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+				f(&mut *self.0.get())
 			}
 
 			/// not available with loom!

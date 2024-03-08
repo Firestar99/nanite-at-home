@@ -1,7 +1,5 @@
 use std::mem::MaybeUninit;
-use std::ops::Index;
 
-use num_traits::FromPrimitive;
 use smallvec::SmallVec;
 use static_assertions::{assert_eq_size, const_assert_eq};
 
@@ -103,10 +101,9 @@ impl<V: Default> AtomicSlots<V> {
 								.map(|_| V::default())
 								.collect::<Vec<_>>()
 								.into_boxed_slice();
-							self.blocks
-								.get(i as usize)
-								.unwrap()
-								.with_mut(|block_ref| unsafe { &mut *block_ref }.write(block));
+							self.blocks.get(i as usize).unwrap().with_mut(|block_ref| {
+								block_ref.write(block);
+							});
 						}
 					}
 					// also unlocks
@@ -151,7 +148,7 @@ impl<V: Default> AtomicSlots<V> {
 
 /// loom cannot track this correctly
 #[cfg(not(feature = "loom"))]
-impl<V: Default> Index<SlotKey> for AtomicSlots<V> {
+impl<V: Default> core::ops::Index<SlotKey> for AtomicSlots<V> {
 	type Output = V;
 
 	fn index(&self, slot: SlotKey) -> &Self::Output {
@@ -199,13 +196,13 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic("Block size may not be zero")]
+	#[should_panic(expected = "Block size may not be zero")]
 	fn test_zero_block_size() {
 		AtomicSlots::<u32>::new(0, 1);
 	}
 
 	#[test]
-	#[should_panic("SlotIndex used with wrong AtomicSlots instance!")]
+	#[should_panic(expected = "SlotIndex used with wrong AtomicSlots instance!")]
 	fn test_wrong_atomic_slots() {
 		let slots1 = AtomicSlots::<u32>::new(4, 1);
 		let slots2 = AtomicSlots::<u32>::new(4, 1);
@@ -306,6 +303,7 @@ mod tests {
 	}
 }
 
+#[cfg(test)]
 mod loom_tests {
 	use crate::sync::loom;
 	use crate::sync::Arc;
@@ -315,7 +313,7 @@ mod loom_tests {
 	#[test]
 	fn loom_alloc_first_block() {
 		loom::model(|| {
-			let mut slots = Arc::new(AtomicSlots::<u32>::new(4, 16));
+			let slots = Arc::new(AtomicSlots::<u32>::new(4, 16));
 			let slots2 = slots.clone();
 			crate::sync::thread::spawn(move || {
 				slots2.allocate().unwrap();
@@ -329,7 +327,7 @@ mod loom_tests {
 	fn loom_alloc_next_block() {
 		loom::model(|| {
 			let block_size = 4;
-			let mut slots = Arc::new(AtomicSlots::<u32>::new(block_size, 16));
+			let slots = Arc::new(AtomicSlots::<u32>::new(block_size, 16));
 			for _ in 0..block_size {
 				slots.allocate().unwrap();
 			}
@@ -345,7 +343,7 @@ mod loom_tests {
 	#[test]
 	fn loom_access() {
 		loom::model(|| {
-			let mut slots = Arc::new(AtomicSlots::<u32>::new(4, 16));
+			let slots = Arc::new(AtomicSlots::<u32>::new(4, 16));
 			{
 				let slots = slots.clone();
 				crate::sync::thread::spawn(move || {

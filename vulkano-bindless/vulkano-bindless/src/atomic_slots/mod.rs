@@ -1,1 +1,1 @@
-mod atomic_slots;
+pub mod atomic_slots;
