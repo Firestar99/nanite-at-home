@@ -128,6 +128,14 @@ impl<V: Default> AtomicSlots<V> {
 		}
 	}
 
+	pub fn key_to_raw_index(&self, key: SlotKey) -> u32 {
+		self.check(key);
+		let base_offset = 1u64 << self.block_size_log;
+		let shift = key.block as u32 + self.block_size_log;
+		let slot_offset = (1u64 << shift) - base_offset;
+		key.slot + slot_offset as u32
+	}
+
 	pub fn check(&self, slot: SlotKey) {
 		assert_eq!(
 			slot.instance_id, self.instance_id,
@@ -178,14 +186,26 @@ mod tests {
 				let index_counter = AtomicU32::new(0);
 				for block in 0..blocks_max {
 					for slot in 0..(block_size << block) {
+						let index = index_counter.fetch_add(1, Relaxed);
+						let key = slots.key_from_raw_index(index);
+
+						let key_should = SlotKey {
+							instance_id,
+							block,
+							slot,
+						};
 						assert_eq!(
-							slots.key_from_raw_index(index_counter.fetch_add(1, Relaxed)),
-							SlotKey {
-								instance_id,
-								block,
-								slot
-							}
-						)
+							key, key_should,
+							"key_from_raw_index({}) -> {:?} should be {:?}",
+							index, key, key_should
+						);
+
+						let index_actual = slots.key_to_raw_index(key);
+						assert_eq!(
+							index_actual, index,
+							"key_to_raw_index({:?}) -> {} should be {}",
+							key, index_actual, index
+						);
 					}
 				}
 			}
