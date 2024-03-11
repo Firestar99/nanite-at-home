@@ -136,6 +136,7 @@ impl<V: Default> AtomicSlots<V> {
 		key.slot + slot_offset as u32
 	}
 
+	#[inline]
 	pub fn check(&self, slot: SlotKey) {
 		assert_eq!(
 			slot.instance_id, self.instance_id,
@@ -143,6 +144,7 @@ impl<V: Default> AtomicSlots<V> {
 		);
 	}
 
+	#[inline]
 	pub fn with<R>(&self, slot: SlotKey, f: impl FnOnce(&V) -> R) -> R {
 		self.check(slot);
 		unsafe { self.blocks[slot.block as usize].with(|block| f(&(&*block).assume_init_ref()[slot.slot as usize])) }
@@ -154,6 +156,7 @@ impl<V: Default> AtomicSlots<V> {
 impl<V: Default> core::ops::Index<SlotKey> for AtomicSlots<V> {
 	type Output = V;
 
+	#[inline]
 	fn index(&self, slot: SlotKey) -> &Self::Output {
 		self.check(slot);
 		unsafe { &(&mut *self.blocks[slot.block as usize].get()).assume_init_ref()[slot.slot as usize] }

@@ -37,3 +37,6 @@ smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
 loom = { workspace = true, optional = true }
+
+[dev-dependencies]
+rand = { workspace = true }
