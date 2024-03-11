@@ -221,7 +221,7 @@ impl<S: QueueSlot> Queue<S> for ChainQueue<S> {
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "loom")))]
 mod tests {
 	use rand::prelude::SliceRandom;
 	use rand::rngs::mock::StepRng;

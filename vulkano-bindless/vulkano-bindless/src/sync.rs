@@ -2,8 +2,10 @@ pub use inner::*;
 
 #[cfg(feature = "loom")]
 mod inner {
+	use std::sync::TryLockError;
+
 	pub use ::loom::sync::{Arc, Barrier};
-	pub use ::loom::sync::{Condvar, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, WaitTimeoutResult};
+	pub use ::loom::sync::{Condvar, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, WaitTimeoutResult};
 
 	pub mod hint {
 		pub use loom::hint::{spin_loop, unreachable_unchecked};
@@ -63,6 +65,38 @@ mod inner {
 			thread::yield_now()
 		}
 		pub fn reset(&mut self) {}
+	}
+
+	pub struct Mutex<T> {
+		inner: ::loom::sync::Mutex<T>,
+	}
+
+	impl<T> Mutex<T> {
+		pub fn new(data: T) -> Self {
+			Self {
+				inner: ::loom::sync::Mutex::new(data),
+			}
+		}
+
+		pub fn lock(&self) -> MutexGuard<'_, T> {
+			self.inner.lock().unwrap()
+		}
+
+		pub fn try_lock(&self) -> Option<MutexGuard<'_, T>> {
+			match self.inner.try_lock() {
+				Ok(e) => Some(e),
+				Err(TryLockError::WouldBlock) => None,
+				Err(TryLockError::Poisoned(e)) => panic!("{}", TryLockError::Poisoned(e)),
+			}
+		}
+
+		pub fn get_mut(&mut self) -> &mut T {
+			self.inner.get_mut().unwrap()
+		}
+
+		pub fn into_inner(self) -> T {
+			self.inner.into_inner().unwrap()
+		}
 	}
 }
 
