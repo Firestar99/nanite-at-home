@@ -77,6 +77,11 @@ pub trait Queue<S: QueueSlot> {
 	fn push(&self, atomic_slots: &AtomicSlots<S>, slot_key: SlotKey);
 	fn push_chain(&self, atomic_slots: &AtomicSlots<S>, chain: SlotChain);
 	fn pop(&self, atomic_slots: &AtomicSlots<S>) -> Option<SlotKey>;
+
+	/// # Safety
+	/// Only meant for single-thread testing, queue must not be shared between threads!
+	#[cfg(test)]
+	unsafe fn debug_count(&self, atomic_slots: &AtomicSlots<S>) -> u32;
 }
 
 pub struct PopQueue<S: QueueSlot> {
@@ -128,6 +133,22 @@ impl<S: QueueSlot> Queue<S> for PopQueue<S> {
 			}
 
 			spin_wait.spin();
+		}
+	}
+
+	#[cfg(test)]
+	unsafe fn debug_count(&self, atomic_slots: &AtomicSlots<S>) -> u32 {
+		let mut count = 0;
+		let mut slot_index = self.head.load(Acquire);
+		loop {
+			if slot_index == !0 {
+				return count;
+			}
+			count += 1;
+
+			// Safety: we inserted it, it must be valid
+			let slot_key = unsafe { atomic_slots.key_from_raw_index(slot_index) };
+			slot_index = atomic_slots.with(slot_key, |slot| slot.atomic().load(Relaxed));
 		}
 	}
 }
@@ -228,6 +249,27 @@ impl<S: QueueSlot> Queue<S> for ChainQueue<S> {
 		})
 		.map(|chain| chain.single_slot_key().unwrap())
 	}
+
+	/// actually not unsafe
+	#[cfg(test)]
+	unsafe fn debug_count(&self, atomic_slots: &AtomicSlots<S>) -> u32 {
+		let guard = self.head.lock();
+		if let Some(mut key) = *guard {
+			let mut count = 1;
+			loop {
+				let slot_index = atomic_slots.with(key, |slot| slot.atomic().load(Relaxed));
+				if slot_index == !0 {
+					return count;
+				}
+				count += 1;
+
+				// Safety: we inserted it, it must be valid
+				key = unsafe { atomic_slots.key_from_raw_index(slot_index) };
+			}
+		} else {
+			0
+		}
+	}
 }
 
 #[cfg(test)]
@@ -281,14 +323,19 @@ mod tests {
 	}
 
 	fn test_single(queue: impl Queue<TestSlot>) {
-		let slots = AtomicSlots::new(32);
-		let key0 = slots.allocate();
-		let key1 = slots.allocate();
+		unsafe {
+			let slots = AtomicSlots::new(32);
+			assert_eq!(queue.debug_count(&slots), 0);
+			let key0 = slots.allocate();
+			let key1 = slots.allocate();
 
-		queue.push(&slots, key0);
-		queue.push(&slots, key1);
-		assert_eq!(queue.pop(&slots), Some(key0));
-		assert_eq!(queue.pop(&slots), None);
+			queue.push(&slots, key0);
+			queue.push(&slots, key1);
+			assert_eq!(queue.debug_count(&slots), 2);
+			assert_eq!(queue.pop(&slots), Some(key0));
+			assert_eq!(queue.pop(&slots), None);
+			assert_eq!(queue.debug_count(&slots), 1);
+		}
 	}
 
 	#[test]
@@ -302,23 +349,28 @@ mod tests {
 	}
 
 	fn test_many(queue: impl Queue<TestSlot>) {
-		let slots = AtomicSlots::new(32);
+		unsafe {
+			let slots = AtomicSlots::new(32);
 
-		const KEY_COUNT: usize = 5;
-		let mut keys = [(); KEY_COUNT].map(|_| slots.allocate());
-		let mut rng = StepRng::new(!1, 0xDEADBEEF);
-		keys.shuffle(&mut rng);
-		println!("{:?}", keys);
+			const KEY_COUNT: usize = 5;
+			let mut keys = [(); KEY_COUNT].map(|_| slots.allocate());
+			let mut rng = StepRng::new(!1, 0xDEADBEEF);
+			keys.shuffle(&mut rng);
+			println!("{:?}", keys);
 
-		for key in keys {
-			queue.push(&slots, key);
+			assert_eq!(queue.debug_count(&slots), 0);
+			for key in keys {
+				queue.push(&slots, key);
+			}
+			assert_eq!(queue.debug_count(&slots), 5);
+
+			// last entry cannot be poped
+			for key in &keys[0..KEY_COUNT - 1] {
+				assert_eq!(queue.pop(&slots), Some(*key));
+			}
+			assert_eq!(queue.debug_count(&slots), 1);
+			assert_eq!(queue.pop(&slots), None);
 		}
-
-		// last entry cannot be poped
-		for key in &keys[0..KEY_COUNT - 1] {
-			assert_eq!(queue.pop(&slots), Some(*key));
-		}
-		assert_eq!(queue.pop(&slots), None);
 	}
 
 	#[test]
@@ -332,24 +384,32 @@ mod tests {
 	}
 
 	fn test_dry_and_reconnect(queue: impl Queue<TestSlot>) {
-		let slots = AtomicSlots::new(32);
+		unsafe {
+			let slots = AtomicSlots::new(32);
 
-		let key0 = slots.allocate();
-		let key1 = slots.allocate();
-		let key2 = slots.allocate();
+			let key0 = slots.allocate();
+			let key1 = slots.allocate();
+			let key2 = slots.allocate();
 
-		assert_eq!(queue.pop(&slots), None);
+			assert_eq!(queue.pop(&slots), None);
+			assert_eq!(queue.debug_count(&slots), 0);
 
-		queue.push(&slots, key0);
-		assert_eq!(queue.pop(&slots), None);
+			queue.push(&slots, key0);
+			assert_eq!(queue.pop(&slots), None);
+			assert_eq!(queue.debug_count(&slots), 1);
 
-		queue.push(&slots, key1);
-		assert_eq!(queue.pop(&slots), Some(key0));
-		assert_eq!(queue.pop(&slots), None);
+			queue.push(&slots, key1);
+			assert_eq!(queue.debug_count(&slots), 2);
+			assert_eq!(queue.pop(&slots), Some(key0));
+			assert_eq!(queue.pop(&slots), None);
+			assert_eq!(queue.debug_count(&slots), 1);
 
-		queue.push(&slots, key2);
-		assert_eq!(queue.pop(&slots), Some(key1));
-		assert_eq!(queue.pop(&slots), None);
+			queue.push(&slots, key2);
+			assert_eq!(queue.debug_count(&slots), 2);
+			assert_eq!(queue.pop(&slots), Some(key1));
+			assert_eq!(queue.pop(&slots), None);
+			assert_eq!(queue.debug_count(&slots), 1);
+		}
 	}
 
 	#[test]
@@ -359,22 +419,25 @@ mod tests {
 	}
 
 	fn make_chain(slots: &AtomicSlots<TestSlot>, key_count: usize) -> (SlotChain, Vec<SlotKey>) {
-		let first = ChainQueue::new();
+		unsafe {
+			let first = ChainQueue::new();
 
-		let mut keys: Vec<_> = (0..key_count).map(|_| slots.allocate()).collect();
-		let mut rng = StepRng::new(!1, 0xDEADBEEF);
-		keys.shuffle(&mut rng);
-		println!("{:?}", keys);
+			let mut keys: Vec<_> = (0..key_count).map(|_| slots.allocate()).collect();
+			let mut rng = StepRng::new(!1, 0xDEADBEEF);
+			keys.shuffle(&mut rng);
+			println!("{:?}", keys);
 
-		for key in &keys {
-			first.push(&slots, *key);
+			for key in &keys {
+				first.push(&slots, *key);
+			}
+			first.push(&slots, slots.allocate());
+			assert_eq!(first.debug_count(&slots), key_count as u32 + 1);
+
+			let chain = first.pop_chain(&slots, |_| true).unwrap();
+			assert_eq!(chain.head, keys[0]);
+			assert_eq!(chain.tail, keys[key_count - 1]);
+			(chain, keys)
 		}
-		first.push(&slots, slots.allocate());
-
-		let chain = first.pop_chain(&slots, |_| true).unwrap();
-		assert_eq!(chain.head, keys[0]);
-		assert_eq!(chain.tail, keys[key_count - 1]);
-		(chain, keys)
 	}
 
 	#[test]
@@ -388,16 +451,20 @@ mod tests {
 	}
 
 	fn test_push_chain(queue: impl Queue<TestSlot>) {
-		let slots = AtomicSlots::new(32);
-		let (chain, keys) = make_chain(&slots, 8);
+		unsafe {
+			let slots = AtomicSlots::new(32);
+			let (chain, keys) = make_chain(&slots, 8);
 
-		// actual test
-		queue.push_chain(&slots, chain);
-		queue.push(&slots, slots.allocate());
-		for key in &keys {
-			assert_eq!(queue.pop(&slots), Some(*key));
+			// actual test
+			queue.push_chain(&slots, chain);
+			queue.push(&slots, slots.allocate());
+			assert_eq!(queue.debug_count(&slots), 9);
+			for key in &keys {
+				assert_eq!(queue.pop(&slots), Some(*key));
+			}
+			assert_eq!(queue.debug_count(&slots), 1);
+			assert_eq!(queue.pop(&slots), None);
 		}
-		assert_eq!(queue.pop(&slots), None);
 	}
 }
 
