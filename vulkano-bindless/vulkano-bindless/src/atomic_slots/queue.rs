@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use crate::atomic_slots::atomic_slots::InstanceId;
 use crate::atomic_slots::{AtomicSlots, SlotKey};
 use crate::sync::atomic::AtomicU32;
 use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
@@ -40,21 +41,28 @@ pub trait QueueSlot: Default {
 
 pub struct BaseQueue<S: QueueSlot> {
 	tail: AtomicU32,
+	instance_id: InstanceId,
 	_phantom: PhantomData<S>,
 }
 
 impl<S: QueueSlot> BaseQueue<S> {
-	pub fn new() -> Self {
+	pub fn new(atomic_slots: &AtomicSlots<S>) -> Self {
 		Self {
 			tail: AtomicU32::new(!0),
+			instance_id: atomic_slots.get_instance_id(),
 			_phantom: PhantomData {},
 		}
+	}
+
+	pub fn check(&self, atomic_slots: &AtomicSlots<S>) {
+		atomic_slots.check_instance_id(self.instance_id);
 	}
 
 	/// Push a chain of [`SlotKey`]s onto the queue.
 	/// Returns Some() if the queue has dried up and the head needs to be reconnected, with the SlotKey and associated index of the slot it should connect to.
 	#[inline]
 	pub fn push_chain(&self, atomic_slots: &AtomicSlots<S>, chain: SlotChain) -> Option<(SlotKey, u32)> {
+		self.check(atomic_slots);
 		let head_index = atomic_slots.key_to_raw_index(chain.head);
 		let tail_index = atomic_slots.key_to_raw_index(chain.tail);
 		// set `next` of this slot to !0 aka no next key
@@ -90,11 +98,15 @@ pub struct PopQueue<S: QueueSlot> {
 }
 
 impl<S: QueueSlot> PopQueue<S> {
-	pub fn new() -> Self {
+	pub fn new(atomic_slots: &AtomicSlots<S>) -> Self {
 		Self {
-			base: BaseQueue::new(),
+			base: BaseQueue::new(atomic_slots),
 			head: AtomicU32::new(!0),
 		}
+	}
+
+	pub fn check(&self, atomic_slots: &AtomicSlots<S>) {
+		self.base.check(atomic_slots)
 	}
 }
 
@@ -110,6 +122,7 @@ impl<S: QueueSlot> Queue<S> for PopQueue<S> {
 	}
 
 	fn pop(&self, atomic_slots: &AtomicSlots<S>) -> Option<SlotKey> {
+		self.check(atomic_slots);
 		let mut spin_wait = SpinWait::new();
 
 		loop {
@@ -138,6 +151,7 @@ impl<S: QueueSlot> Queue<S> for PopQueue<S> {
 
 	#[cfg(test)]
 	unsafe fn debug_count(&self, atomic_slots: &AtomicSlots<S>) -> u32 {
+		self.check(atomic_slots);
 		let mut count = 0;
 		let mut slot_index = self.head.load(Acquire);
 		loop {
@@ -159,11 +173,15 @@ pub struct ChainQueue<S: QueueSlot> {
 }
 
 impl<S: QueueSlot> ChainQueue<S> {
-	pub fn new() -> Self {
+	pub fn new(atomic_slots: &AtomicSlots<S>) -> Self {
 		Self {
-			base: BaseQueue::new(),
+			base: BaseQueue::new(atomic_slots),
 			head: Mutex::new(None),
 		}
+	}
+
+	pub fn check(&self, atomic_slots: &AtomicSlots<S>) {
+		self.base.check(atomic_slots)
 	}
 
 	fn pop_chain_inner(
@@ -205,6 +223,7 @@ impl<S: QueueSlot> ChainQueue<S> {
 		atomic_slots: &AtomicSlots<S>,
 		process_slot: impl FnMut(SlotKey) -> bool,
 	) -> Option<SlotChain> {
+		self.check(atomic_slots);
 		if let Some(mut lock) = self.head.try_lock() {
 			self.pop_chain_inner(atomic_slots, process_slot, &mut lock)
 		} else {
@@ -221,6 +240,7 @@ impl<S: QueueSlot> ChainQueue<S> {
 		atomic_slots: &AtomicSlots<S>,
 		process_slot: impl FnMut(SlotKey) -> bool,
 	) -> Option<SlotChain> {
+		self.check(atomic_slots);
 		let mut lock = self.head.lock();
 		self.pop_chain_inner(atomic_slots, process_slot, &mut lock)
 	}
@@ -253,6 +273,7 @@ impl<S: QueueSlot> Queue<S> for ChainQueue<S> {
 	/// actually not unsafe
 	#[cfg(test)]
 	unsafe fn debug_count(&self, atomic_slots: &AtomicSlots<S>) -> u32 {
+		self.check(atomic_slots);
 		let guard = self.head.lock();
 		if let Some(mut key) = *guard {
 			let mut count = 1;
@@ -299,33 +320,44 @@ mod tests {
 
 	#[test]
 	fn test_pop_empty() {
-		test_empty(PopQueue::new());
+		test_empty(|slots| PopQueue::new(slots));
 	}
 
 	#[test]
 	fn test_chain_empty() {
-		test_empty(ChainQueue::new());
+		test_empty(|slots| ChainQueue::new(slots));
 	}
 
-	fn test_empty(queue: impl Queue<TestSlot>) {
+	fn test_empty<F, Q>(queue: F)
+	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
 		let slots = AtomicSlots::new(32);
+		let queue = queue(&slots);
 		assert_eq!(queue.pop(&slots), None);
 	}
 
 	#[test]
 	fn test_pop_single() {
-		test_single(PopQueue::new());
+		test_single(|slots| PopQueue::new(slots));
 	}
 
 	#[test]
 	fn test_chain_single() {
-		test_single(ChainQueue::new());
+		test_single(|slots| ChainQueue::new(slots));
 	}
 
-	fn test_single(queue: impl Queue<TestSlot>) {
+	fn test_single<F, Q>(queue: F)
+	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
 		unsafe {
 			let slots = AtomicSlots::new(32);
+			let queue = queue(&slots);
 			assert_eq!(queue.debug_count(&slots), 0);
+
 			let key0 = slots.allocate();
 			let key1 = slots.allocate();
 
@@ -340,17 +372,22 @@ mod tests {
 
 	#[test]
 	fn test_pop_many() {
-		test_many(PopQueue::new());
+		test_many(|slots| PopQueue::new(slots));
 	}
 
 	#[test]
 	fn test_chain_many() {
-		test_many(ChainQueue::new());
+		test_many(|slots| ChainQueue::new(slots));
 	}
 
-	fn test_many(queue: impl Queue<TestSlot>) {
+	fn test_many<F, Q>(queue: F)
+	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
 		unsafe {
 			let slots = AtomicSlots::new(32);
+			let queue = queue(&slots);
 
 			const KEY_COUNT: usize = 5;
 			let mut keys = [(); KEY_COUNT].map(|_| slots.allocate());
@@ -375,17 +412,22 @@ mod tests {
 
 	#[test]
 	fn test_pop_dry_and_reconnect() {
-		test_dry_and_reconnect(PopQueue::new());
+		test_dry_and_reconnect(|slots| PopQueue::new(slots));
 	}
 
 	#[test]
 	fn test_chain_dry_and_reconnect() {
-		test_dry_and_reconnect(ChainQueue::new());
+		test_dry_and_reconnect(|slots| ChainQueue::new(slots));
 	}
 
-	fn test_dry_and_reconnect(queue: impl Queue<TestSlot>) {
+	fn test_dry_and_reconnect<F, Q>(queue: F)
+	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
 		unsafe {
 			let slots = AtomicSlots::new(32);
+			let queue = queue(&slots);
 
 			let key0 = slots.allocate();
 			let key1 = slots.allocate();
@@ -420,7 +462,7 @@ mod tests {
 
 	fn make_chain(slots: &AtomicSlots<TestSlot>, key_count: usize) -> (SlotChain, Vec<SlotKey>) {
 		unsafe {
-			let first = ChainQueue::new();
+			let first = ChainQueue::new(slots);
 
 			let mut keys: Vec<_> = (0..key_count).map(|_| slots.allocate()).collect();
 			let mut rng = StepRng::new(!1, 0xDEADBEEF);
@@ -442,18 +484,23 @@ mod tests {
 
 	#[test]
 	fn test_pop_push_chain() {
-		test_push_chain(PopQueue::new());
+		test_push_chain(|slots| PopQueue::new(slots));
 	}
 
 	#[test]
 	fn test_chain_push_chain() {
-		test_push_chain(ChainQueue::new());
+		test_push_chain(|slots| ChainQueue::new(slots));
 	}
 
-	fn test_push_chain(queue: impl Queue<TestSlot>) {
+	fn test_push_chain<F, Q>(queue: F)
+	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
 		unsafe {
 			let slots = AtomicSlots::new(32);
 			let (chain, keys) = make_chain(&slots, 8);
+			let queue = queue(&slots);
 
 			// actual test
 			queue.push_chain(&slots, chain);
@@ -479,24 +526,25 @@ mod loom_tests {
 
 	#[test]
 	fn test_pop_push() {
-		test_push(|| PopQueue::new())
+		test_push(|slots| PopQueue::new(slots))
 	}
 
 	#[test]
 	fn test_chain_push() {
-		test_push(|| ChainQueue::new())
+		test_push(|slots| ChainQueue::new(slots))
 	}
 
-	fn test_push<Q>(queue: impl Fn() -> Q + Send + Sync + 'static)
+	fn test_push<F, Q>(queue: F)
 	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
 		Q: Queue<TestSlot> + Send + Sync + 'static,
 	{
 		const PUSH_THREADS: usize = 3;
 		model_builder(
 			|b| b.preemption_bound = Some(4),
 			move || {
-				let queue = Arc::new(queue());
 				let slots = Arc::new(AtomicSlots::new(32));
+				let queue = Arc::new(queue(&slots));
 				launch_loom_threads((0..PUSH_THREADS).map(|_| {
 					let slots = slots.clone();
 					let queue = queue.clone();
@@ -511,24 +559,25 @@ mod loom_tests {
 
 	#[test]
 	fn test_pop_pop() {
-		test_pop(|| PopQueue::new())
+		test_pop(|slots| PopQueue::new(slots))
 	}
 
 	#[test]
 	fn test_chain_pop() {
-		test_pop(|| ChainQueue::new())
+		test_pop(|slots| ChainQueue::new(slots))
 	}
 
-	fn test_pop<Q>(queue: impl Fn() -> Q + Send + Sync + 'static)
+	fn test_pop<F, Q>(queue: F)
 	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
 		Q: Queue<TestSlot> + Send + Sync + 'static,
 	{
 		const POP_THREADS: usize = 3;
 		model_builder(
 			|b| b.preemption_bound = Some(4),
 			move || {
-				let queue = Arc::new(queue());
 				let slots = Arc::new(AtomicSlots::new(32));
+				let queue = Arc::new(queue(&slots));
 				let keys = [(); POP_THREADS].map(|_| slots.allocate());
 				for key in keys {
 					queue.push(&slots, key);
@@ -552,17 +601,18 @@ mod loom_tests {
 	#[test]
 	#[cfg_attr(feature = "loom_tests", ignore)]
 	fn test_pop_push_pop() {
-		test_push_pop(|| PopQueue::new())
+		test_push_pop(|slots| PopQueue::new(slots))
 	}
 
 	#[test]
 	#[cfg_attr(feature = "loom_tests", ignore)]
 	fn test_chain_push_pop() {
-		test_push_pop(|| ChainQueue::new())
+		test_push_pop(|slots| ChainQueue::new(slots))
 	}
 
-	fn test_push_pop<Q>(queue: impl Fn() -> Q + Send + Sync + 'static)
+	fn test_push_pop<F, Q>(queue: F)
 	where
+		F: Fn(&AtomicSlots<TestSlot>) -> Q + Send + Sync + 'static,
 		Q: Queue<TestSlot> + Send + Sync + 'static,
 	{
 		const THREADS: usize = 1;
@@ -573,8 +623,8 @@ mod loom_tests {
 				b.preemption_bound = Some(1);
 			},
 			move || {
-				let queue = Arc::new(queue());
 				let slots = Arc::new(AtomicSlots::new(32));
+				let queue = Arc::new(queue(&slots));
 				let keys = [(); THREADS + 1].map(|_| slots.allocate());
 				queue.push(&slots, keys[THREADS]);
 

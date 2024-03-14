@@ -9,8 +9,11 @@ use crate::sync::cell::UnsafeCell;
 use crate::sync::SpinWait;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+pub struct InstanceId(u16);
+
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct SlotKey {
-	instance_id: u16,
+	instance_id: InstanceId,
 	block: u16,
 	slot: u32,
 }
@@ -25,7 +28,7 @@ pub struct AtomicSlots<V: Default> {
 	next_free_slot: AtomicU32,
 	block_size_log: u32,
 	blocks_allocated: AtomicU16,
-	instance_id: u16,
+	instance_id: InstanceId,
 }
 
 unsafe impl<V: Default> Send for AtomicSlots<V> {}
@@ -56,7 +59,7 @@ impl<V: Default> AtomicSlots<V> {
 			next_free_slot: AtomicU32::new(0),
 			block_size_log,
 			blocks_allocated: AtomicU16::new(0),
-			instance_id,
+			instance_id: InstanceId(instance_id),
 		}
 	}
 
@@ -138,10 +141,19 @@ impl<V: Default> AtomicSlots<V> {
 
 	#[inline]
 	pub fn check(&self, slot: SlotKey) {
+		self.check_instance_id(slot.instance_id)
+	}
+
+	#[inline]
+	pub fn check_instance_id(&self, instance_id: InstanceId) {
 		assert_eq!(
-			slot.instance_id, self.instance_id,
+			instance_id, self.instance_id,
 			"SlotIndex used with wrong AtomicSlots instance!"
 		);
+	}
+
+	pub fn get_instance_id(&self) -> InstanceId {
+		self.instance_id
 	}
 
 	#[inline]
