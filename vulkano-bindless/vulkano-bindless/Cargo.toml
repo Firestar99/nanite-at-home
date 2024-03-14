@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [features]
-loom_tests = ["loom"]
+loom_tests = []
 
 [dependencies]
 # vulkan
@@ -36,7 +36,7 @@ parking_lot_core = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
-loom = { workspace = true, optional = true }
+loom = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

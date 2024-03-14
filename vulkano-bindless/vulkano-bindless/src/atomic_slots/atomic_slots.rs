@@ -43,12 +43,12 @@ impl<V: Default> AtomicSlots<V> {
 	pub fn new(first_block_size: u32) -> Self {
 		let block_size_log = first_block_size.checked_ilog2().expect("Block size may not be zero");
 
-		#[cfg(not(feature = "loom"))]
+		#[cfg(not(feature = "loom_tests"))]
 		let instance_id = {
 			static INSTANCE_COUNTER: AtomicU16 = AtomicU16::new(0);
 			INSTANCE_COUNTER.fetch_add(1, Relaxed)
 		};
-		#[cfg(feature = "loom")]
+		#[cfg(feature = "loom_tests")]
 		let instance_id = 0;
 
 		Self {
@@ -152,7 +152,7 @@ impl<V: Default> AtomicSlots<V> {
 }
 
 /// loom cannot track this correctly
-#[cfg(not(feature = "loom"))]
+#[cfg(not(feature = "loom_tests"))]
 impl<V: Default> core::ops::Index<SlotKey> for AtomicSlots<V> {
 	type Output = V;
 
@@ -175,7 +175,7 @@ impl<V: Default> Drop for AtomicSlots<V> {
 	}
 }
 
-#[cfg(all(test, not(feature = "loom")))]
+#[cfg(all(test, not(feature = "loom_tests")))]
 mod tests {
 	use super::*;
 

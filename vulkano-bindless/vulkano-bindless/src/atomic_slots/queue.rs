@@ -221,15 +221,12 @@ impl<S: QueueSlot> Queue<S> for ChainQueue<S> {
 	}
 }
 
-#[cfg(all(test, not(feature = "loom")))]
-mod tests {
-	use rand::prelude::SliceRandom;
-	use rand::rngs::mock::StepRng;
-
+#[cfg(test)]
+mod test_helper {
 	use super::*;
 
 	#[derive(Debug, Default)]
-	struct TestSlot {
+	pub struct TestSlot {
 		atomic: AtomicU32,
 	}
 
@@ -238,6 +235,16 @@ mod tests {
 			&self.atomic
 		}
 	}
+}
+
+#[cfg(all(test, not(feature = "loom_tests")))]
+mod tests {
+	use rand::prelude::SliceRandom;
+	use rand::rngs::mock::StepRng;
+
+	use crate::atomic_slots::queue::test_helper::TestSlot;
+
+	use super::*;
 
 	#[test]
 	fn test_pop_empty() {

@@ -1,6 +1,39 @@
 pub use inner::*;
 
-#[cfg(feature = "loom")]
+mod common {
+	pub mod loom {
+		use crate::sync::thread::spawn;
+		use crate::sync::thread::JoinHandle;
+
+		pub fn launch_loom_threads(iter: impl Iterator<Item = impl FnOnce() + Send + 'static>) {
+			let (first, _) = launch_loom_threads_inner(iter);
+			first();
+		}
+
+		pub fn launch_loom_threads_and_wait<T: Send + 'static>(
+			iter: impl Iterator<Item = impl FnOnce() -> T + Send + 'static>,
+		) -> Vec<T> {
+			let (first, joins) = launch_loom_threads_inner(iter);
+			[first()]
+				.into_iter()
+				.chain(joins.into_iter().map(|j| j.join().unwrap()))
+				.collect()
+		}
+
+		fn launch_loom_threads_inner<F, T>(iter: impl Iterator<Item = F>) -> (F, Vec<JoinHandle<T>>)
+		where
+			T: Send + 'static,
+			F: FnOnce() -> T + Send + 'static,
+		{
+			let mut vec = iter.collect::<Vec<_>>().into_iter();
+			let first = vec.next().unwrap();
+			let joins = vec.map(|x| spawn(x)).collect::<Vec<_>>();
+			(first, joins)
+		}
+	}
+}
+
+#[cfg(feature = "loom_tests")]
 mod inner {
 	use std::sync::TryLockError;
 
@@ -25,7 +58,20 @@ mod inner {
 		};
 	}
 	pub mod loom {
+		pub use loom::model::Builder;
 		pub use loom::{explore, model, skip_branch, stop_exploring};
+
+		pub use crate::sync::common::loom::*;
+
+		pub fn model_builder<B, F>(_b: B, f: F)
+		where
+			B: FnOnce(&mut Builder),
+			F: Fn() + Sync + Send + 'static,
+		{
+			let mut builder = Builder::new();
+			_b(&mut builder);
+			builder.check(f)
+		}
 	}
 
 	pub mod cell {
@@ -51,20 +97,29 @@ mod inner {
 		}
 	}
 
-	pub struct SpinWait;
+	pub struct SpinWait(u32);
 
-	#[cfg(feature = "loom")]
+	#[cfg(feature = "loom_tests")]
 	impl SpinWait {
+		// this does almost nothing
+		pub const THRESHOLD_KILL: u32 = 8;
 		pub fn new() -> Self {
-			Self
+			Self(0)
 		}
 		pub fn spin(&mut self) {
-			thread::yield_now()
+			if self.0 < Self::THRESHOLD_KILL {
+				thread::yield_now();
+			} else {
+				loom::skip_branch();
+			}
+			self.0 += 1;
 		}
 		pub fn spin_no_yield(&mut self) {
-			thread::yield_now()
+			self.spin();
 		}
-		pub fn reset(&mut self) {}
+		pub fn reset(&mut self) {
+			self.0 = 0;
+		}
 	}
 
 	pub struct Mutex<T> {
@@ -100,7 +155,7 @@ mod inner {
 	}
 }
 
-#[cfg(not(feature = "loom"))]
+#[cfg(not(feature = "loom_tests"))]
 mod inner {
 	pub use std::sync::{Arc, Barrier};
 
@@ -124,6 +179,10 @@ mod inner {
 		};
 	}
 	pub mod loom {
+		pub use loom::model::Builder;
+
+		pub use crate::sync::common::loom::*;
+
 		pub fn explore() {}
 		pub fn stop_exploring() {}
 		pub fn skip_branch() {}
@@ -132,6 +191,14 @@ mod inner {
 			F: Fn() + Sync + Send + 'static,
 		{
 			f()
+		}
+
+		pub fn model_builder<B, F>(_b: B, f: F)
+		where
+			B: FnOnce(&mut Builder),
+			F: Fn() + Sync + Send + 'static,
+		{
+			f();
 		}
 	}
 
