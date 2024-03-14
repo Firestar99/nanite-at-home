@@ -145,13 +145,13 @@ impl<S: QueueSlot> ChainQueue<S> {
 		}
 	}
 
-	pub fn pop_chain_inner(
+	fn pop_chain_inner(
 		&self,
 		atomic_slots: &AtomicSlots<S>,
 		mut process_slot: impl FnMut(SlotKey) -> bool,
-		lock: &mut MutexGuard<Option<SlotKey>>,
+		guard: &mut MutexGuard<Option<SlotKey>>,
 	) -> Option<SlotChain> {
-		if let Some(head) = **lock {
+		if let Some(head) = **guard {
 			let mut prev = head;
 			let mut curr = head;
 			loop {
@@ -159,17 +159,17 @@ impl<S: QueueSlot> ChainQueue<S> {
 				if next_index == !0 {
 					break;
 				}
+				if !process_slot(curr) {
+					break;
+				}
 
 				prev = curr;
 				// Safety: we inserted it, it must be valid
 				curr = unsafe { atomic_slots.key_from_raw_index(next_index) };
-				if !process_slot(prev) {
-					break;
-				}
 			}
 
 			if curr != head {
-				**lock = Some(curr);
+				**guard = Some(curr);
 				return Some(SlotChain::new(head, prev));
 			} else {
 				None
@@ -191,6 +191,10 @@ impl<S: QueueSlot> ChainQueue<S> {
 		}
 	}
 
+	/// Pop a chain of slots, retaining the linked list inside of them.
+	///
+	/// `process_slot` is called with new entries as long as it returns true, consuming the entry. If it returns false once, this function exits returning the chain of
+	/// entries for which the function returned true. However, the last entry that returned false is **not** contained within the chain and will be retained in the queue.
 	pub fn pop_chain(
 		&self,
 		atomic_slots: &AtomicSlots<S>,
@@ -213,8 +217,16 @@ impl<S: QueueSlot> Queue<S> for ChainQueue<S> {
 	}
 
 	fn pop(&self, atomic_slots: &AtomicSlots<S>) -> Option<SlotKey> {
-		self.pop_chain(atomic_slots, |_| false)
-			.map(|chain| chain.single_slot_key().unwrap())
+		let mut popped = false;
+		self.pop_chain(atomic_slots, |_| {
+			if popped {
+				false
+			} else {
+				popped = true;
+				true
+			}
+		})
+		.map(|chain| chain.single_slot_key().unwrap())
 	}
 }
 
