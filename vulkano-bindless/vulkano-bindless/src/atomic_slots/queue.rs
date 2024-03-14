@@ -3,7 +3,6 @@ use std::marker::PhantomData;
 use crate::atomic_slots::{AtomicSlots, SlotKey};
 use crate::sync::atomic::AtomicU32;
 use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use crate::sync::cell::UnsafeCell;
 use crate::sync::Mutex;
 use crate::sync::MutexGuard;
 use crate::sync::SpinWait;
@@ -41,7 +40,6 @@ pub trait QueueSlot: Default {
 
 pub struct BaseQueue<S: QueueSlot> {
 	tail: AtomicU32,
-	_not_sync: UnsafeCell<()>,
 	_phantom: PhantomData<S>,
 }
 
@@ -49,7 +47,6 @@ impl<S: QueueSlot> BaseQueue<S> {
 	pub fn new() -> Self {
 		Self {
 			tail: AtomicU32::new(!0),
-			_not_sync: UnsafeCell::new(()),
 			_phantom: PhantomData {},
 		}
 	}
@@ -389,5 +386,85 @@ mod tests {
 			assert_eq!(queue.pop(&slots), Some(*key));
 		}
 		assert_eq!(queue.pop(&slots), None);
+	}
+}
+
+#[cfg(test)]
+mod loom_tests {
+	use crate::atomic_slots::queue::test_helper::TestSlot;
+	use crate::sync::loom::*;
+	use crate::sync::Arc;
+
+	use super::*;
+
+	#[test]
+	fn test_pop_push() {
+		test_push(|| PopQueue::new())
+	}
+
+	#[test]
+	fn test_chain_push() {
+		test_push(|| ChainQueue::new())
+	}
+
+	fn test_push<Q>(queue: impl Fn() -> Q + Send + Sync + 'static)
+	where
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
+		const PUSH_THREADS: usize = 3;
+		model_builder(
+			|b| b.preemption_bound = Some(4),
+			move || {
+				let queue = Arc::new(queue());
+				let slots = Arc::new(AtomicSlots::new(32));
+				launch_loom_threads((0..PUSH_THREADS).map(|_| {
+					let slots = slots.clone();
+					let queue = queue.clone();
+					let key = slots.allocate();
+					move || {
+						queue.push(&slots, key);
+					}
+				}));
+			},
+		);
+	}
+
+	#[test]
+	fn test_pop_pop() {
+		test_pop(|| PopQueue::new())
+	}
+
+	#[test]
+	fn test_chain_pop() {
+		test_pop(|| ChainQueue::new())
+	}
+
+	fn test_pop<Q>(queue: impl Fn() -> Q + Send + Sync + 'static)
+	where
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
+		const POP_THREADS: usize = 3;
+		model_builder(
+			|b| b.preemption_bound = Some(4),
+			move || {
+				let queue = Arc::new(queue());
+				let slots = Arc::new(AtomicSlots::new(32));
+				let keys = [(); POP_THREADS].map(|_| slots.allocate());
+				for key in keys {
+					queue.push(&slots, key);
+				}
+				queue.push(&slots, slots.allocate());
+
+				let iter = (0..POP_THREADS).map(|_| {
+					let slots = slots.clone();
+					let queue = queue.clone();
+					move || queue.pop(&slots).unwrap()
+				});
+				let mut result = launch_loom_threads_and_wait(iter);
+
+				result.sort_by_key(|key| slots.key_to_raw_index(*key));
+				assert_eq!(result, keys);
+			},
+		);
 	}
 }
