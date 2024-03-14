@@ -86,6 +86,8 @@ pub trait Queue<S: QueueSlot> {
 	fn push_chain(&self, atomic_slots: &AtomicSlots<S>, chain: SlotChain);
 	fn pop(&self, atomic_slots: &AtomicSlots<S>) -> Option<SlotKey>;
 
+	fn dry_up(&mut self, atomic_slots: &AtomicSlots<S>, f: impl FnMut(SlotKey)) -> Option<SlotChain>;
+
 	/// # Safety
 	/// Only meant for single-thread testing, queue must not be shared between threads!
 	#[cfg(test)]
@@ -149,6 +151,31 @@ impl<S: QueueSlot> Queue<S> for PopQueue<S> {
 		}
 	}
 
+	fn dry_up(&mut self, atomic_slots: &AtomicSlots<S>, mut f: impl FnMut(SlotKey)) -> Option<SlotChain> {
+		self.check(atomic_slots);
+
+		let head = *self.head.get_mut();
+		if head == !0 {
+			return None;
+		}
+
+		// Safety: we inserted it, it must be valid
+		let head = unsafe { atomic_slots.key_from_raw_index(head) };
+		let mut key = head;
+		loop {
+			f(key);
+			let next_index = atomic_slots.with(key, |slot| slot.atomic().load(Relaxed));
+			if next_index == !0 {
+				break;
+			}
+			// Safety: we inserted it, it must be valid
+			key = unsafe { atomic_slots.key_from_raw_index(next_index) };
+		}
+
+		*self.head.get_mut() = !0;
+		Some(SlotChain::new(head, key))
+	}
+
 	#[cfg(test)]
 	unsafe fn debug_count(&self, atomic_slots: &AtomicSlots<S>) -> u32 {
 		self.check(atomic_slots);
@@ -190,7 +217,7 @@ impl<S: QueueSlot> ChainQueue<S> {
 		mut process_slot: impl FnMut(SlotKey) -> bool,
 		guard: &mut MutexGuard<Option<SlotKey>>,
 	) -> Option<SlotChain> {
-		if let Some(head) = **guard {
+		guard.and_then(|head| {
 			let mut prev = head;
 			let mut curr = head;
 			loop {
@@ -207,15 +234,11 @@ impl<S: QueueSlot> ChainQueue<S> {
 				curr = unsafe { atomic_slots.key_from_raw_index(next_index) };
 			}
 
-			if curr != head {
+			(curr != head).then(|| {
 				**guard = Some(curr);
-				return Some(SlotChain::new(head, prev));
-			} else {
-				None
-			}
-		} else {
-			None
-		}
+				SlotChain::new(head, prev)
+			})
+		})
 	}
 
 	pub fn try_pop_chain(
@@ -268,6 +291,25 @@ impl<S: QueueSlot> Queue<S> for ChainQueue<S> {
 			}
 		})
 		.map(|chain| chain.single_slot_key().unwrap())
+	}
+
+	fn dry_up(&mut self, atomic_slots: &AtomicSlots<S>, mut f: impl FnMut(SlotKey)) -> Option<SlotChain> {
+		self.check(atomic_slots);
+		let result = self.head.get_mut().map(|head| {
+			let mut curr = head;
+			loop {
+				let next_index = atomic_slots.with(curr, |slot| slot.atomic().load(Acquire));
+				f(curr);
+				if next_index == !0 {
+					break;
+				}
+				// Safety: we inserted it, it must be valid
+				curr = unsafe { atomic_slots.key_from_raw_index(next_index) };
+			}
+			SlotChain::new(head, curr)
+		});
+		*self.head.get_mut() = None;
+		result
 	}
 
 	/// actually not unsafe

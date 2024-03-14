@@ -335,6 +335,21 @@ impl<T> AtomicRCSlots<T> {
 	}
 }
 
+impl<T> Drop for AtomicRCSlots<T> {
+	fn drop(&mut self) {
+		// Safety: we have exclusive ownership of ourselves and our slots, and need to drop all slots in the reaper queue
+		unsafe {
+			self.reaper_queue.dry_up(&self.inner, |key| {
+				self.inner.with(key, |slot| {
+					slot.inner.with_mut(|inner| {
+						inner.t.assume_init_drop();
+					})
+				})
+			});
+		}
+	}
+}
+
 #[cfg(test)]
 mod test_utils {
 	use std::mem::replace;
@@ -638,5 +653,24 @@ mod tests {
 			assert_eq!(slots.reaper_queue.debug_count(&slots.inner), 1);
 			assert_eq!(slots.dead_queue.debug_count(&slots.inner), 13);
 		}
+	}
+
+	#[test]
+	fn test_reaper_queue_leak() {
+		let slots = AtomicRCSlots::new(32);
+
+		let arc = Arc::new(42);
+		let slot = slots.allocate(arc.clone());
+		assert_eq!(Arc::strong_count(&arc), 2);
+
+		// get slot in the reaper queue, where it remains unfreed
+		let lock = slots.lock();
+		drop(slot);
+		lock.unlock();
+		assert_eq!(Arc::strong_count(&arc), 2);
+
+		// must free slot in reaper queue
+		drop(slots);
+		assert_eq!(Arc::strong_count(&arc), 1, "reaper queue is leaking!");
 	}
 }
