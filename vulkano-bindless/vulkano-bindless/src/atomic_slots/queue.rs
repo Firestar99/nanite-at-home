@@ -393,6 +393,7 @@ mod tests {
 mod loom_tests {
 	use crate::atomic_slots::queue::test_helper::TestSlot;
 	use crate::sync::loom::*;
+	use crate::sync::thread::spawn;
 	use crate::sync::Arc;
 
 	use super::*;
@@ -461,6 +462,89 @@ mod loom_tests {
 					move || queue.pop(&slots).unwrap()
 				});
 				let mut result = launch_loom_threads_and_wait(iter);
+
+				result.sort_by_key(|key| slots.key_to_raw_index(*key));
+				assert_eq!(result, keys);
+			},
+		);
+	}
+
+	// loom does not like push_pop at all, generates way too many branches for some reason, which cause int overflows
+	#[test]
+	#[cfg_attr(feature = "loom_tests", ignore)]
+	fn test_pop_push_pop() {
+		test_push_pop(|| PopQueue::new())
+	}
+
+	#[test]
+	#[cfg_attr(feature = "loom_tests", ignore)]
+	fn test_chain_push_pop() {
+		test_push_pop(|| ChainQueue::new())
+	}
+
+	fn test_push_pop<Q>(queue: impl Fn() -> Q + Send + Sync + 'static)
+	where
+		Q: Queue<TestSlot> + Send + Sync + 'static,
+	{
+		const THREADS: usize = 1;
+		model_builder(
+			|b| {
+				b.expect_explicit_explore = true;
+				b.max_branches = 100000;
+				b.preemption_bound = Some(1);
+			},
+			move || {
+				let queue = Arc::new(queue());
+				let slots = Arc::new(AtomicSlots::new(32));
+				let keys = [(); THREADS + 1].map(|_| slots.allocate());
+				queue.push(&slots, keys[THREADS]);
+
+				let push = (0..THREADS)
+					.map(|i| {
+						let slots = slots.clone();
+						let queue = queue.clone();
+						move || {
+							queue.push(&slots, keys[i]);
+						}
+					})
+					.collect::<Vec<_>>();
+
+				let pop = (0..THREADS)
+					.map(|_| {
+						let slots = slots.clone();
+						let queue = queue.clone();
+						move || {
+							let mut spin_wait = SpinWait::new();
+							loop {
+								if let Some(slot) = queue.pop(&slots) {
+									return slot;
+								}
+								spin_wait.spin();
+							}
+						}
+					})
+					.collect::<Vec<_>>();
+
+				explore();
+				for x in push {
+					spawn(x);
+				}
+				let mut result = launch_loom_threads_and_wait(pop.into_iter());
+				stop_exploring();
+
+				// empty out queue
+				result.push({
+					queue.push(&slots, slots.allocate());
+					// Normally pop should be unable to return None, as the push above by the same thread ensures it can be poped. But loom says otherwise.
+					let mut spin_wait = SpinWait::new();
+					loop {
+						if let Some(key) = queue.pop(&slots) {
+							break key;
+						} else {
+							spin_wait.spin();
+						}
+					}
+				});
 
 				result.sort_by_key(|key| slots.key_to_raw_index(*key));
 				assert_eq!(result, keys);
