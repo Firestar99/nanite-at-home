@@ -9,7 +9,7 @@ use crate::atomic_slots::timestamp::Timestamp;
 use crate::atomic_slots::Queue;
 use crate::sync::atomic::fence;
 use crate::sync::atomic::AtomicU32;
-use crate::sync::atomic::Ordering::{Acquire, Relaxed};
+use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use crate::sync::cell::UnsafeCell;
 use crate::sync::{Arc, SpinWait};
 
@@ -32,14 +32,14 @@ impl<T> RCSlot<T> {
 	fn with_slot<R>(&self, f: impl FnOnce(&Slot<T>) -> R) -> R {
 		self.slots.inner.with(self.key, |slot| {
 			// SAFETY: we must assume the slot to be alive, to check if it really is alive. As when it is alive, reading version with a shared ref is ok.
-			let _version = unsafe { slot.inner.with(|inner| (&*inner).version) };
-			debug_assert_eq!(_version.0 & 1, 1, "Slot is alive with version {}", _version);
+			let _version = slot.version.load(Relaxed);
+			debug_assert_eq!(_version & 1, 1, "Slot is alive with version {}", _version);
 			f(slot)
 		})
 	}
 
 	pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
-		unsafe { self.with_slot(|slot| slot.inner.with(|inner| f(inner.t.assume_init_ref()))) }
+		unsafe { self.with_slot(|slot| slot.t.with(|t| f(t.assume_init_ref()))) }
 	}
 
 	/// # Safety
@@ -77,7 +77,7 @@ impl<T> Deref for RCSlot<T> {
 
 	fn deref(&self) -> &Self::Target {
 		// Safety:
-		unsafe { (&*self.slots.inner.index(self.key).inner.get()).t.assume_init_ref() }
+		unsafe { (&*self.slots.inner.index(self.key).t.get()).assume_init_ref() }
 	}
 }
 
@@ -113,18 +113,28 @@ impl<T> Debug for RCSlot<T> {
 	}
 }
 
-/// An `RCSlotInner` is the backing slot in [`AtomicSlots`] that manages its lifetime via RC. `version` determines the state this slot is in:
+/// A `Slot` is the backing slot of [`RCSlot`] and stored within [`AtomicSlots`]. The atomic `version` determines the state this slot is in. When switching states
+/// `version` will always be wrapping incremented so that each reuse of a slot results in a different version (apart from wrapping around after many reuses).
 ///
 /// # slot is alive: `version & 1 == 1`
-/// `atomic` is the ref count of the alive slot. `t` is initialized and contains the data contents of this slot. `free_timestamp` is unused. Upgrading weak pointers will
-/// succeed and increment the ref count.
+/// * `atomic` is the ref count of the alive slot. Should it decrement to 0, the slot will be "start dying" by being added to the
+/// [reaper queue](AtomicRCSlots::reaper_queue_add), but may stay alive for some time.
+/// * `t` is initialized, may be referenced by many shared references and contains the data contents of this slot.
+/// * `free_timestamp` is unused and should not be accessed, as during state transitions a mut reference may be held against it.
+/// * Upgrading weak pointers will succeed and increment the ref count.
 ///
 /// # slot is dead: `version & 1 == 0`
-/// `atomic` points to the next free slot index in this [`AtomicSlots`], as controlled by [`PopQueue`] or [`ChainQueue`]. `t` is uninitialized. `free_timestamp` is the
-/// timestamp until which the slot may be in use, if the timestamp progresses past this the slot may be dropped and reused. Upgrading weak pointers will fail.
-pub struct Slot<T> {
-	pub atomic: AtomicU32,
-	pub inner: UnsafeCell<SlotInner<T>>,
+/// * `atomic` is *generally* undefined and should not be accessed externally. Typically, it's used to point to the next free slot index while the slot is in any of the
+/// queues. However, during transition between the states (e.g. allocation and freeing), `atomic` is undefined.
+/// * `t` is uninitialized and should not be accessed, as during state transitions a mut reference may be held against it.
+/// * `free_timestamp` is the timestamp until which the slot may be in use, if the `finished_lock_counter` timestamp progresses past this the slot may be dropped and
+/// reused.
+/// * Upgrading weak pointers will fail.
+struct Slot<T> {
+	atomic: AtomicU32,
+	version: AtomicU32,
+	free_timestamp: UnsafeCell<Timestamp>,
+	t: UnsafeCell<MaybeUninit<T>>,
 }
 
 impl<T> QueueSlot for Slot<T> {
@@ -140,24 +150,13 @@ impl<T> Debug for Slot<T> {
 	}
 }
 
-pub struct SlotInner<T> {
-	// TODO u32 or is u16 enough?
-	pub version: Wrapping<u32>,
-	pub free_timestamp: Timestamp,
-	/// ensured to be init if `version & 1 == 1`
-	/// may be init or uninit if `version & 1 == 0`, determined by whether it is in the reaper queue or not.
-	pub t: MaybeUninit<T>,
-}
-
 impl<T> Default for Slot<T> {
 	fn default() -> Self {
 		Self {
 			atomic: AtomicU32::new(0),
-			inner: UnsafeCell::new(SlotInner {
-				version: Wrapping(0),
-				free_timestamp: Timestamp::new(0),
-				t: MaybeUninit::uninit(),
-			}),
+			version: AtomicU32::new(0),
+			free_timestamp: UnsafeCell::new(Timestamp::new(0)),
+			t: UnsafeCell::new(MaybeUninit::uninit()),
 		}
 	}
 }
@@ -217,13 +216,15 @@ impl<T> AtomicRCSlots<T> {
 		self.inner.with(key, |slot| {
 			// Safety: we are the only ones who have access to this newly allocated key
 			unsafe {
-				slot.inner.with_mut(|inner| {
-					assert_eq!(inner.version.0 & 1, 0, "slot that was allocated was not dead");
-					inner.version += 1;
-					inner.t.write(t);
+				slot.t.with_mut(|t_ref| {
+					t_ref.write(t);
 				});
 			}
+			// ref count of 1
 			slot.atomic.store(1, Relaxed);
+			// slot is now alive and t may be referenced by many shared references beyond this point
+			let _old_version = slot.version.fetch_add(1, Release);
+			assert_eq!(_old_version & 1, 0, "slot that was allocated was not dead");
 		});
 
 		// Safety: transfer ownership of the ref increment done above
@@ -235,30 +236,29 @@ impl<T> AtomicRCSlots<T> {
 	#[cold]
 	#[inline(never)]
 	unsafe fn reaper_queue_add(&self, key: &RCSlot<T>) {
+		// FIXME may race against locking, free_now may be set to true even though another thread just locked
 		let curr = Timestamp::new(self.curr_lock_counter.load(Relaxed));
 		let finished = Timestamp::new(self.finished_lock_counter.load(Relaxed));
 		// free_now means there are no locks present
 		let free_now = curr.compare_wrapping(&finished).unwrap().is_le();
 
-		// SAFETY: see method safely contract
-		unsafe {
-			key.with_slot(|slot| {
-				slot.inner.with_mut(|inner| {
-					assert_eq!(inner.version.0 & 1, 1, "slot is alive before it was freed");
-					inner.version += 1;
-					inner.free_timestamp = curr;
-					if free_now {
-						inner.t.assume_init_drop();
-					}
-				})
-			});
-		}
-
 		if free_now {
+			key.with_slot(|slot| {
+				// FIXME freeing may race against locked iterating
+				Self::free_slot(slot);
+			});
 			// put onto dead queue
 			// afterward, we NO LONGER have exclusive ownership, so no with_mut() allowed!
 			self.dead_queue.push(&self.inner, key.key);
 		} else {
+			key.with_slot(|slot| {
+				// SAFETY: while the slot is (still) alive, no-one is allowed to hold a reference against free_timestamp, thus grabbing a mutable ref is safe.
+				// Also, the method contract ensures only one thread may enter this method for each alive slot.
+				unsafe {
+					slot.free_timestamp.with_mut(|free_timestamp| *free_timestamp = curr);
+				}
+			});
+
 			// put onto reaper queue
 			// the order they are put into the queue may differ from their timestamps, so a few entries may get stuck
 			// afterward, we NO LONGER have exclusive ownership, so no with_mut() allowed!
@@ -266,41 +266,17 @@ impl<T> AtomicRCSlots<T> {
 		}
 	}
 
+	/// Frees the alive slot and turns it dead. Panics if the slot was not alive.
+	///
 	/// # Safety
-	/// Must only be called from unlock
-	unsafe fn reaper_queue_free(&self, lock_timestamp: Timestamp) {
-		let chain = self.reaper_queue.pop_chain(&self.inner, |key| {
-			// SAFETY: we have exclusive access to popped entries, and to drop their t now that it's safe to do so
-			unsafe {
-				self.inner.with(key, |slot| {
-					slot.inner.with_mut(|inner| {
-						// TODO move this to docs
-						// It is required to be less_than and not just equal, as some entries may get stuck due to:
-						// * reaper_queue internally retaining a single entry
-						// * entries being added out of order compared to their timestamp
-						// Thus we also have to free previously unlocked entries, which have gone stuck.
-						// But there is the risk that constant locking without any new entries to flush the queue can cause timestamps to wrap around,
-						// and then we don't know if it was before or after us!
-						if inner
-							.free_timestamp
-							.compare_wrapping(&lock_timestamp)
-							.expect("Reaper queue stood still for too long, timestamps have wrapped around!")
-							.is_le()
-						{
-							inner.t.assume_init_drop();
-							true
-						} else {
-							false
-						}
-					})
-				})
-			}
-		});
-
-		// freed slots may reorder here, that's fine.
-		// But actually, won't happen with the current unlock logic.
-		if let Some(chain) = chain {
-			self.dead_queue.push_chain(&self.inner, chain);
+	/// Must have exclusive access to `slot.t`
+	unsafe fn free_slot(slot: &Slot<T>) {
+		let _old_version = slot.version.fetch_add(1, Relaxed);
+		assert_eq!(_old_version & 1, 1, "slot should be freed but was already dead");
+		unsafe {
+			slot.t.with_mut(|t| {
+				t.assume_init_drop();
+			});
 		}
 	}
 
@@ -326,24 +302,52 @@ impl<T> AtomicRCSlots<T> {
 		}
 
 		// free reaper_queue
-		// SAFETY: I am unlock
-		unsafe {
-			self.reaper_queue_free(lock_timestamp);
-		}
+		let chain = self.reaper_queue.pop_chain(&self.inner, |key| {
+			// SAFETY: we have exclusive access to popped entries, and to drop their t now that it's safe to do so
+			unsafe {
+				self.inner.with(key, |slot| {
+					// TODO move this to docs
+					// It is required to be less_than and not just equal, as some entries may get stuck due to:
+					// * reaper_queue internally retaining a single entry
+					// * entries being added out of order compared to their timestamp
+					// Thus we also have to free previously unlocked entries, which have gone stuck.
+					// But there is the risk: Constant locking without any new entries to flush the queue can cause timestamps to wrap around,
+					// and then we don't know if it was before or after us!
+					let free_timestamp = slot.free_timestamp.with(|t| *t);
+					if free_timestamp
+						.compare_wrapping(&lock_timestamp)
+						.expect("Reaper queue stood still for too long, timestamps have wrapped around!")
+						.is_le()
+					{
+						// Safety: has exclusive access to slot, as `ChainQueue` poping is mutexed
+						Self::free_slot(slot);
+						true
+					} else {
+						false
+					}
+				})
+			}
+		});
 
-		self.finished_lock_counter.store(lock_timestamp.into(), Relaxed);
+		// unlock complete
+		self.finished_lock_counter.store(lock_timestamp.into(), Release);
+
+		// move freed slots to dead queue
+		// freed slots may reorder here, that's fine.
+		if let Some(chain) = chain {
+			self.dead_queue.push_chain(&self.inner, chain);
+		}
 	}
 }
 
 impl<T> Drop for AtomicRCSlots<T> {
 	fn drop(&mut self) {
-		// Safety: we have exclusive ownership of ourselves and our slots, and need to drop all slots in the reaper queue
+		// Need to drop all slots remaining in the reaper queue (always either 0 or the 1 retained slot)
+		// Safety: we have exclusive access of all of our slots
 		unsafe {
 			self.reaper_queue.dry_up(&self.inner, |key| {
 				self.inner.with(key, |slot| {
-					slot.inner.with_mut(|inner| {
-						inner.t.assume_init_drop();
-					})
+					Self::free_slot(slot);
 				})
 			});
 		}
@@ -672,5 +676,29 @@ mod tests {
 		// must free slot in reaper queue
 		drop(slots);
 		assert_eq!(Arc::strong_count(&arc), 1, "reaper queue is leaking!");
+	}
+
+	#[test]
+	fn test_lock_timestamp_ordering() {
+		let slots = AtomicRCSlots::new(32);
+
+		let arc = Arc::new(42);
+		let slot = slots.allocate(arc.clone());
+		let slot_flush = slots.allocate(Arc::new(42));
+		assert_eq!(Arc::strong_count(&arc), 2);
+
+		let lock1 = slots.lock();
+		let lock2 = slots.lock();
+		assert_eq!(Arc::strong_count(&arc), 2);
+
+		drop(slot);
+		drop(slot_flush);
+		assert_eq!(Arc::strong_count(&arc), 2);
+
+		lock1.unlock();
+		assert_eq!(Arc::strong_count(&arc), 2);
+
+		lock2.unlock();
+		assert_eq!(Arc::strong_count(&arc), 1);
 	}
 }
