@@ -218,6 +218,13 @@ impl<T> AtomicRCSlotsLock<T> {
 	pub fn unlock(self) {
 		// impl in drop
 	}
+
+	pub fn iter_with<'a, R>(
+		&'a self,
+		f: impl FnMut(Option<&T>) -> R + 'a,
+	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
+		self.slots.iter_with(self.lock_timestamp, f)
+	}
 }
 
 impl<T> Drop for AtomicRCSlotsLock<T> {
@@ -228,6 +235,7 @@ impl<T> Drop for AtomicRCSlotsLock<T> {
 
 pub struct AtomicRCSlots<T> {
 	inner: AtomicSlots<Slot<T>>,
+	slots_allocated_max: AtomicU32,
 	/// queue of slots that can be dropped and reclaimed, as soon as all locks that may be using them have finished
 	reaper_queue: ChainQueue<Slot<T>>,
 	/// queue of slots that are dead and may be reused
@@ -248,6 +256,7 @@ impl<T> AtomicRCSlots<T> {
 			reaper_queue: ChainQueue::new(&inner),
 			dead_queue: PopQueue::new(&inner),
 			inner,
+			slots_allocated_max: AtomicU32::new(0),
 			curr_lock_counter: AtomicU32::new(0),
 			finished_lock_counter: AtomicU32::new(0),
 			// finished_locks_bits: AtomicU64::new(!0),
@@ -255,10 +264,10 @@ impl<T> AtomicRCSlots<T> {
 	}
 
 	pub fn allocate(self: &Arc<Self>, t: T) -> RCSlot<T> {
-		let key = self
-			.dead_queue
-			.pop(&self.inner)
-			.unwrap_or_else(|| self.inner.allocate());
+		let (key, new_alloc) = match self.dead_queue.pop(&self.inner) {
+			None => (self.inner.allocate(), true),
+			Some(e) => (e, false),
+		};
 
 		self.inner.with(key, |slot| {
 			// Safety: we are the only ones who have access to this newly allocated key
@@ -272,6 +281,12 @@ impl<T> AtomicRCSlots<T> {
 			// slot is now alive and t may be referenced by many shared references beyond this point
 			slot.version_swap(Dead, Alive, Release);
 		});
+
+		if new_alloc {
+			// Relaxed may be enough, but I want to make sure the slot is properly initialized before iterated on
+			self.slots_allocated_max
+				.fetch_max(self.inner.key_to_raw_index(key) + 1, Release);
+		}
 
 		// Safety: transfer ownership of the ref increment done above
 		unsafe { RCSlot::new(self.clone(), key) }
@@ -386,6 +401,41 @@ impl<T> AtomicRCSlots<T> {
 		if let Some(chain) = chain {
 			self.dead_queue.push_chain(&self.inner, chain);
 		}
+	}
+
+	/// Iterates over all slots that have been allocated thus far.
+	/// Does not give [`RCSlot`] but plain `&T` to prevent resurrection of slots in reaper state. Could be implemented later if needed.
+	fn iter_with<'a, R>(
+		self: &'a Arc<Self>,
+		lock_timestamp: Timestamp,
+		mut f: impl FnMut(Option<&T>) -> R + 'a,
+	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
+		let max = self.slots_allocated_max.load(Relaxed);
+
+		// it may be possible to iterate more efficiently on a per-block basis?
+		// and at the same time ensure ExactSizeIterator?
+		(0..max).map(move |index| {
+			// Safety: it is a valid index
+			let key = unsafe { self.inner.key_from_raw_index(index) };
+			self.inner.with(key, |slot| {
+				let present = match VersionState::from(slot.version.load(Relaxed)) {
+					Dead => false,
+					Alive => true,
+					Reaper => {
+						// Safety: Reaper state ensures free_timestamp has been written
+						let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
+						free_timestamp.compare_wrapping(&lock_timestamp).unwrap().is_ge()
+					}
+				};
+
+				if present {
+					// Safety: just checked that we can safely access it
+					unsafe { slot.t.with(|t| f(Some(t.assume_init_ref()))) }
+				} else {
+					f(None)
+				}
+			})
+		})
 	}
 }
 
@@ -749,5 +799,65 @@ mod tests {
 
 		lock2.unlock();
 		assert_eq!(Arc::strong_count(&arc), 1);
+	}
+
+	fn iter_collect<T: Clone>(lock: &AtomicRCSlotsLock<T>) -> Vec<Option<T>> {
+		lock.iter_with(|t| t.cloned()).collect::<Vec<_>>()
+	}
+
+	#[test]
+	fn test_iter_smoke() {
+		let slots = AtomicRCSlots::new(32);
+		assert_eq!(iter_collect(&slots.lock()), []);
+
+		let slot1 = slots.allocate(42);
+		assert_eq!(iter_collect(&slots.lock()), [Some(42)]);
+
+		let slot2 = slots.allocate(69);
+		assert_eq!(iter_collect(&slots.lock()), [Some(42), Some(69)]);
+
+		drop(slot2);
+		assert_eq!(iter_collect(&slots.lock()), [Some(42), None]);
+
+		drop(slot1);
+		assert_eq!(iter_collect(&slots.lock()), [None, None]);
+	}
+
+	#[test]
+	fn test_iter_locked() {
+		let slots = AtomicRCSlots::new(32);
+		assert_eq!(iter_collect(&slots.lock()), []);
+
+		let slot1 = slots.allocate(1);
+		let slot2 = slots.allocate(2);
+		let slot3 = slots.allocate(3);
+		assert_eq!(iter_collect(&slots.lock()), [Some(1), Some(2), Some(3)]);
+
+		// 1 lock
+		let lock1 = slots.lock();
+		assert_eq!(iter_collect(&lock1), [Some(1), Some(2), Some(3)]);
+		drop(slot1);
+		assert_eq!(iter_collect(&lock1), [Some(1), Some(2), Some(3)]);
+		drop(lock1);
+		assert_eq!(iter_collect(&slots.lock()), [None, Some(2), Some(3)]);
+
+		// 2 locks in parallel
+		let lock2 = slots.lock();
+		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
+		drop(slot2);
+		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
+
+		let lock3 = slots.lock();
+		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
+		assert_eq!(iter_collect(&lock3), [None, None, Some(3)]);
+		drop(slot3);
+		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
+		assert_eq!(iter_collect(&lock3), [None, None, Some(3)]);
+
+		drop(lock2);
+		assert_eq!(iter_collect(&lock3), [None, None, Some(3)]);
+
+		drop(lock3);
+		assert_eq!(iter_collect(&slots.lock()), [None, None, None]);
 	}
 }
