@@ -31,8 +31,8 @@ pub struct AtomicSlots<V: Default> {
 	instance_id: InstanceId,
 }
 
-unsafe impl<V: Default> Send for AtomicSlots<V> {}
-unsafe impl<V: Default> Sync for AtomicSlots<V> {}
+unsafe impl<V: Default + Send + Sync> Send for AtomicSlots<V> {}
+unsafe impl<V: Default + Send + Sync> Sync for AtomicSlots<V> {}
 
 const BLOCKS_ALLOCATED_COUNT_MASK: u16 = 0x7FFF;
 const BLOCKS_ALLOCATED_ALLOCATING_FLAG: u16 = 0x8000;
@@ -152,6 +152,7 @@ impl<V: Default> AtomicSlots<V> {
 		);
 	}
 
+	#[inline]
 	pub fn get_instance_id(&self) -> InstanceId {
 		self.instance_id
 	}
