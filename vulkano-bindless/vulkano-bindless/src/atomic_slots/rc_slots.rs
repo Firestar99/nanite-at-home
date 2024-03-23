@@ -247,6 +247,7 @@ pub struct AtomicRCSlots<T> {
 	// /// A bitset of the next 64 locks that are set to true once they unlock. Allow locks to be freed in arbitrary order without blocking on each other,
 	// /// as long as it's only 64 locks ahead of the oldest locked one.
 	// finished_locks_bits: AtomicU64,
+	_unimpl_send_sync: UnsafeCell<()>,
 }
 
 impl<T> AtomicRCSlots<T> {
@@ -259,6 +260,7 @@ impl<T> AtomicRCSlots<T> {
 			slots_allocated_max: AtomicU32::new(0),
 			curr_lock_counter: AtomicU32::new(0),
 			finished_lock_counter: AtomicU32::new(0),
+			_unimpl_send_sync: UnsafeCell::new(()),
 			// finished_locks_bits: AtomicU64::new(!0),
 		})
 	}
