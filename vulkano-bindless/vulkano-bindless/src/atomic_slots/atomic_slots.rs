@@ -172,7 +172,7 @@ impl<V: Default> core::ops::Index<SlotKey> for AtomicSlots<V> {
 	#[inline]
 	fn index(&self, slot: SlotKey) -> &Self::Output {
 		self.check(slot);
-		unsafe { &(&mut *self.blocks[slot.block as usize].get()).assume_init_ref()[slot.slot as usize] }
+		unsafe { &(&*self.blocks[slot.block as usize].get()).assume_init_ref()[slot.slot as usize] }
 	}
 }
 
