@@ -20,23 +20,28 @@ use crate::sync::cell::UnsafeCell;
 use crate::sync::{Arc, SpinWait};
 
 pub struct RCSlot<T> {
-	// TODO get rid of that Arc
-	slots: Arc<AtomicRCSlots<T>>,
+	slots: *const AtomicRCSlots<T>,
 	key: SlotKey,
 }
 
 impl<T> RCSlot<T> {
-	/// Creates a new RCSlot
+	/// Creates a new RCSlot of an alive slot
 	///
 	/// # Safety
-	/// ref_count must have been incremented for this slot previously, and ownership to decrement it again is transferred to Self
+	/// the slot must be alive, to ensure the Arc of `slots` is ref counted correctly
+	/// `ref_count` must have been incremented for this slot previously, and ownership to decrement it again is transferred to Self
 	#[inline]
-	unsafe fn new(slots: Arc<AtomicRCSlots<T>>, key: SlotKey) -> Self {
+	unsafe fn new(slots: *const AtomicRCSlots<T>, key: SlotKey) -> Self {
 		Self { slots, key }
 	}
 
+	#[inline]
+	pub fn slots(&self) -> &AtomicRCSlots<T> {
+		unsafe { &*self.slots }
+	}
+
 	fn with_slot<R>(&self, f: impl FnOnce(&Slot<T>) -> R) -> R {
-		self.slots.inner.with(self.key, |slot| {
+		self.slots().inner.with(self.key, |slot| {
 			if cfg!(debug_assertions) {
 				Slot::<T>::assert_version_state(slot.version.load(Relaxed), Alive);
 			}
@@ -51,23 +56,28 @@ impl<T> RCSlot<T> {
 	/// # Safety
 	/// must follow ref counting: after incrementing one must also decrement exactly that many times
 	#[inline]
-	pub unsafe fn ref_inc(&self) {
+	unsafe fn ref_inc(&self) {
 		let _prev = self.with_slot(|slot| slot.atomic.fetch_add(1, Relaxed));
 		debug_assert!(_prev > 0, "Invalid state: Slot is alive but ref count was 0!");
 	}
 
+	/// Decrements the ref_count, returns true if this was the last ref_dec and the slot started to die.
+	///
 	/// # Safety
 	/// must follow ref counting: after incrementing one must also decrement exactly that many times
 	#[inline]
-	pub unsafe fn ref_dec(&self) {
+	unsafe fn ref_dec(&self) -> bool {
 		let _prev = self.with_slot(|slot| slot.atomic.fetch_sub(1, Relaxed));
 		debug_assert!(_prev > 0, "Invalid state: Slot is alive but ref count was 0!");
 		if _prev == 1 {
 			fence(Acquire);
 			// SAFETY: we just verified that we are the last RC to be dropped and have exclusive access to this slot's internals
 			unsafe {
-				self.slots.slot_starts_dying(self);
+				self.slots().slot_starts_dying(self);
 			}
+			true
+		} else {
+			false
 		}
 	}
 
@@ -83,7 +93,7 @@ impl<T> RCSlot<T> {
 
 	#[inline]
 	pub fn id(&self) -> u32 {
-		self.slots.inner.key_to_raw_index(self.key)
+		self.slots().inner.key_to_raw_index(self.key)
 	}
 
 	#[inline]
@@ -99,7 +109,7 @@ impl<T> Deref for RCSlot<T> {
 
 	fn deref(&self) -> &Self::Target {
 		// Safety:
-		unsafe { (&*self.slots.inner.index(self.key).t.get()).assume_init_ref() }
+		unsafe { (&*self.slots().inner.index(self.key).t.get()).assume_init_ref() }
 	}
 }
 
@@ -115,7 +125,7 @@ impl<T> Clone for RCSlot<T> {
 		// SAFETY: we are ref counting
 		unsafe {
 			self.ref_inc();
-			Self::new(self.slots.clone(), self.key)
+			Self::new(self.slots, self.key)
 		}
 	}
 }
@@ -124,7 +134,9 @@ impl<T> Drop for RCSlot<T> {
 	fn drop(&mut self) {
 		// SAFETY: we are ref counting
 		unsafe {
-			self.ref_dec();
+			if self.ref_dec() {
+				drop(Arc::from_raw(self.slots));
+			}
 		}
 	}
 }
@@ -228,7 +240,6 @@ impl<T> Default for Slot<T> {
 }
 
 pub struct AtomicRCSlotsLock<T> {
-	// TODO get rid of that Arc
 	slots: Arc<AtomicRCSlots<T>>,
 	lock_timestamp: Timestamp,
 }
@@ -310,7 +321,7 @@ impl<T> AtomicRCSlots<T> {
 		}
 
 		// Safety: transfer ownership of the ref increment done above
-		unsafe { RCSlot::new(self.clone(), key) }
+		unsafe { RCSlot::new(Arc::into_raw(self.clone()), key) }
 	}
 
 	/// # Safety
@@ -529,9 +540,12 @@ mod tests {
 	fn test_ref_counting_underflow() {
 		let slots = AtomicRCSlots::new(32);
 		let slot = slots.allocate(42);
+		let slot2 = slot.clone();
 
-		// Safety: this is not safe
+		// Safety: this is not safe, and should cause a panic later
 		unsafe { slot.ref_dec() };
+		// need 2 slots otherwise we leak memory
+		drop(slot2);
 		drop(slot);
 	}
 
