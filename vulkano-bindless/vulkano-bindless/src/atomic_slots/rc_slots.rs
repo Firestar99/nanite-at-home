@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Formatter};
-use std::mem::MaybeUninit;
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::num::Wrapping;
 use std::ops::{Deref, Index};
 use std::sync::atomic::Ordering;
@@ -108,7 +108,7 @@ impl<T> Deref for RCSlot<T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
-		// Safety:
+		// Safety: self existing ensures the slot must be alive and t exists
 		unsafe { (&*self.slots().inner.index(self.key).t.get()).assume_init_ref() }
 	}
 }
@@ -249,9 +249,12 @@ impl<T> AtomicRCSlotsLock<T> {
 		// impl in drop
 	}
 
+	/// Iterates over all slots that have been allocated thus far.
+	/// It is NOT sound to clone returned [`RCSlot`] and doing so may result in a panic! Doing so could revive a slot marked to be reaper'ed, which is currently not
+	/// (yet) supported.
 	pub fn iter_with<'a, R>(
 		&'a self,
-		f: impl FnMut(Option<&T>) -> R + 'a,
+		f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
 	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
 		self.slots.iter_with(self.lock_timestamp, f)
 	}
@@ -435,12 +438,10 @@ impl<T> AtomicRCSlots<T> {
 		}
 	}
 
-	/// Iterates over all slots that have been allocated thus far.
-	/// Does not give [`RCSlot`] but plain `&T` to prevent resurrection of slots in reaper state. Could be implemented later if needed.
 	fn iter_with<'a, R>(
 		self: &'a Arc<Self>,
 		lock_timestamp: Timestamp,
-		mut f: impl FnMut(Option<&T>) -> R + 'a,
+		mut f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
 	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
 		let max = self.slots_allocated_max.load(Relaxed);
 
@@ -449,8 +450,8 @@ impl<T> AtomicRCSlots<T> {
 		(0..max).map(move |index| {
 			// Safety: it is a valid index
 			let key = unsafe { self.inner.key_from_raw_index(index) };
-			self.inner.with(key, |slot| {
-				let present = match VersionState::from(slot.version.load(Relaxed)).0 {
+			let present = self.inner.with(key, |slot| {
+				match VersionState::from(slot.version.load(Relaxed)).0 {
 					Dead => false,
 					Alive => true,
 					Reaper => {
@@ -458,15 +459,16 @@ impl<T> AtomicRCSlots<T> {
 						let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
 						free_timestamp.compare_wrapping(&lock_timestamp).unwrap().is_ge()
 					}
-				};
-
-				if present {
-					// Safety: just checked that we can safely access it
-					unsafe { slot.t.with(|t| f(Some(t.assume_init_ref()))) }
-				} else {
-					f(None)
 				}
-			})
+			});
+
+			if present {
+				// Safety: we actually do NOT transfer ownership of a ref_count here, instead we never drop the RCSlot
+				let rc_slot = unsafe { ManuallyDrop::new(RCSlot::new(Arc::as_ptr(self), key)) };
+				f(Some(&rc_slot))
+			} else {
+				f(None)
+			}
 		})
 	}
 }
@@ -848,7 +850,7 @@ mod tests {
 	}
 
 	fn iter_collect<T: Clone>(lock: &AtomicRCSlotsLock<T>) -> Vec<Option<T>> {
-		lock.iter_with(|t| t.cloned()).collect::<Vec<_>>()
+		lock.iter_with(|t| t.map(|slot| (**slot).clone())).collect::<Vec<_>>()
 	}
 
 	#[test]
@@ -905,5 +907,21 @@ mod tests {
 
 		drop(lock3);
 		assert_eq!(iter_collect(&slots.lock()), [None, None, None]);
+	}
+
+	#[test]
+	#[should_panic(expected = "(state: Reaper) differed from expected state Alive!")]
+	fn test_iter_clone() {
+		let slots = AtomicRCSlots::new(32);
+		let slot1 = slots.allocate(42);
+
+		let lock1 = slots.lock();
+		assert_eq!(iter_collect(&lock1), [Some(42)]);
+
+		drop(slot1);
+		assert_eq!(iter_collect(&lock1), [Some(42)]);
+
+		// necromancy is not allowed!
+		lock1.iter_with(|o| o.map(|s| s.clone())).next();
 	}
 }
