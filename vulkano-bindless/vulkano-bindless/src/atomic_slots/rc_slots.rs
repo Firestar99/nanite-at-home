@@ -502,6 +502,17 @@ mod tests {
 		assert_eq!(slot.deref_copy(), 42);
 		assert_eq!(slot.ref_count(), 1);
 	}
+	
+	#[test]
+	#[should_panic(expected = "(state: Dead) differed from expected state Alive!")]
+	fn test_ref_counting_underflow() {
+		let slots = AtomicRCSlots::new(32);
+		let slot = slots.allocate(42);
+		
+		// Safety: this is not safe
+		unsafe { slot.ref_dec() };
+		drop(slot);
+	}
 
 	#[test]
 	fn test_alloc_unique() {
