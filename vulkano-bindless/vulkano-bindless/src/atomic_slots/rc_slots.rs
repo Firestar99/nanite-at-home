@@ -71,8 +71,24 @@ impl<T> RCSlot<T> {
 		}
 	}
 
+	#[inline]
 	pub fn ref_count(&self) -> u32 {
 		self.with_slot(|slot| slot.atomic.load(Relaxed))
+	}
+
+	#[inline]
+	pub fn key(&self) -> SlotKey {
+		self.key
+	}
+
+	#[inline]
+	pub fn id(&self) -> u32 {
+		self.slots.inner.key_to_raw_index(self.key)
+	}
+
+	#[inline]
+	pub fn version(&self) -> u32 {
+		VersionState::from(self.with_slot(|slot| slot.version.load(Relaxed))).1
 	}
 }
 
@@ -162,8 +178,11 @@ impl VersionState {
 }
 
 impl VersionState {
-	fn from(version: u32) -> Self {
-		VersionState::from_u32(version & Self::MASK).unwrap()
+	#[inline]
+	fn from(version: u32) -> (Self, u32) {
+		let state = VersionState::from_u32(version & Self::MASK).unwrap();
+		let version = version & !Self::MASK;
+		(state, version)
 	}
 }
 
@@ -175,7 +194,7 @@ impl<T> Slot<T> {
 	}
 
 	fn assert_version_state(version: u32, expected: VersionState) {
-		let state = VersionState::from(version);
+		let state = VersionState::from(version).0;
 		assert_eq!(
 			state, expected,
 			"Version {} (state: {:?}) differed from expected state {:?}!",
@@ -420,7 +439,7 @@ impl<T> AtomicRCSlots<T> {
 			// Safety: it is a valid index
 			let key = unsafe { self.inner.key_from_raw_index(index) };
 			self.inner.with(key, |slot| {
-				let present = match VersionState::from(slot.version.load(Relaxed)) {
+				let present = match VersionState::from(slot.version.load(Relaxed)).0 {
 					Dead => false,
 					Alive => true,
 					Reaper => {
@@ -504,13 +523,13 @@ mod tests {
 		assert_eq!(slot.deref_copy(), 42);
 		assert_eq!(slot.ref_count(), 1);
 	}
-	
+
 	#[test]
 	#[should_panic(expected = "(state: Dead) differed from expected state Alive!")]
 	fn test_ref_counting_underflow() {
 		let slots = AtomicRCSlots::new(32);
 		let slot = slots.allocate(42);
-		
+
 		// Safety: this is not safe
 		unsafe { slot.ref_dec() };
 		drop(slot);
