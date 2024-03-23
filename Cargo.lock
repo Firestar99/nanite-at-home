@@ -2697,6 +2697,7 @@ dependencies = [
  "smol",
  "static_assertions",
  "vulkano",
+ "vulkano-bindless-shaders",
  "vulkano-shaders",
  "winit",
 ]
@@ -2711,6 +2712,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "spirv-std",
+ "static_assertions",
 ]
 
 [[package]]
