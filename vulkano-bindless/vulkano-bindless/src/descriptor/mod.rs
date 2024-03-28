@@ -1,5 +1,6 @@
 pub use vulkano_bindless_shaders::descriptor::*;
 
-pub mod descriptor_table;
+pub mod buffer_table;
+pub mod descriptor_cpu_type;
+pub mod descriptors;
 pub mod rc_reference;
-pub mod table_type;

@@ -37,7 +37,7 @@ impl<T: DescType> WeakDesc<T> {
 		}
 	}
 
-	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor is still valid. 
+	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor is still valid.
 	///
 	/// # Safety
 	/// This unsafe variant assumes the descriptor is still alive, rather than checking whether it actually is.
