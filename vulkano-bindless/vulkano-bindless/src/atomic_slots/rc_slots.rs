@@ -334,7 +334,11 @@ impl<T> AtomicRCSlots<T> {
 	unsafe fn slot_starts_dying(&self, key: &RCSlot<T>) {
 		// FIXME may race against locking, free_now may be set to true even though another thread just locked
 		let curr = Timestamp::new(self.curr_lock_counter.load(Relaxed));
-		let finished = Timestamp::new(self.finished_lock_counter.load(Relaxed));
+
+		// FIXME separate these two timestamp queries:
+		// 	* First, the curr queries the current timestamp, at which this slot can be freed.
+		//  * **Then** check if it can be freed immediately, which is completely separate from above!
+		let finished = Timestamp::new(self.finished_lock_counter.load(Acquire));
 		// free_now means there are no locks present
 		let free_now = curr.compare_wrapping(&finished).unwrap().is_le();
 
@@ -436,6 +440,13 @@ impl<T> AtomicRCSlots<T> {
 		if let Some(chain) = chain {
 			self.dead_queue.push_chain(&self.inner, chain);
 		}
+	}
+
+	/// The amount of slots that have been allocated until now. Should immediately be considered
+	/// outdated, but is guaranteed to only ever monotonically increase.
+	#[inline]
+	pub fn slots_allocated(&self) -> u32 {
+		self.slots_allocated_max.load(Relaxed)
 	}
 
 	fn iter_with<'a, R>(

@@ -1,45 +1,65 @@
 use std::ops::Deref;
 use std::sync::Arc;
-use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
 
+use vulkano::buffer::Buffer as VBuffer;
+use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
+use vulkano::descriptor_set::layout::DescriptorType;
+use vulkano::descriptor_set::WriteDescriptorSet;
+use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::{DeviceSize, Validated};
-use vulkano_bindless_shaders::descriptor::Buffer;
+
+use vulkano_bindless_shaders::descriptor::{Buffer, BufferTable};
 
 use crate::atomic_slots::{AtomicRCSlots, AtomicRCSlotsLock, RCSlot};
-use crate::descriptor::descriptor_cpu_type::DescCpuType;
+use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::descriptor::rc_reference::RCDesc;
+use crate::descriptor::resource_table::ResourceTable;
+use crate::sync::mpsc::*;
 
-use vulkano::buffer::Buffer as VBuffer;
-use vulkano::descriptor_set::WriteDescriptorSet;
-
-impl<T: BufferContents + ?Sized> DescCpuType for Buffer<T> {
-	type TableType = Subbuffer<[u8]>;
+impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
+	type ResourceTableCpu = BufferTable;
 	type CpuType = Subbuffer<T>;
 
-	fn deref_table(slot: &RCSlot<Self::TableType>) -> &Self::CpuType {
+	fn deref_table(slot: &RCSlot<<Self::ResourceTableCpu as ResourceTableCpu>::SlotType>) -> &Self::CpuType {
 		slot.deref().reinterpret_ref()
 	}
+
+	fn to_table(from: Self::CpuType) -> <Self::ResourceTableCpu as ResourceTableCpu>::SlotType {
+		from.into_bytes()
+	}
 }
 
-pub struct BufferTable {
-	device: Arc<Device>,
-	slot_map: Arc<AtomicRCSlots<Subbuffer<[u8]>>>,
-}
+impl ResourceTableCpu for BufferTable {
+	type SlotType = Subbuffer<[u8]>;
+	const DESCRIPTOR_TYPE: DescriptorType = DescriptorType::StorageBuffer;
 
-pub const SLOTS_FIRST_BLOCK_SIZE: u32 = 128;
-
-impl BufferTable {
-	pub fn new(device: Arc<Device>) -> Self {
-		Self {
-			device,
-			slot_map: AtomicRCSlots::new(SLOTS_FIRST_BLOCK_SIZE),
-		}
+	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
+		physical_device
+			.properties()
+			.max_descriptor_set_update_after_bind_storage_buffers
+			.unwrap()
 	}
 
-	pub fn alloc_slot<T: BufferContents + ?Sized>(&self, buffer: Subbuffer<T>) -> RCDesc<Buffer<T>> {
-		RCDesc::new(self.slot_map.allocate(buffer.into_bytes()))
+	fn write_descriptor_set(
+		binding: u32,
+		first_array_element: u32,
+		elements: impl IntoIterator<Item = Self::SlotType>,
+	) -> WriteDescriptorSet {
+		WriteDescriptorSet::buffer_array(binding, first_array_element, elements)
+	}
+}
+
+pub struct BufferResourceTable {
+	resource_table: ResourceTable<BufferTable>,
+}
+
+impl BufferResourceTable {
+	pub fn new(device: Arc<Device>) -> Self {
+		Self {
+			resource_table: ResourceTable::new(device),
+		}
 	}
 
 	pub fn alloc_from_data<T: BufferContents>(
@@ -49,7 +69,8 @@ impl BufferTable {
 		allocation_info: AllocationCreateInfo,
 		data: T,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		Ok(self.alloc_slot(VBuffer::from_data(allocator, create_info, allocation_info, data)?))
+		let buffer = VBuffer::from_data(allocator, create_info, allocation_info, data)?;
+		Ok(self.resource_table.alloc_slot(buffer))
 	}
 
 	pub fn alloc_from_iter<T: BufferContents, I>(
@@ -59,11 +80,12 @@ impl BufferTable {
 		allocation_info: AllocationCreateInfo,
 		iter: I,
 	) -> Result<RCDesc<Buffer<[T]>>, Validated<AllocateBufferError>>
-		where
-			I: IntoIterator<Item=T>,
-			I::IntoIter: ExactSizeIterator,
+	where
+		I: IntoIterator<Item = T>,
+		I::IntoIter: ExactSizeIterator,
 	{
-		Ok(self.alloc_slot(VBuffer::from_iter(allocator, create_info, allocation_info, iter)?))
+		let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)?;
+		Ok(self.resource_table.alloc_slot(buffer))
 	}
 
 	pub fn alloc_sized<T: BufferContents>(
@@ -72,7 +94,8 @@ impl BufferTable {
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		Ok(self.alloc_slot(VBuffer::new_sized::<T>(allocator, create_info, allocation_info)?))
+		let buffer = VBuffer::new_sized::<T>(allocator, create_info, allocation_info)?;
+		Ok(self.resource_table.alloc_slot(buffer))
 	}
 
 	pub fn alloc_slice<T: BufferContents>(
@@ -82,7 +105,8 @@ impl BufferTable {
 		allocation_info: AllocationCreateInfo,
 		len: DeviceSize,
 	) -> Result<RCDesc<Buffer<[T]>>, Validated<AllocateBufferError>> {
-		Ok(self.alloc_slot(VBuffer::new_slice::<T>(allocator, create_info, allocation_info, len)?))
+		let buffer = VBuffer::new_slice::<T>(allocator, create_info, allocation_info, len)?;
+		Ok(self.resource_table.alloc_slot(buffer))
 	}
 
 	pub fn alloc_unsized<T: BufferContents + ?Sized>(
@@ -92,21 +116,7 @@ impl BufferTable {
 		allocation_info: AllocationCreateInfo,
 		len: DeviceSize,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		Ok(self.alloc_slot(VBuffer::new_unsized::<T>(allocator, create_info, allocation_info, len)?))
-	}
-
-	pub fn lock(&self) -> BufferTableLock {
-		BufferTableLock(self.slot_map.lock())
-	}
-}
-
-pub struct BufferTableLock(AtomicRCSlotsLock<Subbuffer<[u8]>>);
-
-impl BufferTableLock {
-	pub fn unlock(self) {}
-
-	pub fn write(&self) {
-
-		// WriteDescriptorSet::buffer_array(binding, 0, self.0.iter_with(|b|))
+		let buffer = VBuffer::new_unsized::<T>(allocator, create_info, allocation_info, len)?;
+		Ok(self.resource_table.alloc_slot(buffer))
 	}
 }

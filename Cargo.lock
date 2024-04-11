@@ -91,6 +91,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d67af77d68a931ecd5cbd8a3b5987d63a1d1d1278f7f6a60ae33db485cdebb69"
 
 [[package]]
+name = "arc-swap"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
+
+[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2693,8 +2699,11 @@ dependencies = [
 name = "vulkano-bindless"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.6",
+ "arc-swap",
  "bytemuck",
  "bytemuck_derive",
+ "crossbeam-queue",
  "futures",
  "glam",
  "konst",

@@ -1,16 +1,16 @@
 use crate::atomic_slots::RCSlot;
-use crate::descriptor::descriptor_cpu_type::DescCpuType;
+use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::frame_in_flight::FrameInFlight;
 use std::ops::Deref;
 use vulkano_bindless_shaders::descriptor::{TransientDesc, WeakDesc};
 
 #[derive(Clone)]
-pub struct RCDesc<T: DescCpuType> {
-	inner: RCSlot<T::TableType>,
+pub struct RCDesc<T: DescTypeCpu> {
+	inner: RCSlot<<T::ResourceTableCpu as ResourceTableCpu>::SlotType>,
 }
 
-impl<T: DescCpuType> RCDesc<T> {
-	pub fn new(inner: RCSlot<T::TableType>) -> Self {
+impl<T: DescTypeCpu> RCDesc<T> {
+	pub fn new(inner: RCSlot<<T::ResourceTableCpu as ResourceTableCpu>::SlotType>) -> Self {
 		Self { inner }
 	}
 
@@ -23,7 +23,7 @@ impl<T: DescCpuType> RCDesc<T> {
 	}
 }
 
-impl<T: DescCpuType> Deref for RCDesc<T> {
+impl<T: DescTypeCpu> Deref for RCDesc<T> {
 	type Target = T::CpuType;
 
 	fn deref(&self) -> &Self::Target {

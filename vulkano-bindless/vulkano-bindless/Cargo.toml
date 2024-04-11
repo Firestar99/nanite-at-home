@@ -40,6 +40,9 @@ smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
 loom = { workspace = true }
+ahash = { workspace = true }
+crossbeam-queue = { workspace = true }
+arc-swap = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

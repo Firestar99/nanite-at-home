@@ -67,6 +67,9 @@ parking_lot_core = "0.9"
 clap = { version = "3.2", features = ["derive"] }
 loom = "0.7.1"
 rand = "0.8"
+ahash = "0.8"
+crossbeam-queue = "0.3"
+arc-swap = "1.7.1"
 
 
 
