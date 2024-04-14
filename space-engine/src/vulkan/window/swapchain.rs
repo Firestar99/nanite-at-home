@@ -73,16 +73,13 @@ impl Swapchain {
 					colorspace = f.1;
 				}
 
-				let present_mode;
-				{
-					let present_modes = || {
-						device
-							.physical_device()
-							.surface_present_modes(&surface, SurfaceInfo::default())
-							.unwrap()
-					};
-					present_mode = present_modes().find(|p| *p == Mailbox).unwrap_or(Fifo);
-				}
+				let present_mode = device
+					.physical_device()
+					.surface_present_modes(&surface, SurfaceInfo::default())
+					.unwrap()
+					.into_iter()
+					.find(|p| *p == Mailbox)
+					.unwrap_or(Fifo);
 
 				let image_count;
 				{

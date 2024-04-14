@@ -1,15 +1,15 @@
 [workspace]
 members = [
-    "asteroids",
-    "asteroids-shader",
-    "asteroids-common",
-    "shader-symbols-builder",
-    "space-engine",
-    "space-engine-common",
-    "space-engine-shader",
-    "space-engine-shader-builder",
-    "vulkano-bindless/vulkano-bindless",
-    "vulkano-bindless/vulkano-bindless-shaders",
+	"asteroids",
+	"asteroids-shader",
+	"asteroids-common",
+	"shader-symbols-builder",
+	"space-engine",
+	"space-engine-common",
+	"space-engine-shader",
+	"space-engine-shader-builder",
+	"vulkano-bindless/vulkano-bindless",
+	"vulkano-bindless/vulkano-bindless-shaders",
 ]
 resolver = "2"
 
@@ -27,8 +27,8 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 [workspace.dependencies]
 # vulkan
 # vulkano 0.35 development, PR https://github.com/vulkano-rs/vulkano/pull/2482
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "4c2d7c584adcde6a8e3f4b9c3f24fd2f1b1e28bc" }
-vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "4c2d7c584adcde6a8e3f4b9c3f24fd2f1b1e28bc" }
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "27ac09b780466540443d8ee72c6df3808a6e8d2d" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "27ac09b780466540443d8ee72c6df3808a6e8d2d" }
 winit = { version = "0.29.9", features = ["rwh_05"] }
 
 # rust-gpu

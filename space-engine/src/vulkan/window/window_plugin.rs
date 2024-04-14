@@ -2,7 +2,7 @@ use smallvec::SmallVec;
 use std::sync::Arc;
 
 use vulkano::device::physical::PhysicalDevice;
-use vulkano::device::{DeviceExtensions, Features};
+use vulkano::device::{DeviceExtensions, DeviceFeatures};
 use vulkano::instance::InstanceExtensions;
 use vulkano::swapchain::Surface;
 use vulkano::VulkanLibrary;
@@ -34,13 +34,13 @@ impl Plugin for WindowPlugin {
 		(self.window_extensions, SmallVec::new())
 	}
 
-	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
+	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, DeviceFeatures) {
 		(
 			DeviceExtensions {
 				khr_swapchain: true,
 				..Default::default()
 			},
-			Features::empty(),
+			DeviceFeatures::empty(),
 		)
 	}
 }

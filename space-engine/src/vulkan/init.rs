@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
-use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
+use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::{Version, VulkanLibrary};
@@ -31,8 +31,8 @@ pub trait Plugin {
 	/// Return what DeviceExtensions and Features you would like to be enabled.
 	/// Note that you must check that said DeviceExtensions or Features are available on the
 	/// PhysicalDevice, requesting something that the PhysicalDevice does not support will panic!
-	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
-		(DeviceExtensions::empty(), Features::empty())
+	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, DeviceFeatures) {
+		(DeviceExtensions::empty(), DeviceFeatures::empty())
 	}
 }
 
@@ -133,7 +133,7 @@ impl<Q: Clone> Init<Q> {
 		let (device_extensions, device_features) = plugins
 			.iter()
 			.map(|p| p.device_config(&physical_device))
-			.fold((DeviceExtensions::empty(), Features::empty()), |a, b| {
+			.fold((DeviceExtensions::empty(), DeviceFeatures::empty()), |a, b| {
 				(a.0 | b.0, a.1 | b.1)
 			});
 
