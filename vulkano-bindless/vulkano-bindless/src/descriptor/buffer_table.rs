@@ -3,20 +3,21 @@ use std::sync::Arc;
 
 use vulkano::buffer::Buffer as VBuffer;
 use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
+use vulkano::descriptor_set::allocator::DescriptorSetAllocator;
 use vulkano::descriptor_set::layout::DescriptorType;
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
+use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
 
 use vulkano_bindless_shaders::descriptor::{Buffer, BufferTable};
 
-use crate::atomic_slots::{AtomicRCSlots, AtomicRCSlotsLock, RCSlot};
 use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
-use crate::sync::mpsc::*;
+use crate::rc_slots::RCSlot;
 
 impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 	type ResourceTableCpu = BufferTable;
@@ -56,9 +57,14 @@ pub struct BufferResourceTable {
 }
 
 impl BufferResourceTable {
-	pub fn new(device: Arc<Device>) -> Self {
+	pub fn new(
+		device: Arc<Device>,
+		stages: ShaderStages,
+		allocator: Arc<dyn DescriptorSetAllocator>,
+		count: u32,
+	) -> Self {
 		Self {
-			resource_table: ResourceTable::new(device),
+			resource_table: ResourceTable::new(device, stages, allocator, count),
 		}
 	}
 

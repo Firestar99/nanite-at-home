@@ -42,7 +42,8 @@ once_cell = { workspace = true }
 loom = { workspace = true }
 ahash = { workspace = true }
 crossbeam-queue = { workspace = true }
-arc-swap = { workspace = true }
+crossbeam-utils = { workspace = true }
+rangemap = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

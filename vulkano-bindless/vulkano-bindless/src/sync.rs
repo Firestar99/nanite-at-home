@@ -35,6 +35,7 @@ mod common {
 
 #[cfg(feature = "loom_tests")]
 mod inner {
+	use std::cell::Cell;
 	use std::sync::TryLockError;
 
 	pub use ::loom::sync::{Arc, Barrier};
@@ -97,28 +98,34 @@ mod inner {
 		}
 	}
 
-	pub struct SpinWait(u32);
+	pub struct Backoff(Cell<u32>);
 
 	#[cfg(feature = "loom_tests")]
-	impl SpinWait {
+	impl Backoff {
 		// this does almost nothing
-		pub const THRESHOLD_KILL: u32 = 8;
+		pub const KILL_BRANCH_LIMIT: u32 = 6;
 		pub fn new() -> Self {
-			Self(0)
+			Self(Cell::new(0))
 		}
-		pub fn spin(&mut self) {
-			if self.0 < Self::THRESHOLD_KILL {
+		pub fn spin(&self) {
+			// failed cas should just repeat
+		}
+		pub fn snooze(&mut self) {
+			if self.0.get() < Self::KILL_BRANCH_LIMIT {
 				thread::yield_now();
 			} else {
 				loom::skip_branch();
 			}
-			self.0 += 1;
-		}
-		pub fn spin_no_yield(&mut self) {
-			self.spin();
+
+			if self.0.get() <= Self::KILL_BRANCH_LIMIT {
+				self.0.set(self.0.get() + 1);
+			}
 		}
 		pub fn reset(&mut self) {
-			self.0 = 0;
+			self.0.set(0);
+		}
+		pub fn is_completed(&self) -> bool {
+			self.0.get() > Self::KILL_BRANCH_LIMIT
 		}
 	}
 
@@ -235,20 +242,23 @@ mod inner {
 		}
 	}
 
-	pub struct SpinWait(parking_lot_core::SpinWait);
+	pub struct Backoff(crossbeam_utils::Backoff);
 
-	impl SpinWait {
+	impl Backoff {
 		pub fn new() -> Self {
-			Self(parking_lot_core::SpinWait::new())
+			Self(crossbeam_utils::Backoff::new())
 		}
 		pub fn spin(&mut self) {
 			self.0.spin();
 		}
-		pub fn spin_no_yield(&mut self) {
-			self.0.spin_no_yield();
+		pub fn snooze(&mut self) {
+			self.0.snooze();
 		}
 		pub fn reset(&mut self) {
 			self.0.reset();
+		}
+		pub fn is_completed(&self) -> bool {
+			self.0.is_completed()
 		}
 	}
 }

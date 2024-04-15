@@ -8,9 +8,9 @@ use crate::frame_in_flight::FrameInFlight;
 // 	_phantom: PhantomData<T>,
 // }
 
-pub struct TransientDesc<'a, T: DescType> {
+pub struct TransientDesc<'a, D: DescType> {
 	id: u32,
-	_phantom: PhantomData<&'a T>,
+	_phantom: PhantomData<&'a D>,
 }
 
 impl<'a, T: DescType> TransientDesc<'a, T> {
@@ -22,10 +22,10 @@ impl<'a, T: DescType> TransientDesc<'a, T> {
 	}
 }
 
-pub struct WeakDesc<T: DescType> {
+pub struct WeakDesc<D: DescType> {
 	id: u32,
 	version: u32,
-	_phantom: PhantomData<T>,
+	_phantom: PhantomData<D>,
 }
 
 impl<T: DescType> WeakDesc<T> {

@@ -1,6 +1,5 @@
-use crate::atomic_slots::RCSlot;
+use crate::rc_slots::RCSlot;
 use std::sync::Arc;
-use vulkano::buffer::Subbuffer;
 use vulkano::descriptor_set::layout::DescriptorType;
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::PhysicalDevice;

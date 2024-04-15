@@ -69,7 +69,8 @@ loom = "0.7.1"
 rand = "0.8"
 ahash = "0.8"
 crossbeam-queue = "0.3"
-arc-swap = "1.7.1"
+crossbeam-utils = "0.8"
+rangemap = "1.5.1"
 
 
 
