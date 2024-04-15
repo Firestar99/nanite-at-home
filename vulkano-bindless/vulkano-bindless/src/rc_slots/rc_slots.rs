@@ -5,8 +5,11 @@ use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use crate::sync::cell::UnsafeCell;
 use crate::sync::{Arc, Backoff};
 use crossbeam_queue::SegQueue;
+use crossbeam_utils::CachePadded;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
+use parking_lot::Mutex;
+use rangemap::RangeSet;
 use std::fmt::{Debug, Formatter};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::num::Wrapping;
@@ -34,7 +37,7 @@ impl<T> Index<SlotIndex> for [Slot<T>] {
 }
 
 pub struct RCSlot<T> {
-	slots: *const AtomicRCSlots<T>,
+	slots: *const RCSlots<T>,
 	index: SlotIndex,
 }
 
@@ -45,12 +48,12 @@ impl<T> RCSlot<T> {
 	/// the slot must be alive, to ensure the Arc of `slots` is ref counted correctly
 	/// `ref_count` must have been incremented for this slot previously, and ownership to decrement it again is transferred to Self
 	#[inline]
-	unsafe fn new(slots: *const AtomicRCSlots<T>, index: SlotIndex) -> Self {
+	unsafe fn new(slots: *const RCSlots<T>, index: SlotIndex) -> Self {
 		Self { slots, index }
 	}
 
 	#[inline]
-	pub fn slots(&self) -> &AtomicRCSlots<T> {
+	pub fn slots(&self) -> &RCSlots<T> {
 		unsafe { &*self.slots }
 	}
 
@@ -160,7 +163,7 @@ impl<T> Debug for RCSlot<T> {
 ///
 /// # slot is alive: `version & 1 == 1`
 /// * `atomic` is the ref count of the alive slot. Should it decrement to 0, the slot will be "start dying" by being added to the
-/// [reaper queue](AtomicRCSlots::reaper_queue_add), but may stay alive for some time.
+/// [reaper queue](RCSlots::reaper_queue_add), but may stay alive for some time.
 /// * `t` is initialized, may be referenced by many shared references and contains the data contents of this slot.
 /// * `free_timestamp` is unused and should not be accessed, as during state transitions a mut reference may be held against it.
 /// * Upgrading weak pointers will succeed and increment the ref count.
@@ -241,12 +244,12 @@ impl<T> Default for Slot<T> {
 	}
 }
 
-pub struct AtomicRCSlotsLock<T> {
-	slots: Arc<AtomicRCSlots<T>>,
+pub struct Lock<T> {
+	slots: Arc<RCSlots<T>>,
 	lock_timestamp: Timestamp,
 }
 
-impl<T> AtomicRCSlotsLock<T> {
+impl<T> Lock<T> {
 	pub fn unlock(self) {
 		// impl in drop
 	}
@@ -258,14 +261,13 @@ impl<T> AtomicRCSlotsLock<T> {
 		&'a self,
 		f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
 	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
-		self.slots.iter_with(
-			|_, slot| {
-				// Safety: Reaper state ensures free_timestamp has been written
-				let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
-				free_timestamp.compare_wrapping(&self.lock_timestamp).unwrap().is_ge()
-			},
-			f,
-		)
+		let reaper_include = |_, slot: &Slot<T>| {
+			// Safety: Reaper state ensures free_timestamp has been written
+			let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
+			free_timestamp.compare_wrapping(&self.lock_timestamp).unwrap().is_ge()
+		};
+		// Safety: Only reapered slots that are protected by this lock are accessible
+		unsafe { self.slots.iter_with(reaper_include, f) }
 	}
 
 	// FIXME: unsound: slots may be accessed that are freed concurrently
@@ -279,40 +281,46 @@ impl<T> AtomicRCSlotsLock<T> {
 	// }
 }
 
-impl<T> Drop for AtomicRCSlotsLock<T> {
+impl<T> Drop for Lock<T> {
 	fn drop(&mut self) {
 		self.slots.unlock(self.lock_timestamp);
 	}
 }
 
-pub struct AtomicRCSlots<T> {
+pub struct RCSlots<T> {
 	array: Box<[Slot<T>]>,
-	next_free: AtomicUsize,
+	next_free: CachePadded<AtomicUsize>,
 	/// queue of slots that can be dropped and reclaimed, as soon as all locks that may be using them have finished
 	reaper_queue: SegQueue<SlotIndex>,
 	/// queue of slots that are dead and may be reused
 	dead_queue: SegQueue<SlotIndex>,
 	/// Every created lock gets a new timestamp from this counter. Current active locks is `next_lock_counter.wrapping_sub(finished_lock_counter)`. May wrap around.
-	curr_lock_counter: AtomicU32,
+	lock_timestamp_curr: CachePadded<AtomicU32>,
 	/// Counter to track the amount of locks that have been unlocked. Current active locks is `next_lock_counter.wrapping_sub(finished_lock_counter)`. May wrap around.
-	finished_lock_counter: AtomicU32,
-	// /// A bitset of the next 64 locks that are set to true once they unlock. Allow locks to be freed in arbitrary order without blocking on each other,
-	// /// as long as it's only 64 locks ahead of the oldest locked one.
-	// finished_locks_bits: AtomicU64,
-	_unimpl_send_sync: UnsafeCell<()>,
+	unlock_timestamp_curr: CachePadded<AtomicU32>,
+	/// A RangeSet containing all locks that have been unlocked, that are *greater than* `unlock_timestamp_curr` and
+	/// thus must wait for a previous lock to unlock before being able to clean up their resources.
+	///
+	/// Note: A RangeMap does not support wrapping numbers, but should be fine for now. Will fix when it causes issues.
+	unlock_future_timestamp: CachePadded<Mutex<RangeSet<Timestamp>>>,
+	/// Contains `UNLOCK_CONTROL_*` bitflags to sync unlock logic between threads without causing stalls.
+	unlock_control: CachePadded<AtomicU32>,
 }
 
-impl<T> AtomicRCSlots<T> {
+const UNLOCK_CONTROL_LOCKED: u32 = 0x1;
+const UNLOCK_CONTROL_MORE: u32 = 0x01;
+
+impl<T> RCSlots<T> {
 	pub fn new(len: usize) -> Arc<Self> {
 		Arc::new(Self {
 			array: (0..len).map(|_| Slot::default()).collect::<Vec<_>>().into_boxed_slice(),
-			next_free: AtomicUsize::new(0),
+			next_free: CachePadded::new(AtomicUsize::new(0)),
 			reaper_queue: SegQueue::new(),
 			dead_queue: SegQueue::new(),
-			curr_lock_counter: AtomicU32::new(0),
-			finished_lock_counter: AtomicU32::new(0),
-			_unimpl_send_sync: UnsafeCell::new(()),
-			// finished_locks_bits: AtomicU64::new(!0),
+			lock_timestamp_curr: CachePadded::new(AtomicU32::new(0)),
+			unlock_timestamp_curr: CachePadded::new(AtomicU32::new(0)),
+			unlock_future_timestamp: CachePadded::new(Mutex::new(RangeSet::new())),
+			unlock_control: CachePadded::new(AtomicU32::new(0)),
 		})
 	}
 
@@ -345,12 +353,12 @@ impl<T> AtomicRCSlots<T> {
 	unsafe fn slot_starts_dying(&self, index: SlotIndex) {
 		let slot = &self.array[index];
 		// FIXME may race against locking, free_now may be set to true even though another thread just locked
-		let curr = Timestamp::new(self.curr_lock_counter.load(Relaxed));
+		let curr = Timestamp::new(self.lock_timestamp_curr.load(Relaxed));
 
 		// FIXME separate these two timestamp queries:
 		// 	* First, the curr queries the current timestamp, at which this slot can be freed.
 		//  * **Then** check if it can be freed immediately, which is completely separate from above!
-		let finished = Timestamp::new(self.finished_lock_counter.load(Acquire));
+		let finished = Timestamp::new(self.unlock_timestamp_curr.load(Acquire));
 		// free_now means there are no locks present
 		let free_now = curr.compare_wrapping(&finished).unwrap().is_le();
 
@@ -395,53 +403,99 @@ impl<T> AtomicRCSlots<T> {
 		}
 	}
 
-	pub fn lock(self: &Arc<Self>) -> AtomicRCSlotsLock<T> {
-		let lock_id = Timestamp(Wrapping(self.curr_lock_counter.fetch_add(1, Relaxed)) + Wrapping(1));
-		AtomicRCSlotsLock {
+	pub fn lock(self: &Arc<Self>) -> Lock<T> {
+		let lock_id = Timestamp(Wrapping(self.lock_timestamp_curr.fetch_add(1, Relaxed)) + Wrapping(1));
+		Lock {
 			slots: self.clone(),
 			lock_timestamp: lock_id,
 		}
 	}
 
 	fn unlock(self: &Arc<Self>, lock_timestamp: Timestamp) {
-		let mut backoff = Backoff::new();
+		{
+			let mut guard = self.unlock_future_timestamp.lock();
+			guard.insert(lock_timestamp..Timestamp(lock_timestamp.0 + Wrapping(1)));
+		}
 
-		// wait for all previous locks to unlock
-		// TODO impl finished_locks_bits logic
+		let result = self
+			.unlock_control
+			.fetch_or(UNLOCK_CONTROL_LOCKED | UNLOCK_CONTROL_MORE, Relaxed);
+		let acq_lock = result & UNLOCK_CONTROL_LOCKED == 0;
+		if !acq_lock {
+			// whoever has the lock will do the cleanup
+			return;
+		}
+
+		drop(CleanupLock { slots: self });
+	}
+
+	pub fn cleanup_lock<'a>(self: &'a Arc<Self>) -> CleanupLock<'a, T> {
+		let mut backoff = Backoff::new();
 		loop {
-			let old = Wrapping(self.finished_lock_counter.load(Relaxed));
-			if old == lock_timestamp.0 - Wrapping(1) {
-				break;
+			if let Some(lock) = self.try_cleanup_lock() {
+				break lock;
 			}
 			backoff.snooze();
 		}
+	}
 
-		while let Some(index) = self.reaper_queue.pop() {
-			let slot = &self.array[index];
-			// Safety: slots in the reaper queue must be in Reaper state, and thus have the timestamp initialized and
-			// readable by shared ref
-			let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
-			// TODO move this to docs
-			// It is required to be less_than and not just equal, as some entries may get stuck due to entries being
-			// added out of order compared to their timestamp. Thus, we also have to free previously unlocked entries,
-			// which have gone stuck. But there is a risk: Constant locking without any new entries to flush the queue
-			// can cause timestamps to wrap around, and then we don't know if it was before or after us!
-			if free_timestamp
-				.compare_wrapping(&lock_timestamp)
-				.expect("Reaper queue stood still for too long, timestamps have wrapped around!")
-				.is_le()
+	pub fn try_cleanup_lock<'a>(self: &'a Arc<Self>) -> Option<CleanupLock<'a, T>> {
+		let result = self.unlock_control.fetch_or(UNLOCK_CONTROL_LOCKED, Relaxed);
+		let acq_lock = result & UNLOCK_CONTROL_LOCKED == 0;
+		acq_lock.then(|| CleanupLock { slots: self })
+	}
+
+	fn cleanup_unlock(&self) {
+		let mut unlock_timestamp = Timestamp::new(self.unlock_timestamp_curr.load(Relaxed));
+		loop {
 			{
-				// Safety: we have exclusive access to this slot, and just verified that the last lock access to this
-				// slot has dropped, so we may drop the slot
-				unsafe { self.free_slot(index, Reaper) };
-				self.dead_queue.push(index);
-			} else {
+				// only lock while figuring out timestamps, not while dropping slots
+				let mut guard = self.unlock_future_timestamp.lock();
+				// clear UNLOCK_CONTROL_MORE flag
+				self.unlock_control.fetch_and(UNLOCK_CONTROL_LOCKED, Relaxed);
+
+				while let Some(range) = guard.get(&Timestamp(unlock_timestamp.0 + Wrapping(1))) {
+					let range = range.clone();
+					unlock_timestamp = range.end;
+					guard.remove(range);
+				}
+			}
+			self.unlock_timestamp_curr.store(unlock_timestamp.0 .0, Relaxed);
+
+			while let Some(index) = self.reaper_queue.pop() {
+				let slot = &self.array[index];
+				// Safety: slots in the reaper queue must be in Reaper state, and thus have the timestamp initialized
+				// and readable by shared ref
+				let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
+				// TODO move this to docs
+				// It is required to be less_than and not just equal, as some entries may get stuck due to entries being
+				// added out of order compared to their timestamp. Thus, we also have to free previously unlocked
+				// entries, which have gone stuck. But there is a risk: Constant locking without any new entries to
+				// flush the queue can cause timestamps to wrap around, and then we don't know if it was before or after
+				// us!
+				if free_timestamp
+					.compare_wrapping(&unlock_timestamp)
+					.expect("Reaper queue stood still for too long, timestamps have wrapped around!")
+					.is_le()
+				{
+					// Safety: we have exclusive access to this slot, and just verified that the last lock access to
+					// this slot has dropped, so we may drop the slot
+					unsafe { self.free_slot(index, Reaper) };
+					self.dead_queue.push(index);
+				} else {
+					break;
+				}
+			}
+
+			// unlock, or retry if MORE flag was set
+			if self
+				.unlock_control
+				.compare_exchange(UNLOCK_CONTROL_LOCKED, 0, Relaxed, Relaxed)
+				.is_ok()
+			{
 				break;
 			}
 		}
-
-		// unlock complete
-		self.finished_lock_counter.store(lock_timestamp.into(), Release);
 	}
 
 	/// The amount of slots that have been allocated until now. Should immediately be considered
@@ -451,7 +505,11 @@ impl<T> AtomicRCSlots<T> {
 		self.next_free.load(Relaxed)
 	}
 
-	fn iter_with<'a, R>(
+	/// Iterates through all slots
+	///
+	/// # Safety
+	/// Caller must ensure that slots for which reaper_include() returns true are not dropped while iterating
+	unsafe fn iter_with<'a, R>(
 		self: &'a Arc<Self>,
 		reaper_include: impl Fn(SlotIndex, &Slot<T>) -> bool + 'a,
 		mut f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
@@ -478,6 +536,26 @@ impl<T> AtomicRCSlots<T> {
 	}
 }
 
+pub struct CleanupLock<'a, T> {
+	slots: &'a Arc<RCSlots<T>>,
+}
+
+impl<'a, T> CleanupLock<'a, T> {
+	pub fn iter_latest_with<R>(
+		&'a self,
+		f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
+	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
+		// Safety: CleanupLock prevents all reaper slots from being dropped
+		unsafe { self.slots.iter_with(|_, _| true, f) }
+	}
+}
+
+impl<'a, T> Drop for CleanupLock<'a, T> {
+	fn drop(&mut self) {
+		self.slots.cleanup_unlock();
+	}
+}
+
 #[cfg(test)]
 mod test_utils {
 	use std::mem::replace;
@@ -485,12 +563,12 @@ mod test_utils {
 	use super::*;
 
 	pub struct LockUnlock<T> {
-		slots: Arc<AtomicRCSlots<T>>,
-		lock: AtomicRCSlotsLock<T>,
+		slots: Arc<RCSlots<T>>,
+		lock: Lock<T>,
 	}
 
 	impl<T> LockUnlock<T> {
-		pub fn new(slots: &Arc<AtomicRCSlots<T>>) -> Self {
+		pub fn new(slots: &Arc<RCSlots<T>>) -> Self {
 			Self {
 				slots: slots.clone(),
 				lock: slots.lock(),
@@ -511,7 +589,7 @@ mod tests {
 
 	#[test]
 	fn test_ref_counting() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 		let slot = slots.allocate(42);
 		assert_eq!(slot.deref_copy(), 42);
 		assert_eq!(slot.ref_count(), 1);
@@ -531,7 +609,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "(state: Dead) differed from expected state Alive!")]
 	fn test_ref_counting_underflow() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 		let slot = slots.allocate(42);
 		let slot2 = slot.clone();
 
@@ -544,7 +622,7 @@ mod tests {
 
 	#[test]
 	fn test_alloc_unique() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 
 		let count: u32 = 5;
 		let vec = (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
@@ -564,7 +642,7 @@ mod tests {
 	#[test]
 	fn test_queues() {
 		unsafe {
-			let slots = AtomicRCSlots::new(32);
+			let slots = RCSlots::new(32);
 			let mut lock_unlock = LockUnlock::new(&slots);
 
 			let arc1 = Arc::new(42);
@@ -661,7 +739,7 @@ mod tests {
 	#[test]
 	fn test_queues_many_entries() {
 		unsafe {
-			let slots = AtomicRCSlots::new(32);
+			let slots = RCSlots::new(32);
 			let mut lock_unlock = LockUnlock::new(&slots);
 
 			for i in 0..5 {
@@ -700,7 +778,7 @@ mod tests {
 	#[test]
 	fn test_queues_while_unlocked() {
 		unsafe {
-			let slots = AtomicRCSlots::new(32);
+			let slots = RCSlots::new(32);
 
 			drop(slots.allocate(0));
 			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
@@ -727,7 +805,7 @@ mod tests {
 	#[test]
 	fn test_queues_mix_locked_and_unlocked() {
 		unsafe {
-			let slots = AtomicRCSlots::new(32);
+			let slots = RCSlots::new(32);
 			let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 
 			// unlocked behaviour
@@ -770,7 +848,7 @@ mod tests {
 	#[test]
 	fn test_queues_drop_before_and_after_lock() {
 		unsafe {
-			let slots = AtomicRCSlots::new(32);
+			let slots = RCSlots::new(32);
 			let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 
 			let before_lock_a = alloc(2);
@@ -799,7 +877,7 @@ mod tests {
 
 	#[test]
 	fn test_reaper_queue_leak() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 
 		let arc = Arc::new(42);
 		let slot = slots.allocate(arc.clone());
@@ -818,7 +896,7 @@ mod tests {
 
 	#[test]
 	fn test_lock_timestamp_ordering() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 
 		let arc = Arc::new(42);
 		let slot = slots.allocate(arc.clone());
@@ -840,13 +918,13 @@ mod tests {
 		assert_eq!(Arc::strong_count(&arc), 1);
 	}
 
-	fn iter_collect<T: Clone>(lock: &AtomicRCSlotsLock<T>) -> Vec<Option<T>> {
+	fn iter_collect<T: Clone>(lock: &Lock<T>) -> Vec<Option<T>> {
 		lock.iter_with(|t| t.map(|slot| (**slot).clone())).collect::<Vec<_>>()
 	}
 
 	#[test]
 	fn test_iter_smoke() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 		assert_eq!(iter_collect(&slots.lock()), []);
 
 		let slot1 = slots.allocate(42);
@@ -864,7 +942,7 @@ mod tests {
 
 	#[test]
 	fn test_iter_locked() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 		assert_eq!(iter_collect(&slots.lock()), []);
 
 		let slot1 = slots.allocate(1);
@@ -903,7 +981,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "(state: Reaper) differed from expected state Alive!")]
 	fn test_iter_clone() {
-		let slots = AtomicRCSlots::new(32);
+		let slots = RCSlots::new(32);
 		let slot1 = slots.allocate(42);
 
 		let lock1 = slots.lock();

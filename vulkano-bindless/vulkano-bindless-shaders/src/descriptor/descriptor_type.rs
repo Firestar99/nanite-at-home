@@ -15,7 +15,7 @@ pub trait DescType: private::SealedTrait {
 }
 
 pub trait ResourceTable: private::SealedTrait {
-	const DESCRIPTOR_SET_INDEX: u32;
+	const BINDING: u32;
 }
 
 // Buffer
@@ -34,7 +34,7 @@ impl<T: ?Sized> DescType for Buffer<T> {
 }
 
 impl ResourceTable for BufferTable {
-	const DESCRIPTOR_SET_INDEX: u32 = 0;
+	const BINDING: u32 = 0;
 }
 
 // macro_rules! decl_dtype {

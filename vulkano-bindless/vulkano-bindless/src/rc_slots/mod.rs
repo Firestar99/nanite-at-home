@@ -1,4 +1,4 @@
-pub use rc_slots::{AtomicRCSlots, AtomicRCSlotsLock, RCSlot};
+pub use rc_slots::{CleanupLock, Lock, RCSlot, RCSlots};
 
 mod rc_slots;
 mod timestamp;

@@ -1,23 +1,17 @@
-use std::ops::Deref;
-use std::sync::Arc;
-
-use vulkano::buffer::Buffer as VBuffer;
-use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
-use vulkano::descriptor_set::allocator::DescriptorSetAllocator;
-use vulkano::descriptor_set::layout::DescriptorType;
-use vulkano::descriptor_set::WriteDescriptorSet;
-use vulkano::device::physical::PhysicalDevice;
-use vulkano::device::Device;
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
-use vulkano::shader::ShaderStages;
-use vulkano::{DeviceSize, Validated};
-
-use vulkano_bindless_shaders::descriptor::{Buffer, BufferTable};
-
 use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
 use crate::rc_slots::RCSlot;
+use std::ops::Deref;
+use std::sync::Arc;
+use vulkano::buffer::Buffer as VBuffer;
+use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
+use vulkano::descriptor_set::layout::DescriptorType;
+use vulkano::descriptor_set::WriteDescriptorSet;
+use vulkano::device::physical::PhysicalDevice;
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
+use vulkano::{DeviceSize, Validated};
+use vulkano_bindless_shaders::descriptor::{Buffer, BufferTable};
 
 impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 	type ResourceTableCpu = BufferTable;
@@ -56,15 +50,18 @@ pub struct BufferResourceTable {
 	resource_table: ResourceTable<BufferTable>,
 }
 
+impl Deref for BufferResourceTable {
+	type Target = ResourceTable<BufferTable>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.resource_table
+	}
+}
+
 impl BufferResourceTable {
-	pub fn new(
-		device: Arc<Device>,
-		stages: ShaderStages,
-		allocator: Arc<dyn DescriptorSetAllocator>,
-		count: u32,
-	) -> Self {
+	pub fn new(count: u32) -> Self {
 		Self {
-			resource_table: ResourceTable::new(device, stages, allocator, count),
+			resource_table: ResourceTable::new(count),
 		}
 	}
 

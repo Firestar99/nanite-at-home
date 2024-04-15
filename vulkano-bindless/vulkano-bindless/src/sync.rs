@@ -40,6 +40,7 @@ mod inner {
 
 	pub use ::loom::sync::{Arc, Barrier};
 	pub use ::loom::sync::{Condvar, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, WaitTimeoutResult};
+	pub use crossbeam_utils::CachePadded;
 
 	pub mod hint {
 		pub use loom::hint::{spin_loop, unreachable_unchecked};
@@ -164,9 +165,9 @@ mod inner {
 
 #[cfg(not(feature = "loom_tests"))]
 mod inner {
-	pub use std::sync::{Arc, Barrier};
-
+	pub use crossbeam_utils::CachePadded;
 	pub use parking_lot::{Condvar, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, WaitTimeoutResult};
+	pub use std::sync::{Arc, Barrier};
 
 	pub mod hint {
 		pub use std::hint::{spin_loop, unreachable_unchecked};
