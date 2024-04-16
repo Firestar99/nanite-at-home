@@ -12,7 +12,7 @@ use vulkano::descriptor_set::layout::{
 use vulkano::descriptor_set::DescriptorSet;
 use vulkano::device::Device;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::BufferTable;
+use vulkano_bindless_shaders::descriptor::buffer::BufferTable;
 
 pub struct DescriptorCounts {
 	pub buffer_descriptors: u32,
@@ -34,7 +34,7 @@ impl DescriptorCounts {
 	}
 }
 
-pub struct Descriptors {
+pub struct DescriptorsCpu {
 	pub device: Arc<Device>,
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pub descriptor_set: Arc<DescriptorSet>,
@@ -42,7 +42,7 @@ pub struct Descriptors {
 	_private: PhantomData<()>,
 }
 
-impl Descriptors {
+impl DescriptorsCpu {
 	/// Creates a new Descriptors instance with which to allocate descriptors.
 	///
 	/// # Safety

@@ -1,9 +1,7 @@
-use std::marker::PhantomData;
-use std::mem::size_of;
-
-use static_assertions::const_assert_eq;
-
 use crate::frame_in_flight::FRAMES_LIMIT;
+use core::marker::PhantomData;
+use core::mem::size_of;
+use static_assertions::const_assert_eq;
 
 /// The index of a frame that is in flight. See [mod](self) for docs.
 #[derive(Copy, Clone)]
@@ -83,8 +81,8 @@ impl SeedInFlight {
 	#[cfg(not(target_arch = "spirv"))]
 	#[must_use]
 	pub fn new(frames_in_flight: u32) -> Self {
-		use std::sync::atomic::AtomicU16;
-		use std::sync::atomic::Ordering::Relaxed;
+		use core::sync::atomic::AtomicU16;
+		use core::sync::atomic::Ordering::Relaxed;
 
 		static SEED_CNT: AtomicU16 = AtomicU16::new(42);
 		let seed = SEED_CNT.fetch_add(1, Relaxed);
@@ -92,9 +90,10 @@ impl SeedInFlight {
 		unsafe { Self::assemble(seed, frames_in_flight) }
 	}
 
-	/// SAFETY: Only there for internal testing. The seed must never repeat, which `Self::new()` ensures.
+	/// # Safety
+	/// Only there for internal testing. The seed must never repeat, which `Self::new()` ensures.
 	#[must_use]
-	unsafe fn assemble(seed: u16, frames_in_flight: u32) -> Self {
+	pub unsafe fn assemble(seed: u16, frames_in_flight: u32) -> Self {
 		assert!(
 			frames_in_flight <= FRAMES_LIMIT,
 			"frames_in_flight_max of {} is over FRAMES_IN_FLIGHT_LIMIT {}",
@@ -129,7 +128,7 @@ impl SeedInFlight {
 	#[must_use]
 	#[allow(dead_code)]
 	#[inline(always)]
-	fn seed(&self) -> u16 {
+	pub fn seed_u16(&self) -> u16 {
 		u16::from_ne_bytes(self.seed)
 	}
 }
@@ -145,7 +144,7 @@ mod tests {
 				let seed = 0xDEAD + i as u16;
 				let s = SeedInFlight::assemble(seed, i);
 				assert_eq!(s.frames_in_flight(), i);
-				assert_eq!(s.seed(), seed);
+				assert_eq!(s.seed_u16(), seed);
 				assert_eq!(s, s.clone());
 			}
 

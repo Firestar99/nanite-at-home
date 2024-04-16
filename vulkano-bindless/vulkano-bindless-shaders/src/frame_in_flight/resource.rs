@@ -1,6 +1,5 @@
-use std::mem::MaybeUninit;
-
 use crate::frame_in_flight::{FrameInFlight, SeedInFlight, FRAMES_LIMIT};
+use core::mem::MaybeUninit;
 
 /// A `ResourceInFlight` is a resource that is allocated once per frame that may be in flight at the same time. See [mod](super) for docs.
 ///

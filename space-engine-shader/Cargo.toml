@@ -12,6 +12,7 @@ crate-type = ["dylib"]
 [dependencies]
 # my projects
 space-engine-common = { path = "../space-engine-common" }
+vulkano-bindless-shaders = { path = "../vulkano-bindless/vulkano-bindless-shaders" }
 
 # rust-gpu
 spirv-std = { workspace = true }

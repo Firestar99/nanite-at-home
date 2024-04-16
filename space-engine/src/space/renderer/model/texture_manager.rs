@@ -1,9 +1,13 @@
-use std::ops::DerefMut;
-use std::sync::Arc;
-
+use crate::space::renderer::model::texture_array_descriptor_set::{
+	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
+};
+use crate::space::Init;
 use image::{DynamicImage, ImageError};
 use parking_lot::Mutex;
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer};
+use space_engine_common::space::renderer::model::model_vertex::ModelTextureId;
+use std::ops::DerefMut;
+use std::sync::Arc;
+use vulkano::buffer::{BufferContents, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::{
 	CommandBufferBeginInfo, CommandBufferUsage, CopyBufferToImageInfo, RecordingCommandBuffer,
@@ -14,13 +18,8 @@ use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
-
-use space_engine_common::space::renderer::model::model_vertex::ModelTextureId;
-
-use crate::space::renderer::model::texture_array_descriptor_set::{
-	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
-};
-use crate::space::Init;
+use vulkano_bindless::descriptor::buffer::Buffer;
+use vulkano_bindless::descriptor::rc_reference::RCDesc;
 
 pub struct TextureManager {
 	pub init: Arc<Init>,
@@ -69,7 +68,7 @@ impl TextureManager {
 		let image_data = image_data.into_rgba8();
 		let (width, height) = image_data.dimensions();
 
-		let copy_buffer = Buffer::from_iter(
+		let copy_buffer = vulkano::buffer::Buffer::from_iter(
 			init.memory_allocator.clone(),
 			BufferCreateInfo {
 				usage: BufferUsage::TRANSFER_SRC,
@@ -144,25 +143,28 @@ impl TextureManager {
 			.clone()
 	}
 
-	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> Subbuffer<[T]>
+	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>
 	where
 		T: BufferContents,
 		ITER: IntoIterator<Item = T>,
 		ITER::IntoIter: ExactSizeIterator,
 	{
-		Buffer::from_iter(
-			self.init.memory_allocator.clone(),
-			BufferCreateInfo {
-				usage,
-				sharing: Sharing::Exclusive,
-				..BufferCreateInfo::default()
-			},
-			AllocationCreateInfo {
-				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-				..AllocationCreateInfo::default()
-			},
-			data.into_iter(),
-		)
-		.unwrap()
+		self.init
+			.descriptors
+			.buffer
+			.alloc_from_iter(
+				self.init.memory_allocator.clone(),
+				BufferCreateInfo {
+					usage,
+					sharing: Sharing::Exclusive,
+					..BufferCreateInfo::default()
+				},
+				AllocationCreateInfo {
+					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+					..AllocationCreateInfo::default()
+				},
+				data.into_iter(),
+			)
+			.unwrap()
 	}
 }

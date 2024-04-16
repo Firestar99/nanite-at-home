@@ -17,7 +17,7 @@ impl<D: DescTypeCpu> RCDesc<D> {
 	#[inline]
 	pub fn id(&self) -> u32 {
 		// we guarantee 32 bits is enough when constructing the resource tables
-		self.inner.id() as u32
+		*self.inner.id() as u32
 	}
 
 	#[inline]

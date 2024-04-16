@@ -11,7 +11,7 @@ use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::{DeviceSize, Validated};
-use vulkano_bindless_shaders::descriptor::{Buffer, BufferTable};
+use vulkano_bindless_shaders::descriptor::buffer::{Buffer, BufferTable};
 
 impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 	type ResourceTableCpu = BufferTable;

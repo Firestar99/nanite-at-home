@@ -11,6 +11,7 @@ repository.workspace = true
 asteroids-common = { path = "../asteroids-common" }
 space-engine = { path = "../space-engine" }
 space-engine-common = { path = "../space-engine-common" }
+vulkano-bindless = { path = "../vulkano-bindless/vulkano-bindless" }
 
 # vulkan
 vulkano = { workspace = true }

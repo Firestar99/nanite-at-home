@@ -8,7 +8,9 @@ use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo};
 use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
 use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano::shader::ShaderStages;
 use vulkano::{Version, VulkanLibrary};
+use vulkano_bindless::descriptor::descriptors::{DescriptorCounts, DescriptorsCpu};
 
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::debug::Debug;
@@ -51,6 +53,7 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
+	pub descriptors: DescriptorsCpu,
 	pub memory_allocator: Arc<StandardMemoryAllocator>,
 	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
 	pub cmd_buffer_allocator: Arc<StandardCommandBufferAllocator>,
@@ -151,6 +154,14 @@ impl<Q: Clone> Init<Q> {
 		.unwrap();
 		let queues = allocation.take(queues.collect());
 
+		// Safety: it's the only instance for the device
+		let descriptors = unsafe {
+			DescriptorsCpu::new(
+				device.clone(),
+				ShaderStages::all_graphics(),
+				DescriptorCounts::reasonable_defaults(&device),
+			)
+		};
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 		let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
 			device.clone(),
@@ -162,6 +173,7 @@ impl<Q: Clone> Init<Q> {
 		Arc::new(Self {
 			device,
 			queues,
+			descriptors,
 			memory_allocator,
 			descriptor_allocator,
 			cmd_buffer_allocator,

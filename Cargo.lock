@@ -136,6 +136,7 @@ dependencies = [
  "space-engine-shader-builder",
  "static_assertions",
  "vulkano",
+ "vulkano-bindless",
  "vulkano-shaders",
  "winit",
 ]
@@ -2287,6 +2288,7 @@ dependencies = [
  "space-engine-common",
  "spirv-std",
  "static_assertions",
+ "vulkano-bindless-shaders",
 ]
 
 [[package]]

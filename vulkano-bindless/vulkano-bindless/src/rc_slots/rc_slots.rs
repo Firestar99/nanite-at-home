@@ -3,7 +3,7 @@ use crate::sync::atomic::fence;
 use crate::sync::atomic::AtomicU32;
 use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use crate::sync::cell::UnsafeCell;
-use crate::sync::{Arc, Backoff};
+use crate::sync::Arc;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -11,6 +11,7 @@ use num_traits::FromPrimitive;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
 use std::fmt::{Debug, Formatter};
+use std::mem;
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::num::Wrapping;
 use std::ops::{Deref, Index};
@@ -18,7 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use VersionState::*;
 
 #[derive(Copy, Clone, Debug)]
-struct SlotIndex(pub usize);
+pub struct SlotIndex(pub usize);
 
 impl Deref for SlotIndex {
 	type Target = usize;
@@ -103,13 +104,35 @@ impl<T> RCSlot<T> {
 	}
 
 	#[inline]
-	pub fn id(&self) -> usize {
-		*self.index
+	pub fn id(&self) -> SlotIndex {
+		self.index
 	}
 
 	#[inline]
 	pub fn version(&self) -> u32 {
 		VersionState::from(self.with_slot(|slot| slot.version.load(Relaxed))).1
+	}
+
+	/// turns this clone of `RCSlot` into a [`SlotIndex`]
+	///
+	/// # Safety
+	/// The [`SlotIndex`] returned must be turned back into an `RCSlot` using [`Self::from_raw_index`] eventually, to
+	/// ensure sure no resources are leaking
+	#[inline]
+	pub unsafe fn into_raw_index(self) -> SlotIndex {
+		let index = self.index;
+		mem::forget(self);
+		index
+	}
+
+	/// turns a [`SlotIndex`] acquired from [`Self::into_raw_index`] back into an `RCSlot`
+	///
+	/// # Safety
+	/// The [`SlotIndex`] must have originated from [`Self::from_raw_index`], this method must only be called once with
+	/// that particular [`SlotIndex`], `slots` must be the same instance as the original `RCSlot` and the T generic must be the same
+	#[inline]
+	pub unsafe fn from_raw_index(slots: &Arc<RCSlots<T>>, index: SlotIndex) -> RCSlot<T> {
+		RCSlot::new(Arc::as_ptr(slots) as *const _, index)
 	}
 }
 
@@ -352,7 +375,6 @@ impl<T> RCSlots<T> {
 	#[inline(never)]
 	unsafe fn slot_starts_dying(&self, index: SlotIndex) {
 		let slot = &self.array[index];
-		// FIXME may race against locking, free_now may be set to true even though another thread just locked
 		let curr = Timestamp::new(self.lock_timestamp_curr.load(Relaxed));
 
 		// FIXME separate these two timestamp queries:
@@ -363,7 +385,7 @@ impl<T> RCSlots<T> {
 		let free_now = curr.compare_wrapping(&finished).unwrap().is_le();
 
 		if free_now {
-			// FIXME freeing may race against locked iterating
+			// FIXME freeing may race against CleanupLock, fix this!!!!
 			unsafe {
 				self.free_slot(index, Alive);
 			}
@@ -426,23 +448,7 @@ impl<T> RCSlots<T> {
 			return;
 		}
 
-		drop(CleanupLock { slots: self });
-	}
-
-	pub fn cleanup_lock<'a>(self: &'a Arc<Self>) -> CleanupLock<'a, T> {
-		let mut backoff = Backoff::new();
-		loop {
-			if let Some(lock) = self.try_cleanup_lock() {
-				break lock;
-			}
-			backoff.snooze();
-		}
-	}
-
-	pub fn try_cleanup_lock<'a>(self: &'a Arc<Self>) -> Option<CleanupLock<'a, T>> {
-		let result = self.unlock_control.fetch_or(UNLOCK_CONTROL_LOCKED, Relaxed);
-		let acq_lock = result & UNLOCK_CONTROL_LOCKED == 0;
-		acq_lock.then(|| CleanupLock { slots: self })
+		self.cleanup_unlock();
 	}
 
 	fn cleanup_unlock(&self) {
@@ -533,26 +539,6 @@ impl<T> RCSlots<T> {
 				f(None)
 			}
 		})
-	}
-}
-
-pub struct CleanupLock<'a, T> {
-	slots: &'a Arc<RCSlots<T>>,
-}
-
-impl<'a, T> CleanupLock<'a, T> {
-	pub fn iter_latest_with<R>(
-		&'a self,
-		f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
-	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
-		// Safety: CleanupLock prevents all reaper slots from being dropped
-		unsafe { self.slots.iter_with(|_, _| true, f) }
-	}
-}
-
-impl<'a, T> Drop for CleanupLock<'a, T> {
-	fn drop(&mut self) {
-		self.slots.cleanup_unlock();
 	}
 }
 

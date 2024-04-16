@@ -1,16 +1,15 @@
-use std::sync::Arc;
-
-use vulkano::buffer::{BufferUsage, Subbuffer};
-
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
-
 use crate::space::renderer::model::model_descriptor_set::{ModelDescriptorSet, ModelDescriptorSetLayout};
 use crate::space::renderer::model::texture_manager::TextureManager;
 use crate::space::Init;
+use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
+use std::sync::Arc;
+use vulkano::buffer::BufferUsage;
+use vulkano_bindless::descriptor::buffer::Buffer;
+use vulkano_bindless::descriptor::rc_reference::RCDesc;
 
 pub struct OpaqueModel {
-	pub vertex_buffer: Subbuffer<[ModelVertex]>,
-	pub index_buffer: Subbuffer<[u32]>,
+	pub vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
+	pub index_buffer: RCDesc<Buffer<[u32]>>,
 	pub descriptor: ModelDescriptorSet,
 }
 
@@ -70,16 +69,10 @@ impl OpaqueModel {
 		init: &Arc<Init>,
 		texture_manager: &Arc<TextureManager>,
 		model_descriptor_set_layout: &ModelDescriptorSetLayout,
-		vertex_buffer: Subbuffer<[ModelVertex]>,
-		index_buffer: Subbuffer<[u32]>,
+		vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
+		index_buffer: RCDesc<Buffer<[u32]>>,
 	) -> Self {
-		let descriptor = ModelDescriptorSet::new(
-			init,
-			model_descriptor_set_layout,
-			&vertex_buffer,
-			&index_buffer,
-			&texture_manager.sampler,
-		);
+		let descriptor = ModelDescriptorSet::new(init, model_descriptor_set_layout, &texture_manager.sampler);
 		Self {
 			vertex_buffer,
 			index_buffer,

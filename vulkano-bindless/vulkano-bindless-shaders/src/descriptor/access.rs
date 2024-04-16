@@ -1,8 +1,5 @@
-pub trait ValidRef {
-	fn id(&self) -> u32;
-}
+use crate::descriptor::DescType;
 
-pub trait ValidBufferReference<T>: ValidRef {
-	fn access(&self) -> &T;
-	fn access_mut(&mut self) -> &mut T;
+pub trait ValidDesc<D: DescType> {
+	fn id(&self) -> u32;
 }

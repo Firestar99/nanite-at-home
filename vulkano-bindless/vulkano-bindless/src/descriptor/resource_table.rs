@@ -1,10 +1,11 @@
 use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::rc_slots::RCSlots;
+use crate::rc_slots::{RCSlot, RCSlots, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
 use smallvec::SmallVec;
+use std::ops::Deref;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::Device;
@@ -45,10 +46,11 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 	}
 
 	pub fn alloc_slot<D: DescTypeCpu<ResourceTableCpu = T>>(&self, cpu_type: D::CpuType) -> RCDesc<D> {
-		let desc = RCDesc::<D>::new(self.slots.allocate(D::to_table(cpu_type)));
-		let id = desc.id();
+		let slot = self.slots.allocate(D::to_table(cpu_type));
+		// Safety: we'll pull from the queue later and destroy the slots
+		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);
-		desc
+		RCDesc::<D>::new(slot)
 	}
 
 	pub(crate) fn flush_updates<const C: usize>(&self, writes: &mut SmallVec<[WriteDescriptorSet; C]>) {
@@ -62,33 +64,20 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 		let max = ranges.iter().map(|r| r.end - r.start).max().unwrap();
 		let mut buffer = Vec::with_capacity(max as usize);
 
-		let cleanup_lock = self.slots.cleanup_lock();
-		let mut iter = cleanup_lock.iter_latest_with(|slot| slot.map(|s| s.with(|s| s.clone())));
-		let mut iter_index = 0;
 		for range in ranges.iter() {
-			let mut write_start = range.start;
-			let mut push = |s: Option<T::SlotType>| {
-				if let Some(slot) = s {
-					buffer.push(slot)
-				} else {
-					let len = buffer.len();
-					if len != 0 {
-						writes.push(T::write_descriptor_set(T::BINDING, write_start, buffer.drain(..)))
-					}
-					write_start += len as u32 + 1;
-				}
-			};
-
 			let range = (range.start as usize)..(range.end as usize);
-			// advance would be better here, but that's still feature flagged in nightly
-			push(iter.nth(range.start - iter_index).unwrap());
-			for _ in 0..(range.end - range.start - 1) {
-				push(iter.next().unwrap());
+			for index in range.clone() {
+				// Safety: indices come from alloc_slot
+				let slot = unsafe { RCSlot::from_raw_index(&self.slots, SlotIndex(index)) };
+				buffer.push(slot.deref().clone());
+				// may want to delay dropping?
+				drop(slot);
 			}
-			iter_index = range.end;
-
-			// flush
-			push(None);
+			writes.push(T::write_descriptor_set(
+				T::BINDING,
+				range.start as u32,
+				buffer.drain(..),
+			));
 		}
 
 		ranges.clear();

@@ -32,20 +32,17 @@ unsafe impl DescriptorSetAllocator for BindlessDescriptorSetAllocator {
 	fn allocate(
 		&self,
 		layout: &Arc<DescriptorSetLayout>,
-		variable_descriptor_count: u32,
+		_variable_descriptor_count: u32,
 	) -> Result<DescriptorSetAlloc, Validated<VulkanError>> {
-		assert_eq!(
-			layout.bindings().len(),
-			1,
-			"Descriptor set must have exactly 1 binding!"
-		);
-		let binding = layout.bindings().get(&0).unwrap();
-		assert!(
-			binding
-				.binding_flags
-				.contains(DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT),
-			"The single binding must be a variable descriptor count binding!"
-		);
+		for (id, binding) in layout.bindings() {
+			assert!(
+				!binding
+					.binding_flags
+					.contains(DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT),
+				"Binding {} must not have the variable descriptor count flag!",
+				id
+			);
+		}
 
 		let flags = if layout
 			.flags()
@@ -60,19 +57,16 @@ unsafe impl DescriptorSetAllocator for BindlessDescriptorSetAllocator {
 			DescriptorPoolCreateInfo {
 				max_sets: 1,
 				flags,
-				pool_sizes: ahash::HashMap::from_iter([(binding.descriptor_type, variable_descriptor_count)]),
+				pool_sizes: layout.descriptor_counts().clone(),
 				..DescriptorPoolCreateInfo::default()
 			},
 		)?);
 
 		// Safety: pool and allocated descriptor set always have the same sizes and are dropped together
 		let inner = unsafe {
-			pool.allocate_descriptor_sets([DescriptorSetAllocateInfo {
-				variable_descriptor_count,
-				..DescriptorSetAllocateInfo::new(layout.clone())
-			}])?
-			.next()
-			.unwrap()
+			pool.allocate_descriptor_sets([DescriptorSetAllocateInfo::new(layout.clone())])?
+				.next()
+				.unwrap()
 		};
 
 		Ok(DescriptorSetAlloc {
