@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# my projects
+vulkano-bindless-shaders = { path = "../vulkano-bindless/vulkano-bindless-shaders" }
+
 # rust-gpu
 spirv-std = { workspace = true }
 

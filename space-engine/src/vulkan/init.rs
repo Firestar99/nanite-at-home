@@ -66,6 +66,8 @@ impl<Q: Clone> Init<Q> {
 		application_config: ApplicationConfig,
 		plugins: &[&dyn Plugin],
 		queue_allocator: ALLOCATOR,
+		stages: ShaderStages,
+		descriptor_counts: impl FnOnce(&Arc<PhysicalDevice>) -> DescriptorCounts,
 	) -> Arc<Self>
 	where
 		Q: 'static,
@@ -155,13 +157,8 @@ impl<Q: Clone> Init<Q> {
 		let queues = allocation.take(queues.collect());
 
 		// Safety: it's the only instance for the device
-		let descriptors = unsafe {
-			DescriptorsCpu::new(
-				device.clone(),
-				ShaderStages::all_graphics(),
-				DescriptorCounts::reasonable_defaults(&device),
-			)
-		};
+		let descriptors =
+			unsafe { DescriptorsCpu::new(device.clone(), stages, descriptor_counts(device.physical_device())) };
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 		let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
 			device.clone(),

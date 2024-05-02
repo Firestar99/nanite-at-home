@@ -1,5 +1,6 @@
 use crate::descriptor::{DescType, ValidDesc};
 use crate::frame_in_flight::FrameInFlight;
+use bytemuck_derive::AnyBitPattern;
 use core::marker::PhantomData;
 
 // pub struct StrongRef<T: DType> {
@@ -7,16 +8,37 @@ use core::marker::PhantomData;
 // 	_phantom: PhantomData<T>,
 // }
 
+#[repr(C)]
 pub struct TransientDesc<'a, D: DescType> {
 	id: u32,
 	_phantom: PhantomData<&'a D>,
 }
+
+impl<'a, D: DescType> Copy for TransientDesc<'a, D> {}
+
+impl<'a, D: DescType> Clone for TransientDesc<'a, D> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
+unsafe impl<D: DescType> bytemuck::Zeroable for TransientDesc<'static, D> {}
+
+unsafe impl<D: DescType> bytemuck::AnyBitPattern for TransientDesc<'static, D> {}
 
 impl<'a, D: DescType> TransientDesc<'a, D> {
 	#[inline]
 	pub const fn new(id: u32, _frame: FrameInFlight<'a>) -> Self {
 		Self {
 			id,
+			_phantom: PhantomData {},
+		}
+	}
+
+	#[inline]
+	pub unsafe fn to_static(&self) -> TransientDesc<'static, D> {
+		TransientDesc {
+			id: self.id,
 			_phantom: PhantomData {},
 		}
 	}
@@ -29,6 +51,8 @@ impl<'a, D: DescType> ValidDesc<D> for TransientDesc<'a, D> {
 	}
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, AnyBitPattern)]
 pub struct WeakDesc<D: DescType> {
 	id: u32,
 	version: u32,

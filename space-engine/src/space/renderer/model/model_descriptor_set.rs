@@ -1,16 +1,11 @@
-use std::ops::Deref;
-use std::sync::Arc;
-
-use vulkano::buffer::Subbuffer;
-use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorType};
-use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
-use vulkano::image::sampler::Sampler;
-
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
-
 use crate::space::renderer::descriptor_set_creator::DescriptorSetBinding;
 use crate::space::renderer::ALL_SHADER_STAGES;
 use crate::space::Init;
+use std::ops::Deref;
+use std::sync::Arc;
+use vulkano::descriptor_set::layout::{DescriptorSetLayout, DescriptorType};
+use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
+use vulkano::image::sampler::Sampler;
 
 #[derive(Clone)]
 pub struct ModelDescriptorSetLayout(pub Arc<DescriptorSetLayout>);

@@ -26,14 +26,15 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 
 [workspace.dependencies]
 # vulkan
-# vulkano 0.35 development, PR https://github.com/vulkano-rs/vulkano/pull/2482
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "27ac09b780466540443d8ee72c6df3808a6e8d2d" }
-vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "27ac09b780466540443d8ee72c6df3808a6e8d2d" }
+# vulkano 0.35 development
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "8697ab7554b949422b1c3a71f417f7e2aac40e15" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "8697ab7554b949422b1c3a71f417f7e2aac40e15" }
+
 winit = { version = "0.29.9", features = ["rwh_05"] }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "05e8c8df6c5577c23afdc43ad90df591a92fdca0", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "05e8c8df6c5577c23afdc43ad90df591a92fdca0", version = "0.9" }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "7a3bf6e27ca313eea843a50dd92680cfbb09db25", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "7a3bf6e27ca313eea843a50dd92680cfbb09db25" }
 
 # async
 futures = "0.3"

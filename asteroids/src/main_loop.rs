@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 
 use glam::{Mat4, UVec3};
+use vulkano::shader::ShaderStages;
 use winit::event::{Event, WindowEvent};
 use winit::window::{CursorGrabMode, WindowBuilder};
 
@@ -22,6 +23,7 @@ use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
 use space_engine_common::space::renderer::camera::Camera;
 use space_engine_common::space::renderer::frame_data::FrameData;
+use vulkano_bindless::descriptor::descriptors::DescriptorCounts;
 
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
@@ -47,7 +49,15 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			vec.push(&StandardValidationLayerPlugin);
 		}
 
-		init = Init::new(generate_application_config!(), &vec, SpaceQueueAllocator::new()).await;
+		let stages = ShaderStages::VERTEX | ShaderStages::FRAGMENT | ShaderStages::MESH | ShaderStages::COMPUTE;
+		init = Init::new(
+			generate_application_config!(),
+			&vec,
+			SpaceQueueAllocator::new(),
+			stages,
+			|phy| DescriptorCounts::reasonable_defaults(phy),
+		)
+		.await;
 	}
 	let graphics_main = &init.queues.client.graphics_main;
 

@@ -10,6 +10,7 @@ use vulkano::descriptor_set::layout::{
 	DescriptorSetLayout, DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo,
 };
 use vulkano::descriptor_set::DescriptorSet;
+use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::shader::ShaderStages;
 use vulkano_bindless_shaders::descriptor::buffer::BufferTable;
@@ -19,15 +20,14 @@ pub struct DescriptorCounts {
 }
 
 impl DescriptorCounts {
-	pub fn limits(device: &Arc<Device>) -> Self {
-		let phy = device.physical_device();
+	pub fn limits(phy: &Arc<PhysicalDevice>) -> Self {
 		Self {
 			buffer_descriptors: BufferTable::max_update_after_bind_descriptors(phy),
 		}
 	}
 
-	pub fn reasonable_defaults(device: &Arc<Device>) -> Self {
-		let limits = Self::limits(device);
+	pub fn reasonable_defaults(phy: &Arc<PhysicalDevice>) -> Self {
+		let limits = Self::limits(phy);
 		Self {
 			buffer_descriptors: limits.buffer_descriptors.min(10_000),
 		}

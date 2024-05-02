@@ -18,6 +18,7 @@ use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 
 pub struct OpaqueRenderTask {
+	init: Arc<Init>,
 	pipeline_opaque: OpaqueDrawPipeline,
 	texture_manager: Arc<TextureManager>,
 	pub models: Mutex<Vec<OpaqueModel>>,
@@ -32,6 +33,7 @@ impl OpaqueRenderTask {
 	) -> Self {
 		let pipeline_opaque = OpaqueDrawPipeline::new(&init, format_color, format_depth);
 		Self {
+			init: init.clone(),
 			pipeline_opaque,
 			models: Mutex::new(Vec::new()),
 			texture_manager: texture_manager.clone(),
@@ -80,7 +82,9 @@ impl OpaqueRenderTask {
 				.draw(frame_context, &mut cmd, model, &texture_array_descriptor_set);
 		}
 		cmd.end_rendering().unwrap();
+		let cmd = cmd.end().unwrap();
 
-		future.then_execute(graphics.clone(), cmd.end().unwrap()).unwrap()
+		self.init.descriptors.flush();
+		future.then_execute(graphics.clone(), cmd).unwrap()
 	}
 }

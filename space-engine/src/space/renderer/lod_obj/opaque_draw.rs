@@ -1,7 +1,9 @@
+use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use smallvec::smallvec;
+use space_engine_common::space::renderer::lod_obj::opaque_shader::PushConstant;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::format::Format;
@@ -12,10 +14,11 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
-use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
+use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
 use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
+use vulkano::shader::ShaderStages;
 
 use crate::shader::space::renderer::lod_obj::opaque_shader;
 use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
@@ -39,10 +42,17 @@ impl OpaqueDrawPipeline {
 			device.clone(),
 			PipelineLayoutCreateInfo {
 				set_layouts: [
+					init.descriptors.descriptor_set_layout.clone(),
 					GlobalDescriptorSetLayout::new(init).0,
 					ModelDescriptorSetLayout::new(init).0,
 					TextureArrayDescriptorSetLayout::new(init).0,
 				]
+				.to_vec(),
+				push_constant_ranges: [PushConstantRange {
+					stages: ShaderStages::MESH | ShaderStages::FRAGMENT,
+					offset: 0,
+					size: mem::size_of::<PushConstant>() as u32,
+				}]
 				.to_vec(),
 				..PipelineLayoutCreateInfo::default()
 			},
@@ -97,6 +107,7 @@ impl OpaqueDrawPipeline {
 		texture_array_descriptor_set: &TextureArrayDescriptorSet,
 	) {
 		unsafe {
+			let init = &frame_context.render_context.init;
 			cmd.bind_pipeline_graphics(self.pipeline.clone())
 				.unwrap()
 				.set_viewport(0, frame_context.viewport_smallvec())
@@ -106,10 +117,22 @@ impl OpaqueDrawPipeline {
 					self.pipeline.layout().clone(),
 					0,
 					(
+						init.descriptors.descriptor_set.clone(),
 						frame_context.global_descriptor_set.clone().0,
+						// TODO replace descriptors below with bindless
 						model.descriptor.clone().0,
 						texture_array_descriptor_set.clone().0,
 					),
+				)
+				.unwrap()
+				.push_constants(
+					self.pipeline.layout().clone(),
+					0,
+					PushConstant {
+						vertex_buffer: model.vertex_buffer.to_transient(frame_context.frame_in_flight),
+						index_buffer: model.index_buffer.to_transient(frame_context.frame_in_flight),
+					}
+					.to_static(),
 				)
 				.unwrap()
 				.draw_mesh_tasks([(model.index_buffer.len() / 3) as u32, 1, 1])
