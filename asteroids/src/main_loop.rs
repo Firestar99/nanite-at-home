@@ -13,7 +13,6 @@ use space_engine::space::renderer::renderer_plugin::RendererPlugin;
 use space_engine::space::renderer::renderers::main::{RenderPipelineMain, RendererMain};
 use space_engine::space::Init;
 use space_engine::vulkan::init::Plugin;
-use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use space_engine::vulkan::plugins::vulkano_bindless::VulkanoBindless;
@@ -36,15 +35,13 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	if LAYER_RENDERDOC {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
+		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
 	}
 
 	let init;
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
 		let mut vec: Vec<&dyn Plugin> = vec![&RendererPlugin, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
-		if LAYER_RENDERDOC {
-			vec.push(&RenderdocLayerPlugin);
-		}
 		if LAYER_VALIDATION {
 			vec.push(&StandardValidationLayerPlugin);
 		}
