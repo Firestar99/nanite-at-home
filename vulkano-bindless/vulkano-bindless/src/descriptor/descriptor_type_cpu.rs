@@ -21,9 +21,9 @@ pub trait DescTypeCpu: DescType {
 	fn to_table(from: Self::CpuType) -> <Self::ResourceTableCpu as ResourceTableCpu>::SlotType;
 }
 
-/// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor set of a single kind.
+/// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
 pub trait ResourceTableCpu: ResourceTable {
-	/// Type used within the [`RCSlot`]
+	/// internal non-generic type used within the resource table
 	type SlotType: Clone;
 
 	const DESCRIPTOR_TYPE: DescriptorType;

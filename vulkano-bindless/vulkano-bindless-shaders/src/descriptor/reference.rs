@@ -1,12 +1,16 @@
-use crate::descriptor::{DescType, ValidDesc};
+use crate::descriptor::descriptor_type::DescType;
+use crate::descriptor::descriptors::Descriptors;
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
 use core::marker::PhantomData;
 
-// pub struct StrongRef<T: DType> {
-// 	id: u32,
-// 	_phantom: PhantomData<T>,
-// }
+pub trait ValidDesc<D: DescType> {
+	fn id(&self) -> u32;
+
+	fn access<'a>(&'a self, descriptors: &'a Descriptors<'a>) -> D::AccessType<'a> {
+		D::access(descriptors, self.id())
+	}
+}
 
 #[repr(C)]
 pub struct TransientDesc<'a, D: DescType> {
@@ -88,3 +92,8 @@ impl<D: DescType> WeakDesc<D> {
 		TransientDesc::new(self.id, _frame)
 	}
 }
+
+// pub struct StrongRef<T: DType> {
+// 	id: u32,
+// 	_phantom: PhantomData<T>,
+// }

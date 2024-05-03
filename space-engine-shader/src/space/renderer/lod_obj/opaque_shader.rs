@@ -1,13 +1,11 @@
-use core::mem::size_of;
 use glam::{UVec3, Vec2, Vec4};
 use space_engine_common::space::renderer::frame_data::FrameData;
 use space_engine_common::space::renderer::lod_obj::opaque_shader::PushConstant;
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
 use spirv_std::arch::set_mesh_outputs_ext;
 use spirv_std::{spirv, Image, RuntimeArray, Sampler};
 use static_assertions::const_assert_eq;
-use vulkano_bindless_shaders::descriptor::buffer::BufferAccess;
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
+use vulkano_bindless_shaders::descriptor::ValidDesc;
 
 const OUTPUT_VERTICES: usize = 3;
 const OUTPUT_TRIANGLES: usize = 1;
@@ -34,11 +32,11 @@ pub fn opaque_mesh(
 		let vertex_id = push_constant
 			.index_buffer
 			.access(&descriptors)
-			.load((global_invocation_id.x as usize * 3 + i) * size_of::<u32>());
+			.load(global_invocation_id.x as usize * 3 + i);
 		let vertex_input = push_constant
 			.vertex_buffer
 			.access(&descriptors)
-			.load((vertex_id as usize) * size_of::<ModelVertex>());
+			.load(vertex_id as usize);
 		let position_world = camera.transform.transform_point3(vertex_input.position.into());
 		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
 		tex_coords[i] = vertex_input.tex_coord;

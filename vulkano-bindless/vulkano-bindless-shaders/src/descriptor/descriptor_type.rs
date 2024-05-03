@@ -1,3 +1,5 @@
+use crate::descriptor::descriptors::Descriptors;
+
 pub(crate) mod private {
 	pub trait SealedTrait {}
 }
@@ -11,8 +13,9 @@ pub trait DescType: private::SealedTrait {
 	/// Associated non-generic [`ResourceTableCpu`]
 	type ResourceTable: ResourceTable;
 
-	// FIXME required?
 	type AccessType<'a>;
+
+	fn access<'a>(descriptors: &'a Descriptors<'a>, id: u32) -> Self::AccessType<'a>;
 }
 
 pub trait ResourceTable: private::SealedTrait {
