@@ -1,6 +1,6 @@
+use crate::space::Init;
 use std::ops::Deref;
 use std::sync::Arc;
-
 use vulkano::descriptor_set::layout::{
 	DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo,
 	DescriptorType,
@@ -8,8 +8,6 @@ use vulkano::descriptor_set::layout::{
 use vulkano::image::sampler::Sampler;
 use vulkano::shader::ShaderStages;
 use vulkano::{Validated, VulkanError};
-
-use crate::space::Init;
 
 #[derive(Clone, Debug)]
 pub struct DescriptorSetBinding {

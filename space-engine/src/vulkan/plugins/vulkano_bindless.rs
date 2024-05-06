@@ -1,9 +1,7 @@
+use crate::vulkan::init::Plugin;
 use std::sync::Arc;
-
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::{DeviceExtensions, DeviceFeatures};
-
-use crate::vulkan::init::Plugin;
 
 pub struct VulkanoBindless;
 

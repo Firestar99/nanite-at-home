@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use glam::{vec2, vec3, vec3a};
-
 use space_engine::space::renderer::model::model::OpaqueModel;
 use space_engine::space::renderer::model::model_gltf::load_gltf;
 use space_engine::space::renderer::model::texture_manager::TextureManager;
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
+use std::sync::Arc;
 use vulkano_bindless::descriptor::{SampledImage2D, WeakDesc};
 
 pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {

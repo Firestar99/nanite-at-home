@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::sync::Arc;
-
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::{Queue, QueueCreateInfo, QueueFamilyProperties};
 

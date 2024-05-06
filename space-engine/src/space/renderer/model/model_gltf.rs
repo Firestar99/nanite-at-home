@@ -6,7 +6,7 @@ use gltf::image::{Data, Format};
 use gltf::mesh::Mode;
 use gltf::{Document, Node, Scene};
 use image::DynamicImage;
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;

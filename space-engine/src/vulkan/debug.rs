@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use vulkano::instance::debug::DebugUtilsMessageType;
 use vulkano::instance::debug::DebugUtilsMessenger;
 use vulkano::instance::debug::DebugUtilsMessengerCreateInfo;

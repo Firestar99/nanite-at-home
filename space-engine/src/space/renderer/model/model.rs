@@ -1,5 +1,5 @@
 use crate::space::renderer::model::texture_manager::TextureManager;
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
 use std::sync::Arc;
 use vulkano::buffer::BufferUsage;
 use vulkano_bindless::descriptor::buffer::Buffer;

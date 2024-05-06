@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
-use vulkano::device::physical::PhysicalDevice;
-use vulkano::device::{Queue, QueueCreateInfo, QueueFlags};
-use vulkano::instance::Instance;
-
 use crate::vulkan::init::{QueueAllocation, QueueAllocator};
 use crate::vulkan::queue_allocation_helper::{
 	Priority, QueueAllocationHelper, QueueAllocationHelperEntry, QueueAllocatorHelper,
 };
+use std::sync::Arc;
+use vulkano::device::physical::PhysicalDevice;
+use vulkano::device::{Queue, QueueCreateInfo, QueueFlags};
+use vulkano::instance::Instance;
 
 // queues
 #[derive(Copy, Clone, Debug, Default)]

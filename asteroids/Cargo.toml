@@ -8,10 +8,10 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-asteroids-common = { path = "../asteroids-common" }
-space-engine = { path = "../space-engine" }
-space-engine-common = { path = "../space-engine-common" }
-vulkano-bindless = { path = "../vulkano-bindless/vulkano-bindless" }
+asteroids-shader = { workspace = true }
+space-engine = { workspace = true }
+space-engine-shader = { workspace = true }
+vulkano-bindless = { workspace = true }
 
 # vulkan
 vulkano = { workspace = true }

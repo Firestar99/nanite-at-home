@@ -1,11 +1,4 @@
-use std::f32::consts::PI;
-use std::sync::mpsc::Receiver;
-
 use glam::{Mat4, UVec3};
-use vulkano::shader::ShaderStages;
-use winit::event::{Event, WindowEvent};
-use winit::window::{CursorGrabMode, WindowBuilder};
-
 use space_engine::generate_application_config;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
 use space_engine::space::renderer::model::texture_manager::TextureManager;
@@ -20,9 +13,14 @@ use space_engine::vulkan::window::event_loop::EventLoopExecutor;
 use space_engine::vulkan::window::swapchain::Swapchain;
 use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
-use space_engine_common::space::renderer::camera::Camera;
-use space_engine_common::space::renderer::frame_data::FrameData;
+use space_engine_shader::space::renderer::camera::Camera;
+use space_engine_shader::space::renderer::frame_data::FrameData;
+use std::f32::consts::PI;
+use std::sync::mpsc::Receiver;
+use vulkano::shader::ShaderStages;
 use vulkano_bindless::descriptor::descriptors::DescriptorCounts;
+use winit::event::{Event, WindowEvent};
+use winit::window::{CursorGrabMode, WindowBuilder};
 
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;

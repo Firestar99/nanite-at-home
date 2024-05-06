@@ -1,15 +1,13 @@
+use crate::vulkan::init::Plugin;
+use crate::vulkan::validation_layers::ValidationLayers;
+use crate::vulkan::window::event_loop::EventLoopExecutor;
 use smallvec::SmallVec;
 use std::sync::Arc;
-
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::{DeviceExtensions, DeviceFeatures};
 use vulkano::instance::InstanceExtensions;
 use vulkano::swapchain::Surface;
 use vulkano::VulkanLibrary;
-
-use crate::vulkan::init::Plugin;
-use crate::vulkan::validation_layers::ValidationLayers;
-use crate::vulkan::window::event_loop::EventLoopExecutor;
 
 pub struct WindowPlugin {
 	window_extensions: InstanceExtensions,

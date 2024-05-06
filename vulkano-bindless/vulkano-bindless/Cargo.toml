@@ -10,8 +10,8 @@ repository.workspace = true
 loom_tests = []
 
 [dependencies]
-# my projects
-vulkano-bindless-shaders = { path = "../vulkano-bindless-shaders" }
+# members
+vulkano-bindless-shaders = { workspace = true }
 
 # vulkan
 vulkano = { workspace = true }

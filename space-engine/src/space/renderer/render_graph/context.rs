@@ -1,18 +1,15 @@
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-
-use smallvec::{smallvec, SmallVec};
-use static_assertions::assert_not_impl_any;
-use vulkano::pipeline::graphics::viewport::Viewport;
-use vulkano::sync::future::FenceSignalFuture;
-use vulkano::sync::GpuFuture;
-
-use space_engine_common::space::renderer::frame_data::FrameData;
-
 use crate::space::renderer::global_descriptor_set::{GlobalDescriptorSet, GlobalDescriptorSetLayout};
 use crate::space::Init;
 use crate::vulkan::concurrent_sharing;
+use smallvec::{smallvec, SmallVec};
+use space_engine_shader::space::renderer::frame_data::FrameData;
+use static_assertions::assert_not_impl_any;
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+use vulkano::pipeline::graphics::viewport::Viewport;
+use vulkano::sync::future::FenceSignalFuture;
+use vulkano::sync::GpuFuture;
 use vulkano_bindless::frame_in_flight::frame_manager::FrameManager;
 use vulkano_bindless::frame_in_flight::uniform::UniformInFlight;
 use vulkano_bindless::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};

@@ -4,7 +4,6 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
-
 use vulkano::{instance, VulkanLibrary};
 
 pub struct ValidationLayers(HashSet<LayerProperties>);

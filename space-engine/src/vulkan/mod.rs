@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
+use crate::application_config::ApplicationConfig;
+use crate::generate_application_config;
 use smallvec::SmallVec;
+use std::sync::Arc;
 use vulkano::device::Queue;
 use vulkano::sync::Sharing;
 use vulkano::sync::Sharing::{Concurrent, Exclusive};
-
-use crate::application_config::ApplicationConfig;
-use crate::generate_application_config;
 
 pub mod debug;
 pub mod init;

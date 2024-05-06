@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
-use smallvec::{smallvec, SmallVec};
-use vulkano::instance::InstanceExtensions;
-use vulkano::VulkanLibrary;
-
 use crate::vulkan::init::Plugin;
 use crate::vulkan::validation_layers::ValidationLayers;
+use smallvec::{smallvec, SmallVec};
+use std::sync::Arc;
+use vulkano::instance::InstanceExtensions;
+use vulkano::VulkanLibrary;
 
 pub const STANDARD_VALIDATION_LAYER_NAME: &str = "VK_LAYER_KHRONOS_validation";
 

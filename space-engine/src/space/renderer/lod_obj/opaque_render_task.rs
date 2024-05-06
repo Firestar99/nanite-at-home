@@ -1,6 +1,9 @@
+use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
+use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::render_graph::context::FrameContext;
+use crate::space::Init;
 use parking_lot::Mutex;
 use std::sync::Arc;
-
 use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
 use vulkano::command_buffer::{
@@ -10,11 +13,6 @@ use vulkano::format::{ClearValue, Format};
 use vulkano::image::view::ImageView;
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
-
-use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
-use crate::space::renderer::model::model::OpaqueModel;
-use crate::space::renderer::render_graph::context::FrameContext;
-use crate::space::Init;
 
 pub struct OpaqueRenderTask {
 	init: Arc<Init>,

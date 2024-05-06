@@ -1,14 +1,12 @@
-use std::f32;
-use std::f32::consts::PI;
-
+use crate::delta_time::DeltaTime;
 use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
+use std::f32;
+use std::f32::consts::PI;
 use winit::dpi::PhysicalPosition;
 use winit::event::ElementState::Pressed;
 use winit::event::{DeviceEvent, Event, KeyEvent, MouseScrollDelta, WindowEvent};
 use winit::keyboard::PhysicalKey::Code;
-
-use crate::delta_time::DeltaTime;
 
 #[derive(Copy, Clone)]
 pub struct FpsCameraController {

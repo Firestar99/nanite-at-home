@@ -1,7 +1,11 @@
+use crate::application_config::ApplicationConfig;
+use crate::vulkan::debug::Debug;
+use crate::vulkan::pipeline_cache::SpacePipelineCache;
+use crate::vulkan::validation_layers::ValidationLayers;
+use crate::vulkan::ENGINE_APPLICATION_CONFIG;
+use smallvec::SmallVec;
 use std::cmp;
 use std::sync::Arc;
-
-use smallvec::SmallVec;
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
@@ -11,12 +15,6 @@ use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::shader::ShaderStages;
 use vulkano::{Version, VulkanLibrary};
 use vulkano_bindless::descriptor::descriptors::{DescriptorCounts, DescriptorsCpu};
-
-use crate::application_config::ApplicationConfig;
-use crate::vulkan::debug::Debug;
-use crate::vulkan::pipeline_cache::SpacePipelineCache;
-use crate::vulkan::validation_layers::ValidationLayers;
-use crate::vulkan::ENGINE_APPLICATION_CONFIG;
 
 pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.

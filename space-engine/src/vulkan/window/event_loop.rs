@@ -1,3 +1,8 @@
+use crate::vulkan::window::event_loop::TaskState::*;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
+use parking_lot::Mutex;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::future::Future;
 use std::hint::spin_loop;
@@ -10,15 +15,8 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::thread;
-
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::FromPrimitive;
-use parking_lot::Mutex;
-use static_assertions::{assert_impl_all, assert_not_impl_all};
 use winit::event::Event;
 use winit::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
-
-use crate::vulkan::window::event_loop::TaskState::*;
 
 // EventLoop Task
 trait EventLoopTaskTrait: Send + Sync {

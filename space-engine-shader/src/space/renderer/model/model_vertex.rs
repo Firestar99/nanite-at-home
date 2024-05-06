@@ -1,6 +1,5 @@
-use core::mem::size_of;
-
 use bytemuck_derive::AnyBitPattern;
+use core::mem::size_of;
 use glam::{Vec2, Vec3, Vec3A};
 use static_assertions::const_assert_eq;
 use vulkano_bindless_shaders::descriptor::{SampledImage2D, WeakDesc};

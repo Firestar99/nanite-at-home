@@ -1,9 +1,8 @@
+use smallvec::smallvec;
+use space_engine_shader::space::renderer::lod_obj::opaque_shader::PushConstant;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
-
-use smallvec::smallvec;
-use space_engine_common::space::renderer::lod_obj::opaque_shader::PushConstant;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::format::Format;
 use vulkano::image::sampler::SamplerCreateInfo;

@@ -1,11 +1,34 @@
+use crate::space::renderer::frame_data::FrameData;
+use crate::space::renderer::model::model_vertex::ModelVertex;
 use glam::{UVec3, Vec2, Vec4};
-use space_engine_common::space::renderer::frame_data::FrameData;
-use space_engine_common::space::renderer::lod_obj::opaque_shader::PushConstant;
 use spirv_std::arch::set_mesh_outputs_ext;
 use spirv_std::{spirv, RuntimeArray, Sampler};
 use static_assertions::const_assert_eq;
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
-use vulkano_bindless_shaders::descriptor::{SampledImage2D, TransientDesc, ValidDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, SampledImage2D, TransientDesc, ValidDesc};
+
+#[derive(Copy, Clone)]
+pub struct PushConstant<'a> {
+	pub vertex_buffer: TransientDesc<'a, Buffer<[ModelVertex]>>,
+	pub index_buffer: TransientDesc<'a, Buffer<[u32]>>,
+	pub sampler: TransientDesc<'a, Sampler>,
+}
+
+unsafe impl bytemuck::Zeroable for PushConstant<'static> {}
+
+unsafe impl bytemuck::AnyBitPattern for PushConstant<'static> {}
+
+impl<'a> PushConstant<'a> {
+	pub unsafe fn to_static(&self) -> PushConstant<'static> {
+		unsafe {
+			PushConstant {
+				vertex_buffer: self.vertex_buffer.to_static(),
+				index_buffer: self.index_buffer.to_static(),
+				sampler: self.sampler.to_static(),
+			}
+		}
+	}
+}
 
 const OUTPUT_VERTICES: usize = 3;
 const OUTPUT_TRIANGLES: usize = 1;

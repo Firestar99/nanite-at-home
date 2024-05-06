@@ -1,9 +1,10 @@
+use crate::vulkan::window::event_loop::EventLoopExecutor;
+use crate::vulkan::window::window_ref::WindowRef;
+use smallvec::SmallVec;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
-
-use smallvec::SmallVec;
-use static_assertions::{assert_impl_all, assert_not_impl_all};
 use vulkano::device::{Device, DeviceOwned, Queue};
 use vulkano::format::{Format, FormatFeatures};
 use vulkano::image::view::ImageView;
@@ -19,9 +20,6 @@ use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
-
-use crate::vulkan::window::event_loop::EventLoopExecutor;
-use crate::vulkan::window::window_ref::WindowRef;
 
 pub struct Swapchain {
 	queue: Arc<Queue>,

@@ -1,16 +1,13 @@
+use crate::space::renderer::descriptor_set_creator::DescriptorSetBinding;
+use crate::space::renderer::ALL_SHADER_STAGES;
+use crate::space::Init;
+use space_engine_shader::space::renderer::frame_data::FrameData;
 use std::ops::Deref;
 use std::sync::Arc;
-
 use vulkano::buffer::Subbuffer;
 use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::descriptor_set::layout::DescriptorType::UniformBuffer;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
-
-use space_engine_common::space::renderer::frame_data::FrameData;
-
-use crate::space::renderer::descriptor_set_creator::DescriptorSetBinding;
-use crate::space::renderer::ALL_SHADER_STAGES;
-use crate::space::Init;
 
 #[derive(Clone)]
 pub struct GlobalDescriptorSetLayout(pub Arc<DescriptorSetLayout>);

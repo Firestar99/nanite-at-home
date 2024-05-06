@@ -1,5 +1,9 @@
+use crate::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
+use crate::space::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
+use crate::space::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
+use crate::space::Init;
+use space_engine_shader::space::renderer::frame_data::FrameData;
 use std::sync::Arc;
-
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageUsage};
@@ -7,13 +11,6 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference,
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
-
-use space_engine_common::space::renderer::frame_data::FrameData;
-
-use crate::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
-use crate::space::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
-use crate::space::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
-use crate::space::Init;
 
 pub struct RenderPipelineMain {
 	pub init: Arc<Init>,
