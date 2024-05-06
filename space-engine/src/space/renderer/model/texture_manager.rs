@@ -25,11 +25,15 @@ impl TextureManager {
 		Arc::new(Self { init })
 	}
 
-	pub async fn upload_texture_from_memory(&self, image_data: &[u8]) -> Result<RCDesc<SampledImage2D>, ImageError> {
-		Ok(self.upload_texture(image::load_from_memory(image_data)?).await)
+	pub async fn upload_texture_from_memory(
+		&self,
+		usage: ImageUsage,
+		image_data: &[u8],
+	) -> Result<RCDesc<SampledImage2D>, ImageError> {
+		Ok(self.upload_texture(usage, image::load_from_memory(image_data)?).await)
 	}
 
-	pub async fn upload_texture(&self, image_data: DynamicImage) -> RCDesc<SampledImage2D> {
+	pub async fn upload_texture(&self, usage: ImageUsage, image_data: DynamicImage) -> RCDesc<SampledImage2D> {
 		let init = &self.init;
 		let image_data = image_data.into_rgba8();
 		let (width, height) = image_data.dimensions();
@@ -54,7 +58,7 @@ impl TextureManager {
 				image_type: ImageType::Dim2d,
 				format: Format::R8G8B8A8_SRGB,
 				extent: [width, height, 1],
-				usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+				usage: ImageUsage::TRANSFER_DST | usage,
 				..ImageCreateInfo::default()
 			},
 			AllocationCreateInfo {

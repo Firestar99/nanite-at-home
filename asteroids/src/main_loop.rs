@@ -18,7 +18,7 @@ use space_engine_shader::space::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless::descriptor::descriptors::DescriptorCounts;
+use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
 use winit::event::{Event, WindowEvent};
 use winit::window::{CursorGrabMode, WindowBuilder};
 

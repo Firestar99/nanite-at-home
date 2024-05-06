@@ -1,15 +1,20 @@
+use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
 use crate::rc_slots::RCSlot;
+use smallvec::SmallVec;
+use std::collections::BTreeMap;
 use std::sync::Arc;
-use vulkano::descriptor_set::layout::DescriptorType;
+use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::image::sampler::{Sampler as VSampler, SamplerCreateInfo};
+use vulkano::shader::ShaderStages;
 use vulkano::{Validated, VulkanError};
 use vulkano_bindless_shaders::descriptor::sampler::{Sampler, SamplerTable};
+use vulkano_bindless_shaders::descriptor::BINDING_SAMPLER;
 
 impl DescTypeCpu for Sampler {
 	type ResourceTableCpu = SamplerTable;
@@ -26,7 +31,6 @@ impl DescTypeCpu for Sampler {
 
 impl ResourceTableCpu for SamplerTable {
 	type SlotType = Arc<VSampler>;
-	const DESCRIPTOR_TYPE: DescriptorType = DescriptorType::Sampler;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -35,12 +39,22 @@ impl ResourceTableCpu for SamplerTable {
 			.unwrap()
 	}
 
-	fn write_descriptor_set(
-		binding: u32,
-		first_array_element: u32,
-		elements: impl IntoIterator<Item = Self::SlotType>,
-	) -> WriteDescriptorSet {
-		WriteDescriptorSet::sampler_array(binding, first_array_element, elements)
+	fn layout_binding(
+		stages: ShaderStages,
+		count: DescriptorCounts,
+		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
+	) {
+		out.insert(
+			BINDING_SAMPLER,
+			DescriptorSetLayoutBinding {
+				binding_flags: Self::BINDING_FLAGS,
+				descriptor_count: count.samplers,
+				stages,
+				..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::Sampler)
+			},
+		)
+		.ok_or(())
+		.unwrap_err();
 	}
 }
 
@@ -65,5 +79,15 @@ impl SamplerResourceTable {
 	pub fn alloc(&self, sampler_create_info: SamplerCreateInfo) -> Result<RCDesc<Sampler>, Validated<VulkanError>> {
 		let sampler = VSampler::new(self.device.clone(), sampler_create_info)?;
 		Ok(self.resource_table.alloc_slot(sampler))
+	}
+
+	pub(crate) fn flush_updates<const C: usize>(&self, writes: &mut SmallVec<[WriteDescriptorSet; C]>) {
+		self.resource_table.flush_updates(|first_array_element, buffer| {
+			writes.push(WriteDescriptorSet::sampler_array(
+				BINDING_SAMPLER,
+				first_array_element,
+				buffer.drain(..),
+			));
+		})
 	}
 }

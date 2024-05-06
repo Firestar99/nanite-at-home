@@ -18,6 +18,4 @@ pub trait DescType: private::SealedTrait + 'static {
 	fn access<'a>(descriptors: &'a Descriptors<'a>, id: u32) -> Self::AccessType<'a>;
 }
 
-pub trait ResourceTable: private::SealedTrait {
-	const BINDING: u32;
-}
+pub trait ResourceTable: private::SealedTrait {}

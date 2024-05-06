@@ -19,6 +19,4 @@ impl DescType for Sampler {
 	}
 }
 
-impl ResourceTable for SamplerTable {
-	const BINDING: u32 = 3;
-}
+impl ResourceTable for SamplerTable {}

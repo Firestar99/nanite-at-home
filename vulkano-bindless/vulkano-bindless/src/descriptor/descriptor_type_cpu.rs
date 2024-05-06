@@ -1,8 +1,10 @@
+use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::rc_slots::RCSlot;
+use std::collections::BTreeMap;
 use std::sync::Arc;
-use vulkano::descriptor_set::layout::DescriptorType;
-use vulkano::descriptor_set::WriteDescriptorSet;
+use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
 use vulkano::device::physical::PhysicalDevice;
+use vulkano::shader::ShaderStages;
 use vulkano_bindless_shaders::descriptor::{DescType, ResourceTable};
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
@@ -26,13 +28,15 @@ pub trait ResourceTableCpu: ResourceTable {
 	/// internal non-generic type used within the resource table
 	type SlotType: Clone;
 
-	const DESCRIPTOR_TYPE: DescriptorType;
-
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32;
 
-	fn write_descriptor_set(
-		binding: u32,
-		first_array_element: u32,
-		elements: impl IntoIterator<Item = Self::SlotType>,
-	) -> WriteDescriptorSet;
+	const BINDING_FLAGS: DescriptorBindingFlags = DescriptorBindingFlags::UPDATE_AFTER_BIND
+		.union(DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING)
+		.union(DescriptorBindingFlags::PARTIALLY_BOUND);
+
+	fn layout_binding(
+		stages: ShaderStages,
+		count: DescriptorCounts,
+		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
+	);
 }

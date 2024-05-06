@@ -33,6 +33,4 @@ impl DescType for SampledImage2D {
 	}
 }
 
-impl ResourceTable for ImageTable {
-	const BINDING: u32 = 2;
-}
+impl ResourceTable for ImageTable {}

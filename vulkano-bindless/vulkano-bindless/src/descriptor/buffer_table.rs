@@ -1,18 +1,23 @@
+use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
 use crate::rc_slots::RCSlot;
+use smallvec::SmallVec;
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::buffer::Buffer as VBuffer;
 use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
-use vulkano::descriptor_set::layout::DescriptorType;
+use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
+use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
 use vulkano_bindless_shaders::descriptor::buffer::{Buffer, BufferTable};
+use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
 impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 	type ResourceTableCpu = BufferTable;
@@ -29,7 +34,6 @@ impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 
 impl ResourceTableCpu for BufferTable {
 	type SlotType = Subbuffer<[u8]>;
-	const DESCRIPTOR_TYPE: DescriptorType = DescriptorType::StorageBuffer;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -38,12 +42,22 @@ impl ResourceTableCpu for BufferTable {
 			.unwrap()
 	}
 
-	fn write_descriptor_set(
-		binding: u32,
-		first_array_element: u32,
-		elements: impl IntoIterator<Item = Self::SlotType>,
-	) -> WriteDescriptorSet {
-		WriteDescriptorSet::buffer_array(binding, first_array_element, elements)
+	fn layout_binding(
+		stages: ShaderStages,
+		count: DescriptorCounts,
+		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
+	) {
+		out.insert(
+			BINDING_BUFFER,
+			DescriptorSetLayoutBinding {
+				binding_flags: Self::BINDING_FLAGS,
+				descriptor_count: count.buffers,
+				stages,
+				..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+			},
+		)
+		.ok_or(())
+		.unwrap_err();
 	}
 }
 
@@ -121,5 +135,15 @@ impl BufferResourceTable {
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
 		let buffer = VBuffer::new_unsized::<T>(allocator, create_info, allocation_info, len)?;
 		Ok(self.resource_table.alloc_slot(buffer))
+	}
+
+	pub(crate) fn flush_updates<const C: usize>(&self, writes: &mut SmallVec<[WriteDescriptorSet; C]>) {
+		self.resource_table.flush_updates(|first_array_element, buffer| {
+			writes.push(WriteDescriptorSet::buffer_array(
+				BINDING_BUFFER,
+				first_array_element,
+				buffer.drain(..),
+			));
+		})
 	}
 }

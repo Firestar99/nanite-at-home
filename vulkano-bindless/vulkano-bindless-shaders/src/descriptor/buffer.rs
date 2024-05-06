@@ -25,9 +25,7 @@ impl<T: ?Sized + 'static> DescType for Buffer<T> {
 	}
 }
 
-impl ResourceTable for BufferTable {
-	const BINDING: u32 = 0;
-}
+impl ResourceTable for BufferTable {}
 
 pub struct BufferSlice<'a, T: ?Sized> {
 	buffer: &'a [u32],

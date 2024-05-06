@@ -4,6 +4,7 @@ use space_engine::space::renderer::model::model_gltf::load_gltf;
 use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
 use std::sync::Arc;
+use vulkano::image::ImageUsage;
 use vulkano_bindless::descriptor::{SampledImage2D, WeakDesc};
 
 pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
@@ -34,8 +35,10 @@ pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out:
 		(vertices, indices)
 	};
 
-	let vulkano_tex = texture_manager.upload_texture_from_memory(include_bytes!("vulkano_logo.png"));
-	let rust_mascot_tex = texture_manager.upload_texture_from_memory(include_bytes!("rust_mascot.png"));
+	let vulkano_tex =
+		texture_manager.upload_texture_from_memory(ImageUsage::SAMPLED, include_bytes!("vulkano_logo.png"));
+	let rust_mascot_tex =
+		texture_manager.upload_texture_from_memory(ImageUsage::SAMPLED, include_bytes!("rust_mascot.png"));
 	let vulkano_tex = vulkano_tex.await.unwrap();
 	let rust_mascot_tex = rust_mascot_tex.await.unwrap();
 

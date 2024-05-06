@@ -4,12 +4,7 @@ use crate::rc_slots::{RCSlot, RCSlots, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
-use smallvec::SmallVec;
 use std::ops::Deref;
-use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
-use vulkano::descriptor_set::WriteDescriptorSet;
-use vulkano::device::Device;
-use vulkano::shader::ShaderStages;
 
 pub struct ResourceTable<T: ResourceTableCpu> {
 	slots: Arc<RCSlots<T::SlotType>>,
@@ -24,27 +19,6 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 		}
 	}
 
-	pub fn layout_binding(device: &Arc<Device>, stages: ShaderStages, count: u32) -> (u32, DescriptorSetLayoutBinding) {
-		let max = T::max_update_after_bind_descriptors(device.physical_device());
-		assert!(
-			count <= max,
-			"Requested descriptors {} exceeds max descriptor count {}!",
-			count,
-			max
-		);
-		(
-			T::BINDING,
-			DescriptorSetLayoutBinding {
-				binding_flags: DescriptorBindingFlags::UPDATE_AFTER_BIND
-					| DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING
-					| DescriptorBindingFlags::PARTIALLY_BOUND,
-				descriptor_count: count,
-				stages,
-				..DescriptorSetLayoutBinding::descriptor_type(T::DESCRIPTOR_TYPE)
-			},
-		)
-	}
-
 	pub fn alloc_slot<D: DescTypeCpu<ResourceTableCpu = T>>(&self, cpu_type: D::CpuType) -> RCDesc<D> {
 		let slot = self.slots.allocate(D::to_table(cpu_type));
 		// Safety: we'll pull from the queue later and destroy the slots
@@ -53,14 +27,15 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 		RCDesc::<D>::new(slot)
 	}
 
-	pub(crate) fn flush_updates<const C: usize>(&self, writes: &mut SmallVec<[WriteDescriptorSet; C]>) {
+	/// Flushes all queued up updates. The `f` function is called with the `first_array_index` and a `&mut Vec` of
+	/// `SlotType`s, that should be [`Vec::drain`]-ed by the function, leaving the Vec empty.
+	pub(crate) fn flush_updates(&self, mut f: impl FnMut(u32, &mut Vec<<T as ResourceTableCpu>::SlotType>)) {
 		let mut ranges = self.flush_queue.lock();
 		if ranges.is_empty() {
 			return;
 		}
 
 		// allocate for worst possible case right away
-		writes.reserve(ranges.iter().count());
 		let max = ranges.iter().map(|r| r.end - r.start).max().unwrap();
 		let mut buffer = Vec::with_capacity(max as usize);
 
@@ -73,13 +48,19 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 				// may want to delay dropping?
 				drop(slot);
 			}
-			writes.push(T::write_descriptor_set(
-				T::BINDING,
-				range.start as u32,
-				buffer.drain(..),
-			));
+
+			f(range.start as u32, &mut buffer);
+			assert!(buffer.is_empty());
 		}
 
 		ranges.clear();
+	}
+}
+
+impl<T: ResourceTableCpu> Drop for ResourceTable<T> {
+	fn drop(&mut self) {
+		// ensure all RCSlot's are dropped what are stuck in the flush_queue
+		// does not need to be efficient, is only invoked on engine shutdown or panic unwind
+		self.flush_updates(|_, vec| vec.clear())
 	}
 }
