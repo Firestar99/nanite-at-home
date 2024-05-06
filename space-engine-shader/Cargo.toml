@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["dylib"]
+crate-type = ["lib", "dylib"]
 
 [dependencies]
 # members
