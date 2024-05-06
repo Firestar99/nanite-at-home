@@ -1,24 +1,22 @@
-use crate::space::renderer::model::model_descriptor_set::{ModelDescriptorSet, ModelDescriptorSetLayout};
 use crate::space::renderer::model::texture_manager::TextureManager;
-use crate::space::Init;
 use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
 use std::sync::Arc;
 use vulkano::buffer::BufferUsage;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
+use vulkano_bindless::descriptor::SampledImage2D;
 
 pub struct OpaqueModel {
 	pub vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
 	pub index_buffer: RCDesc<Buffer<[u32]>>,
-	pub descriptor: ModelDescriptorSet,
+	pub strong_refs: Vec<RCDesc<SampledImage2D>>,
 }
 
 impl OpaqueModel {
 	pub async fn direct<V>(
-		init: &Arc<Init>,
 		texture_manager: &Arc<TextureManager>,
-		model_descriptor_set_layout: &ModelDescriptorSetLayout,
 		vertex_data: V,
+		strong_refs: impl IntoIterator<Item = RCDesc<SampledImage2D>>,
 	) -> Self
 	where
 		V: IntoIterator<Item = ModelVertex>,
@@ -30,21 +28,18 @@ impl OpaqueModel {
 			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, vertex_data);
 		let index_buffer =
 			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, 0..vertex_len);
-		Self::new(
-			init,
-			texture_manager,
-			model_descriptor_set_layout,
+		Self {
 			vertex_buffer,
 			index_buffer,
-		)
+			strong_refs: strong_refs.into_iter().collect(),
+		}
 	}
 
 	pub async fn indexed<I, V>(
-		init: &Arc<Init>,
 		texture_manager: &Arc<TextureManager>,
-		model_descriptor_set_layout: &ModelDescriptorSetLayout,
 		index_data: I,
 		vertex_data: V,
+		strong_refs: impl IntoIterator<Item = RCDesc<SampledImage2D>>,
 	) -> Self
 	where
 		I: IntoIterator<Item = u32>,
@@ -56,27 +51,10 @@ impl OpaqueModel {
 			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, vertex_data);
 		let index_buffer =
 			texture_manager.upload_buffer(BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_DST, index_data);
-		Self::new(
-			init,
-			texture_manager,
-			model_descriptor_set_layout,
-			vertex_buffer,
-			index_buffer,
-		)
-	}
-
-	fn new(
-		init: &Arc<Init>,
-		texture_manager: &Arc<TextureManager>,
-		model_descriptor_set_layout: &ModelDescriptorSetLayout,
-		vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
-		index_buffer: RCDesc<Buffer<[u32]>>,
-	) -> Self {
-		let descriptor = ModelDescriptorSet::new(init, model_descriptor_set_layout, &texture_manager.sampler);
 		Self {
 			vertex_buffer,
 			index_buffer,
-			descriptor,
+			strong_refs: strong_refs.into_iter().collect(),
 		}
 	}
 }

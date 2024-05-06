@@ -9,7 +9,7 @@ pub(crate) mod private {
 /// * [StorageImageType]
 /// * [SampledImageType]
 /// * [SamplerType]
-pub trait DescType: private::SealedTrait {
+pub trait DescType: private::SealedTrait + 'static {
 	/// Associated non-generic [`ResourceTableCpu`]
 	type ResourceTable: ResourceTable;
 

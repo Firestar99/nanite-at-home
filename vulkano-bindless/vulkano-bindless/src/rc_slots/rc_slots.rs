@@ -11,6 +11,7 @@ use num_traits::FromPrimitive;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
 use std::fmt::{Debug, Formatter};
+use std::hash::{Hash, Hasher};
 use std::mem;
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::num::Wrapping;
@@ -18,7 +19,7 @@ use std::ops::{Deref, Index};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use VersionState::*;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SlotIndex(pub usize);
 
 impl Deref for SlotIndex {
@@ -178,6 +179,21 @@ impl<T> Drop for RCSlot<T> {
 impl<T> Debug for RCSlot<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("RCSlot").field("ref_count", &self.ref_count()).finish()
+	}
+}
+
+impl<T> PartialEq<Self> for RCSlot<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.slots == other.slots && self.index == other.index
+	}
+}
+
+impl<T> Eq for RCSlot<T> {}
+
+impl<T> Hash for RCSlot<T> {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.slots.hash(state);
+		self.index.hash(state);
 	}
 }
 

@@ -28,8 +28,8 @@ use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scene::load_scene;
 
-const LAYER_RENDERDOC: bool = false;
-const LAYER_VALIDATION: bool = true;
+const LAYER_RENDERDOC: bool = true;
+const LAYER_VALIDATION: bool = false;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	if LAYER_RENDERDOC {
@@ -73,11 +73,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 
 	// renderer
 	let texture_manager = TextureManager::new(&init);
-	let render_pipeline_main = RenderPipelineMain::new(&init, &texture_manager, swapchain.format());
+	let render_pipeline_main = RenderPipelineMain::new(&init, swapchain.format());
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let models = load_scene(&init, &texture_manager).await;
+	let models = load_scene(&texture_manager).await;
 	render_pipeline_main.opaque_task.models.lock().extend(models);
 
 	// main loop

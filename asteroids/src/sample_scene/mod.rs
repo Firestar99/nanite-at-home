@@ -3,21 +3,17 @@ use std::sync::Arc;
 use glam::{vec2, vec3, vec3a};
 
 use space_engine::space::renderer::model::model::OpaqueModel;
-use space_engine::space::renderer::model::model_descriptor_set::ModelDescriptorSetLayout;
 use space_engine::space::renderer::model::model_gltf::load_gltf;
 use space_engine::space::renderer::model::texture_manager::TextureManager;
-use space_engine::space::Init;
-use space_engine_common::space::renderer::model::model_vertex::{ModelTextureId, ModelVertex};
+use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
+use vulkano_bindless::descriptor::{SampledImage2D, WeakDesc};
 
-pub async fn load_scene(init: &Arc<Init>, texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
-	let model_descriptor_set_layout = ModelDescriptorSetLayout::new(init);
+pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
 	let mut out = Vec::new();
-	load_rust_vulkano_logos(&init, &texture_manager, &model_descriptor_set_layout, &mut out).await;
+	load_rust_vulkano_logos(&texture_manager, &mut out).await;
 	out.extend(
 		load_gltf(
-			&init,
 			&texture_manager,
-			&model_descriptor_set_layout,
 			concat!(
 				env!("CARGO_MANIFEST_DIR"),
 				"/src/sample_scene/Lantern/glTF/Lantern.gltf"
@@ -28,53 +24,41 @@ pub async fn load_scene(init: &Arc<Init>, texture_manager: &Arc<TextureManager>)
 	out
 }
 
-pub async fn load_rust_vulkano_logos(
-	init: &Arc<Init>,
-	texture_manager: &Arc<TextureManager>,
-	model_descriptor_set_layout: &ModelDescriptorSetLayout,
-	out: &mut Vec<OpaqueModel>,
-) {
-	const QUAD_VERTICES: [ModelVertex; 4] = [
-		ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), ModelTextureId(0)),
-		ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), ModelTextureId(0)),
-		ModelVertex::new(vec3(1., -1., 0.), vec2(1., 0.), ModelTextureId(0)),
-		ModelVertex::new(vec3(1., 1., 0.), vec2(1., 1.), ModelTextureId(0)),
-	];
-	const QUAD_INDICES: [u32; 6] = [0, 1, 2, 1, 2, 3];
+pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out: &mut Vec<OpaqueModel>) {
+	let create_model = |texture: WeakDesc<SampledImage2D>| {
+		let vertices = [
+			ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), texture),
+			ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), texture),
+			ModelVertex::new(vec3(1., -1., 0.), vec2(1., 0.), texture),
+			ModelVertex::new(vec3(1., 1., 0.), vec2(1., 1.), texture),
+		];
+		let indices = [0, 1, 2, 1, 2, 3];
+		(vertices, indices)
+	};
+
+	let vulkano_tex = texture_manager.upload_texture_from_memory(include_bytes!("vulkano_logo.png"));
+	let rust_mascot_tex = texture_manager.upload_texture_from_memory(include_bytes!("rust_mascot.png"));
+	let vulkano_tex = vulkano_tex.await.unwrap();
+	let rust_mascot_tex = rust_mascot_tex.await.unwrap();
 
 	// unroll indices
-	let (_, vulkano_tex_id) = texture_manager
-		.upload_texture_from_memory(include_bytes!("vulkano_logo.png"))
-		.await
-		.unwrap();
+	let (vertices, indices) = create_model(vulkano_tex.to_weak());
 	let vulkano_logo = OpaqueModel::direct(
-		init,
 		texture_manager,
-		&model_descriptor_set_layout,
-		QUAD_INDICES
-			.map(|i| QUAD_VERTICES[i as usize])
-			.map(|v| ModelVertex {
-				tex_id: vulkano_tex_id,
-				..v
-			})
-			.into_iter(),
+		indices.map(|i| vertices[i as usize]).into_iter(),
+		[vulkano_tex],
 	);
 
 	// use indices
-	let (_, rust_mascot_tex_id) = texture_manager
-		.upload_texture_from_memory(include_bytes!("rust_mascot.png"))
-		.await
-		.unwrap();
+	let (vertices, indices) = create_model(rust_mascot_tex.to_weak());
 	let rust_mascot = OpaqueModel::indexed(
-		init,
 		texture_manager,
-		&model_descriptor_set_layout,
-		QUAD_INDICES.iter().copied(),
-		QUAD_VERTICES.iter().copied().map(|v| ModelVertex {
+		indices,
+		vertices.map(|v| ModelVertex {
 			position: v.position + vec3a(0., 0.5, 1.),
-			tex_id: rust_mascot_tex_id,
 			..v
 		}),
+		[rust_mascot_tex],
 	);
 
 	let vulkano_logo = vulkano_logo.await;

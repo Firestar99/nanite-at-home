@@ -13,30 +13,22 @@ use vulkano::sync::GpuFuture;
 
 use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
 use crate::space::renderer::model::model::OpaqueModel;
-use crate::space::renderer::model::texture_manager::TextureManager;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 
 pub struct OpaqueRenderTask {
 	init: Arc<Init>,
 	pipeline_opaque: OpaqueDrawPipeline,
-	texture_manager: Arc<TextureManager>,
 	pub models: Mutex<Vec<OpaqueModel>>,
 }
 
 impl OpaqueRenderTask {
-	pub fn new(
-		init: &Arc<Init>,
-		texture_manager: &Arc<TextureManager>,
-		format_color: Format,
-		format_depth: Format,
-	) -> Self {
+	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
 		let pipeline_opaque = OpaqueDrawPipeline::new(&init, format_color, format_depth);
 		Self {
 			init: init.clone(),
 			pipeline_opaque,
 			models: Mutex::new(Vec::new()),
-			texture_manager: texture_manager.clone(),
 		}
 	}
 
@@ -76,10 +68,8 @@ impl OpaqueRenderTask {
 			..RenderingInfo::default()
 		})
 		.unwrap();
-		let texture_array_descriptor_set = self.texture_manager.create_descriptor_set();
 		for model in &*self.models.lock() {
-			self.pipeline_opaque
-				.draw(frame_context, &mut cmd, model, &texture_array_descriptor_set);
+			self.pipeline_opaque.draw(frame_context, &mut cmd, model);
 		}
 		cmd.end_rendering().unwrap();
 		let cmd = cmd.end().unwrap();

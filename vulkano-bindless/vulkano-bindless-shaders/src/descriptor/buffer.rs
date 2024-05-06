@@ -5,23 +5,23 @@ use core::marker::PhantomData;
 use core::mem;
 use spirv_std::byte_addressable_buffer::buffer_load_intrinsic;
 
-pub struct Buffer<T: ?Sized> {
+pub struct Buffer<T: ?Sized + 'static> {
 	_phantom: PhantomData<T>,
 }
 
 pub struct BufferTable;
 
-impl<T: ?Sized> private::SealedTrait for Buffer<T> {}
+impl<T: ?Sized + 'static> private::SealedTrait for Buffer<T> {}
 
 impl private::SealedTrait for BufferTable {}
 
-impl<T: ?Sized> DescType for Buffer<T> {
+impl<T: ?Sized + 'static> DescType for Buffer<T> {
 	type ResourceTable = BufferTable;
 	type AccessType<'a> = BufferSlice<'a, T>;
 
 	#[inline]
 	fn access<'a>(descriptors: &'a Descriptors<'a>, id: u32) -> Self::AccessType<'a> {
-		BufferSlice::new(unsafe { descriptors.buffer_data.index(id as usize) })
+		BufferSlice::new(unsafe { descriptors.buffers.index(id as usize) })
 	}
 }
 

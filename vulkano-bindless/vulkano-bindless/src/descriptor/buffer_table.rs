@@ -9,6 +9,7 @@ use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Sub
 use vulkano::descriptor_set::layout::DescriptorType;
 use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::physical::PhysicalDevice;
+use vulkano::device::Device;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::{DeviceSize, Validated};
 use vulkano_bindless_shaders::descriptor::buffer::{Buffer, BufferTable};
@@ -47,22 +48,21 @@ impl ResourceTableCpu for BufferTable {
 }
 
 pub struct BufferResourceTable {
-	resource_table: ResourceTable<BufferTable>,
-}
-
-impl Deref for BufferResourceTable {
-	type Target = ResourceTable<BufferTable>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.resource_table
-	}
+	pub device: Arc<Device>,
+	pub(super) resource_table: ResourceTable<BufferTable>,
 }
 
 impl BufferResourceTable {
-	pub fn new(count: u32) -> Self {
+	pub fn new(device: Arc<Device>, count: u32) -> Self {
 		Self {
+			device,
 			resource_table: ResourceTable::new(count),
 		}
+	}
+
+	#[inline]
+	pub fn alloc_slot<T: BufferContents + ?Sized>(&self, buffer: Subbuffer<T>) -> RCDesc<Buffer<T>> {
+		self.resource_table.alloc_slot(buffer)
 	}
 
 	pub fn alloc_from_data<T: BufferContents>(

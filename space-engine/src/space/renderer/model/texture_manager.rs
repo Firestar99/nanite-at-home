@@ -1,11 +1,5 @@
-use crate::space::renderer::model::texture_array_descriptor_set::{
-	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
-};
 use crate::space::Init;
 use image::{DynamicImage, ImageError};
-use parking_lot::Mutex;
-use space_engine_common::space::renderer::model::model_vertex::ModelTextureId;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use vulkano::buffer::{BufferContents, BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
@@ -13,57 +7,29 @@ use vulkano::command_buffer::{
 	CommandBufferBeginInfo, CommandBufferUsage, CopyBufferToImageInfo, RecordingCommandBuffer,
 };
 use vulkano::format::Format;
-use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
+use vulkano_bindless::descriptor::SampledImage2D;
 
 pub struct TextureManager {
 	pub init: Arc<Init>,
-	pub sampler: Arc<Sampler>,
-	pub descriptor_set_layout: TextureArrayDescriptorSetLayout,
-	inner: Mutex<Inner>,
-}
-
-struct Inner {
-	slots: Vec<Arc<ImageView>>,
-	descriptor_set_cache: Option<TextureArrayDescriptorSet>,
 }
 
 impl TextureManager {
 	pub fn new(init: &Arc<Init>) -> Arc<Self> {
 		let init = init.clone();
-		let sampler = Sampler::new(
-			init.device.clone(),
-			SamplerCreateInfo {
-				..SamplerCreateInfo::simple_repeat_linear()
-			},
-		)
-		.unwrap();
-		let descriptor_set_layout = TextureArrayDescriptorSetLayout::new(&init);
-		let inner = Mutex::new(Inner {
-			slots: Vec::new(),
-			descriptor_set_cache: None,
-		});
-		Arc::new(Self {
-			init,
-			sampler,
-			descriptor_set_layout,
-			inner,
-		})
+		Arc::new(Self { init })
 	}
 
-	pub async fn upload_texture_from_memory(
-		&self,
-		image_data: &[u8],
-	) -> Result<(Arc<ImageView>, ModelTextureId), ImageError> {
+	pub async fn upload_texture_from_memory(&self, image_data: &[u8]) -> Result<RCDesc<SampledImage2D>, ImageError> {
 		Ok(self.upload_texture(image::load_from_memory(image_data)?).await)
 	}
 
-	pub async fn upload_texture(&self, image_data: DynamicImage) -> (Arc<ImageView>, ModelTextureId) {
+	pub async fn upload_texture(&self, image_data: DynamicImage) -> RCDesc<SampledImage2D> {
 		let init = &self.init;
 		let image_data = image_data.into_rgba8();
 		let (width, height) = image_data.dimensions();
@@ -122,25 +88,7 @@ impl TextureManager {
 			.await
 			.unwrap();
 
-		let tex_id;
-		{
-			let mut inner = self.inner.lock();
-			tex_id = ModelTextureId(inner.slots.len() as u32);
-			inner.slots.push(image_view.clone());
-			inner.descriptor_set_cache = None;
-		}
-		(image_view, tex_id)
-	}
-
-	pub fn create_descriptor_set(&self) -> TextureArrayDescriptorSet {
-		let mut guard = self.inner.lock();
-		let inner = guard.deref_mut();
-		inner
-			.descriptor_set_cache
-			.get_or_insert_with(|| {
-				TextureArrayDescriptorSet::new(&self.init, &self.descriptor_set_layout, &inner.slots)
-			})
-			.clone()
+		self.init.descriptors.image.alloc_slot(image_view)
 	}
 
 	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>

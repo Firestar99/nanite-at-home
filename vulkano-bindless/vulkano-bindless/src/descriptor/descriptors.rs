@@ -1,7 +1,9 @@
 use crate::descriptor::bindless_descriptor_allocator::BindlessDescriptorSetAllocator;
 use crate::descriptor::buffer_table::BufferResourceTable;
 use crate::descriptor::descriptor_type_cpu::ResourceTableCpu;
+use crate::descriptor::image_table::ImageResourceTable;
 use crate::descriptor::resource_table::ResourceTable;
+use crate::descriptor::sampler_table::SamplerResourceTable;
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
@@ -14,22 +16,30 @@ use vulkano::device::physical::PhysicalDevice;
 use vulkano::device::Device;
 use vulkano::shader::ShaderStages;
 use vulkano_bindless_shaders::descriptor::buffer::BufferTable;
+use vulkano_bindless_shaders::descriptor::{ImageTable, SamplerTable};
 
 pub struct DescriptorCounts {
-	pub buffer_descriptors: u32,
+	pub buffers: u32,
+	pub image: u32,
+	pub samplers: u32,
 }
 
 impl DescriptorCounts {
 	pub fn limits(phy: &Arc<PhysicalDevice>) -> Self {
 		Self {
-			buffer_descriptors: BufferTable::max_update_after_bind_descriptors(phy),
+			buffers: BufferTable::max_update_after_bind_descriptors(phy),
+			image: ImageTable::max_update_after_bind_descriptors(phy),
+			samplers: SamplerTable::max_update_after_bind_descriptors(phy),
 		}
 	}
 
 	pub fn reasonable_defaults(phy: &Arc<PhysicalDevice>) -> Self {
 		let limits = Self::limits(phy);
+		// These reasonable limits are copied from Daxa
 		Self {
-			buffer_descriptors: limits.buffer_descriptors.min(10_000),
+			buffers: limits.buffers.min(10_000),
+			image: limits.image.min(10_000),
+			samplers: limits.samplers.min(400),
 		}
 	}
 }
@@ -39,6 +49,8 @@ pub struct DescriptorsCpu {
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pub descriptor_set: Arc<DescriptorSet>,
 	pub buffer: BufferResourceTable,
+	pub image: ImageResourceTable,
+	pub sampler: SamplerResourceTable,
 	_private: PhantomData<()>,
 }
 
@@ -53,11 +65,11 @@ impl DescriptorsCpu {
 			device.clone(),
 			DescriptorSetLayoutCreateInfo {
 				flags: DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
-				bindings: BTreeMap::from([ResourceTable::<BufferTable>::layout_binding(
-					&device,
-					stages,
-					counts.buffer_descriptors,
-				)]),
+				bindings: BTreeMap::from([
+					ResourceTable::<BufferTable>::layout_binding(&device, stages, counts.buffers),
+					ResourceTable::<SamplerTable>::layout_binding(&device, stages, counts.samplers),
+					ResourceTable::<ImageTable>::layout_binding(&device, stages, counts.image),
+				]),
 				..DescriptorSetLayoutCreateInfo::default()
 			},
 		)
@@ -66,10 +78,12 @@ impl DescriptorsCpu {
 		let descriptor_set = DescriptorSet::new(allocator, descriptor_set_layout.clone(), [], []).unwrap();
 
 		Self {
-			device,
 			descriptor_set_layout,
 			descriptor_set,
-			buffer: BufferResourceTable::new(counts.buffer_descriptors),
+			buffer: BufferResourceTable::new(device.clone(), counts.buffers),
+			image: ImageResourceTable::new(device.clone(), counts.image),
+			sampler: SamplerResourceTable::new(device.clone(), counts.samplers),
+			device,
 			_private: PhantomData {},
 		}
 	}
@@ -80,7 +94,9 @@ impl DescriptorsCpu {
 		//  * descriptor set may be used in command buffers concurrently, see spec
 		unsafe {
 			let mut writes: SmallVec<[_; 8]> = SmallVec::new();
-			self.buffer.flush_updates(&mut writes);
+			self.buffer.resource_table.flush_updates(&mut writes);
+			self.image.resource_table.flush_updates(&mut writes);
+			self.sampler.resource_table.flush_updates(&mut writes);
 			if !writes.is_empty() {
 				self.descriptor_set.update_by_ref(writes, []).unwrap();
 			}
