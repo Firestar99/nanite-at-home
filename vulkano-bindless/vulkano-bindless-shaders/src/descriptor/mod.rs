@@ -5,12 +5,12 @@ pub mod images;
 pub mod reference;
 pub mod sampler;
 
-pub use buffer::*;
-pub use descriptor_type::*;
-pub use descriptors::*;
-pub use images::*;
-pub use reference::*;
-pub use sampler::*;
+pub use buffer::{Buffer, BufferSlice};
+pub use descriptor_type::DescType;
+pub use descriptors::Descriptors;
+pub use images::{Image, SampledImage2D};
+pub use reference::{TransientDesc, ValidDesc, WeakDesc};
+pub use sampler::Sampler;
 
 pub const BINDING_BUFFER: u32 = 0;
 pub const BINDING_STORAGE_IMAGE: u32 = 1;
