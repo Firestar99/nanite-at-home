@@ -92,7 +92,7 @@ impl TextureManager {
 			.await
 			.unwrap();
 
-		self.init.descriptors.image.alloc_slot(image_view)
+		self.init.bindless.image.alloc_slot(image_view)
 	}
 
 	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>
@@ -102,7 +102,7 @@ impl TextureManager {
 		ITER::IntoIter: ExactSizeIterator,
 	{
 		self.init
-			.descriptors
+			.bindless
 			.buffer
 			.alloc_from_iter(
 				self.init.memory_allocator.clone(),

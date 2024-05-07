@@ -10,12 +10,7 @@ pub(crate) mod private {
 /// * [SampledImageType]
 /// * [SamplerType]
 pub trait DescType: private::SealedTrait + 'static {
-	/// Associated non-generic [`ResourceTableCpu`]
-	type ResourceTable: ResourceTable;
-
 	type AccessType<'a>;
 
 	fn access<'a>(descriptors: &'a Descriptors<'a>, id: u32) -> Self::AccessType<'a>;
 }
-
-pub trait ResourceTable: private::SealedTrait {}

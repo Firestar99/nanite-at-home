@@ -1,7 +1,9 @@
-use crate::descriptor::descriptor_type_cpu::ResourceTableCpu;
+use crate::descriptor::buffer_table::BufferTable;
+use crate::descriptor::descriptor_type_cpu::DescTable;
+use crate::descriptor::image_table::ImageTable;
+use crate::descriptor::sampler_table::SamplerTable;
 use std::sync::Arc;
 use vulkano::device::physical::PhysicalDevice;
-use vulkano_bindless_shaders::descriptor::{BufferTable, ImageTable, SamplerTable};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DescriptorCounts {

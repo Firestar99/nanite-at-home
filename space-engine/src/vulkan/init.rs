@@ -14,8 +14,8 @@ use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, Insta
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::shader::ShaderStages;
 use vulkano::{Version, VulkanLibrary};
+use vulkano_bindless::descriptor::bindless::Bindless;
 use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
-use vulkano_bindless::descriptor::descriptors::DescriptorsCpu;
 
 pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.
@@ -52,7 +52,7 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
-	pub descriptors: DescriptorsCpu,
+	pub bindless: Bindless,
 	pub memory_allocator: Arc<StandardMemoryAllocator>,
 	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
 	pub cmd_buffer_allocator: Arc<StandardCommandBufferAllocator>,
@@ -156,8 +156,7 @@ impl<Q: Clone> Init<Q> {
 		let queues = allocation.take(queues.collect());
 
 		// Safety: it's the only instance for the device
-		let descriptors =
-			unsafe { DescriptorsCpu::new(device.clone(), stages, descriptor_counts(device.physical_device())) };
+		let bindless = unsafe { Bindless::new(device.clone(), stages, descriptor_counts(device.physical_device())) };
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 		let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
 			device.clone(),
@@ -169,7 +168,7 @@ impl<Q: Clone> Init<Q> {
 		Arc::new(Self {
 			device,
 			queues,
-			descriptors,
+			bindless,
 			memory_allocator,
 			descriptor_allocator,
 			cmd_buffer_allocator,

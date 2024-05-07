@@ -40,7 +40,7 @@ impl OpaqueDrawPipeline {
 			device.clone(),
 			PipelineLayoutCreateInfo {
 				set_layouts: [
-					init.descriptors.descriptor_set_layout.clone(),
+					init.bindless.descriptor_set_layout.clone(),
 					GlobalDescriptorSetLayout::new(init).0,
 				]
 				.to_vec(),
@@ -93,7 +93,7 @@ impl OpaqueDrawPipeline {
 		.unwrap();
 
 		let sampler = init
-			.descriptors
+			.bindless
 			.sampler
 			.alloc(SamplerCreateInfo::simple_repeat_linear())
 			.unwrap();
@@ -113,7 +113,7 @@ impl OpaqueDrawPipeline {
 					self.pipeline.layout().clone(),
 					0,
 					(
-						init.descriptors.descriptor_set.clone(),
+						init.bindless.descriptor_set.clone(),
 						frame_context.global_descriptor_set.clone().0,
 					),
 				)

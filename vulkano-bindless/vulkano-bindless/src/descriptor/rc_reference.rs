@@ -1,4 +1,4 @@
-use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
+use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::frame_in_flight::FrameInFlight;
 use crate::rc_slots::RCSlot;
 use std::hash::{Hash, Hasher};
@@ -6,11 +6,11 @@ use std::ops::Deref;
 use vulkano_bindless_shaders::descriptor::{TransientDesc, WeakDesc};
 
 pub struct RCDesc<D: DescTypeCpu + ?Sized> {
-	inner: RCSlot<<D::ResourceTableCpu as ResourceTableCpu>::SlotType>,
+	inner: RCSlot<<D::DescTable as DescTable>::Slot>,
 }
 
 impl<D: DescTypeCpu + ?Sized> RCDesc<D> {
-	pub fn new(inner: RCSlot<<D::ResourceTableCpu as ResourceTableCpu>::SlotType>) -> Self {
+	pub fn new(inner: RCSlot<<D::DescTable as DescTable>::Slot>) -> Self {
 		Self { inner }
 	}
 
@@ -36,7 +36,7 @@ impl<D: DescTypeCpu + ?Sized> RCDesc<D> {
 }
 
 impl<T: DescTypeCpu + ?Sized> Deref for RCDesc<T> {
-	type Target = T::CpuType;
+	type Target = T::VulkanType;
 
 	fn deref(&self) -> &Self::Target {
 		T::deref_table(&self.inner)

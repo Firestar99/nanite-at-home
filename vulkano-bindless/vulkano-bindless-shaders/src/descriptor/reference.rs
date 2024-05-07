@@ -5,6 +5,7 @@ use core::marker::PhantomData;
 pub trait ValidDesc<D: DescType + ?Sized> {
 	fn id(&self) -> u32;
 
+	#[inline]
 	fn access<'a>(&'a self, descriptors: &'a Descriptors<'a>) -> D::AccessType<'a> {
 		D::access(descriptors, self.id())
 	}

@@ -1,12 +1,10 @@
-use crate::descriptor::descriptor_type::{private, DescType, ResourceTable};
+use crate::descriptor::descriptor_type::{private, DescType};
 use crate::descriptor::descriptors::Descriptors;
 
 pub use spirv_std::image::Image;
 pub use spirv_std::image::SampleType;
 
 pub type SampledImage2D = Image!(2D, type=f32, sampled);
-
-pub struct ImageTable;
 
 impl<
 		SampledType: SampleType<FORMAT, COMPONENTS>,
@@ -21,10 +19,7 @@ impl<
 {
 }
 
-impl private::SealedTrait for ImageTable {}
-
 impl DescType for SampledImage2D {
-	type ResourceTable = ImageTable;
 	type AccessType<'a> = &'a Self;
 
 	#[inline]
@@ -32,5 +27,3 @@ impl DescType for SampledImage2D {
 		unsafe { descriptors.sampled_images_2d.index(id as usize) }
 	}
 }
-
-impl ResourceTable for ImageTable {}

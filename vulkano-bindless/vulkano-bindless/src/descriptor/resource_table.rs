@@ -1,4 +1,4 @@
-use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
+use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::rc_slots::{RCSlot, RCSlots, SlotIndex};
 use crate::sync::Arc;
@@ -6,12 +6,12 @@ use parking_lot::Mutex;
 use rangemap::RangeSet;
 use std::ops::Deref;
 
-pub struct ResourceTable<T: ResourceTableCpu> {
-	slots: Arc<RCSlots<T::SlotType>>,
+pub struct ResourceTable<T: DescTable> {
+	slots: Arc<RCSlots<T::Slot>>,
 	flush_queue: Mutex<RangeSet<u32>>,
 }
 
-impl<T: ResourceTableCpu> ResourceTable<T> {
+impl<T: DescTable> ResourceTable<T> {
 	pub fn new(count: u32) -> Self {
 		Self {
 			slots: RCSlots::new(count as usize),
@@ -19,7 +19,7 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 		}
 	}
 
-	pub fn alloc_slot<D: DescTypeCpu<ResourceTableCpu = T>>(&self, cpu_type: D::CpuType) -> RCDesc<D> {
+	pub fn alloc_slot<D: DescTypeCpu<DescTable = T>>(&self, cpu_type: D::VulkanType) -> RCDesc<D> {
 		let slot = self.slots.allocate(D::to_table(cpu_type));
 		// Safety: we'll pull from the queue later and destroy the slots
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
@@ -29,7 +29,7 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 
 	/// Flushes all queued up updates. The `f` function is called with the `first_array_index` and a `&mut Vec` of
 	/// `SlotType`s, that should be [`Vec::drain`]-ed by the function, leaving the Vec empty.
-	pub(crate) fn flush_updates(&self, mut f: impl FnMut(u32, &mut Vec<<T as ResourceTableCpu>::SlotType>)) {
+	pub(crate) fn flush_updates(&self, mut f: impl FnMut(u32, &mut Vec<<T as DescTable>::Slot>)) {
 		let mut ranges = self.flush_queue.lock();
 		if ranges.is_empty() {
 			return;
@@ -57,7 +57,7 @@ impl<T: ResourceTableCpu> ResourceTable<T> {
 	}
 }
 
-impl<T: ResourceTableCpu> Drop for ResourceTable<T> {
+impl<T: DescTable> Drop for ResourceTable<T> {
 	fn drop(&mut self) {
 		// ensure all RCSlot's are dropped what are stuck in the flush_queue
 		// does not need to be efficient, is only invoked on engine shutdown or panic unwind

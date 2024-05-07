@@ -1,9 +1,9 @@
 use crate::descriptor::bindless_descriptor_allocator::BindlessDescriptorSetAllocator;
-use crate::descriptor::buffer_table::BufferResourceTable;
+use crate::descriptor::buffer_table::BufferTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::ResourceTableCpu;
-use crate::descriptor::image_table::ImageResourceTable;
-use crate::descriptor::sampler_table::SamplerResourceTable;
+use crate::descriptor::descriptor_type_cpu::DescTable;
+use crate::descriptor::image_table::ImageTable;
+use crate::descriptor::sampler_table::SamplerTable;
 use crate::sync::Mutex;
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
@@ -14,20 +14,18 @@ use vulkano::descriptor_set::layout::{
 use vulkano::descriptor_set::DescriptorSet;
 use vulkano::device::Device;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::buffer::BufferTable;
-use vulkano_bindless_shaders::descriptor::{ImageTable, SamplerTable};
 
-pub struct DescriptorsCpu {
+pub struct Bindless {
 	pub device: Arc<Device>,
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pub descriptor_set: Arc<DescriptorSet>,
-	pub buffer: BufferResourceTable,
-	pub image: ImageResourceTable,
-	pub sampler: SamplerResourceTable,
+	pub buffer: BufferTable,
+	pub image: ImageTable,
+	pub sampler: SamplerTable,
 	flush_lock: Mutex<()>,
 }
 
-impl DescriptorsCpu {
+impl Bindless {
 	/// Creates a new Descriptors instance with which to allocate descriptors.
 	///
 	/// # Safety
@@ -62,9 +60,9 @@ impl DescriptorsCpu {
 		Self {
 			descriptor_set_layout,
 			descriptor_set,
-			buffer: BufferResourceTable::new(device.clone(), counts.buffers),
-			image: ImageResourceTable::new(device.clone(), counts.image),
-			sampler: SamplerResourceTable::new(device.clone(), counts.samplers),
+			buffer: BufferTable::new(device.clone(), counts.buffers),
+			image: ImageTable::new(device.clone(), counts.image),
+			sampler: SamplerTable::new(device.clone(), counts.samplers),
 			device,
 			flush_lock: Mutex::new(()),
 		}

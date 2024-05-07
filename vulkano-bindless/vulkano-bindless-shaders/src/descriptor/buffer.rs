@@ -1,4 +1,4 @@
-use crate::descriptor::descriptor_type::{private, DescType, ResourceTable};
+use crate::descriptor::descriptor_type::{private, DescType};
 use crate::descriptor::descriptors::Descriptors;
 use bytemuck::AnyBitPattern;
 use core::marker::PhantomData;
@@ -9,14 +9,9 @@ pub struct Buffer<T: ?Sized + 'static> {
 	_phantom: PhantomData<T>,
 }
 
-pub struct BufferTable;
-
 impl<T: ?Sized + 'static> private::SealedTrait for Buffer<T> {}
 
-impl private::SealedTrait for BufferTable {}
-
 impl<T: ?Sized + 'static> DescType for Buffer<T> {
-	type ResourceTable = BufferTable;
 	type AccessType<'a> = BufferSlice<'a, T>;
 
 	#[inline]
@@ -24,8 +19,6 @@ impl<T: ?Sized + 'static> DescType for Buffer<T> {
 		BufferSlice::new(unsafe { descriptors.buffers.index(id as usize) })
 	}
 }
-
-impl ResourceTable for BufferTable {}
 
 pub struct BufferSlice<'a, T: ?Sized> {
 	buffer: &'a [u32],

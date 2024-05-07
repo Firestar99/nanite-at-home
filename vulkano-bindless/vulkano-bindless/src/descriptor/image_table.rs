@@ -1,5 +1,5 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
+use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
 use crate::rc_slots::RCSlot;
@@ -13,25 +13,25 @@ use vulkano::device::Device;
 use vulkano::image::view::{ImageView, ImageViewType};
 use vulkano::image::ImageUsage;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::{ImageTable, SampledImage2D, BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
+use vulkano_bindless_shaders::descriptor::{SampledImage2D, BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
 
 impl DescTypeCpu for SampledImage2D {
-	type ResourceTableCpu = ImageTable;
-	type CpuType = Arc<ImageView>;
+	type DescTable = ImageTable;
+	type VulkanType = Arc<ImageView>;
 
-	fn deref_table(slot: &RCSlot<<Self::ResourceTableCpu as ResourceTableCpu>::SlotType>) -> &Self::CpuType {
+	fn deref_table(slot: &RCSlot<<Self::DescTable as DescTable>::Slot>) -> &Self::VulkanType {
 		slot
 	}
 
-	fn to_table(from: Self::CpuType) -> <Self::ResourceTableCpu as ResourceTableCpu>::SlotType {
+	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
 		let from: Arc<ImageView> = from;
 		assert_eq!(from.view_type(), ImageViewType::Dim2d);
 		from
 	}
 }
 
-impl ResourceTableCpu for ImageTable {
-	type SlotType = Arc<ImageView>;
+impl DescTable for ImageTable {
+	type Slot = Arc<ImageView>;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -70,12 +70,12 @@ impl ResourceTableCpu for ImageTable {
 	}
 }
 
-pub struct ImageResourceTable {
+pub struct ImageTable {
 	pub device: Arc<Device>,
 	pub(super) resource_table: ResourceTable<ImageTable>,
 }
 
-impl ImageResourceTable {
+impl ImageTable {
 	pub fn new(device: Arc<Device>, count: u32) -> Self {
 		Self {
 			device,

@@ -1,5 +1,5 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTypeCpu, ResourceTableCpu};
+use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
 use crate::rc_slots::RCSlot;
@@ -16,24 +16,24 @@ use vulkano::device::Device;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
-use vulkano_bindless_shaders::descriptor::buffer::{Buffer, BufferTable};
+use vulkano_bindless_shaders::descriptor::buffer::Buffer;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
 impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
-	type ResourceTableCpu = BufferTable;
-	type CpuType = Subbuffer<T>;
+	type DescTable = BufferTable;
+	type VulkanType = Subbuffer<T>;
 
-	fn deref_table(slot: &RCSlot<<Self::ResourceTableCpu as ResourceTableCpu>::SlotType>) -> &Self::CpuType {
+	fn deref_table(slot: &RCSlot<<Self::DescTable as DescTable>::Slot>) -> &Self::VulkanType {
 		slot.deref().reinterpret_ref()
 	}
 
-	fn to_table(from: Self::CpuType) -> <Self::ResourceTableCpu as ResourceTableCpu>::SlotType {
+	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
 		from.into_bytes()
 	}
 }
 
-impl ResourceTableCpu for BufferTable {
-	type SlotType = Subbuffer<[u8]>;
+impl DescTable for BufferTable {
+	type Slot = Subbuffer<[u8]>;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -61,12 +61,12 @@ impl ResourceTableCpu for BufferTable {
 	}
 }
 
-pub struct BufferResourceTable {
+pub struct BufferTable {
 	pub device: Arc<Device>,
 	pub(super) resource_table: ResourceTable<BufferTable>,
 }
 
-impl BufferResourceTable {
+impl BufferTable {
 	pub fn new(device: Arc<Device>, count: u32) -> Self {
 		Self {
 			device,
