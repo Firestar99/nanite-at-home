@@ -11,6 +11,7 @@ crate-type = ["lib", "dylib"]
 
 [dependencies]
 # members
+vulkano-bindless-macros = { workspace = true }
 vulkano-bindless-shaders = { workspace = true }
 
 # rust-gpu

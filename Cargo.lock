@@ -2261,6 +2261,7 @@ dependencies = [
  "num-traits",
  "spirv-std",
  "static_assertions",
+ "vulkano-bindless-macros",
  "vulkano-bindless-shaders",
 ]
 
@@ -2698,6 +2699,18 @@ dependencies = [
  "vulkano-bindless-shaders",
  "vulkano-shaders",
  "winit",
+]
+
+[[package]]
+name = "vulkano-bindless-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro-crate 3.1.0",
+ "proc-macro2",
+ "quote",
+ "spirv-std",
+ "syn 2.0.46",
+ "vulkano-bindless-shaders",
 ]
 
 [[package]]

@@ -2,8 +2,9 @@ use crate::space::renderer::frame_data::FrameData;
 use crate::space::renderer::model::model_vertex::ModelVertex;
 use glam::{UVec3, Vec2, Vec4};
 use spirv_std::arch::set_mesh_outputs_ext;
-use spirv_std::{spirv, RuntimeArray, Sampler};
+use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
+use vulkano_bindless_macros::bindless;
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
 use vulkano_bindless_shaders::descriptor::{Buffer, SampledImage2D, TransientDesc, ValidDesc};
 
@@ -33,11 +34,9 @@ impl<'a> PushConstant<'a> {
 const OUTPUT_VERTICES: usize = 3;
 const OUTPUT_TRIANGLES: usize = 1;
 
-#[spirv(mesh_ext(threads(1), output_vertices = 3, output_primitives_ext = 1, output_triangles_ext))]
+#[bindless(mesh_ext(threads(1), output_vertices = 3, output_primitives_ext = 1, output_triangles_ext))]
 pub fn opaque_mesh(
-	#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] buffers: &mut RuntimeArray<[u32]>,
-	#[spirv(descriptor_set = 0, binding = 2)] sampled_images_2d: &RuntimeArray<SampledImage2D>,
-	#[spirv(descriptor_set = 0, binding = 3)] samplers: &RuntimeArray<Sampler>,
+	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[spirv(descriptor_set = 1, binding = 0, uniform)] frame_data: &FrameData,
 	#[spirv(push_constant)] push_constant: &PushConstant,
 	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
@@ -46,8 +45,6 @@ pub fn opaque_mesh(
 	vert_tex_coords: &mut [Vec2; OUTPUT_VERTICES],
 	vert_texture: &mut [TransientDesc<SampledImage2D>; OUTPUT_VERTICES],
 ) {
-	let descriptors = Descriptors::new(buffers, sampled_images_2d, samplers);
-
 	unsafe {
 		set_mesh_outputs_ext(OUTPUT_VERTICES as u32, OUTPUT_TRIANGLES as u32);
 	}
@@ -56,12 +53,9 @@ pub fn opaque_mesh(
 	for i in 0..OUTPUT_VERTICES {
 		let vertex_id = push_constant
 			.index_buffer
-			.access(&descriptors)
+			.access(descriptors)
 			.load(global_invocation_id.x as usize * 3 + i);
-		let vertex_input = push_constant
-			.vertex_buffer
-			.access(&descriptors)
-			.load(vertex_id as usize);
+		let vertex_input = push_constant.vertex_buffer.access(descriptors).load(vertex_id as usize);
 		let position_world = camera.transform.transform_point3(vertex_input.position.into());
 		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
 		vert_tex_coords[i] = vertex_input.tex_coord;
@@ -72,20 +66,16 @@ pub fn opaque_mesh(
 	indices[0] = UVec3::new(0, 1, 2);
 }
 
-#[spirv(fragment)]
+#[bindless(fragment)]
 pub fn opaque_fs(
-	#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] buffers: &mut RuntimeArray<[u32]>,
-	#[spirv(descriptor_set = 0, binding = 2)] sampled_images_2d: &RuntimeArray<SampledImage2D>,
-	#[spirv(descriptor_set = 0, binding = 3)] samplers: &RuntimeArray<Sampler>,
+	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[spirv(push_constant)] push_constant: &PushConstant,
 	vert_tex_coords: Vec2,
 	#[spirv(flat)] vert_texture: TransientDesc<SampledImage2D>,
 	output: &mut Vec4,
 ) {
-	let descriptors = Descriptors::new(buffers, sampled_images_2d, samplers);
-
-	let image: &SampledImage2D = vert_texture.access(&descriptors);
-	*output = image.sample(*push_constant.sampler.access(&descriptors), vert_tex_coords);
+	let image: &SampledImage2D = vert_texture.access(descriptors);
+	*output = image.sample(*push_constant.sampler.access(descriptors), vert_tex_coords);
 	if output.w < 0.01 {
 		spirv_std::arch::kill();
 	}

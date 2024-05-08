@@ -7,6 +7,7 @@ members = [
 	"space-engine-shader",
 	"space-engine-shader-builder",
 	"vulkano-bindless/vulkano-bindless",
+	"vulkano-bindless/vulkano-bindless-macros",
 	"vulkano-bindless/vulkano-bindless-shaders",
 ]
 resolver = "2"
@@ -32,6 +33,7 @@ space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
 vulkano-bindless = { path = "vulkano-bindless/vulkano-bindless" }
 vulkano-bindless-shaders = { path = "vulkano-bindless/vulkano-bindless-shaders" }
+vulkano-bindless-macros = { path = "vulkano-bindless/vulkano-bindless-macros" }
 
 # vulkan
 # vulkano 0.35 development
@@ -51,10 +53,11 @@ smol = "1.3.0"
 # codegen
 quote = "1.0"
 proc-macro2 = "1.0"
-syn = "2.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
 paste = "1.0"
 konst = "0.3"
 prettyplease = "0.2"
+proc-macro-crate = "3.1.0"
 
 # bytes and numbers
 glam = { version = "0.24", default-features = false, features = ["libm", "bytemuck"] }
