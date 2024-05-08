@@ -38,6 +38,8 @@ impl<'a, D: DescType + ?Sized> TransientDesc<'a, D> {
 		}
 	}
 
+	/// # Safety
+	/// Should only be called by vulkano_bindless
 	#[inline]
 	pub unsafe fn to_static(&self) -> TransientDesc<'static, D> {
 		TransientDesc {

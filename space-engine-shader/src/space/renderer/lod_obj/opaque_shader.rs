@@ -20,6 +20,8 @@ unsafe impl bytemuck::Zeroable for PushConstant<'static> {}
 unsafe impl bytemuck::AnyBitPattern for PushConstant<'static> {}
 
 impl<'a> PushConstant<'a> {
+	/// # Safety
+	/// Should only be called by vulkano_bindless
 	pub unsafe fn to_static(&self) -> PushConstant<'static> {
 		unsafe {
 			PushConstant {

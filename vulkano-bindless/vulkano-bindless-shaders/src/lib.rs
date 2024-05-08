@@ -1,5 +1,8 @@
 #![no_std]
 
+#[cfg(test)]
+extern crate alloc;
+
 pub mod descriptor;
 pub mod frame_in_flight;
 

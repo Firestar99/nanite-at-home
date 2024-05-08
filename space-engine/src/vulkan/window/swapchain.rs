@@ -164,7 +164,7 @@ impl Swapchain {
 	}
 	#[inline]
 	pub fn device(&self) -> &Arc<Device> {
-		&self.queue.device()
+		self.queue.device()
 	}
 	#[inline]
 	pub fn surface(&self) -> &Arc<Surface> {
@@ -270,14 +270,12 @@ impl SwapchainController {
 	}
 
 	pub fn handle_input(&mut self, event: &Event<()>) {
-		match event {
-			Event::WindowEvent {
-				event: WindowEvent::Resized(_),
-				..
-			} => {
-				self.should_recreate = true;
-			}
-			_ => (),
+		if let Event::WindowEvent {
+			event: WindowEvent::Resized(_),
+			..
+		} = event
+		{
+			self.should_recreate = true;
 		}
 	}
 }

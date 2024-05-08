@@ -22,6 +22,12 @@ pub struct FpsCameraController {
 	pub move_speed_exponent: i32,
 }
 
+impl Default for FpsCameraController {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl FpsCameraController {
 	pub fn new() -> Self {
 		Self {
@@ -38,32 +44,15 @@ impl FpsCameraController {
 	pub fn handle_input(&mut self, event: &Event<()>) {
 		match event {
 			Event::WindowEvent {
-				event: WindowEvent::KeyboardInput { event, .. },
-				..
-			} => {
-				self.handle_keyboard_input(event);
-			}
-			Event::DeviceEvent {
-				event: DeviceEvent::MouseMotion { delta, .. },
-				..
-			} => {
-				self.handle_mouse_input(*delta);
-			}
-			Event::WindowEvent {
-				event: WindowEvent::MouseWheel { delta, .. },
-				..
-			} => {
-				self.handle_scroll_input(*delta);
-			}
-			_ => {}
-		}
-	}
-
-	pub fn handle_keyboard_input(&mut self, input: &KeyEvent) {
-		match input {
-			KeyEvent {
-				state,
-				physical_key: Code { 0: code },
+				event:
+					WindowEvent::KeyboardInput {
+						event: KeyEvent {
+							state,
+							physical_key: Code { 0: code },
+							..
+						},
+						..
+					},
 				..
 			} => {
 				use winit::keyboard::KeyCode::*;
@@ -79,24 +68,28 @@ impl FpsCameraController {
 					_ => {}
 				}
 			}
+			Event::DeviceEvent {
+				event: DeviceEvent::MouseMotion { delta, .. },
+				..
+			} => {
+				const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
+				let delta = DVec2::from(*delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST;
+				self.rotation_yaw -= delta.x;
+				self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
+			}
+			Event::WindowEvent {
+				event: WindowEvent::MouseWheel { delta, .. },
+				..
+			} => {
+				let y = match *delta {
+					MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => y as f32,
+					MouseScrollDelta::LineDelta(_, y) => y,
+				};
+				let y = -y;
+				self.move_speed_exponent += [-1, 1][(y < 0.) as usize];
+			}
 			_ => {}
 		}
-	}
-
-	pub fn handle_mouse_input(&mut self, delta: (f64, f64)) {
-		const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
-		let delta = DVec2::from(delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST;
-		self.rotation_yaw -= delta.x;
-		self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
-	}
-
-	pub fn handle_scroll_input(&mut self, scroll: MouseScrollDelta) {
-		let y = match scroll {
-			MouseScrollDelta::PixelDelta(PhysicalPosition { y, .. }) => y as f32,
-			MouseScrollDelta::LineDelta(_, y) => y,
-		};
-		let y = -y;
-		self.move_speed_exponent += [-1, 1][(y < 0.) as usize];
 	}
 
 	pub fn update(&mut self, delta_time: DeltaTime) -> Affine3A {

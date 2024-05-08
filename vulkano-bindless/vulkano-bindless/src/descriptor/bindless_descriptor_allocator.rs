@@ -52,6 +52,7 @@ unsafe impl DescriptorSetAllocator for BindlessDescriptorSetAllocator {
 		} else {
 			DescriptorPoolCreateFlags::empty()
 		};
+		#[allow(clippy::arc_with_non_send_sync)]
 		let pool = Arc::new(DescriptorPool::new(
 			layout.device().clone(),
 			DescriptorPoolCreateInfo {

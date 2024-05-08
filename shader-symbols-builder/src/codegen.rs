@@ -92,7 +92,7 @@ impl<'a> ModNode<'a> {
 	fn insert(&mut self, mut path: impl Iterator<Item = &'a str>, shader: (&'a str, &'a PathBuf)) {
 		match path.next() {
 			None => {
-				assert!(matches!(self.shader, None), "Duplicate shader name!");
+				assert!(self.shader.is_none(), "Duplicate shader name!");
 				self.shader = Some(shader);
 			}
 			Some(name) => {

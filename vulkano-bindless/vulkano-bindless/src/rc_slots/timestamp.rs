@@ -90,6 +90,7 @@ impl Debug for TimestampCompareError {
 	}
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd<Self> for Timestamp {
 	#[inline]
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

@@ -22,7 +22,7 @@ pub struct OpaqueRenderTask {
 
 impl OpaqueRenderTask {
 	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
-		let pipeline_opaque = OpaqueDrawPipeline::new(&init, format_color, format_depth);
+		let pipeline_opaque = OpaqueDrawPipeline::new(init, format_color, format_depth);
 		Self {
 			init: init.clone(),
 			pipeline_opaque,

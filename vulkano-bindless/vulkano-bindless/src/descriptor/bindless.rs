@@ -6,6 +6,7 @@ use crate::descriptor::image_table::ImageTable;
 use crate::descriptor::sampler_table::SamplerTable;
 use crate::sync::Mutex;
 use smallvec::SmallVec;
+use static_assertions::assert_impl_all;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{
@@ -24,6 +25,8 @@ pub struct Bindless {
 	pub sampler: SamplerTable,
 	flush_lock: Mutex<()>,
 }
+
+assert_impl_all!(Bindless: Send, Sync);
 
 impl Bindless {
 	/// Creates a new Descriptors instance with which to allocate descriptors.

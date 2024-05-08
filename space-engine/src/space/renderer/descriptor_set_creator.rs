@@ -29,7 +29,7 @@ impl DescriptorSetBinding {
 		}
 	}
 
-	fn to_descriptor_set_layout_binding(self, stages: ShaderStages) -> (u32, DescriptorSetLayoutBinding) {
+	fn into_descriptor_set_layout_binding(self, stages: ShaderStages) -> (u32, DescriptorSetLayoutBinding) {
 		(
 			self.binding_id,
 			DescriptorSetLayoutBinding {
@@ -49,7 +49,7 @@ impl DescriptorSetBinding {
 		DescriptorSetLayoutCreateInfo {
 			bindings: binding
 				.iter()
-				.map(|b| (**b).clone().to_descriptor_set_layout_binding(stages))
+				.map(|b| (**b).clone().into_descriptor_set_layout_binding(stages))
 				.collect(),
 			..DescriptorSetLayoutCreateInfo::default()
 		}

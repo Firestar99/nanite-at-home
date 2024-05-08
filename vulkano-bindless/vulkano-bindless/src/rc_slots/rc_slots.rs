@@ -43,6 +43,9 @@ pub struct RCSlot<T> {
 	index: SlotIndex,
 }
 
+unsafe impl<T> Send for RCSlot<T> {}
+unsafe impl<T> Sync for RCSlot<T> {}
+
 impl<T> RCSlot<T> {
 	/// Creates a new RCSlot of an alive slot
 	///
@@ -144,7 +147,7 @@ impl<T> Deref for RCSlot<T> {
 
 	fn deref(&self) -> &Self::Target {
 		// Safety: self existing ensures the slot must be alive and t exists
-		unsafe { (&*self.slots().array.index(self.index).t.get()).assume_init_ref() }
+		unsafe { (*self.slots().array.index(self.index).t.get()).assume_init_ref() }
 	}
 }
 
@@ -220,6 +223,9 @@ struct Slot<T> {
 	free_timestamp: UnsafeCell<Timestamp>,
 	t: UnsafeCell<MaybeUninit<T>>,
 }
+
+unsafe impl<T> Send for Slot<T> {}
+unsafe impl<T> Sync for Slot<T> {}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(u32)]

@@ -9,10 +9,10 @@ use vulkano_bindless::descriptor::{SampledImage2D, WeakDesc};
 
 pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
 	let mut out = Vec::new();
-	load_rust_vulkano_logos(&texture_manager, &mut out).await;
+	load_rust_vulkano_logos(texture_manager, &mut out).await;
 	out.extend(
 		load_gltf(
-			&texture_manager,
+			texture_manager,
 			concat!(
 				env!("CARGO_MANIFEST_DIR"),
 				"/src/sample_scene/Lantern/glTF/Lantern.gltf"

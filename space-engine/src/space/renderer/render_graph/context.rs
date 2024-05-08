@@ -75,7 +75,7 @@ pub struct RenderContextNewFrame {
 assert_not_impl_any!(RenderContextNewFrame: Clone);
 
 impl RenderContextNewFrame {
-	pub fn new_frame<F>(self: &mut Self, viewport: Viewport, frame_data: FrameData, f: F)
+	pub fn new_frame<F>(&mut self, viewport: Viewport, frame_data: FrameData, f: F)
 	where
 		F: FnOnce(FrameContext) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
@@ -92,7 +92,7 @@ impl RenderContextNewFrame {
 				frame_data,
 				viewport,
 				global_descriptor_set,
-				_private: PhantomData::default(),
+				_private: PhantomData,
 			})
 		});
 	}

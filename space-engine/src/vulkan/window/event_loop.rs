@@ -8,7 +8,7 @@ use std::future::Future;
 use std::hint::spin_loop;
 use std::mem::MaybeUninit;
 use std::pin::Pin;
-use std::process::exit;
+
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release};
 use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -120,7 +120,7 @@ where
 		}
 	}
 
-	fn poll(&self, cx: &mut Context<'_>) -> Poll<R> {
+	fn poll(&self, cx: &Context<'_>) -> Poll<R> {
 		let mut state_old = self.state.load(Relaxed);
 		loop {
 			state_old = match TaskState::from_u8(state_old).unwrap() {
@@ -290,19 +290,13 @@ where
 	// plain loop without EventLoop
 	let event_loop;
 	{
-		let forward_msg;
-		loop {
-			match exec_rx.recv() {
-				Ok(msg) => {
-					forward_msg = msg;
-					break;
-				}
-				Err(_) => {
-					// fail is always a disconnect
-					exit(0);
-				}
-			};
-		}
+		let forward_msg = match exec_rx.recv() {
+			Ok(msg) => msg,
+			Err(_) => {
+				// fail is always a disconnect
+				return;
+			}
+		};
 
 		// EventLoop setup
 		// FIXME replace with log
@@ -325,7 +319,7 @@ where
 				Event::UserEvent(_) => {
 					loop {
 						match exec_rx.try_recv() {
-							Ok(msg) => msg.run(&b),
+							Ok(msg) => msg.run(b),
 							Err(e) => {
 								if matches!(e, TryRecvError::Disconnected) {
 									// Only exit when all other threads have exited!

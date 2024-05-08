@@ -22,7 +22,7 @@ pub const ENGINE_APPLICATION_CONFIG: ApplicationConfig = generate_application_co
 /// as for small sizes of typically 2-3 it's not worth creating one.
 pub fn concurrent_sharing<const N: usize>(queues: &[&Arc<Queue>]) -> Sharing<SmallVec<[u32; N]>> {
 	let mut ret = SmallVec::<[u32; N]>::new();
-	for x in queues.into_iter().map(|q| q.queue_family_index()) {
+	for x in queues.iter().map(|q| q.queue_family_index()) {
 		if !ret.contains(&x) {
 			ret.push(x);
 		}

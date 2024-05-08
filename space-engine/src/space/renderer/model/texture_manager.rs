@@ -115,7 +115,7 @@ impl TextureManager {
 					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 					..AllocationCreateInfo::default()
 				},
-				data.into_iter(),
+				data,
 			)
 			.unwrap()
 	}

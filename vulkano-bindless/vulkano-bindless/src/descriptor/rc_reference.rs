@@ -1,13 +1,16 @@
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::frame_in_flight::FrameInFlight;
 use crate::rc_slots::RCSlot;
+use static_assertions::assert_impl_all;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use vulkano_bindless_shaders::descriptor::{TransientDesc, WeakDesc};
+use vulkano_bindless_shaders::descriptor::{Sampler, TransientDesc, WeakDesc};
 
 pub struct RCDesc<D: DescTypeCpu + ?Sized> {
 	inner: RCSlot<<D::DescTable as DescTable>::Slot>,
 }
+
+assert_impl_all!(RCDesc<Sampler>: Send, Sync);
 
 impl<D: DescTypeCpu + ?Sized> RCDesc<D> {
 	pub fn new(inner: RCSlot<<D::DescTable as DescTable>::Slot>) -> Self {

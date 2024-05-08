@@ -24,7 +24,7 @@ impl RenderPipelineMain {
 		// always available
 		let depth_format = Format::D32_SFLOAT;
 
-		let opaque_task = OpaqueRenderTask::new(&init, output_format, depth_format);
+		let opaque_task = OpaqueRenderTask::new(init, output_format, depth_format);
 		Arc::new(Self {
 			init: init.clone(),
 			output_format,
@@ -115,12 +115,11 @@ pub struct RendererMainFrame<'a> {
 impl<'a> RendererMainFrame<'a> {
 	pub fn record(self, future_await: impl GpuFuture) -> impl GpuFuture {
 		let r = self.resources;
-		let p = &*self.pipeline;
+		let p = self.pipeline;
 		let c = self.frame_context;
 
-		let future = future_await;
-		let future = p.opaque_task.record(c, &self.output_image, &r.depth_image, future);
-		future
+		p.opaque_task
+			.record(c, &self.output_image, &r.depth_image, future_await)
 	}
 }
 

@@ -101,7 +101,12 @@ mod inner {
 
 	pub struct Backoff(Cell<u32>);
 
-	#[cfg(feature = "loom_tests")]
+	impl Default for Backoff {
+		fn default() -> Self {
+			Self::new()
+		}
+	}
+
 	impl Backoff {
 		// this does almost nothing
 		pub const KILL_BRANCH_LIMIT: u32 = 6;
@@ -221,12 +226,14 @@ mod inner {
 				UnsafeCell(std::cell::UnsafeCell::new(data))
 			}
 
-			/// SAFETY: same as casting contents to a shared reference
+			/// # Safety
+			/// same as casting contents to a shared reference
 			pub unsafe fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
 				unsafe { f(&*self.0.get()) }
 			}
 
-			/// SAFETY: same as casting contents to a mutable exclusive reference
+			/// # Safety
+			/// same as casting contents to a mutable exclusive reference
 			pub unsafe fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
 				f(&mut *self.0.get())
 			}
@@ -244,6 +251,12 @@ mod inner {
 	}
 
 	pub struct Backoff(crossbeam_utils::Backoff);
+
+	impl Default for Backoff {
+		fn default() -> Self {
+			Self::new()
+		}
+	}
 
 	impl Backoff {
 		pub fn new() -> Self {

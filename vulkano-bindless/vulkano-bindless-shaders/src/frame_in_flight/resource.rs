@@ -119,7 +119,7 @@ impl<T> From<&ResourceInFlight<T>> for SeedInFlight {
 
 #[cfg(test)]
 mod tests {
-	use std::rc::Rc;
+	use alloc::rc::Rc;
 
 	use super::*;
 

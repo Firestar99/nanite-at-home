@@ -50,7 +50,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			&vec,
 			SpaceQueueAllocator::new(),
 			stages,
-			|phy| DescriptorCounts::reasonable_defaults(phy),
+			DescriptorCounts::reasonable_defaults,
 		)
 		.await;
 	}
@@ -80,21 +80,18 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
-	let mut last_frame = DeltaTimeTimer::new();
+	let mut last_frame = DeltaTimeTimer::default();
 	'outer: loop {
 		// event handling
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
-			match &event {
-				Event::WindowEvent {
-					event: WindowEvent::CloseRequested,
-					..
-				} => {
-					break 'outer;
-				}
-
-				_ => (),
+			if let Event::WindowEvent {
+				event: WindowEvent::CloseRequested,
+				..
+			} = &event
+			{
+				break 'outer;
 			}
 		}
 
