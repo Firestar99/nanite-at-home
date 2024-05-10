@@ -26,11 +26,16 @@ use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scene::load_scene;
 
-const LAYER_RENDERDOC: bool = true;
-const LAYER_VALIDATION: bool = false;
+pub enum Debugger {
+	None,
+	Validation,
+	RenderDoc,
+}
+
+const DEBUGGER: Debugger = Debugger::RenderDoc;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
-	if LAYER_RENDERDOC {
+	if matches!(DEBUGGER, Debugger::RenderDoc) {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
 		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
@@ -40,7 +45,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
 		let mut vec: Vec<&dyn Plugin> = vec![&RendererPlugin, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
-		if LAYER_VALIDATION {
+		if matches!(DEBUGGER, Debugger::Validation) {
 			vec.push(&StandardValidationLayerPlugin);
 		}
 
