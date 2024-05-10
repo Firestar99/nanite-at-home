@@ -69,16 +69,18 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	let fn_ident_inner = format_ident!("__bindless_{}", fn_ident_outer);
 	let fn_block_inner = &item.block;
 	let crate_ident = symbols.crate_ident;
+
+	// the fn_ident_inner *could* be put within the entry point fn,
+	// but putting it outside significantly improves editor performance in rustrover
 	Ok(quote! {
 		#[#crate_ident::spirv(#entry_point_attr)]
 		#[allow(clippy::too_many_arguments)]
 		#vis fn #fn_ident_outer(#fn_args_outer) {
-
-			#[allow(clippy::too_many_arguments)]
-			fn #fn_ident_inner(#fn_args_inner) #fn_block_inner
-
 			#fn_ident_inner(#fn_values_inner);
 		}
+
+		#[allow(clippy::too_many_arguments)]
+		fn #fn_ident_inner(#fn_args_inner) #fn_block_inner
 	})
 }
 
