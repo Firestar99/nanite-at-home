@@ -15,6 +15,7 @@ impl Plugin for RendererPlugin {
 			DeviceFeatures {
 				dynamic_rendering: true,
 				mesh_shader: true,
+				task_shader: true,
 				..DeviceFeatures::default()
 			},
 		)

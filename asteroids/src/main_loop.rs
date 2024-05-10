@@ -49,7 +49,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			vec.push(&StandardValidationLayerPlugin);
 		}
 
-		let stages = ShaderStages::VERTEX | ShaderStages::FRAGMENT | ShaderStages::MESH | ShaderStages::COMPUTE;
+		let stages = ShaderStages::TASK
+			| ShaderStages::MESH
+			| ShaderStages::VERTEX
+			| ShaderStages::FRAGMENT
+			| ShaderStages::COMPUTE;
 		init = Init::new(
 			generate_application_config!(),
 			&vec,

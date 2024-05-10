@@ -1,7 +1,7 @@
 use crate::space::renderer::frame_data::FrameData;
-use crate::space::renderer::model::model_vertex::ModelVertex;
+use crate::space::renderer::model::gpu_model::OpaqueGpuModel;
 use glam::{UVec3, Vec2, Vec4};
-use spirv_std::arch::set_mesh_outputs_ext;
+use spirv_std::arch::{emit_mesh_tasks_ext, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
@@ -11,8 +11,7 @@ use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 
 #[derive(Copy, Clone)]
 pub struct Params<'a> {
-	pub vertex_buffer: TransientDesc<'a, Buffer<[ModelVertex]>>,
-	pub index_buffer: TransientDesc<'a, Buffer<[u32]>>,
+	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel]>>,
 	pub sampler: TransientDesc<'a, Sampler>,
 }
 
@@ -26,11 +25,32 @@ impl<'a> Params<'a> {
 	pub unsafe fn to_static(&self) -> Params<'static> {
 		unsafe {
 			Params {
-				vertex_buffer: self.vertex_buffer.to_static(),
-				index_buffer: self.index_buffer.to_static(),
+				models: self.models.to_static(),
 				sampler: self.sampler.to_static(),
 			}
 		}
+	}
+}
+
+#[derive(Copy, Clone)]
+pub struct Payload {
+	pub model_offset: usize,
+}
+
+#[bindless(task_ext(threads(1)))]
+pub fn opaque_task(
+	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(param_constants)] param: &Params,
+	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
+	#[spirv(task_payload_workgroup_ext)] payload: &mut Payload,
+) {
+	let global_id = global_invocation_id.x as usize;
+	// Safety: cannot use load() as a panic before emit_mesh_tasks_ext() mispiles
+	let model = unsafe { param.models.access(descriptors).load_unchecked(global_id) };
+	payload.model_offset = global_id;
+
+	unsafe {
+		emit_mesh_tasks_ext(model.triangle_count, 1, 1);
 	}
 }
 
@@ -42,6 +62,7 @@ pub fn opaque_mesh(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[spirv(descriptor_set = 1, binding = 0, uniform)] frame_data: &FrameData,
 	#[bindless(param_constants)] param: &Params,
+	#[spirv(task_payload_workgroup_ext)] payload: &Payload,
 	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
 	#[spirv(primitive_triangle_indices_ext)] indices: &mut [UVec3; OUTPUT_TRIANGLES],
 	#[spirv(position)] positions: &mut [Vec4; OUTPUT_VERTICES],
@@ -52,13 +73,16 @@ pub fn opaque_mesh(
 		set_mesh_outputs_ext(OUTPUT_VERTICES as u32, OUTPUT_TRIANGLES as u32);
 	}
 
+	let model = param.models.access(descriptors).load(payload.model_offset);
+	let index_buffer = unsafe { model.index_buffer.upgrade_unchecked() };
+	let vertex_buffer = unsafe { model.vertex_buffer.upgrade_unchecked() };
+
 	let camera = frame_data.camera;
 	for i in 0..OUTPUT_VERTICES {
-		let vertex_id = param
-			.index_buffer
+		let vertex_id = index_buffer
 			.access(descriptors)
 			.load(global_invocation_id.x as usize * 3 + i);
-		let vertex_input = param.vertex_buffer.access(descriptors).load(vertex_id as usize);
+		let vertex_input = vertex_buffer.access(descriptors).load(vertex_id as usize);
 		let position_world = camera.transform.transform_point3(vertex_input.position.into());
 		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
 		vert_tex_coords[i] = vertex_input.tex_coord;

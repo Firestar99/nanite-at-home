@@ -3,7 +3,9 @@ use crate::space::renderer::model::model::OpaqueModel;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 use parking_lot::Mutex;
+use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
 use std::sync::Arc;
+use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::CommandBufferUsage::OneTimeSubmit;
 use vulkano::command_buffer::{
@@ -11,6 +13,7 @@ use vulkano::command_buffer::{
 };
 use vulkano::format::{ClearValue, Format};
 use vulkano::image::view::ImageView;
+use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
 
@@ -37,7 +40,32 @@ impl OpaqueRenderTask {
 		depth_image: &Arc<ImageView>,
 		future: impl GpuFuture,
 	) -> impl GpuFuture {
-		let graphics = &frame_context.render_context.init.queues.client.graphics_main;
+		let init = &self.init;
+		let graphics = &init.queues.client.graphics_main;
+
+		let models = {
+			let guard = self.models.lock();
+			init.bindless
+				.buffer
+				.alloc_from_iter(
+					init.memory_allocator.clone(),
+					BufferCreateInfo {
+						usage: BufferUsage::STORAGE_BUFFER,
+						..BufferCreateInfo::default()
+					},
+					AllocationCreateInfo {
+						memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+						..AllocationCreateInfo::default()
+					},
+					guard.iter().map(|model| OpaqueGpuModel {
+						vertex_buffer: model.vertex_buffer.to_weak(),
+						index_buffer: model.index_buffer.to_weak(),
+						triangle_count: (model.index_buffer.len() / 3) as u32,
+					}),
+				)
+				.unwrap()
+		};
+
 		let mut cmd = RecordingCommandBuffer::new(
 			frame_context.render_context.init.cmd_buffer_allocator.clone(),
 			graphics.queue_family_index(),
@@ -66,9 +94,7 @@ impl OpaqueRenderTask {
 			..RenderingInfo::default()
 		})
 		.unwrap();
-		for model in &*self.models.lock() {
-			self.pipeline_opaque.draw(frame_context, &mut cmd, model);
-		}
+		self.pipeline_opaque.draw(frame_context, &mut cmd, models);
 		cmd.end_rendering().unwrap();
 		let cmd = cmd.end().unwrap();
 

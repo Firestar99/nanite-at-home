@@ -1,5 +1,6 @@
 use smallvec::smallvec;
 use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
+use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -19,11 +20,10 @@ use vulkano::pipeline::{
 };
 use vulkano::shader::ShaderStages;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::descriptor::Sampler;
+use vulkano_bindless::descriptor::{Buffer, Sampler};
 
 use crate::shader::space::renderer::lod_obj::opaque_shader;
 use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
-use crate::space::renderer::model::model::OpaqueModel;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 
@@ -45,7 +45,7 @@ impl OpaqueDrawPipeline {
 				]
 				.to_vec(),
 				push_constant_ranges: [PushConstantRange {
-					stages: ShaderStages::MESH | ShaderStages::FRAGMENT,
+					stages: ShaderStages::TASK | ShaderStages::MESH | ShaderStages::FRAGMENT,
 					offset: 0,
 					size: mem::size_of::<Params>() as u32,
 				}]
@@ -60,6 +60,7 @@ impl OpaqueDrawPipeline {
 			Some(init.pipeline_cache.deref().clone()),
 			GraphicsPipelineCreateInfo {
 				stages: smallvec![
+					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_task::new(device.clone())),
 					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_mesh::new(device.clone())),
 					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_fs::new(device.clone())),
 				],
@@ -101,7 +102,12 @@ impl OpaqueDrawPipeline {
 		Self { pipeline, sampler }
 	}
 
-	pub fn draw(&self, frame_context: &FrameContext, cmd: &mut RecordingCommandBuffer, model: &OpaqueModel) {
+	pub fn draw(
+		&self,
+		frame_context: &FrameContext,
+		cmd: &mut RecordingCommandBuffer,
+		models: RCDesc<Buffer<[OpaqueGpuModel]>>,
+	) {
 		unsafe {
 			let init = &frame_context.render_context.init;
 			cmd.bind_pipeline_graphics(self.pipeline.clone())
@@ -122,14 +128,13 @@ impl OpaqueDrawPipeline {
 					self.pipeline.layout().clone(),
 					0,
 					Params {
-						vertex_buffer: model.vertex_buffer.to_transient(frame_context.frame_in_flight),
-						index_buffer: model.index_buffer.to_transient(frame_context.frame_in_flight),
+						models: models.to_transient(frame_context.frame_in_flight),
 						sampler: self.sampler.to_transient(frame_context.frame_in_flight),
 					}
 					.to_static(),
 				)
 				.unwrap()
-				.draw_mesh_tasks([(model.index_buffer.len() / 3) as u32, 1, 1])
+				.draw_mesh_tasks([models.len() as u32, 1, 1])
 				.unwrap();
 		}
 	}
