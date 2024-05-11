@@ -1,7 +1,7 @@
 use crate::space::renderer::frame_data::FrameData;
 use crate::space::renderer::model::gpu_model::OpaqueGpuModel;
 use glam::{UVec3, Vec2, Vec4};
-use spirv_std::arch::{emit_mesh_tasks_ext, set_mesh_outputs_ext};
+use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
@@ -50,7 +50,7 @@ pub fn opaque_task(
 	payload.model_offset = global_id;
 
 	unsafe {
-		emit_mesh_tasks_ext(model.triangle_count, 1, 1);
+		emit_mesh_tasks_ext_payload(model.triangle_count, 1, 1, payload);
 	}
 }
 
