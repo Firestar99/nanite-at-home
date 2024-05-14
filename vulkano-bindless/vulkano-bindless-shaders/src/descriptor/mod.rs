@@ -5,6 +5,8 @@ pub mod images;
 pub mod reference;
 pub mod sampler;
 
+pub mod metadata;
+
 #[path = "../../../image_types.rs"]
 #[macro_use]
 mod image_types;

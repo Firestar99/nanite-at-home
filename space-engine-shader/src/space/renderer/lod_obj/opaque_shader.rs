@@ -10,22 +10,22 @@ use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
 use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 
 #[derive(Copy, Clone)]
-pub struct PushConstant<'a> {
+pub struct Params<'a> {
 	pub vertex_buffer: TransientDesc<'a, Buffer<[ModelVertex]>>,
 	pub index_buffer: TransientDesc<'a, Buffer<[u32]>>,
 	pub sampler: TransientDesc<'a, Sampler>,
 }
 
-unsafe impl bytemuck::Zeroable for PushConstant<'static> {}
+unsafe impl bytemuck::Zeroable for Params<'static> {}
 
-unsafe impl bytemuck::AnyBitPattern for PushConstant<'static> {}
+unsafe impl bytemuck::AnyBitPattern for Params<'static> {}
 
-impl<'a> PushConstant<'a> {
+impl<'a> Params<'a> {
 	/// # Safety
 	/// Should only be called by vulkano_bindless
-	pub unsafe fn to_static(&self) -> PushConstant<'static> {
+	pub unsafe fn to_static(&self) -> Params<'static> {
 		unsafe {
-			PushConstant {
+			Params {
 				vertex_buffer: self.vertex_buffer.to_static(),
 				index_buffer: self.index_buffer.to_static(),
 				sampler: self.sampler.to_static(),
@@ -41,7 +41,7 @@ const OUTPUT_TRIANGLES: usize = 1;
 pub fn opaque_mesh(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[spirv(descriptor_set = 1, binding = 0, uniform)] frame_data: &FrameData,
-	#[spirv(push_constant)] push_constant: &PushConstant,
+	#[bindless(param_constants)] param: &Params,
 	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
 	#[spirv(primitive_triangle_indices_ext)] indices: &mut [UVec3; OUTPUT_TRIANGLES],
 	#[spirv(position)] positions: &mut [Vec4; OUTPUT_VERTICES],
@@ -54,11 +54,11 @@ pub fn opaque_mesh(
 
 	let camera = frame_data.camera;
 	for i in 0..OUTPUT_VERTICES {
-		let vertex_id = push_constant
+		let vertex_id = param
 			.index_buffer
 			.access(descriptors)
 			.load(global_invocation_id.x as usize * 3 + i);
-		let vertex_input = push_constant.vertex_buffer.access(descriptors).load(vertex_id as usize);
+		let vertex_input = param.vertex_buffer.access(descriptors).load(vertex_id as usize);
 		let position_world = camera.transform.transform_point3(vertex_input.position.into());
 		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
 		vert_tex_coords[i] = vertex_input.tex_coord;
@@ -72,13 +72,13 @@ pub fn opaque_mesh(
 #[bindless(fragment)]
 pub fn opaque_fs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[spirv(push_constant)] push_constant: &PushConstant,
+	#[bindless(param_constants)] param: &Params,
 	vert_tex_coords: Vec2,
 	#[spirv(flat)] vert_texture: TransientDesc<Image2d>,
 	output: &mut Vec4,
 ) {
 	let image: &Image2d = vert_texture.access(descriptors);
-	*output = image.sample(*push_constant.sampler.access(descriptors), vert_tex_coords);
+	*output = image.sample(*param.sampler.access(descriptors), vert_tex_coords);
 	if output.w < 0.01 {
 		spirv_std::arch::kill();
 	}

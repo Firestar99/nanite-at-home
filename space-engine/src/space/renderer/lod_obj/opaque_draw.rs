@@ -1,5 +1,5 @@
 use smallvec::smallvec;
-use space_engine_shader::space::renderer::lod_obj::opaque_shader::PushConstant;
+use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -47,7 +47,7 @@ impl OpaqueDrawPipeline {
 				push_constant_ranges: [PushConstantRange {
 					stages: ShaderStages::MESH | ShaderStages::FRAGMENT,
 					offset: 0,
-					size: mem::size_of::<PushConstant>() as u32,
+					size: mem::size_of::<Params>() as u32,
 				}]
 				.to_vec(),
 				..PipelineLayoutCreateInfo::default()
@@ -121,7 +121,7 @@ impl OpaqueDrawPipeline {
 				.push_constants(
 					self.pipeline.layout().clone(),
 					0,
-					PushConstant {
+					Params {
 						vertex_buffer: model.vertex_buffer.to_transient(frame_context.frame_in_flight),
 						index_buffer: model.index_buffer.to_transient(frame_context.frame_in_flight),
 						sampler: self.sampler.to_transient(frame_context.frame_in_flight),
