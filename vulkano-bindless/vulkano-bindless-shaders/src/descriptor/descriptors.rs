@@ -1,30 +1,39 @@
+use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::{Buffer, BufferSlice, DescType, ValidDesc};
-use macros::image::Image2d;
 use spirv_std::{RuntimeArray, Sampler};
 
 pub trait DescriptorsAccess<D: DescType + ?Sized> {
 	fn access(&self, desc: &impl ValidDesc<D>) -> D::AccessType<'_>;
 }
 
-pub struct Descriptors<'a> {
-	pub(crate) buffers: &'a mut RuntimeArray<[u32]>,
-	pub(crate) sampled_images_2d: &'a RuntimeArray<Image2d>,
-	pub(crate) samplers: &'a RuntimeArray<Sampler>,
-}
-
-impl<'a> Descriptors<'a> {
-	pub fn new(
-		buffers: &'a mut RuntimeArray<[u32]>,
-		sampled_images_2d: &'a RuntimeArray<Image2d>,
-		samplers: &'a RuntimeArray<Sampler>,
-	) -> Descriptors<'a> {
-		Self {
-			buffers,
-			sampled_images_2d,
-			samplers,
+macro_rules! decl_descriptors {
+    (
+		{$($storage_name:ident: $storage_ty:ty,)*}
+		{$($sampled_name:ident: $sampled_ty:ty,)*}
+	) => {
+		pub struct Descriptors<'a> {
+			pub buffers: &'a mut RuntimeArray<[u32]>,
+			$(pub $storage_name: &'a RuntimeArray<$storage_ty>,)*
+			$(pub $sampled_name: &'a RuntimeArray<$sampled_ty>,)*
+			pub samplers: &'a RuntimeArray<Sampler>,
 		}
-	}
+		$(
+			impl<'a> DescriptorsAccess<$storage_ty> for Descriptors<'a> {
+				fn access(&self, desc: &impl ValidDesc<$storage_ty>) -> <$storage_ty as DescType>::AccessType<'_> {
+					unsafe { self.$storage_name.index(desc.id() as usize) }
+				}
+			}
+		)*
+		$(
+			impl<'a> DescriptorsAccess<$sampled_ty> for Descriptors<'a> {
+				fn access(&self, desc: &impl ValidDesc<$sampled_ty>) -> <$sampled_ty as DescType>::AccessType<'_> {
+					unsafe { self.$sampled_name.index(desc.id() as usize) }
+				}
+			}
+		)*
+	};
 }
+standard_image_types!(decl_descriptors);
 
 impl<'a, T: ?Sized + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 	fn access(&self, desc: &impl ValidDesc<Buffer<T>>) -> <Buffer<T> as DescType>::AccessType<'_> {
@@ -35,11 +44,5 @@ impl<'a, T: ?Sized + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
 	fn access(&self, desc: &impl ValidDesc<Sampler>) -> <Sampler as DescType>::AccessType<'_> {
 		unsafe { self.samplers.index(desc.id() as usize) }
-	}
-}
-
-impl<'a> DescriptorsAccess<Image2d> for Descriptors<'a> {
-	fn access(&self, desc: &impl ValidDesc<Image2d>) -> <Image2d as DescType>::AccessType<'_> {
-		unsafe { self.sampled_images_2d.index(desc.id() as usize) }
 	}
 }

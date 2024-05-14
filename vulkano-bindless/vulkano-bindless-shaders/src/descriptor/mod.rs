@@ -5,6 +5,10 @@ pub mod images;
 pub mod reference;
 pub mod sampler;
 
+#[path = "../../../image_types.rs"]
+#[macro_use]
+mod image_types;
+
 pub use buffer::{Buffer, BufferSlice};
 pub use descriptor_type::DescType;
 pub use descriptors::Descriptors;

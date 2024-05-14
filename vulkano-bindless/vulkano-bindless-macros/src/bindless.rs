@@ -1,3 +1,4 @@
+use crate::image_types::standard_image_types;
 use crate::symbols::Symbols;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -95,17 +96,43 @@ fn bindless_parse_args(symbols: &Symbols, arg: &PatType, bindless: &Attribute) -
 
 fn bindless_descriptors(symbols: &Symbols) -> Result<(TokenStream, TokenStream)> {
 	let crate_ident = &symbols.crate_ident;
+	let image_args;
+	let image_values;
+	macro_rules! make_image_args {
+		(
+			{$($storage_name:ident: $storage_ty:ty,)*}
+			{$($sampled_name:ident: $sampled_ty:ty,)*}
+		) => {
+			$(let $storage_name = format_ident!("__bindless_{}", stringify!($storage_name));)*
+			$(let $sampled_name = format_ident!("__bindless_{}", stringify!($sampled_name));)*
+
+			image_args = quote! {
+				$(#[spirv(descriptor_set = 0, binding = 1)] #$storage_name: &#crate_ident::spirv_std::RuntimeArray<#crate_ident$storage_ty>,)*
+				$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled_name: &#crate_ident::spirv_std::RuntimeArray<#crate_ident$sampled_ty>,)*
+			};
+			image_values = quote! {
+				$($storage_name: #$storage_name,)*
+				$($sampled_name: #$sampled_name,)*
+			};
+		};
+	}
+	standard_image_types!(make_image_args);
+
 	let buffers = format_ident!("__bindless_buffers");
-	let sampled_image_2d = format_ident!("__bindless_sampled_images_2d");
 	let samplers = format_ident!("__bindless_samplers");
+
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 	let args = quote! {
 		#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &mut #crate_ident::spirv_std::RuntimeArray<[u32]>,
-		#[spirv(descriptor_set = 0, binding = 2)] #sampled_image_2d: &#crate_ident::spirv_std::RuntimeArray<#crate_ident::spirv_std::image::Image2d>,
+		#image_args
 		#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_ident::spirv_std::RuntimeArray<#crate_ident::descriptor::Sampler>,
 	};
 	let values = quote! {
-		&#crate_ident::descriptor::Descriptors::new(#buffers, #sampled_image_2d, #samplers),
+		&#crate_ident::descriptor::Descriptors {
+			buffers: #buffers,
+			#image_values
+			samplers: #samplers,
+		},
 	};
 	Ok((args, values))
 }
