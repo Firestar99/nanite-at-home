@@ -5,7 +5,8 @@ use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
-use vulkano_bindless::descriptor::{SampledImage2D, WeakDesc};
+use vulkano_bindless::descriptor::WeakDesc;
+use vulkano_bindless::spirv_std::image::Image2d;
 
 pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
 	let mut out = Vec::new();
@@ -24,7 +25,7 @@ pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueMode
 }
 
 pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out: &mut Vec<OpaqueModel>) {
-	let create_model = |texture: WeakDesc<SampledImage2D>| {
+	let create_model = |texture: WeakDesc<Image2d>| {
 		let vertices = [
 			ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), texture),
 			ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), texture),

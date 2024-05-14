@@ -2,11 +2,12 @@ use crate::space::renderer::frame_data::FrameData;
 use crate::space::renderer::model::model_vertex::ModelVertex;
 use glam::{UVec3, Vec2, Vec4};
 use spirv_std::arch::set_mesh_outputs_ext;
+use spirv_std::image::Image2d;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::bindless;
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
-use vulkano_bindless_shaders::descriptor::{Buffer, SampledImage2D, TransientDesc, ValidDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 
 #[derive(Copy, Clone)]
 pub struct PushConstant<'a> {
@@ -45,7 +46,7 @@ pub fn opaque_mesh(
 	#[spirv(primitive_triangle_indices_ext)] indices: &mut [UVec3; OUTPUT_TRIANGLES],
 	#[spirv(position)] positions: &mut [Vec4; OUTPUT_VERTICES],
 	vert_tex_coords: &mut [Vec2; OUTPUT_VERTICES],
-	vert_texture: &mut [TransientDesc<SampledImage2D>; OUTPUT_VERTICES],
+	vert_texture: &mut [TransientDesc<Image2d>; OUTPUT_VERTICES],
 ) {
 	unsafe {
 		set_mesh_outputs_ext(OUTPUT_VERTICES as u32, OUTPUT_TRIANGLES as u32);
@@ -73,10 +74,10 @@ pub fn opaque_fs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[spirv(push_constant)] push_constant: &PushConstant,
 	vert_tex_coords: Vec2,
-	#[spirv(flat)] vert_texture: TransientDesc<SampledImage2D>,
+	#[spirv(flat)] vert_texture: TransientDesc<Image2d>,
 	output: &mut Vec4,
 ) {
-	let image: &SampledImage2D = vert_texture.access(descriptors);
+	let image: &Image2d = vert_texture.access(descriptors);
 	*output = image.sample(*push_constant.sampler.access(descriptors), vert_tex_coords);
 	if output.w < 0.01 {
 		spirv_std::arch::kill();

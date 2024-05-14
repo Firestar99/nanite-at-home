@@ -13,7 +13,7 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::descriptor::SampledImage2D;
+use vulkano_bindless::spirv_std::image::Image2d;
 
 pub struct TextureManager {
 	pub init: Arc<Init>,
@@ -29,11 +29,11 @@ impl TextureManager {
 		&self,
 		usage: ImageUsage,
 		image_data: &[u8],
-	) -> Result<RCDesc<SampledImage2D>, ImageError> {
+	) -> Result<RCDesc<Image2d>, ImageError> {
 		Ok(self.upload_texture(usage, image::load_from_memory(image_data)?).await)
 	}
 
-	pub async fn upload_texture(&self, usage: ImageUsage, image_data: DynamicImage) -> RCDesc<SampledImage2D> {
+	pub async fn upload_texture(&self, usage: ImageUsage, image_data: DynamicImage) -> RCDesc<Image2d> {
 		let init = &self.init;
 		let image_data = image_data.into_rgba8();
 		let (width, height) = image_data.dimensions();
@@ -92,7 +92,7 @@ impl TextureManager {
 			.await
 			.unwrap();
 
-		self.init.bindless.image.alloc_slot(image_view)
+		self.init.bindless.image.alloc_slot_2d(image_view)
 	}
 
 	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>

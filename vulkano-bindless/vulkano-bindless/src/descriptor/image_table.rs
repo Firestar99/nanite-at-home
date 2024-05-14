@@ -2,6 +2,7 @@ use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
+use crate::descriptor::Image;
 use crate::rc_slots::RCSlot;
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
@@ -13,9 +14,21 @@ use vulkano::device::Device;
 use vulkano::image::view::{ImageView, ImageViewType};
 use vulkano::image::ImageUsage;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::{SampledImage2D, BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
+use vulkano_bindless_shaders::descriptor::images::SampleType;
+use vulkano_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
+use vulkano_bindless_shaders::spirv_std::image::Image2d;
 
-impl DescTypeCpu for SampledImage2D {
+impl<
+		SampledType: SampleType<FORMAT, COMPONENTS> + 'static,
+		const DIM: u32,
+		const DEPTH: u32,
+		const ARRAYED: u32,
+		const MULTISAMPLED: u32,
+		const SAMPLED: u32,
+		const FORMAT: u32,
+		const COMPONENTS: u32,
+	> DescTypeCpu for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
+{
 	type DescTable = ImageTable;
 	type VulkanType = Arc<ImageView>;
 
@@ -24,8 +37,6 @@ impl DescTypeCpu for SampledImage2D {
 	}
 
 	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
-		let from: Arc<ImageView> = from;
-		assert_eq!(from.view_type(), ImageViewType::Dim2d);
 		from
 	}
 }
@@ -84,7 +95,8 @@ impl ImageTable {
 	}
 
 	#[inline]
-	pub fn alloc_slot(&self, image_view: Arc<ImageView>) -> RCDesc<SampledImage2D> {
+	pub fn alloc_slot_2d(&self, image_view: Arc<ImageView>) -> RCDesc<Image2d> {
+		assert_eq!(image_view.view_type(), ImageViewType::Dim2d);
 		self.resource_table.alloc_slot(image_view)
 	}
 

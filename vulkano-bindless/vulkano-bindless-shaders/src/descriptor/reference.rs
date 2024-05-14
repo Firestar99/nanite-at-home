@@ -1,13 +1,13 @@
 use crate::descriptor::descriptor_type::DescType;
-use crate::descriptor::descriptors::Descriptors;
+use crate::descriptor::descriptors::DescriptorsAccess;
 use core::marker::PhantomData;
 
-pub trait ValidDesc<D: DescType + ?Sized> {
+pub trait ValidDesc<D: DescType + ?Sized>: Sized {
 	fn id(&self) -> u32;
 
 	#[inline]
-	fn access<'a>(&'a self, descriptors: &'a Descriptors<'a>) -> D::AccessType<'a> {
-		D::access(descriptors, self.id())
+	fn access<'a>(&'a self, descriptors: &'a impl DescriptorsAccess<D>) -> D::AccessType<'a> {
+		descriptors.access(self)
 	}
 }
 

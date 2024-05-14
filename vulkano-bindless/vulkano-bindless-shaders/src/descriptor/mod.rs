@@ -8,7 +8,7 @@ pub mod sampler;
 pub use buffer::{Buffer, BufferSlice};
 pub use descriptor_type::DescType;
 pub use descriptors::Descriptors;
-pub use images::{Image, SampledImage2D};
+pub use images::Image;
 pub use reference::{TransientDesc, ValidDesc, WeakDesc};
 pub use sampler::Sampler;
 

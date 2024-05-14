@@ -1,5 +1,4 @@
 use crate::descriptor::descriptor_type::{private, DescType};
-use crate::descriptor::descriptors::Descriptors;
 use bytemuck::AnyBitPattern;
 use core::marker::PhantomData;
 use core::mem;
@@ -13,11 +12,6 @@ impl<T: ?Sized + 'static> private::SealedTrait for Buffer<T> {}
 
 impl<T: ?Sized + 'static> DescType for Buffer<T> {
 	type AccessType<'a> = BufferSlice<'a, T>;
-
-	#[inline]
-	fn access<'a>(descriptors: &'a Descriptors<'a>, id: u32) -> Self::AccessType<'a> {
-		BufferSlice::new(unsafe { descriptors.buffers.index(id as usize) })
-	}
 }
 
 pub struct BufferSlice<'a, T: ?Sized> {

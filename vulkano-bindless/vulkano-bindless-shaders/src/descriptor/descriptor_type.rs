@@ -1,5 +1,3 @@
-use crate::descriptor::descriptors::Descriptors;
-
 pub(crate) mod private {
 	pub trait SealedTrait {}
 }
@@ -11,6 +9,4 @@ pub(crate) mod private {
 /// * [SamplerType]
 pub trait DescType: private::SealedTrait + 'static {
 	type AccessType<'a>;
-
-	fn access<'a>(descriptors: &'a Descriptors<'a>, id: u32) -> Self::AccessType<'a>;
 }

@@ -4,19 +4,19 @@ use std::sync::Arc;
 use vulkano::buffer::BufferUsage;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::descriptor::SampledImage2D;
+use vulkano_bindless::spirv_std::image::Image2d;
 
 pub struct OpaqueModel {
 	pub vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
 	pub index_buffer: RCDesc<Buffer<[u32]>>,
-	pub strong_refs: Vec<RCDesc<SampledImage2D>>,
+	pub strong_refs: Vec<RCDesc<Image2d>>,
 }
 
 impl OpaqueModel {
 	pub async fn direct<V>(
 		texture_manager: &Arc<TextureManager>,
 		vertex_data: V,
-		strong_refs: impl IntoIterator<Item = RCDesc<SampledImage2D>>,
+		strong_refs: impl IntoIterator<Item = RCDesc<Image2d>>,
 	) -> Self
 	where
 		V: IntoIterator<Item = ModelVertex>,
@@ -39,7 +39,7 @@ impl OpaqueModel {
 		texture_manager: &Arc<TextureManager>,
 		index_data: I,
 		vertex_data: V,
-		strong_refs: impl IntoIterator<Item = RCDesc<SampledImage2D>>,
+		strong_refs: impl IntoIterator<Item = RCDesc<Image2d>>,
 	) -> Self
 	where
 		I: IntoIterator<Item = u32>,

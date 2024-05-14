@@ -101,7 +101,7 @@ fn bindless_descriptors(symbols: &Symbols) -> Result<(TokenStream, TokenStream)>
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 	let args = quote! {
 		#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &mut #crate_ident::spirv_std::RuntimeArray<[u32]>,
-		#[spirv(descriptor_set = 0, binding = 2)] #sampled_image_2d: &#crate_ident::spirv_std::RuntimeArray<#crate_ident::descriptor::SampledImage2D>,
+		#[spirv(descriptor_set = 0, binding = 2)] #sampled_image_2d: &#crate_ident::spirv_std::RuntimeArray<#crate_ident::spirv_std::image::Image2d>,
 		#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_ident::spirv_std::RuntimeArray<#crate_ident::descriptor::Sampler>,
 	};
 	let values = quote! {
