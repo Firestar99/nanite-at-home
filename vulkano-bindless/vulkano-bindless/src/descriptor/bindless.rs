@@ -8,6 +8,7 @@ use crate::rc_slots::Lock;
 use crate::sync::Mutex;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
+use std::array;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{
@@ -15,11 +16,16 @@ use vulkano::descriptor_set::layout::{
 };
 use vulkano::descriptor_set::DescriptorSet;
 use vulkano::device::Device;
+use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
+use vulkano::pipeline::PipelineLayout;
 use vulkano::shader::ShaderStages;
+
+pub const BINDLESS_PIPELINE_LAYOUT_PUSH_CONSTANT_WORDS: usize = 5;
 
 pub struct Bindless {
 	pub device: Arc<Device>,
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
+	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_PIPELINE_LAYOUT_PUSH_CONSTANT_WORDS],
 	pub descriptor_set: Arc<DescriptorSet>,
 	pub buffer: BufferTable,
 	pub image: ImageTable,
@@ -67,8 +73,29 @@ impl Bindless {
 		let allocator = BindlessDescriptorSetAllocator::new(device.clone());
 		let descriptor_set = DescriptorSet::new(allocator, descriptor_set_layout.clone(), [], []).unwrap();
 
+		let pipeline_layouts = array::from_fn(|i| {
+			PipelineLayout::new(
+				device.clone(),
+				PipelineLayoutCreateInfo {
+					set_layouts: Vec::from([descriptor_set_layout.clone()]),
+					push_constant_ranges: if i == 0 {
+						Vec::new()
+					} else {
+						Vec::from([PushConstantRange {
+							stages,
+							offset: 0,
+							size: i as u32 * 4,
+						}])
+					},
+					..PipelineLayoutCreateInfo::default()
+				},
+			)
+			.unwrap()
+		});
+
 		Arc::new(Self {
 			descriptor_set_layout,
+			pipeline_layouts,
 			descriptor_set,
 			buffer: BufferTable::new(device.clone(), counts.buffers),
 			image: ImageTable::new(device.clone(), counts.image),
@@ -107,5 +134,11 @@ impl Bindless {
 			_image: self.image.lock_table(),
 			_sampler: self.sampler.lock_table(),
 		}
+	}
+
+	/// Get a pipeline layout with just the bindless descriptor set and some amount of push constant words (of u32's).
+	/// `push_constant_words` must be within `0..=4`, the minimum the vulkan spec requires.
+	pub fn get_pipeline_layout(&self, push_constant_words: u32) -> Option<&Arc<PipelineLayout>> {
+		self.pipeline_layouts.get(push_constant_words as usize)
 	}
 }
