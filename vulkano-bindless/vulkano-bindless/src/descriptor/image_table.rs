@@ -3,7 +3,7 @@ use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::ResourceTable;
 use crate::descriptor::Image;
-use crate::rc_slots::RCSlot;
+use crate::rc_slots::{Lock, RCSlot};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -78,6 +78,10 @@ impl DescTable for ImageTable {
 		)
 		.ok_or(())
 		.unwrap_err();
+	}
+
+	fn lock_table(&self) -> Lock<Self::Slot> {
+		self.resource_table.lock()
 	}
 }
 

@@ -18,6 +18,7 @@ use space_engine_shader::space::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 use vulkano::shader::ShaderStages;
+use vulkano::sync::GpuFuture;
 use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
 use winit::event::{Event, WindowEvent};
 use winit::window::{CursorGrabMode, WindowBuilder};
@@ -127,9 +128,9 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		renderer_main.as_mut().unwrap().new_frame(
 			frame_data,
 			acquired_image.image_view().clone(),
-			|_frame_context, frame| {
-				let future = frame.record(swapchain_acquire);
-				acquired_image.present(future)
+			|frame, prev_frame_future, main_frame| {
+				let future = main_frame.record(swapchain_acquire.join(prev_frame_future));
+				acquired_image.present(frame.frame, future)
 			},
 		);
 	}

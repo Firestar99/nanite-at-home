@@ -11,6 +11,7 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference,
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
+use vulkano_bindless::frame_manager::PrevFrameFuture;
 
 pub struct RenderPipelineMain {
 	pub init: Arc<Init>,
@@ -81,7 +82,7 @@ impl RendererMain {
 
 	pub fn new_frame<F>(&mut self, frame_data: FrameData, output_image: Arc<ImageView>, f: F)
 	where
-		F: FnOnce(&FrameContext, RendererMainFrame) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+		F: FnOnce(&FrameContext, PrevFrameFuture, RendererMainFrame) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		self.image_supported(&output_image).unwrap();
 		let extent = output_image.image().extent();
@@ -91,12 +92,13 @@ impl RendererMain {
 			depth_range: 0f32..=1f32,
 		};
 		self.render_context_new_frame
-			.new_frame(viewport, frame_data, |frame_context| {
+			.new_frame(viewport, frame_data, |frame_context, prev_frame_future| {
 				f(
-					&frame_context,
+					frame_context,
+					prev_frame_future,
 					RendererMainFrame {
 						pipeline: &self.pipeline,
-						frame_context: &frame_context,
+						frame_context,
 						resources: &self.resources,
 						output_image,
 					},

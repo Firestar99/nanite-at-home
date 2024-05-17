@@ -185,3 +185,9 @@ impl<Q: Clone> Init<Q> {
 		self.device.instance().library()
 	}
 }
+
+impl<Q: Clone> AsRef<Bindless> for Init<Q> {
+	fn as_ref(&self) -> &Bindless {
+		&self.bindless
+	}
+}

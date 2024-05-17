@@ -10,9 +10,9 @@ use std::sync::Arc;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
-use vulkano_bindless::frame_in_flight::frame_manager::FrameManager;
 use vulkano_bindless::frame_in_flight::uniform::UniformInFlight;
 use vulkano_bindless::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
+use vulkano_bindless::frame_manager::{Frame, FrameManager, PrevFrameFuture};
 
 /// `RenderContext` is the main instance of the renderer, talking care of rendering frames and most notable ensuring no
 /// data races when multiple frames are currently in flight.
@@ -26,7 +26,7 @@ pub struct RenderContext {
 
 impl RenderContext {
 	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
-		let frame_manager = FrameManager::new(frames_in_flight);
+		let frame_manager = FrameManager::new(init.clone(), frames_in_flight);
 		let seed = frame_manager.seed();
 		let frame_data_uniform = UniformInFlight::new(
 			init.memory_allocator.clone(),
@@ -69,7 +69,7 @@ impl From<&RenderContext> for SeedInFlight {
 /// allows generating [`RenderContextNewFrame::new_frame()`].
 pub struct RenderContextNewFrame {
 	render_context: Arc<RenderContext>,
-	frame_manager: FrameManager,
+	frame_manager: FrameManager<Init>,
 }
 
 assert_not_impl_any!(RenderContextNewFrame: Clone);
@@ -77,23 +77,25 @@ assert_not_impl_any!(RenderContextNewFrame: Clone);
 impl RenderContextNewFrame {
 	pub fn new_frame<F>(&mut self, viewport: Viewport, frame_data: FrameData, f: F)
 	where
-		F: FnOnce(FrameContext) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+		F: FnOnce(&FrameContext, PrevFrameFuture) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
-		self.frame_manager.new_frame(|frame_in_flight| {
-			self.render_context
-				.frame_data_uniform
-				.upload(frame_in_flight, frame_data);
+		self.frame_manager.new_frame(|frame, prev_frame_future| {
+			self.render_context.frame_data_uniform.upload(frame.fif, frame_data);
 
 			let render_context = self.render_context.clone();
-			let global_descriptor_set = self.render_context.global_descriptor_set.index(frame_in_flight).clone();
-			f(FrameContext {
-				render_context,
-				frame_in_flight,
-				frame_data,
-				viewport,
-				global_descriptor_set,
-				_private: PhantomData,
-			})
+			let global_descriptor_set = self.render_context.global_descriptor_set.index(frame.fif).clone();
+			f(
+				&FrameContext {
+					render_context,
+					fif: frame.fif,
+					frame,
+					frame_data,
+					viewport,
+					global_descriptor_set,
+					_private: PhantomData,
+				},
+				prev_frame_future,
+			)
 		});
 	}
 }
@@ -109,7 +111,8 @@ impl Deref for RenderContextNewFrame {
 /// A `FrameContext` is created once per Frame rendered, containing frame-specific information and access to resources.
 pub struct FrameContext<'a> {
 	pub render_context: Arc<RenderContext>,
-	pub frame_in_flight: FrameInFlight<'a>,
+	pub frame: &'a Frame<'a, Init>,
+	pub fif: FrameInFlight<'a>,
 	pub frame_data: FrameData,
 	pub viewport: Viewport,
 	pub global_descriptor_set: GlobalDescriptorSet,

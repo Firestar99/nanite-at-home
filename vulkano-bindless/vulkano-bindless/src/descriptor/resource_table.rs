@@ -1,6 +1,6 @@
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::rc_slots::{RCSlot, RCSlots, SlotIndex};
+use crate::rc_slots::{Lock, RCSlot, RCSlots, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
@@ -54,6 +54,10 @@ impl<T: DescTable> ResourceTable<T> {
 		}
 
 		ranges.clear();
+	}
+
+	pub fn lock(&self) -> Lock<T::Slot> {
+		self.slots.lock()
 	}
 }
 

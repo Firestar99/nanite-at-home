@@ -1,5 +1,5 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::rc_slots::RCSlot;
+use crate::rc_slots::{Lock, RCSlot};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
@@ -39,4 +39,6 @@ pub trait DescTable {
 		count: DescriptorCounts,
 		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
 	);
+
+	fn lock_table(&self) -> Lock<Self::Slot>;
 }

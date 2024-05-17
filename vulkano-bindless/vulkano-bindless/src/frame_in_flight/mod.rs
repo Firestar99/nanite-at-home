@@ -27,8 +27,6 @@
 //!
 
 pub use vulkano_bindless_shaders::frame_in_flight::*;
-
-pub mod frame_manager;
 pub mod uniform;
 
 pub const FRAMES_LIMIT: u32 = 3;

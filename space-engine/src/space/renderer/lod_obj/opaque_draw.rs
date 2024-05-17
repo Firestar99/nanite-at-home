@@ -128,8 +128,8 @@ impl OpaqueDrawPipeline {
 					self.pipeline.layout().clone(),
 					0,
 					Params {
-						models: models.to_transient(frame_context.frame_in_flight),
-						sampler: self.sampler.to_transient(frame_context.frame_in_flight),
+						models: models.to_transient(frame_context.fif),
+						sampler: self.sampler.to_transient(frame_context.fif),
 					}
 					.to_static(),
 				)

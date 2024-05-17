@@ -18,6 +18,8 @@ use vulkano::swapchain::{
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
+use vulkano_bindless::descriptor::Bindless;
+use vulkano_bindless::frame_manager::Frame;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
 
@@ -299,18 +301,22 @@ impl<'a> AcquiredImage<'a> {
 		&self.controller.images[self.image_index as usize]
 	}
 
-	pub fn present(self, future: impl GpuFuture + 'static) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>> {
-		match future
-			.then_swapchain_present(
-				self.controller.queue.clone(),
-				SwapchainPresentInfo::swapchain_image_index(
-					self.controller.vulkano_swapchain.clone(),
-					self.image_index,
-				),
-			)
-			.boxed()
-			.then_signal_fence_and_flush()
-		{
+	pub fn present(
+		self,
+		frame: &Frame<impl AsRef<Bindless>>,
+		future: impl GpuFuture + 'static,
+	) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>> {
+		match frame.then_signal_fence_and_flush(
+			future
+				.then_swapchain_present(
+					self.controller.queue.clone(),
+					SwapchainPresentInfo::swapchain_image_index(
+						self.controller.vulkano_swapchain.clone(),
+						self.image_index,
+					),
+				)
+				.boxed(),
+		) {
 			Ok(e) => Some(e),
 			Err(e) => {
 				match e.unwrap() {

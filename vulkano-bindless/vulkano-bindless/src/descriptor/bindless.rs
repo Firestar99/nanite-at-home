@@ -4,6 +4,7 @@ use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::DescTable;
 use crate::descriptor::image_table::ImageTable;
 use crate::descriptor::sampler_table::SamplerTable;
+use crate::rc_slots::Lock;
 use crate::sync::Mutex;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
@@ -26,14 +27,20 @@ pub struct Bindless {
 	flush_lock: Mutex<()>,
 }
 
+pub struct BindlessLock {
+	_buffer: Lock<<BufferTable as DescTable>::Slot>,
+	_image: Lock<<ImageTable as DescTable>::Slot>,
+	_sampler: Lock<<SamplerTable as DescTable>::Slot>,
+}
+
 assert_impl_all!(Bindless: Send, Sync);
 
 impl Bindless {
 	/// Creates a new Descriptors instance with which to allocate descriptors.
 	///
 	/// # Safety
-	/// There must only be one global Descriptors instance for each [`Device`].
-	/// Before executing commands, one must [`Self::flush`] the Descriptors.
+	/// * There must only be one global Bindless instance for each [`Device`].
+	/// * The [general bindless safety requirements](crate#safety) apply
 	pub unsafe fn new(device: Arc<Device>, stages: ShaderStages, counts: DescriptorCounts) -> Self {
 		let limit = DescriptorCounts::limits(device.physical_device());
 		assert!(
@@ -71,6 +78,8 @@ impl Bindless {
 		}
 	}
 
+	/// Flush the bindless descriptor set. All newly allocated resources before this call will be written.
+	/// Instead of manual flushing, one should prefer to use [`FrameManager`]'s flushing capabilities.
 	pub fn flush(&self) {
 		// flushes must be sequential. Finer sync may be possible, but probably not worth it.
 		let _flush_guard = self.flush_lock.lock();
@@ -86,6 +95,17 @@ impl Bindless {
 			if !writes.is_empty() {
 				self.descriptor_set.update_by_ref(writes, []).unwrap();
 			}
+		}
+	}
+
+	/// Locking the Bindless system will ensure that any resource, that is dropped after the lock has been created, will
+	/// not be deallocated or removed from the bindless descriptor set until this lock is dropped. There may be multiple
+	/// active locks at the same time that can be unlocked out of order.
+	pub fn lock(&self) -> BindlessLock {
+		BindlessLock {
+			_buffer: self.buffer.lock_table(),
+			_image: self.image.lock_table(),
+			_sampler: self.sampler.lock_table(),
 		}
 	}
 }

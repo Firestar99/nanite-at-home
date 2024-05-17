@@ -98,7 +98,6 @@ impl OpaqueRenderTask {
 		cmd.end_rendering().unwrap();
 		let cmd = cmd.end().unwrap();
 
-		self.init.bindless.flush();
 		future.then_execute(graphics.clone(), cmd).unwrap()
 	}
 }
