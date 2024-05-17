@@ -1,14 +1,13 @@
 use crate::descriptor::bindless::BindlessLock;
 use crate::descriptor::Bindless;
-use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::sync::future::{FenceSignalFuture, NowFuture, SemaphoreSignalFuture};
 use vulkano::sync::{now, GpuFuture};
 use vulkano::{Validated, VulkanError};
 use vulkano_bindless_shaders::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 
-pub struct FrameManager<B: AsRef<Bindless>> {
-	bindless: Arc<B>,
+pub struct FrameManager {
+	bindless: Arc<Bindless>,
 	frame_id_mod: u32,
 	prev_frame: ResourceInFlight<Option<PrevFrame>>,
 }
@@ -21,8 +20,8 @@ struct PrevFrame {
 	_lock: BindlessLock,
 }
 
-impl<B: AsRef<Bindless>> FrameManager<B> {
-	pub fn new(bindless: Arc<B>, frames_in_flight: u32) -> Self {
+impl FrameManager {
+	pub fn new(bindless: Arc<Bindless>, frames_in_flight: u32) -> Self {
 		let seed = SeedInFlight::new(frames_in_flight);
 		Self {
 			bindless,
@@ -53,7 +52,7 @@ impl<B: AsRef<Bindless>> FrameManager<B> {
 	/// [`device_wait_idle`]: vulkano::device::Device::wait_idle
 	pub fn new_frame<F>(&mut self, f: F)
 	where
-		F: FnOnce(&Frame<B>, PrevFrameFuture) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+		F: FnOnce(&Frame, PrevFrameFuture) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		// SAFETY: this function ensures the FramesInFlight are never launched concurrently
 		let fif;
@@ -83,11 +82,11 @@ impl<B: AsRef<Bindless>> FrameManager<B> {
 			// unlock bindless lock
 			drop(prev_frame);
 		}
-		let prev_frame_future = now(self.bindless().device.clone());
+		let prev_frame_future = now(self.bindless.device.clone());
 
 		// do the render, write back GpuFuture
 		let fence_rendered = {
-			let _lock = self.bindless().lock();
+			let _lock = self.bindless.lock();
 			let frame = Frame {
 				frame_manager: self,
 				fif,
@@ -103,21 +102,16 @@ impl<B: AsRef<Bindless>> FrameManager<B> {
 	pub fn seed(&self) -> SeedInFlight {
 		self.prev_frame.seed()
 	}
-
-	#[inline]
-	pub fn bindless(&self) -> &Bindless {
-		(*self.bindless).as_ref()
-	}
 }
 
-pub struct Frame<'a, B: AsRef<Bindless>> {
-	pub frame_manager: &'a FrameManager<B>,
+pub struct Frame<'a> {
+	pub frame_manager: &'a FrameManager,
 	pub fif: FrameInFlight<'a>,
 }
 
-impl<'a, B: AsRef<Bindless>> Frame<'a, B> {
+impl<'a> Frame<'a> {
 	pub fn force_flush(&self) {
-		self.frame_manager.bindless().flush();
+		self.frame_manager.bindless.flush();
 	}
 
 	pub fn flush<G: GpuFuture>(&self, gpu_future: G) -> Result<G, Validated<VulkanError>> {
@@ -143,16 +137,8 @@ impl<'a, B: AsRef<Bindless>> Frame<'a, B> {
 	}
 }
 
-impl<'a, B: AsRef<Bindless>> Deref for Frame<'a, B> {
-	type Target = B;
-
-	fn deref(&self) -> &Self::Target {
-		&self.frame_manager.bindless
-	}
-}
-
-impl<B: AsRef<Bindless>> From<&FrameManager<B>> for SeedInFlight {
-	fn from(value: &FrameManager<B>) -> Self {
+impl From<&FrameManager> for SeedInFlight {
+	fn from(value: &FrameManager) -> Self {
 		value.seed()
 	}
 }

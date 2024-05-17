@@ -26,7 +26,7 @@ pub struct RenderContext {
 
 impl RenderContext {
 	pub fn new(init: Arc<Init>, frames_in_flight: u32) -> (Arc<Self>, RenderContextNewFrame) {
-		let frame_manager = FrameManager::new(init.clone(), frames_in_flight);
+		let frame_manager = FrameManager::new(init.bindless.clone(), frames_in_flight);
 		let seed = frame_manager.seed();
 		let frame_data_uniform = UniformInFlight::new(
 			init.memory_allocator.clone(),
@@ -69,7 +69,7 @@ impl From<&RenderContext> for SeedInFlight {
 /// allows generating [`RenderContextNewFrame::new_frame()`].
 pub struct RenderContextNewFrame {
 	render_context: Arc<RenderContext>,
-	frame_manager: FrameManager<Init>,
+	frame_manager: FrameManager,
 }
 
 assert_not_impl_any!(RenderContextNewFrame: Clone);
@@ -111,7 +111,7 @@ impl Deref for RenderContextNewFrame {
 /// A `FrameContext` is created once per Frame rendered, containing frame-specific information and access to resources.
 pub struct FrameContext<'a> {
 	pub render_context: Arc<RenderContext>,
-	pub frame: &'a Frame<'a, Init>,
+	pub frame: &'a Frame<'a>,
 	pub fif: FrameInFlight<'a>,
 	pub frame_data: FrameData,
 	pub viewport: Viewport,

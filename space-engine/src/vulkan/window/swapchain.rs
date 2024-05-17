@@ -18,7 +18,6 @@ use vulkano::swapchain::{
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
-use vulkano_bindless::descriptor::Bindless;
 use vulkano_bindless::frame_manager::Frame;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
@@ -303,7 +302,7 @@ impl<'a> AcquiredImage<'a> {
 
 	pub fn present(
 		self,
-		frame: &Frame<impl AsRef<Bindless>>,
+		frame: &Frame,
 		future: impl GpuFuture + 'static,
 	) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>> {
 		match frame.then_signal_fence_and_flush(

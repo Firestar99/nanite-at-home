@@ -41,7 +41,7 @@ impl Bindless {
 	/// # Safety
 	/// * There must only be one global Bindless instance for each [`Device`].
 	/// * The [general bindless safety requirements](crate#safety) apply
-	pub unsafe fn new(device: Arc<Device>, stages: ShaderStages, counts: DescriptorCounts) -> Self {
+	pub unsafe fn new(device: Arc<Device>, stages: ShaderStages, counts: DescriptorCounts) -> Arc<Self> {
 		let limit = DescriptorCounts::limits(device.physical_device());
 		assert!(
 			counts.is_within_limit(limit),
@@ -67,7 +67,7 @@ impl Bindless {
 		let allocator = BindlessDescriptorSetAllocator::new(device.clone());
 		let descriptor_set = DescriptorSet::new(allocator, descriptor_set_layout.clone(), [], []).unwrap();
 
-		Self {
+		Arc::new(Self {
 			descriptor_set_layout,
 			descriptor_set,
 			buffer: BufferTable::new(device.clone(), counts.buffers),
@@ -75,7 +75,7 @@ impl Bindless {
 			sampler: SamplerTable::new(device.clone(), counts.samplers),
 			device,
 			flush_lock: Mutex::new(()),
-		}
+		})
 	}
 
 	/// Flush the bindless descriptor set. All newly allocated resources before this call will be written.

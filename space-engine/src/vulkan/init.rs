@@ -52,7 +52,7 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
-	pub bindless: Bindless,
+	pub bindless: Arc<Bindless>,
 	pub memory_allocator: Arc<StandardMemoryAllocator>,
 	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
 	pub cmd_buffer_allocator: Arc<StandardCommandBufferAllocator>,
