@@ -13,7 +13,7 @@ pub struct OpaqueModel {
 }
 
 impl OpaqueModel {
-	pub async fn direct<V>(
+	pub fn direct<V>(
 		texture_manager: &Arc<TextureManager>,
 		vertex_data: V,
 		strong_refs: impl IntoIterator<Item = RCDesc<Image2d>>,
@@ -35,7 +35,7 @@ impl OpaqueModel {
 		}
 	}
 
-	pub async fn indexed<I, V>(
+	pub fn indexed<I, V>(
 		texture_manager: &Arc<TextureManager>,
 		index_data: I,
 		vertex_data: V,

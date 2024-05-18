@@ -7,7 +7,6 @@ use gltf::mesh::Mode;
 use gltf::{Document, Node, Scene};
 use image::DynamicImage;
 use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
-use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
@@ -47,10 +46,7 @@ async fn load_gltf_inner(texture_manager: &Arc<TextureManager>, path: &Path) -> 
 	)
 	.await;
 
-	let mut vertices = Vec::new();
-	let mut indices = Vec::new();
-	let mut vertices_direct = Vec::new();
-	let mut strong_refs = HashSet::new();
+	let mut models = Vec::new();
 	for node in document.nodes() {
 		let mat = nodes_mat[node.index()];
 		if let Some(mesh) = node.mesh() {
@@ -64,7 +60,7 @@ async fn load_gltf_inner(texture_manager: &Arc<TextureManager>, path: &Path) -> 
 					.base_color_texture()
 					.map(|tex| images[tex.texture().source().index()].clone())
 					.unwrap_or_else(|| white_image.clone());
-				strong_refs.insert(albedo_tex.clone());
+				let albedo_tex_weak = albedo_tex.to_weak();
 				let model_vertices = reader
 					.read_positions()
 					.unwrap()
@@ -73,37 +69,24 @@ async fn load_gltf_inner(texture_manager: &Arc<TextureManager>, path: &Path) -> 
 						ModelVertex::new(
 							mat.transform_point3(Vec3::from(pos)),
 							Vec2::from(tex_coord),
-							albedo_tex.to_weak(),
+							albedo_tex_weak,
 						)
 					});
 
 				if let Some(model_indices) = reader.read_indices() {
-					let base_vertices = vertices.len() as u32;
-					vertices.extend(model_vertices);
-					indices.extend(model_indices.into_u32().map(|i| base_vertices + i));
+					models.push(OpaqueModel::indexed(
+						texture_manager,
+						model_indices.into_u32(),
+						model_vertices,
+						[albedo_tex],
+					));
 				} else {
-					vertices_direct.extend(model_vertices);
+					models.push(OpaqueModel::direct(texture_manager, model_vertices, [albedo_tex]));
 				}
 			}
 		}
 	}
-
-	let strong_refs: Vec<_> = strong_refs.into_iter().collect();
-	let opaque_model_direct = if !vertices_direct.is_empty() {
-		Some(OpaqueModel::direct(texture_manager, vertices_direct, strong_refs.clone()).await)
-	} else {
-		None
-	};
-	let opaque_model_indexed = if !indices.is_empty() {
-		Some(OpaqueModel::indexed(texture_manager, indices, vertices, strong_refs).await)
-	} else {
-		None
-	};
-
-	[opaque_model_indexed, opaque_model_direct]
-		.into_iter()
-		.flatten()
-		.collect()
+	models
 }
 
 fn gltf_image_to_dynamic_image(src: Data) -> DynamicImage {

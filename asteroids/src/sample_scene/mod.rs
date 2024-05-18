@@ -62,8 +62,5 @@ pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out:
 		}),
 		[rust_mascot_tex],
 	);
-
-	let vulkano_logo = vulkano_logo.await;
-	let rust_mascot = rust_mascot.await;
 	out.extend([vulkano_logo, rust_mascot])
 }
