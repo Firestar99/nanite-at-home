@@ -5,13 +5,13 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/asteroids-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/asteroids/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/shader-symbols-builder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-engine-shader-builder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-engine-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-engine/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-shaders/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-shader-builder/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

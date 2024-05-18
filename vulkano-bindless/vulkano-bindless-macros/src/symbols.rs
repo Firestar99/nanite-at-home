@@ -3,8 +3,8 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::format_ident;
 
 pub struct Symbols {
-	pub crate_ident: Ident,
 	pub bindless: Ident,
+	pub crate_shaders: Ident,
 }
 
 impl Symbols {
@@ -12,7 +12,7 @@ impl Symbols {
 		let crate_ident = crate_ident();
 		Self {
 			bindless: format_ident!("bindless"),
-			crate_ident,
+			crate_shaders: crate_ident,
 		}
 	}
 }

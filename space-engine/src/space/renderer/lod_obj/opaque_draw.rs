@@ -1,4 +1,3 @@
-use smallvec::smallvec;
 use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
 use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
 use std::mem;
@@ -13,14 +12,16 @@ use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
 use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
-use vulkano::pipeline::{
-	DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
-};
+use vulkano::pipeline::PipelineBindPoint::Graphics;
+use vulkano::pipeline::{DynamicState, Pipeline, PipelineLayout};
 use vulkano::shader::ShaderStages;
+use vulkano_bindless::descriptor::metadata::PushConstant;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::descriptor::{Buffer, Sampler};
+use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
+	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
+};
 
 use crate::shader::space::renderer::lod_obj::opaque_shader;
 use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
@@ -29,7 +30,7 @@ use crate::space::Init;
 
 #[derive(Clone)]
 pub struct OpaqueDrawPipeline {
-	pipeline: Arc<GraphicsPipeline>,
+	pipeline: BindlessMeshGraphicsPipeline<Params<'static>>,
 	sampler: RCDesc<Sampler>,
 }
 
@@ -47,7 +48,7 @@ impl OpaqueDrawPipeline {
 				push_constant_ranges: [PushConstantRange {
 					stages: ShaderStages::TASK | ShaderStages::MESH | ShaderStages::FRAGMENT,
 					offset: 0,
-					size: mem::size_of::<Params>() as u32,
+					size: mem::size_of::<PushConstant<Params>>() as u32,
 				}]
 				.to_vec(),
 				..PipelineLayoutCreateInfo::default()
@@ -55,18 +56,15 @@ impl OpaqueDrawPipeline {
 		)
 		.unwrap();
 
-		let pipeline = GraphicsPipeline::new(
-			device.clone(),
-			Some(init.pipeline_cache.deref().clone()),
-			GraphicsPipelineCreateInfo {
-				stages: smallvec![
-					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_task::new(device.clone())),
-					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_mesh::new(device.clone())),
-					PipelineShaderStageCreateInfo::new(opaque_shader::opaque_fs::new(device.clone())),
-				],
-				rasterization_state: Some(RasterizationState::default()),
-				viewport_state: Some(ViewportState::default()),
-				multisample_state: Some(MultisampleState::default()),
+		let pipeline = BindlessMeshGraphicsPipeline::new_task(
+			init.bindless.clone(),
+			opaque_shader::opaque_task::new(),
+			opaque_shader::opaque_mesh::new(),
+			opaque_shader::opaque_fs::new(),
+			MeshGraphicsPipelineCreateInfo {
+				rasterization_state: RasterizationState::default(),
+				viewport_state: ViewportState::default(),
+				multisample_state: MultisampleState::default(),
 				depth_stencil_state: Some(DepthStencilState {
 					depth: Some(DepthState {
 						write_enable: true,
@@ -87,9 +85,12 @@ impl OpaqueDrawPipeline {
 					..PipelineRenderingCreateInfo::default()
 				})
 				.into(),
+				discard_rectangle_state: None,
 				dynamic_state: [DynamicState::Viewport].into_iter().collect(),
-				..GraphicsPipelineCreateInfo::layout(layout)
+				conservative_rasterization_state: None,
 			},
+			Some(init.pipeline_cache.deref().clone()),
+			Some(layout),
 		)
 		.unwrap();
 
@@ -109,30 +110,24 @@ impl OpaqueDrawPipeline {
 		models: RCDesc<Buffer<[OpaqueGpuModel]>>,
 	) {
 		unsafe {
-			let init = &frame_context.render_context.init;
-			cmd.bind_pipeline_graphics(self.pipeline.clone())
-				.unwrap()
-				.set_viewport(0, frame_context.viewport_smallvec())
-				.unwrap()
-				.bind_descriptor_sets(
-					PipelineBindPoint::Graphics,
-					self.pipeline.layout().clone(),
-					0,
-					(
-						init.bindless.descriptor_set.clone(),
-						frame_context.global_descriptor_set.clone().0,
-					),
-				)
-				.unwrap()
-				.push_constants(
-					self.pipeline.layout().clone(),
-					0,
+			self.pipeline
+				.bind(
+					cmd,
 					Params {
 						models: models.to_transient(frame_context.fif),
 						sampler: self.sampler.to_transient(frame_context.fif),
 					}
 					.to_static(),
 				)
+				.unwrap()
+				.bind_descriptor_sets(
+					Graphics,
+					self.pipeline.layout().clone(),
+					1,
+					frame_context.global_descriptor_set.clone().0,
+				)
+				.unwrap()
+				.set_viewport(0, frame_context.viewport_smallvec())
 				.unwrap()
 				.draw_mesh_tasks([models.len() as u32, 1, 1])
 				.unwrap();

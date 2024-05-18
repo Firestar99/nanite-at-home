@@ -8,6 +8,7 @@ use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::bindless;
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
 use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
+use vulkano_bindless_shaders::param::ParamConstant;
 
 #[derive(Copy, Clone)]
 pub struct Params<'a> {
@@ -18,6 +19,8 @@ pub struct Params<'a> {
 unsafe impl bytemuck::Zeroable for Params<'static> {}
 
 unsafe impl bytemuck::AnyBitPattern for Params<'static> {}
+
+impl ParamConstant for Params<'static> {}
 
 impl<'a> Params<'a> {
 	/// # Safety
@@ -40,7 +43,7 @@ pub struct Payload {
 #[bindless(task_ext(threads(1)))]
 pub fn opaque_task(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params,
+	#[bindless(param_constants)] param: &Params<'static>,
 	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
 	#[spirv(task_payload_workgroup_ext)] payload: &mut Payload,
 ) {
@@ -61,7 +64,7 @@ const OUTPUT_TRIANGLES: usize = 1;
 pub fn opaque_mesh(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[spirv(descriptor_set = 1, binding = 0, uniform)] frame_data: &FrameData,
-	#[bindless(param_constants)] param: &Params,
+	#[bindless(param_constants)] param: &Params<'static>,
 	#[spirv(task_payload_workgroup_ext)] payload: &Payload,
 	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
 	#[spirv(primitive_triangle_indices_ext)] indices: &mut [UVec3; OUTPUT_TRIANGLES],
@@ -93,10 +96,10 @@ pub fn opaque_mesh(
 	indices[0] = UVec3::new(0, 1, 2);
 }
 
-#[bindless(fragment)]
+#[bindless(fragment())]
 pub fn opaque_fs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params,
+	#[bindless(param_constants)] param: &Params<'static>,
 	vert_tex_coords: Vec2,
 	#[spirv(flat)] vert_texture: TransientDesc<Image2d>,
 	output: &mut Vec4,

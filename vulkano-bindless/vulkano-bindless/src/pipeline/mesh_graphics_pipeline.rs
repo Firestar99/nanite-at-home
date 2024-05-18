@@ -1,11 +1,11 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
-use crate::pipeline::shader::{BindlessShader, FragmentShader, MeshShader, TaskShader};
+use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
 use ahash::HashSet;
 use smallvec::SmallVec;
 use std::sync::Arc;
-use vulkano::buffer::{BufferContents, Subbuffer};
+use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{DrawMeshTasksIndirectCommand, RecordingCommandBuffer};
 use vulkano::pipeline::cache::PipelineCache;
 use vulkano::pipeline::graphics::color_blend::ColorBlendState;
@@ -21,6 +21,8 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
+use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::shader_type::{FragmentShader, MeshShader, TaskShader};
 
 pub type BindlessMeshGraphicsPipeline<T> = BindlessPipeline<MeshGraphicsPipelineType, T>;
 
@@ -79,7 +81,7 @@ pub struct MeshGraphicsPipelineCreateInfo {
 	pub conservative_rasterization_state: Option<ConservativeRasterizationState>,
 }
 
-impl<T: BufferContents> BindlessPipeline<MeshGraphicsPipelineType, T> {
+impl<T: ParamConstant> BindlessMeshGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: MeshGraphicsPipelineCreateInfo,
@@ -100,7 +102,7 @@ impl<T: BufferContents> BindlessPipeline<MeshGraphicsPipelineType, T> {
 			multisample_state: Some(create_info.multisample_state),
 			depth_stencil_state: create_info.depth_stencil_state,
 			color_blend_state: create_info.color_blend_state,
-			dynamic_state: Default::default(),
+			dynamic_state: create_info.dynamic_state,
 			subpass: Some(create_info.subpass),
 			base_pipeline: None,
 			discard_rectangle_state: create_info.discard_rectangle_state,

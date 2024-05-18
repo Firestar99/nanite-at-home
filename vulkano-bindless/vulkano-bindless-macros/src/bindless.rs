@@ -4,11 +4,12 @@ use crate::AppendTokens;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::spanned::Spanned;
-use syn::{Error, FnArg, ItemFn, PatType, Result, ReturnType, Type, TypeReference};
+use syn::{Error, FnArg, ItemFn, MetaList, PatType, Result, ReturnType, Type, TypeReference};
 
 pub struct BindlessContext<'a> {
 	symbols: &'a Symbols,
 	item: &'a ItemFn,
+	attr: &'a MetaList,
 	entry_args: TokenStream,
 	inner_value: TokenStream,
 	inner_arg: TokenStream,
@@ -17,6 +18,7 @@ pub struct BindlessContext<'a> {
 pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> Result<TokenStream> {
 	let symbols = Symbols::new();
 	let item = syn::parse::<ItemFn>(item)?;
+	let attr = syn::parse::<MetaList>(attr)?;
 	match &item.sig.output {
 		ReturnType::Default => (),
 		ReturnType::Type(_, e) => return Err(Error::new(e.span(), "Entry points must not return anything!")),
@@ -64,14 +66,15 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	}
 
 	let mut context = BindlessContext {
-		item: &item,
 		symbols: &symbols,
+		item: &item,
+		attr: &attr,
 		entry_args: TokenStream::new(),
 		inner_value: TokenStream::new(),
 		inner_arg: TokenStream::new(),
 	};
 
-	let _metadata_get = gen_bindless_param(&mut context, bindless_param)?;
+	let param = gen_bindless_param(&mut context, bindless_param)?;
 	gen_bindless_descriptors(&mut context, bindless_descriptors)?;
 	for arg in forward {
 		let var_name = &arg.pat;
@@ -79,11 +82,16 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 		quote!(#var_name,).to_tokens(&mut context.inner_value);
 		strip_attr(arg).to_tokens(&mut context.inner_arg);
 	}
+	let entry_shader_type = get_entry_shader_type(&mut context)?;
 
-	let crate_ident = &context.symbols.crate_ident;
-	let entry_point_attr = TokenStream::from(attr);
-	let vis = &context.item.vis;
 	let entry_ident = &context.item.sig.ident;
+	// same formatting in macros and shader-builder
+	let entry_shader_type_ident = format_ident!("__Bindless_{}_ShaderType", entry_ident);
+	let param_type_ident = format_ident!("__Bindless_{}_ParamConstant", entry_ident);
+	let param_type = &param.param_ty;
+
+	let crate_shaders = &context.symbols.crate_shaders;
+	let vis = &context.item.vis;
 	let entry_args = &context.entry_args;
 	let inner_ident = format_ident!("__bindless_{}", entry_ident);
 	let inner_value = &context.inner_value;
@@ -93,7 +101,12 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	// the fn_ident_inner *could* be put within the entry point fn,
 	// but putting it outside significantly improves editor performance in rustrover
 	Ok(quote! {
-		#[#crate_ident::spirv(#entry_point_attr)]
+		#[allow(non_camel_case_types)]
+		#vis type #entry_shader_type_ident = #entry_shader_type;
+		#[allow(non_camel_case_types)]
+		#vis type #param_type_ident = #param_type;
+
+		#[#crate_shaders::spirv(#attr)]
 		#[allow(clippy::too_many_arguments)]
 		#vis fn #entry_ident(#entry_args) {
 			#inner_ident(#inner_value);
@@ -106,7 +119,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 
 fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>) -> Result<()> {
 	if let Some(arg) = arg {
-		let crate_ident = &context.symbols.crate_ident;
+		let crate_shaders = &context.symbols.crate_shaders;
 		let buffers = format_ident!("__bindless_buffers");
 		let samplers = format_ident!("__bindless_samplers");
 
@@ -121,8 +134,8 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>
 				$(let $sampled_name = format_ident!("__bindless_{}", stringify!($sampled_name));)*
 
 				image_args = quote! {
-					$(#[spirv(descriptor_set = 0, binding = 1)] #$storage_name: &#crate_ident::spirv_std::RuntimeArray<#crate_ident$storage_ty>,)*
-					$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled_name: &#crate_ident::spirv_std::RuntimeArray<#crate_ident$sampled_ty>,)*
+					$(#[spirv(descriptor_set = 0, binding = 1)] #$storage_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$storage_ty>,)*
+					$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$sampled_ty>,)*
 				};
 				image_values = quote! {
 					$($storage_name: #$storage_name,)*
@@ -134,12 +147,12 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>
 
 		// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 		context.entry_args.append_tokens(quote! {
-			#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &mut #crate_ident::spirv_std::RuntimeArray<[u32]>,
+			#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &mut #crate_shaders::spirv_std::RuntimeArray<[u32]>,
 			#image_args
-			#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_ident::spirv_std::RuntimeArray<#crate_ident::descriptor::Sampler>,
+			#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders::descriptor::Sampler>,
 		});
 		context.inner_value.append_tokens(quote! {
-			&#crate_ident::descriptor::Descriptors {
+			&#crate_shaders::descriptor::Descriptors {
 				buffers: #buffers,
 				#image_values
 				samplers: #samplers,
@@ -155,10 +168,11 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>
 struct BindlessParam {
 	metadata: Ident,
 	metadata_extract: TokenStream,
+	param_ty: TokenStream,
 }
 
 fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> Result<BindlessParam> {
-	let crate_ident = &context.symbols.crate_ident;
+	let crate_shaders = &context.symbols.crate_shaders;
 	// let param_ty = arg.map_or_else(|| quote!(()), |arg| arg.ty.to_token_stream());
 	let param_ty = match arg {
 		None => Ok(quote!(())),
@@ -176,7 +190,7 @@ fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> R
 
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 	context.entry_args.append_tokens(quote! {
-		#[spirv(push_constant)] #push_constant: &#crate_ident::descriptor::metadata::PushConstant<#param_ty>,
+		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::metadata::PushConstant<#param_ty>,
 	});
 	context.inner_value.append_tokens(quote! {
 		&#push_constant.t,
@@ -191,6 +205,7 @@ fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> R
 			let #metadata = &#push_constant.metadata;
 		},
 		metadata,
+		param_ty,
 	})
 }
 
@@ -200,4 +215,26 @@ fn strip_attr(arg: &PatType) -> TokenStream {
 		..arg.clone()
 	};
 	quote!(#arg,)
+}
+
+fn get_entry_shader_type(context: &mut BindlessContext) -> Result<TokenStream> {
+	let attr = context.attr;
+	let shader_type = attr
+		.path
+		.get_ident()
+		.ok_or_else(|| Error::new(attr.path.span(), "entry point type is not an ident"))?;
+	let shader_type_name = match shader_type.to_string().as_str() {
+		"vertex" => "VertexShader",
+		"tessellation_control" => "TessellationControlShader",
+		"tessellation_evaluation" => "TessellationEvaluationShader",
+		"geometry" => "GeometryShader",
+		"fragment" => "FragmentShader",
+		"compute" => "ComputeShader",
+		"task_ext" => "TaskShader",
+		"mesh_ext" => "MeshShader",
+		_ => Err(Error::new(attr.path.span(), "Unknown bindless shader type"))?,
+	};
+	let shader_type = format_ident!("{}", shader_type_name);
+	let crate_shaders = &context.symbols.crate_shaders;
+	Ok(quote!(#crate_shaders::shader_type::#shader_type))
 }

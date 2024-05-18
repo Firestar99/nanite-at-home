@@ -1,12 +1,13 @@
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
-use std::{fs, io};
-
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
-use smallvec::SmallVec;
+use std::{fs, io, ptr};
+use syn::punctuated::Punctuated;
+use syn::{Path, PathSegment, Token};
 
 pub struct CodegenOptions {
 	pub shader_symbols_path: String,
@@ -37,10 +38,11 @@ impl Error for CodegenError {}
 
 pub fn codegen_shader_symbols<'a>(
 	shaders: impl Iterator<Item = (&'a str, &'a PathBuf)>,
+	crate_name: &String,
 	out_path: &PathBuf,
 	_options: &CodegenOptions,
 ) -> Result<(), CodegenError> {
-	let tokens = ModNode::new(shaders).emit();
+	let tokens = ModNode::new(shaders).emit(crate_name);
 
 	// when pretty printing fails, always write plain version, then error
 	let (content, error) = codegen_try_pretty_print(tokens);
@@ -66,12 +68,7 @@ pub fn codegen_try_pretty_print(tokens: TokenStream) -> (String, Option<CodegenE
 }
 
 const SHADER_TYPE_WARNING: &str = stringify! {
-	/// machine generated file, DO NOT EDIT
-
-	/// Shaders may be of different types but are all declared as `ty: "vertex"` in the `shader!` macro.
-	/// This is due to the macro validating that you specify a shader type, but when you supply your
-	/// shader as `bytes: /path/to/*.spv` it won't actually use the shader type specified anywhere.
-	/// It is only used when compiling from glsl source, which we are not doing.
+	// machine generated file, DO NOT EDIT
 };
 
 #[derive(Debug, Default)]
@@ -101,38 +98,51 @@ impl<'a> ModNode<'a> {
 		}
 	}
 
-	fn emit(&self) -> TokenStream {
-		let content = self.emit_loop();
-		quote! {
-			#[allow(unused_imports)]
-			use std::sync::Arc;
-			#[allow(unused_imports)]
-			use vulkano::device::Device;
-			#[allow(unused_imports)]
-			use vulkano::shader::EntryPoint;
-			#[allow(unused_imports)]
-			use vulkano_shaders::shader;
-
-			#content
-		}
+	fn emit(&self, crate_name: &String) -> TokenStream {
+		let crate_name = format_ident!("{}", crate_name);
+		self.emit_loop(&crate_name)
 	}
 
-	fn emit_loop(&self) -> TokenStream {
-		let mut content = quote! {};
+	fn emit_loop(&self, crate_name: &Ident) -> TokenStream {
+		let mut content: SmallVec<[_; 5]> = SmallVec::new();
 		if let Some((full_name, path)) = self.shader {
 			let path = path.to_str().unwrap();
-			content = quote! {
-				#content
+			let shader_ident = format_ident!("BindlessShaderImpl");
 
-				shader! {
+			println!("{}", full_name);
+			let full_name = syn::parse_str::<Path>(full_name).unwrap();
+			let entry_ident = &full_name.segments.iter().last().unwrap().ident;
+			let mod_path = full_name
+				.segments
+				.iter()
+				.take_while(|i| !ptr::eq(&i.ident, entry_ident))
+				.collect::<Punctuated<&PathSegment, Token![::]>>();
+
+			// same formatting in macros and shader-builder
+			let entry_shader_type_ident = format_ident!("__Bindless_{}_ShaderType", entry_ident);
+			let param_type_ident = format_ident!("__Bindless_{}_ParamConstant", entry_ident);
+
+			content.push(quote! {
+				vulkano_shaders::shader! {
 					bytes: #path,
 					generate_structs: false,
 				}
 
-				pub fn new(device: Arc<Device>) -> EntryPoint {
-					load(device).unwrap().entry_point(#full_name).unwrap()
+				pub struct #shader_ident;
+
+				impl vulkano_bindless::pipeline::shader::BindlessShader for #shader_ident {
+					type ShaderType = #crate_name::#mod_path::#entry_shader_type_ident;
+					type ParamConstant = #crate_name::#mod_path::#param_type_ident;
+
+					fn load(&self, device: std::sync::Arc<vulkano::device::Device>) -> Result<std::sync::Arc<vulkano::shader::ShaderModule>, vulkano::Validated<vulkano::VulkanError>> {
+						load(device)
+					}
 				}
-			}
+
+				pub fn new() -> &'static #shader_ident {
+					&#shader_ident {}
+				}
+			});
 		}
 
 		if !self.children.is_empty() {
@@ -141,17 +151,14 @@ impl<'a> ModNode<'a> {
 
 			for (name, node) in children {
 				let name = format_ident!("{}", name);
-				let inner = node.emit_loop();
-				content = quote! {
-					#content
-
+				let inner = node.emit_loop(crate_name);
+				content.push(quote! {
 					pub mod #name {
-						use super::*;
 						#inner
 					}
-				}
+				})
 			}
 		}
-		content
+		content.into_iter().collect::<TokenStream>()
 	}
 }

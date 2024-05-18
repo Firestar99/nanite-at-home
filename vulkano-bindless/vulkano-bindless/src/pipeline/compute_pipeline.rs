@@ -1,15 +1,17 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
-use crate::pipeline::shader::{BindlessShader, ComputeShader};
+use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
 use std::sync::Arc;
-use vulkano::buffer::{BufferContents, Subbuffer};
+use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{DispatchIndirectCommand, RecordingCommandBuffer};
 use vulkano::pipeline::cache::PipelineCache;
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::ComputePipeline as VComputePipeline;
 use vulkano::pipeline::{PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
+use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::shader_type::ComputeShader;
 
 pub type BindlessComputePipeline<T> = BindlessPipeline<ComputePipelineType, T>;
 
@@ -27,7 +29,7 @@ impl VulkanPipeline for ComputePipelineType {
 	}
 }
 
-impl<T: BufferContents> BindlessPipeline<ComputePipelineType, T> {
+impl<T: ParamConstant> BindlessComputePipeline<T> {
 	pub fn new(
 		bindless: Arc<Bindless>,
 		stage: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,

@@ -1,13 +1,11 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
-use crate::pipeline::shader::{
-	BindlessShader, FragmentShader, GeometryShader, TesselationControlShader, TesselationEvaluationShader, VertexShader,
-};
+use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
 use ahash::HashSet;
 use smallvec::SmallVec;
 use std::sync::Arc;
-use vulkano::buffer::{BufferContents, IndexBuffer, Subbuffer};
+use vulkano::buffer::{IndexBuffer, Subbuffer};
 use vulkano::command_buffer::{DrawIndexedIndirectCommand, DrawIndirectCommand, RecordingCommandBuffer};
 use vulkano::pipeline::cache::PipelineCache;
 use vulkano::pipeline::graphics::color_blend::ColorBlendState;
@@ -26,6 +24,10 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
+use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::shader_type::{
+	FragmentShader, GeometryShader, TesselationControlShader, TesselationEvaluationShader, VertexShader,
+};
 
 pub type BindlessTraditionalGraphicsPipeline<T> = BindlessPipeline<TraditionalGraphicsPipelineType, T>;
 
@@ -93,7 +95,7 @@ pub struct TraditionalGraphicsPipelineCreateInfo {
 	pub conservative_rasterization_state: Option<ConservativeRasterizationState>,
 }
 
-impl<T: BufferContents> BindlessPipeline<TraditionalGraphicsPipelineType, T> {
+impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: TraditionalGraphicsPipelineCreateInfo,
@@ -114,7 +116,7 @@ impl<T: BufferContents> BindlessPipeline<TraditionalGraphicsPipelineType, T> {
 			multisample_state: Some(create_info.multisample_state),
 			depth_stencil_state: create_info.depth_stencil_state,
 			color_blend_state: create_info.color_blend_state,
-			dynamic_state: Default::default(),
+			dynamic_state: create_info.dynamic_state,
 			subpass: Some(create_info.subpass),
 			base_pipeline: None,
 			discard_rectangle_state: create_info.discard_rectangle_state,

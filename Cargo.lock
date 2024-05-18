@@ -2081,18 +2081,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shader-symbols-builder"
-version = "0.1.0"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "quote",
- "smallvec",
- "spirv-builder",
- "syn 2.0.46",
-]
-
-[[package]]
 name = "shaderc"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2269,7 +2257,7 @@ dependencies = [
 name = "space-engine-shader-builder"
 version = "0.1.0"
 dependencies = [
- "shader-symbols-builder",
+ "vulkano-bindless-shader-builder",
 ]
 
 [[package]]
@@ -2711,6 +2699,19 @@ dependencies = [
  "spirv-std",
  "syn 2.0.46",
  "vulkano-bindless-shaders",
+]
+
+[[package]]
+name = "vulkano-bindless-shader-builder"
+version = "0.1.0"
+dependencies = [
+ "prettyplease",
+ "proc-macro-crate 3.1.0",
+ "proc-macro2",
+ "quote",
+ "smallvec",
+ "spirv-builder",
+ "syn 2.0.46",
 ]
 
 [[package]]

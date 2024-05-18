@@ -2,13 +2,13 @@
 members = [
 	"asteroids",
 	"asteroids-shader",
-	"shader-symbols-builder",
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
 	"vulkano-bindless/vulkano-bindless",
 	"vulkano-bindless/vulkano-bindless-macros",
 	"vulkano-bindless/vulkano-bindless-shaders",
+	"vulkano-bindless/vulkano-bindless-shader-builder",
 ]
 resolver = "2"
 
@@ -27,13 +27,13 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 # members
 asteroids = { path = "asteroids" }
 asteroids-shader = { path = "asteroids-shader" }
-shader-symbols-builder = { path = "shader-symbols-builder", default-features = false, features = ["use-installed-tools"] }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
 vulkano-bindless = { path = "vulkano-bindless/vulkano-bindless" }
 vulkano-bindless-shaders = { path = "vulkano-bindless/vulkano-bindless-shaders" }
 vulkano-bindless-macros = { path = "vulkano-bindless/vulkano-bindless-macros" }
+vulkano-bindless-shader-builder = { path = "vulkano-bindless/vulkano-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }
 
 # vulkan
 # vulkano 0.35 development
