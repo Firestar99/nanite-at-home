@@ -16,6 +16,7 @@ use space_engine::vulkan::window::window_ref::WindowRef;
 use space_engine_shader::space::renderer::camera::Camera;
 use space_engine_shader::space::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
+use std::num::NonZeroUsize;
 use std::sync::mpsc::Receiver;
 use vulkano::shader::ShaderStages;
 use vulkano::sync::GpuFuture;
@@ -41,6 +42,13 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		std::env::remove_var("WAYLAND_DISPLAY");
 		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
 	}
+	std::env::set_var(
+		"SMOL_THREADS",
+		std::thread::available_parallelism()
+			.unwrap_or(NonZeroUsize::new(1).unwrap())
+			.get()
+			.to_string(),
+	);
 
 	let init;
 	{
