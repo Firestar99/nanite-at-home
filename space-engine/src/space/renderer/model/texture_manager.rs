@@ -11,6 +11,7 @@ use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
+use vulkano::DeviceSize;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::spirv_std::image::Image2d;
@@ -38,7 +39,7 @@ impl TextureManager {
 		let image_data = image_data.into_rgba8();
 		let (width, height) = image_data.dimensions();
 
-		let copy_buffer = vulkano::buffer::Buffer::from_iter(
+		let copy_buffer = vulkano::buffer::Buffer::new_slice(
 			init.memory_allocator.clone(),
 			BufferCreateInfo {
 				usage: BufferUsage::TRANSFER_SRC,
@@ -48,9 +49,10 @@ impl TextureManager {
 				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 				..AllocationCreateInfo::default()
 			},
-			image_data.into_raw().into_iter(),
+			image_data.len() as DeviceSize,
 		)
 		.unwrap();
+		copy_buffer.write().unwrap().copy_from_slice(&image_data);
 
 		let image = Image::new(
 			init.memory_allocator.clone(),
