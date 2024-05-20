@@ -1,7 +1,7 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::resource_table::ResourceTable;
+use crate::descriptor::resource_table::{FlushUpdates, ResourceTable};
 use crate::descriptor::Image;
 use crate::rc_slots::{Lock, RCSlot};
 use smallvec::SmallVec;
@@ -104,13 +104,17 @@ impl ImageTable {
 		self.resource_table.alloc_slot(image_view)
 	}
 
-	pub(crate) fn flush_updates<const C: usize>(&self, writes: &mut SmallVec<[WriteDescriptorSet; C]>) {
+	pub(crate) fn flush_updates<const C: usize>(
+		&self,
+		writes: &mut SmallVec<[WriteDescriptorSet; C]>,
+	) -> FlushUpdates<ImageTable> {
 		// TODO writes is written out-of-order with regard to bindings.
 		//   Would it be worth to buffer all writes of one binding, only flushing at the end?
 
 		let mut storage_buf = ImageUpdateBuffer::new(BINDING_STORAGE_IMAGE);
 		let mut sampled_buf = ImageUpdateBuffer::new(BINDING_SAMPLED_IMAGE);
-		self.resource_table.flush_updates(|start, buffer| {
+		let flush_updates = self.resource_table.flush_updates();
+		flush_updates.iter(|start, buffer| {
 			storage_buf.start(start, buffer.capacity());
 			sampled_buf.start(start, buffer.capacity());
 
@@ -140,7 +144,8 @@ impl ImageTable {
 
 			storage_buf.advance_flush(writes);
 			sampled_buf.advance_flush(writes);
-		})
+		});
+		flush_updates
 	}
 }
 

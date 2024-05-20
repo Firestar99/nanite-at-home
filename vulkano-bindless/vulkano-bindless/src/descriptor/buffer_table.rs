@@ -1,7 +1,7 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::resource_table::ResourceTable;
+use crate::descriptor::resource_table::{FlushUpdates, ResourceTable};
 use crate::rc_slots::{Lock, RCSlot};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
@@ -141,13 +141,18 @@ impl BufferTable {
 		Ok(self.resource_table.alloc_slot(buffer))
 	}
 
-	pub(crate) fn flush_updates<const C: usize>(&self, writes: &mut SmallVec<[WriteDescriptorSet; C]>) {
-		self.resource_table.flush_updates(|first_array_element, buffer| {
+	pub(crate) fn flush_updates<const C: usize>(
+		&self,
+		writes: &mut SmallVec<[WriteDescriptorSet; C]>,
+	) -> FlushUpdates<BufferTable> {
+		let flush_updates = self.resource_table.flush_updates();
+		flush_updates.iter(|first_array_element, buffer| {
 			writes.push(WriteDescriptorSet::buffer_array(
 				BINDING_BUFFER,
 				first_array_element,
 				buffer.drain(..),
 			));
-		})
+		});
+		flush_updates
 	}
 }
