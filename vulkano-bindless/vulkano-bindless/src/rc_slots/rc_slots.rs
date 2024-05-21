@@ -505,7 +505,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 
 				while let Some(range) = guard.get(&Timestamp(unlock_timestamp.0 + Wrapping(1))) {
 					let range = range.clone();
-					unlock_timestamp = range.end;
+					unlock_timestamp = Timestamp(range.end.0 - Wrapping(1));
 					guard.remove(range);
 				}
 			}
