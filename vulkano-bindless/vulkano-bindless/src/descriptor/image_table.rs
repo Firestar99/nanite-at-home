@@ -1,16 +1,16 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::resource_table::{FlushUpdates, ResourceTable};
+use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
 use crate::descriptor::Image;
-use crate::rc_slots::{Lock, RCSlot};
+use crate::rc_slots::{RCSlotsInterface, SlotIndex};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
-use vulkano::descriptor_set::WriteDescriptorSet;
+use vulkano::descriptor_set::{DescriptorSet, InvalidateDescriptorSet, WriteDescriptorSet};
 use vulkano::device::physical::PhysicalDevice;
-use vulkano::device::Device;
+use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::view::{ImageView, ImageViewType};
 use vulkano::image::ImageUsage;
 use vulkano::shader::ShaderStages;
@@ -32,7 +32,7 @@ impl<
 	type DescTable = ImageTable;
 	type VulkanType = Arc<ImageView>;
 
-	fn deref_table(slot: &RCSlot<<Self::DescTable as DescTable>::Slot>) -> &Self::VulkanType {
+	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
 		slot
 	}
 
@@ -43,6 +43,7 @@ impl<
 
 impl DescTable for ImageTable {
 	type Slot = Arc<ImageView>;
+	type RCSlotsInterface = ImageInterface;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -80,7 +81,7 @@ impl DescTable for ImageTable {
 		.unwrap_err();
 	}
 
-	fn lock_table(&self) -> Lock<Self::Slot> {
+	fn lock_table(&self) -> Lock<Self> {
 		self.resource_table.lock()
 	}
 }
@@ -91,10 +92,10 @@ pub struct ImageTable {
 }
 
 impl ImageTable {
-	pub fn new(device: Arc<Device>, count: u32) -> Self {
+	pub fn new(descriptor_set: Arc<DescriptorSet>, count: u32) -> Self {
 		Self {
-			device,
-			resource_table: ResourceTable::new(count),
+			device: descriptor_set.device().clone(),
+			resource_table: ResourceTable::new(count, ImageInterface { descriptor_set }),
 		}
 	}
 
@@ -183,5 +184,33 @@ impl ImageUpdateBuffer {
 			)]);
 		}
 		self.start += len + 1;
+	}
+}
+
+pub struct ImageInterface {
+	descriptor_set: Arc<DescriptorSet>,
+}
+
+impl RCSlotsInterface<<ImageTable as DescTable>::Slot> for ImageInterface {
+	fn drop_slot(&self, index: SlotIndex, image: <ImageTable as DescTable>::Slot) {
+		let sampled = image.usage().contains(ImageUsage::SAMPLED);
+		let storage = image.usage().contains(ImageUsage::STORAGE);
+		let mut invalidates: SmallVec<[_; 2]> = SmallVec::new();
+		if sampled {
+			invalidates.push(InvalidateDescriptorSet::invalidate_array(
+				BINDING_SAMPLED_IMAGE,
+				index.0 as u32,
+				1,
+			));
+		}
+		if storage {
+			invalidates.push(InvalidateDescriptorSet::invalidate_array(
+				BINDING_STORAGE_IMAGE,
+				index.0 as u32,
+				1,
+			));
+		}
+		self.descriptor_set.invalidate(&invalidates).unwrap();
+		drop(image);
 	}
 }

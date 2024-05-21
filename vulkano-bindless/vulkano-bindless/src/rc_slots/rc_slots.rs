@@ -38,27 +38,39 @@ impl<T> Index<SlotIndex> for [Slot<T>] {
 	}
 }
 
-pub struct RCSlot<T> {
-	slots: *const RCSlots<T>,
+pub trait RCSlotsInterface<T> {
+	fn drop_slot(&self, index: SlotIndex, t: T);
+}
+
+pub struct DefaultRCSlotInterface;
+
+impl<T> RCSlotsInterface<T> for DefaultRCSlotInterface {
+	fn drop_slot(&self, _index: SlotIndex, t: T) {
+		drop(t);
+	}
+}
+
+pub struct RCSlot<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
+	slots: *const RCSlots<T, Interface>,
 	index: SlotIndex,
 }
 
-unsafe impl<T> Send for RCSlot<T> {}
-unsafe impl<T> Sync for RCSlot<T> {}
+unsafe impl<T, Interface: RCSlotsInterface<T>> Send for RCSlot<T, Interface> {}
+unsafe impl<T, Interface: RCSlotsInterface<T>> Sync for RCSlot<T, Interface> {}
 
-impl<T> RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	/// Creates a new RCSlot of an alive slot
 	///
 	/// # Safety
 	/// the slot must be alive, to ensure the Arc of `slots` is ref counted correctly
 	/// `ref_count` must have been incremented for this slot previously, and ownership to decrement it again is transferred to Self
 	#[inline]
-	unsafe fn new(slots: *const RCSlots<T>, index: SlotIndex) -> Self {
+	unsafe fn new(slots: *const RCSlots<T, Interface>, index: SlotIndex) -> Self {
 		Self { slots, index }
 	}
 
 	#[inline]
-	pub fn slots(&self) -> &RCSlots<T> {
+	pub fn slots(&self) -> &RCSlots<T, Interface> {
 		unsafe { &*self.slots }
 	}
 
@@ -135,14 +147,14 @@ impl<T> RCSlot<T> {
 	/// The [`SlotIndex`] must have originated from [`Self::from_raw_index`], this method must only be called once with
 	/// that particular [`SlotIndex`], `slots` must be the same instance as the original `RCSlot` and the T generic must be the same
 	#[inline]
-	pub unsafe fn from_raw_index(slots: &Arc<RCSlots<T>>, index: SlotIndex) -> RCSlot<T> {
+	pub unsafe fn from_raw_index(slots: &Arc<RCSlots<T, Interface>>, index: SlotIndex) -> Self {
 		RCSlot::new(Arc::as_ptr(slots) as *const _, index)
 	}
 }
 
 /// loom cannot reason with references
 #[cfg(not(feature = "loom_tests"))]
-impl<T> Deref for RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> Deref for RCSlot<T, Interface> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -151,14 +163,14 @@ impl<T> Deref for RCSlot<T> {
 	}
 }
 
-impl<T: Copy> RCSlot<T> {
+impl<T: Copy, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	/// replacement for deref if loom is in use
 	pub fn deref_copy(&self) -> T {
 		self.with(|t| *t)
 	}
 }
 
-impl<T> Clone for RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> Clone for RCSlot<T, Interface> {
 	fn clone(&self) -> Self {
 		// SAFETY: we are ref counting
 		unsafe {
@@ -168,7 +180,7 @@ impl<T> Clone for RCSlot<T> {
 	}
 }
 
-impl<T> Drop for RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> Drop for RCSlot<T, Interface> {
 	fn drop(&mut self) {
 		// SAFETY: we are ref counting
 		unsafe {
@@ -179,21 +191,21 @@ impl<T> Drop for RCSlot<T> {
 	}
 }
 
-impl<T> Debug for RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> Debug for RCSlot<T, Interface> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("RCSlot").field("ref_count", &self.ref_count()).finish()
 	}
 }
 
-impl<T> PartialEq<Self> for RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> PartialEq<Self> for RCSlot<T, Interface> {
 	fn eq(&self, other: &Self) -> bool {
 		self.slots == other.slots && self.index == other.index
 	}
 }
 
-impl<T> Eq for RCSlot<T> {}
+impl<T, Interface: RCSlotsInterface<T>> Eq for RCSlot<T, Interface> {}
 
-impl<T> Hash for RCSlot<T> {
+impl<T, Interface: RCSlotsInterface<T>> Hash for RCSlot<T, Interface> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.slots.hash(state);
 		self.index.hash(state);
@@ -289,12 +301,12 @@ impl<T> Default for Slot<T> {
 	}
 }
 
-pub struct Lock<T> {
-	slots: Arc<RCSlots<T>>,
+pub struct Lock<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
+	slots: Arc<RCSlots<T, Interface>>,
 	lock_timestamp: Timestamp,
 }
 
-impl<T> Lock<T> {
+impl<T, Interface: RCSlotsInterface<T>> Lock<T, Interface> {
 	pub fn unlock(self) {
 		// impl in drop
 	}
@@ -304,7 +316,7 @@ impl<T> Lock<T> {
 	/// (yet) supported.
 	pub fn iter_with<'a, R>(
 		&'a self,
-		f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
+		f: impl FnMut(Option<&RCSlot<T, Interface>>) -> R + 'a,
 	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
 		let reaper_include = |_, slot: &Slot<T>| {
 			// Safety: Reaper state ensures free_timestamp has been written
@@ -326,13 +338,14 @@ impl<T> Lock<T> {
 	// }
 }
 
-impl<T> Drop for Lock<T> {
+impl<T, Interface: RCSlotsInterface<T>> Drop for Lock<T, Interface> {
 	fn drop(&mut self) {
 		self.slots.unlock(self.lock_timestamp);
 	}
 }
 
-pub struct RCSlots<T> {
+pub struct RCSlots<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
+	interface: Interface,
 	array: Box<[Slot<T>]>,
 	next_free: CachePadded<AtomicUsize>,
 	/// queue of slots that can be dropped and reclaimed, as soon as all locks that may be using them have finished
@@ -355,9 +368,16 @@ pub struct RCSlots<T> {
 const UNLOCK_CONTROL_LOCKED: u32 = 0x1;
 const UNLOCK_CONTROL_MORE: u32 = 0x01;
 
-impl<T> RCSlots<T> {
+impl<T> RCSlots<T, DefaultRCSlotInterface> {
 	pub fn new(len: usize) -> Arc<Self> {
+		Self::new_with_interface(len, DefaultRCSlotInterface {})
+	}
+}
+
+impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
+	pub fn new_with_interface(len: usize, interface: Interface) -> Arc<Self> {
 		Arc::new(Self {
+			interface,
 			array: (0..len).map(|_| Slot::default()).collect::<Vec<_>>().into_boxed_slice(),
 			next_free: CachePadded::new(AtomicUsize::new(0)),
 			reaper_queue: SegQueue::new(),
@@ -369,7 +389,7 @@ impl<T> RCSlots<T> {
 		})
 	}
 
-	pub fn allocate(self: &Arc<Self>, t: T) -> RCSlot<T> {
+	pub fn allocate(self: &Arc<Self>, t: T) -> RCSlot<T, Interface> {
 		let index = self
 			.dead_queue
 			.pop()
@@ -442,12 +462,13 @@ impl<T> RCSlots<T> {
 		// Safety: nobody should be accessing t, so ordering of version_swap does not matter
 		unsafe {
 			slot.t.with_mut(|t| {
-				t.assume_init_drop();
+				// drops t and makes it uninit
+				self.interface.drop_slot(index, t.assume_init_read())
 			});
 		}
 	}
 
-	pub fn lock(self: &Arc<Self>) -> Lock<T> {
+	pub fn lock(self: &Arc<Self>) -> Lock<T, Interface> {
 		let lock_id = Timestamp(Wrapping(self.lock_timestamp_curr.fetch_add(1, Relaxed)) + Wrapping(1));
 		Lock {
 			slots: self.clone(),
@@ -540,7 +561,7 @@ impl<T> RCSlots<T> {
 	unsafe fn iter_with<'a, R>(
 		self: &'a Arc<Self>,
 		reaper_include: impl Fn(SlotIndex, &Slot<T>) -> bool + 'a,
-		mut f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
+		mut f: impl FnMut(Option<&RCSlot<T, Interface>>) -> R + 'a,
 	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
 		let max = self.next_free.load(Relaxed);
 
@@ -570,13 +591,13 @@ mod test_utils {
 
 	use super::*;
 
-	pub struct LockUnlock<T> {
-		slots: Arc<RCSlots<T>>,
-		lock: Lock<T>,
+	pub struct LockUnlock<T, Interface: RCSlotsInterface<T>> {
+		slots: Arc<RCSlots<T, Interface>>,
+		lock: Lock<T, Interface>,
 	}
 
-	impl<T> LockUnlock<T> {
-		pub fn new(slots: &Arc<RCSlots<T>>) -> Self {
+	impl<T, Interface: RCSlotsInterface<T>> LockUnlock<T, Interface> {
+		pub fn new(slots: &Arc<RCSlots<T, Interface>>) -> Self {
 			Self {
 				slots: slots.clone(),
 				lock: slots.lock(),
@@ -926,7 +947,7 @@ mod tests {
 		assert_eq!(Arc::strong_count(&arc), 1);
 	}
 
-	fn iter_collect<T: Clone>(lock: &Lock<T>) -> Vec<Option<T>> {
+	fn iter_collect<T: Clone, Interface: RCSlotsInterface<T>>(lock: &Lock<T, Interface>) -> Vec<Option<T>> {
 		lock.iter_with(|t| t.map(|slot| (**slot).clone())).collect::<Vec<_>>()
 	}
 

@@ -3,8 +3,8 @@ use crate::descriptor::buffer_table::BufferTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::DescTable;
 use crate::descriptor::image_table::ImageTable;
+use crate::descriptor::resource_table::Lock;
 use crate::descriptor::sampler_table::SamplerTable;
-use crate::rc_slots::Lock;
 use crate::sync::Mutex;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
@@ -34,9 +34,9 @@ pub struct Bindless {
 }
 
 pub struct BindlessLock {
-	_buffer: Lock<<BufferTable as DescTable>::Slot>,
-	_image: Lock<<ImageTable as DescTable>::Slot>,
-	_sampler: Lock<<SamplerTable as DescTable>::Slot>,
+	_buffer: Lock<BufferTable>,
+	_image: Lock<ImageTable>,
+	_sampler: Lock<SamplerTable>,
 }
 
 assert_impl_all!(Bindless: Send, Sync);
@@ -94,12 +94,12 @@ impl Bindless {
 		});
 
 		Arc::new(Self {
+			buffer: BufferTable::new(descriptor_set.clone(), counts.buffers),
+			image: ImageTable::new(descriptor_set.clone(), counts.image),
+			sampler: SamplerTable::new(descriptor_set.clone(), counts.samplers),
 			descriptor_set_layout,
 			pipeline_layouts,
 			descriptor_set,
-			buffer: BufferTable::new(device.clone(), counts.buffers),
-			image: ImageTable::new(device.clone(), counts.image),
-			sampler: SamplerTable::new(device.clone(), counts.samplers),
 			device,
 			flush_lock: Mutex::new(()),
 		})

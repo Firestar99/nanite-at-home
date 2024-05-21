@@ -37,8 +37,8 @@ vulkano-bindless-shader-builder = { path = "vulkano-bindless/vulkano-bindless-sh
 
 # vulkan
 # vulkano 0.35 development
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "8697ab7554b949422b1c3a71f417f7e2aac40e15" }
-vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "8697ab7554b949422b1c3a71f417f7e2aac40e15" }
+vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "d21de235edf6f2fa3fc18cb3603611fdf6d39e54" }
+vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "d21de235edf6f2fa3fc18cb3603611fdf6d39e54" }
 
 winit = { version = "0.29.9", features = ["rwh_05"] }
 

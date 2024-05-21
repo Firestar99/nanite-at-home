@@ -7,13 +7,15 @@ use std::ops::Deref;
 use vulkano_bindless_shaders::descriptor::{Sampler, TransientDesc, WeakDesc};
 
 pub struct RCDesc<D: DescTypeCpu + ?Sized> {
-	inner: RCSlot<<D::DescTable as DescTable>::Slot>,
+	inner: RCSlot<<D::DescTable as DescTable>::Slot, <D::DescTable as DescTable>::RCSlotsInterface>,
 }
 
 assert_impl_all!(RCDesc<Sampler>: Send, Sync);
 
 impl<D: DescTypeCpu + ?Sized> RCDesc<D> {
-	pub fn new(inner: RCSlot<<D::DescTable as DescTable>::Slot>) -> Self {
+	pub fn new(
+		inner: RCSlot<<D::DescTable as DescTable>::Slot, <D::DescTable as DescTable>::RCSlotsInterface>,
+	) -> Self {
 		Self { inner }
 	}
 

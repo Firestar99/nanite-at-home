@@ -1,5 +1,6 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::rc_slots::{Lock, RCSlot};
+use crate::descriptor::resource_table::Lock;
+use crate::rc_slots::RCSlotsInterface;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
@@ -16,7 +17,7 @@ pub trait DescTypeCpu: DescType {
 	type VulkanType;
 
 	/// deref [`Self::TableType`] to exposed [`Self::VulkanType`]
-	fn deref_table(slot: &RCSlot<<Self::DescTable as DescTable>::Slot>) -> &Self::VulkanType;
+	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType;
 
 	/// turn [`Self::VulkanType`] into the internal [`Self::DescTable::Slot`]
 	#[allow(clippy::wrong_self_convention)]
@@ -24,9 +25,10 @@ pub trait DescTypeCpu: DescType {
 }
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
-pub trait DescTable {
+pub trait DescTable: Sized {
 	/// internal non-generic type used within the resource table
 	type Slot: Clone;
+	type RCSlotsInterface: RCSlotsInterface<Self::Slot>;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32;
 
@@ -40,5 +42,5 @@ pub trait DescTable {
 		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
 	);
 
-	fn lock_table(&self) -> Lock<Self::Slot>;
+	fn lock_table(&self) -> Lock<Self>;
 }

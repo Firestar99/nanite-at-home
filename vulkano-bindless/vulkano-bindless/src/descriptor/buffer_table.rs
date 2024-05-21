@@ -1,18 +1,17 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::resource_table::{FlushUpdates, ResourceTable};
-use crate::rc_slots::{Lock, RCSlot};
+use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
+use crate::rc_slots::{RCSlotsInterface, SlotIndex};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
-use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::buffer::Buffer as VBuffer;
 use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
-use vulkano::descriptor_set::WriteDescriptorSet;
+use vulkano::descriptor_set::{DescriptorSet, InvalidateDescriptorSet, WriteDescriptorSet};
 use vulkano::device::physical::PhysicalDevice;
-use vulkano::device::Device;
+use vulkano::device::{Device, DeviceOwned};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
@@ -23,8 +22,8 @@ impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 	type DescTable = BufferTable;
 	type VulkanType = Subbuffer<T>;
 
-	fn deref_table(slot: &RCSlot<<Self::DescTable as DescTable>::Slot>) -> &Self::VulkanType {
-		slot.deref().reinterpret_ref()
+	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
+		slot.reinterpret_ref()
 	}
 
 	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
@@ -34,6 +33,7 @@ impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
 
 impl DescTable for BufferTable {
 	type Slot = Subbuffer<[u8]>;
+	type RCSlotsInterface = BufferInterface;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -60,7 +60,7 @@ impl DescTable for BufferTable {
 		.unwrap_err();
 	}
 
-	fn lock_table(&self) -> Lock<Self::Slot> {
+	fn lock_table(&self) -> Lock<Self> {
 		self.resource_table.lock()
 	}
 }
@@ -71,10 +71,10 @@ pub struct BufferTable {
 }
 
 impl BufferTable {
-	pub fn new(device: Arc<Device>, count: u32) -> Self {
+	pub fn new(descriptor_set: Arc<DescriptorSet>, count: u32) -> Self {
 		Self {
-			device,
-			resource_table: ResourceTable::new(count),
+			device: descriptor_set.device().clone(),
+			resource_table: ResourceTable::new(count, BufferInterface { descriptor_set }),
 		}
 	}
 
@@ -154,5 +154,22 @@ impl BufferTable {
 			));
 		});
 		flush_updates
+	}
+}
+
+pub struct BufferInterface {
+	descriptor_set: Arc<DescriptorSet>,
+}
+
+impl RCSlotsInterface<<BufferTable as DescTable>::Slot> for BufferInterface {
+	fn drop_slot(&self, index: SlotIndex, t: <BufferTable as DescTable>::Slot) {
+		self.descriptor_set
+			.invalidate(&[InvalidateDescriptorSet::invalidate_array(
+				BINDING_BUFFER,
+				index.0 as u32,
+				1,
+			)])
+			.unwrap();
+		drop(t);
 	}
 }

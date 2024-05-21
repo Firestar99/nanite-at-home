@@ -1,21 +1,22 @@
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::rc_slots::{Lock, RCSlot, RCSlots, SlotIndex};
+use crate::rc_slots::{Lock as RCLock, RCSlot, RCSlots, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
 use std::mem;
 use std::mem::ManuallyDrop;
+use std::ops::Deref;
 
 pub struct ResourceTable<T: DescTable> {
-	slots: Arc<RCSlots<T::Slot>>,
+	slots: Arc<RCSlots<T::Slot, T::RCSlotsInterface>>,
 	flush_queue: Mutex<RangeSet<u32>>,
 }
 
 impl<T: DescTable> ResourceTable<T> {
-	pub fn new(count: u32) -> Self {
+	pub fn new(count: u32, interface: T::RCSlotsInterface) -> Self {
 		Self {
-			slots: RCSlots::new(count as usize),
+			slots: RCSlots::new_with_interface(count as usize, interface),
 			flush_queue: Mutex::new(RangeSet::new()),
 		}
 	}
@@ -27,10 +28,6 @@ impl<T: DescTable> ResourceTable<T> {
 		self.flush_queue.lock().insert(id..id + 1);
 		RCDesc::<D>::new(slot)
 	}
-
-	pub fn lock(&self) -> Lock<T::Slot> {
-		self.slots.lock()
-	}
 }
 
 impl<T: DescTable> Drop for ResourceTable<T> {
@@ -41,6 +38,24 @@ impl<T: DescTable> Drop for ResourceTable<T> {
 	}
 }
 
+// lock
+impl<T: DescTable> ResourceTable<T> {
+	pub fn lock(&self) -> Lock<T> {
+		Lock(self.slots.lock())
+	}
+}
+
+pub struct Lock<T: DescTable>(RCLock<T::Slot, T::RCSlotsInterface>);
+
+impl<T: DescTable> Deref for Lock<T> {
+	type Target = RCLock<T::Slot, T::RCSlotsInterface>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+// flush_updates
 impl<T: DescTable> ResourceTable<T> {
 	/// Flushes all queued up updates. The `f` function is called with the `first_array_index` and a `&mut Vec` of
 	/// `SlotType`s, that should be [`Vec::drain`]-ed by the function, leaving the Vec empty.
