@@ -1,7 +1,7 @@
 pub mod buffer;
 pub mod descriptor_type;
 pub mod descriptors;
-pub mod images;
+pub mod image;
 pub mod reference;
 pub mod sampler;
 
@@ -14,7 +14,7 @@ mod image_types;
 pub use buffer::{Buffer, BufferSlice};
 pub use descriptor_type::DescType;
 pub use descriptors::Descriptors;
-pub use images::Image;
+pub use image::Image;
 pub use reference::{TransientDesc, ValidDesc, WeakDesc};
 pub use sampler::Sampler;
 

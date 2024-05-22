@@ -1,6 +1,6 @@
 use crate::descriptor::descriptor_type::{private, DescType};
 
-pub type Sampler = spirv_std::Sampler;
+pub use spirv_std::Sampler;
 
 impl private::SealedTrait for Sampler {}
 
