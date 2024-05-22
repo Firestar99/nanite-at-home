@@ -105,4 +105,20 @@ impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> BindlessPipeline<P
 			)?
 			.push_constants(self.pipeline.layout().clone(), 0, unsafe { param.to_static_desc() })
 	}
+
+	pub fn bind_modify<'a>(
+		&self,
+		cmd: &'a mut RecordingCommandBuffer,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
+		param: impl DescBuffer<DescStatic = T>,
+	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
+		self.bind(cmd, param)?;
+		modify(cmd)?;
+		Ok(cmd)
+	}
+}
+
+pub fn no_modify(
+) -> impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>> {
+	|cmd| Ok(cmd)
 }

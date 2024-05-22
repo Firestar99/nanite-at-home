@@ -7,9 +7,11 @@ use static_assertions::assert_not_impl_any;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
+use vulkano::ValidationError;
 use vulkano_bindless::frame_in_flight::uniform::UniformInFlight;
 use vulkano_bindless::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 use vulkano_bindless::frame_manager::{Frame, FrameManager, PrevFrameFuture};
@@ -122,6 +124,12 @@ pub struct FrameContext<'a> {
 impl<'a> FrameContext<'a> {
 	pub fn viewport_smallvec(&self) -> SmallVec<[Viewport; 2]> {
 		smallvec![self.viewport.clone()]
+	}
+
+	pub fn modify(
+		&self,
+	) -> impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>> + '_ {
+		|cmd| cmd.set_viewport(0, self.viewport_smallvec())
 	}
 
 	#[inline]

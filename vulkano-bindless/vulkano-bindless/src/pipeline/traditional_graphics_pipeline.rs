@@ -96,6 +96,7 @@ pub struct TraditionalGraphicsPipelineCreateInfo {
 	pub conservative_rasterization_state: Option<ConservativeRasterizationState>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
@@ -231,10 +232,11 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		instance_count: u32,
 		first_vertex: u32,
 		first_instance: u32,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
-			self.bind(cmd, param)?
+			self.bind_modify(cmd, modify, param)?
 				.draw(vertex_count, instance_count, first_vertex, first_instance)
 		}
 	}
@@ -249,9 +251,10 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DrawIndirectCommand]>,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
-		unsafe { self.bind(cmd, param)?.draw_indirect(indirect_buffer) }
+		unsafe { self.bind_modify(cmd, modify, param)?.draw_indirect(indirect_buffer) }
 	}
 
 	/// Draw a bindless graphics pipeline indirectly
@@ -269,10 +272,11 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		indirect_buffer: Subbuffer<[DrawIndirectCommand]>,
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
-			self.bind(cmd, param)?
+			self.bind_modify(cmd, modify, param)?
 				.draw_indirect_count(indirect_buffer, count_buffer, max_draw_count)
 		}
 	}
@@ -291,16 +295,13 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		first_index: u32,
 		vertex_offset: i32,
 		first_instance: u32,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
-			self.bind(cmd, param)?.bind_index_buffer(index_buffer)?.draw_indexed(
-				index_count,
-				instance_count,
-				first_index,
-				vertex_offset,
-				first_instance,
-			)
+			self.bind_modify(cmd, modify, param)?
+				.bind_index_buffer(index_buffer)?
+				.draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance)
 		}
 	}
 
@@ -315,10 +316,11 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		cmd: &'a mut RecordingCommandBuffer,
 		index_buffer: impl Into<IndexBuffer>,
 		indirect_buffer: Subbuffer<[DrawIndexedIndirectCommand]>,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
-			self.bind(cmd, param)?
+			self.bind_modify(cmd, modify, param)?
 				.bind_index_buffer(index_buffer)?
 				.draw_indexed_indirect(indirect_buffer)
 		}
@@ -340,10 +342,11 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		indirect_buffer: Subbuffer<[DrawIndexedIndirectCommand]>,
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
-			self.bind(cmd, param)?
+			self.bind_modify(cmd, modify, param)?
 				.bind_index_buffer(index_buffer)?
 				.draw_indexed_indirect_count(indirect_buffer, count_buffer, max_draw_count)
 		}

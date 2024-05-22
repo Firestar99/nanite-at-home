@@ -111,24 +111,23 @@ impl OpaqueDrawPipeline {
 	) {
 		unsafe {
 			self.pipeline
-				.bind(
+				.draw_mesh_tasks(
 					cmd,
+					[models.len() as u32, 1, 1],
+					|cmd| {
+						cmd.bind_descriptor_sets(
+							Graphics,
+							self.pipeline.layout().clone(),
+							1,
+							frame_context.global_descriptor_set.clone().0,
+						)?;
+						frame_context.modify()(cmd)
+					},
 					Params {
 						models: models.to_transient(frame_context.fif),
 						sampler: self.sampler.to_transient(frame_context.fif),
 					},
 				)
-				.unwrap()
-				.bind_descriptor_sets(
-					Graphics,
-					self.pipeline.layout().clone(),
-					1,
-					frame_context.global_descriptor_set.clone().0,
-				)
-				.unwrap()
-				.set_viewport(0, frame_context.viewport_smallvec())
-				.unwrap()
-				.draw_mesh_tasks([models.len() as u32, 1, 1])
 				.unwrap();
 		}
 	}

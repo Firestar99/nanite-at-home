@@ -164,9 +164,10 @@ impl<T: DescBuffer + AnyBitPattern> BindlessMeshGraphicsPipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		group_counts: [u32; 3],
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
-		unsafe { self.bind(cmd, param)?.draw_mesh_tasks(group_counts) }
+		unsafe { self.bind_modify(cmd, modify, param)?.draw_mesh_tasks(group_counts) }
 	}
 
 	/// Dispatch a bindless mesh graphics pipeline indirectly
@@ -180,9 +181,13 @@ impl<T: DescBuffer + AnyBitPattern> BindlessMeshGraphicsPipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DrawMeshTasksIndirectCommand]>,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
-		unsafe { self.bind(cmd, param)?.draw_mesh_tasks_indirect(indirect_buffer) }
+		unsafe {
+			self.bind_modify(cmd, modify, param)?
+				.draw_mesh_tasks_indirect(indirect_buffer)
+		}
 	}
 
 	/// Dispatch a bindless mesh graphics pipeline indirectly with count
@@ -201,11 +206,15 @@ impl<T: DescBuffer + AnyBitPattern> BindlessMeshGraphicsPipeline<T> {
 		indirect_buffer: Subbuffer<[DrawMeshTasksIndirectCommand]>,
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
-			self.bind(cmd, param)?
-				.draw_mesh_tasks_indirect_count(indirect_buffer, count_buffer, max_draw_count)
+			self.bind_modify(cmd, modify, param)?.draw_mesh_tasks_indirect_count(
+				indirect_buffer,
+				count_buffer,
+				max_draw_count,
+			)
 		}
 	}
 }

@@ -56,9 +56,10 @@ impl<T: DescBuffer + AnyBitPattern> BindlessComputePipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		group_counts: [u32; 3],
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer + DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
-		unsafe { self.bind(cmd, param)?.dispatch(group_counts) }
+		unsafe { self.bind_modify(cmd, modify, param)?.dispatch(group_counts) }
 	}
 
 	/// Dispatch a bindless compute shader indirectly
@@ -72,8 +73,9 @@ impl<T: DescBuffer + AnyBitPattern> BindlessComputePipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DispatchIndirectCommand]>,
+		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
 		param: impl DescBuffer + DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
-		unsafe { self.bind(cmd, param)?.dispatch_indirect(indirect_buffer) }
+		unsafe { self.bind_modify(cmd, modify, param)?.dispatch_indirect(indirect_buffer) }
 	}
 }
