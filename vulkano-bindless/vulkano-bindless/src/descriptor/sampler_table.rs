@@ -3,7 +3,6 @@ use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
 use crate::rc_slots::{RCSlotsInterface, SlotIndex};
-use smallvec::SmallVec;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
@@ -86,13 +85,10 @@ impl SamplerTable {
 		Ok(self.resource_table.alloc_slot(sampler))
 	}
 
-	pub(crate) fn flush_updates<const C: usize>(
-		&self,
-		writes: &mut SmallVec<[WriteDescriptorSet; C]>,
-	) -> FlushUpdates<SamplerTable> {
+	pub(crate) fn flush_updates(&self, mut writes: impl FnMut(WriteDescriptorSet)) -> FlushUpdates<SamplerTable> {
 		let flush_updates = self.resource_table.flush_updates();
 		flush_updates.iter(|first_array_element, buffer| {
-			writes.push(WriteDescriptorSet::sampler_array(
+			writes(WriteDescriptorSet::sampler_array(
 				BINDING_SAMPLER,
 				first_array_element,
 				buffer.drain(..),

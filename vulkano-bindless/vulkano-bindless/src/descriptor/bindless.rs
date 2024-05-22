@@ -116,9 +116,9 @@ impl Bindless {
 		//  * descriptor set may be used in command buffers concurrently, see spec
 		unsafe {
 			let mut writes: SmallVec<[_; 8]> = SmallVec::new();
-			let buffer = self.buffer.flush_updates(&mut writes);
-			let image = self.image.flush_updates(&mut writes);
-			let sampler = self.sampler.flush_updates(&mut writes);
+			let buffer = self.buffer.flush_updates(|w| writes.push(w));
+			let image = self.image.flush_updates(|w| writes.push(w));
+			let sampler = self.sampler.flush_updates(|w| writes.push(w));
 			if !writes.is_empty() {
 				self.descriptor_set.update_by_ref(writes, []).unwrap();
 			}

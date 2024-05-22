@@ -105,10 +105,7 @@ impl ImageTable {
 		self.resource_table.alloc_slot(image_view)
 	}
 
-	pub(crate) fn flush_updates<const C: usize>(
-		&self,
-		writes: &mut SmallVec<[WriteDescriptorSet; C]>,
-	) -> FlushUpdates<ImageTable> {
+	pub(crate) fn flush_updates(&self, mut writes: impl FnMut(WriteDescriptorSet)) -> FlushUpdates<ImageTable> {
 		// TODO writes is written out-of-order with regard to bindings.
 		//   Would it be worth to buffer all writes of one binding, only flushing at the end?
 
@@ -129,22 +126,22 @@ impl ImageTable {
 					}
 					(true, false) => {
 						storage_buf.advance_push(image);
-						sampled_buf.advance_flush(writes);
+						sampled_buf.advance_flush(&mut writes);
 					}
 					(false, true) => {
-						storage_buf.advance_flush(writes);
+						storage_buf.advance_flush(&mut writes);
 						sampled_buf.advance_push(image);
 					}
 					(false, false) => {
 						drop(image);
-						storage_buf.advance_flush(writes);
-						sampled_buf.advance_flush(writes);
+						storage_buf.advance_flush(&mut writes);
+						sampled_buf.advance_flush(&mut writes);
 					}
 				}
 			}
 
-			storage_buf.advance_flush(writes);
-			sampled_buf.advance_flush(writes);
+			storage_buf.advance_flush(&mut writes);
+			sampled_buf.advance_flush(&mut writes);
 		});
 		flush_updates
 	}
@@ -174,14 +171,14 @@ impl ImageUpdateBuffer {
 		self.buffer.push(instance)
 	}
 
-	fn advance_flush(&mut self, writes: &mut impl Extend<WriteDescriptorSet>) {
+	fn advance_flush(&mut self, writes: &mut impl FnMut(WriteDescriptorSet)) {
 		let len = self.buffer.len() as u32;
 		if len > 0 {
-			writes.extend([WriteDescriptorSet::image_view_array(
+			writes(WriteDescriptorSet::image_view_array(
 				self.binding,
 				self.start,
 				self.buffer.drain(..),
-			)]);
+			));
 		}
 		self.start += len + 1;
 	}
