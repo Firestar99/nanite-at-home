@@ -40,7 +40,7 @@ vulkano-bindless-shader-builder = { path = "vulkano-bindless/vulkano-bindless-sh
 vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "d21de235edf6f2fa3fc18cb3603611fdf6d39e54" }
 vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "d21de235edf6f2fa3fc18cb3603611fdf6d39e54" }
 
-winit = { version = "0.29.9", features = ["rwh_05"] }
+winit = { version = "0.29" }
 
 # rust-gpu
 spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "796bd4090b2f97d97b4a10d0c9e8a515f845288c", default-features = false }
