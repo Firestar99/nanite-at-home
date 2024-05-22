@@ -2,10 +2,10 @@ use crate::descriptor::Bindless;
 use crate::pipeline::shader::BindlessShader;
 use vulkano::pipeline::PipelineShaderStageCreateInfo;
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::desc_buffer::DescBuffer;
 
 /// If spec constants are used later on, specialization can be implemented here for all pipelines
-pub fn specialize<ShaderType: vulkano_bindless_shaders::shader_type::ShaderType, T: ParamConstant>(
+pub fn specialize<ShaderType: vulkano_bindless_shaders::shader_type::ShaderType, T: DescBuffer>(
 	bindless: &Bindless,
 	shader: &impl BindlessShader<ShaderType = ShaderType, ParamConstant = T>,
 ) -> Result<PipelineShaderStageCreateInfo, Validated<VulkanError>> {

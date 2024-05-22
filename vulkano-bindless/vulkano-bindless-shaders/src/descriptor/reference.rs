@@ -1,3 +1,4 @@
+use crate::desc_buffer::DescBuffer;
 use crate::descriptor::descriptor_type::DescType;
 use crate::descriptor::descriptors::DescriptorsAccess;
 use core::marker::PhantomData;
@@ -28,6 +29,17 @@ impl<'a, D: DescType + ?Sized> Clone for TransientDesc<'a, D> {
 unsafe impl<D: DescType + ?Sized> bytemuck::Zeroable for TransientDesc<'static, D> {}
 
 unsafe impl<D: DescType + ?Sized> bytemuck::AnyBitPattern for TransientDesc<'static, D> {}
+
+unsafe impl<'a, D: DescType + ?Sized> DescBuffer for TransientDesc<'a, D> {
+	type DescStatic = TransientDesc<'static, D>;
+
+	unsafe fn to_static_desc(&self) -> Self::DescStatic {
+		Self::DescStatic {
+			id: self.id,
+			_phantom: PhantomData {},
+		}
+	}
+}
 
 impl<'a, D: DescType + ?Sized> TransientDesc<'a, D> {
 	#[inline]
@@ -74,6 +86,14 @@ impl<D: DescType + ?Sized> Clone for WeakDesc<D> {
 unsafe impl<D: DescType + ?Sized> bytemuck::Zeroable for WeakDesc<D> {}
 
 unsafe impl<D: DescType + ?Sized> bytemuck::AnyBitPattern for WeakDesc<D> {}
+
+unsafe impl<D: DescType + ?Sized> DescBuffer for WeakDesc<D> {
+	type DescStatic = WeakDesc<D>;
+
+	unsafe fn to_static_desc(&self) -> Self::DescStatic {
+		*self
+	}
+}
 
 impl<D: DescType + ?Sized> WeakDesc<D> {
 	#[inline]

@@ -20,7 +20,7 @@ impl Symbols {
 fn crate_ident() -> Ident {
 	let found_crate = crate_name("vulkano-bindless-shaders").unwrap();
 	let name = match &found_crate {
-		FoundCrate::Itself => "vulkano-bindless-shaders",
+		FoundCrate::Itself => "crate",
 		FoundCrate::Name(name) => name,
 	};
 	Ident::new(name, proc_macro2::Span::call_site())

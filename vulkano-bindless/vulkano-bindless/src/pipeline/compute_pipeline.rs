@@ -2,6 +2,7 @@ use crate::descriptor::Bindless;
 use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
 use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
+use bytemuck::AnyBitPattern;
 use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{DispatchIndirectCommand, RecordingCommandBuffer};
@@ -10,7 +11,7 @@ use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::ComputePipeline as VComputePipeline;
 use vulkano::pipeline::{PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::desc_buffer::DescBuffer;
 use vulkano_bindless_shaders::shader_type::ComputeShader;
 
 pub type BindlessComputePipeline<T> = BindlessPipeline<ComputePipelineType, T>;
@@ -29,7 +30,7 @@ impl VulkanPipeline for ComputePipelineType {
 	}
 }
 
-impl<T: ParamConstant> BindlessComputePipeline<T> {
+impl<T: DescBuffer + AnyBitPattern> BindlessComputePipeline<T> {
 	pub fn new(
 		bindless: Arc<Bindless>,
 		stage: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
@@ -55,7 +56,7 @@ impl<T: ParamConstant> BindlessComputePipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		group_counts: [u32; 3],
-		param: T,
+		param: impl DescBuffer + DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind(cmd, param)?.dispatch(group_counts) }
 	}
@@ -71,7 +72,7 @@ impl<T: ParamConstant> BindlessComputePipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DispatchIndirectCommand]>,
-		param: T,
+		param: impl DescBuffer + DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind(cmd, param)?.dispatch_indirect(indirect_buffer) }
 	}

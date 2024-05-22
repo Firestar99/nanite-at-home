@@ -35,7 +35,7 @@ macro_rules! decl_descriptors {
 }
 standard_image_types!(decl_descriptors);
 
-impl<'a, T: ?Sized + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
+impl<'a, T: ?Sized + Send + Sync + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 	fn access(&self, desc: &impl ValidDesc<Buffer<T>>) -> <Buffer<T> as DescType>::AccessType<'_> {
 		BufferSlice::new(unsafe { self.buffers.index(desc.id() as usize) })
 	}

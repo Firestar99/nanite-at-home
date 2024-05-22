@@ -19,7 +19,7 @@ use vulkano_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAG
 use vulkano_bindless_shaders::spirv_std::image::Image2d;
 
 impl<
-		SampledType: SampleType<FORMAT, COMPONENTS> + 'static,
+		SampledType: SampleType<FORMAT, COMPONENTS> + Send + Sync + 'static,
 		const DIM: u32,
 		const DEPTH: u32,
 		const ARRAYED: u32,

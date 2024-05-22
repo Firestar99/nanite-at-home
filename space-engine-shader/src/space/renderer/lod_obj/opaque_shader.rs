@@ -5,22 +5,15 @@ use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::bindless;
+use vulkano_bindless_macros::{bindless, DescBuffer};
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
 use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
-use vulkano_bindless_shaders::param::ParamConstant;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, DescBuffer)]
 pub struct Params<'a> {
 	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel]>>,
 	pub sampler: TransientDesc<'a, Sampler>,
 }
-
-unsafe impl bytemuck::Zeroable for Params<'static> {}
-
-unsafe impl bytemuck::AnyBitPattern for Params<'static> {}
-
-impl ParamConstant for Params<'static> {}
 
 impl<'a> Params<'a> {
 	/// # Safety

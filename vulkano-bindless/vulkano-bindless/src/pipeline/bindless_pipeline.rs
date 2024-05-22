@@ -1,12 +1,13 @@
 use crate::descriptor::Bindless;
+use bytemuck::AnyBitPattern;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
-use vulkano::buffer::BufferContents;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
+use vulkano_bindless_shaders::desc_buffer::DescBuffer;
 use vulkano_bindless_shaders::descriptor::metadata::PushConstant;
 
 pub trait VulkanPipeline {
@@ -20,13 +21,13 @@ pub trait VulkanPipeline {
 	) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>;
 }
 
-pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: BufferContents> {
+pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> {
 	pub bindless: Arc<Bindless>,
 	pub(crate) pipeline: Arc<Pipeline::VulkanType>,
-	_phantom: PhantomData<&'static T>,
+	_phantom: PhantomData<T>,
 }
 
-impl<Pipeline: VulkanPipeline, T: BufferContents> Clone for BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> Clone for BindlessPipeline<Pipeline, T> {
 	fn clone(&self) -> Self {
 		Self {
 			bindless: self.bindless.clone(),
@@ -36,7 +37,7 @@ impl<Pipeline: VulkanPipeline, T: BufferContents> Clone for BindlessPipeline<Pip
 	}
 }
 
-impl<Pipeline: VulkanPipeline, T: BufferContents> Deref for BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> Deref for BindlessPipeline<Pipeline, T> {
 	type Target = Arc<Pipeline::VulkanType>;
 
 	fn deref(&self) -> &Self::Target {
@@ -44,7 +45,7 @@ impl<Pipeline: VulkanPipeline, T: BufferContents> Deref for BindlessPipeline<Pip
 	}
 }
 
-impl<Pipeline: VulkanPipeline, T: BufferContents> BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> BindlessPipeline<Pipeline, T> {
 	/// unsafely create a BindlessPipeline from a Pipeline
 	///
 	/// # Safety
@@ -93,8 +94,7 @@ impl<Pipeline: VulkanPipeline, T: BufferContents> BindlessPipeline<Pipeline, T> 
 	pub fn bind<'a>(
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
-		// FIXME how to accept a lifetime'd struct with TransientReferences? And then convert it to 'static? new derive?
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		Pipeline::bind_pipeline(cmd, self.pipeline.clone())?
 			.bind_descriptor_sets(
@@ -103,6 +103,6 @@ impl<Pipeline: VulkanPipeline, T: BufferContents> BindlessPipeline<Pipeline, T> 
 				0,
 				self.bindless.descriptor_set.clone(),
 			)?
-			.push_constants(self.pipeline.layout().clone(), 0, param)
+			.push_constants(self.pipeline.layout().clone(), 0, unsafe { param.to_static_desc() })
 	}
 }

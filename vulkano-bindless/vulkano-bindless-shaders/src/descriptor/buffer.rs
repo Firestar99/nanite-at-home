@@ -4,13 +4,13 @@ use core::marker::PhantomData;
 use core::mem;
 use spirv_std::byte_addressable_buffer::buffer_load_intrinsic;
 
-pub struct Buffer<T: ?Sized + 'static> {
+pub struct Buffer<T: ?Sized + Send + Sync + 'static> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: ?Sized + 'static> private::SealedTrait for Buffer<T> {}
+impl<T: ?Sized + Send + Sync + 'static> private::SealedTrait for Buffer<T> {}
 
-impl<T: ?Sized + 'static> DescType for Buffer<T> {
+impl<T: ?Sized + Send + Sync + 'static> DescType for Buffer<T> {
 	type AccessType<'a> = BufferSlice<'a, T>;
 }
 

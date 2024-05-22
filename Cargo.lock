@@ -2698,7 +2698,6 @@ dependencies = [
  "quote",
  "spirv-std",
  "syn 2.0.46",
- "vulkano-bindless-shaders",
 ]
 
 [[package]]
@@ -2725,6 +2724,7 @@ dependencies = [
  "num-traits",
  "spirv-std",
  "static_assertions",
+ "vulkano-bindless-macros",
 ]
 
 [[package]]

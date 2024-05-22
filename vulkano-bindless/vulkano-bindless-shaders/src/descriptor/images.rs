@@ -4,7 +4,7 @@ pub use spirv_std::image::Image;
 pub use spirv_std::image::SampleType;
 
 impl<
-		SampledType: SampleType<FORMAT, COMPONENTS> + 'static,
+		SampledType: SampleType<FORMAT, COMPONENTS> + Send + Sync + 'static,
 		const DIM: u32,
 		const DEPTH: u32,
 		const ARRAYED: u32,
@@ -17,7 +17,7 @@ impl<
 }
 
 impl<
-		SampledType: SampleType<FORMAT, COMPONENTS> + 'static,
+		SampledType: SampleType<FORMAT, COMPONENTS> + Send + Sync + 'static,
 		const DIM: u32,
 		const DEPTH: u32,
 		const ARRAYED: u32,

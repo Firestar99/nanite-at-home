@@ -7,6 +7,6 @@ pub(crate) mod private {
 /// * [StorageImageType]
 /// * [SampledImageType]
 /// * [SamplerType]
-pub trait DescType: private::SealedTrait + 'static {
+pub trait DescType: private::SealedTrait + Send + Sync + 'static {
 	type AccessType<'a>;
 }

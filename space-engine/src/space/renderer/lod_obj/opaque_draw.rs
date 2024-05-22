@@ -116,8 +116,7 @@ impl OpaqueDrawPipeline {
 					Params {
 						models: models.to_transient(frame_context.fif),
 						sampler: self.sampler.to_transient(frame_context.fif),
-					}
-					.to_static(),
+					},
 				)
 				.unwrap()
 				.bind_descriptor_sets(

@@ -3,6 +3,7 @@ use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
 use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
 use ahash::HashSet;
+use bytemuck::AnyBitPattern;
 use smallvec::SmallVec;
 use std::sync::Arc;
 use vulkano::buffer::{IndexBuffer, Subbuffer};
@@ -24,7 +25,7 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::desc_buffer::DescBuffer;
 use vulkano_bindless_shaders::shader_type::{
 	FragmentShader, GeometryShader, TesselationControlShader, TesselationEvaluationShader, VertexShader,
 };
@@ -95,7 +96,7 @@ pub struct TraditionalGraphicsPipelineCreateInfo {
 	pub conservative_rasterization_state: Option<ConservativeRasterizationState>,
 }
 
-impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
+impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: TraditionalGraphicsPipelineCreateInfo,
@@ -230,7 +231,7 @@ impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 		instance_count: u32,
 		first_vertex: u32,
 		first_instance: u32,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind(cmd, param)?
@@ -248,7 +249,7 @@ impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DrawIndirectCommand]>,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind(cmd, param)?.draw_indirect(indirect_buffer) }
 	}
@@ -268,7 +269,7 @@ impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 		indirect_buffer: Subbuffer<[DrawIndirectCommand]>,
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind(cmd, param)?
@@ -290,7 +291,7 @@ impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 		first_index: u32,
 		vertex_offset: i32,
 		first_instance: u32,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind(cmd, param)?.bind_index_buffer(index_buffer)?.draw_indexed(
@@ -314,7 +315,7 @@ impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 		cmd: &'a mut RecordingCommandBuffer,
 		index_buffer: impl Into<IndexBuffer>,
 		indirect_buffer: Subbuffer<[DrawIndexedIndirectCommand]>,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind(cmd, param)?
@@ -339,7 +340,7 @@ impl<T: ParamConstant> BindlessTraditionalGraphicsPipeline<T> {
 		indirect_buffer: Subbuffer<[DrawIndexedIndirectCommand]>,
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind(cmd, param)?

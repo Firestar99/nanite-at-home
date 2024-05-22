@@ -3,6 +3,7 @@ use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
 use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
 use ahash::HashSet;
+use bytemuck::AnyBitPattern;
 use smallvec::SmallVec;
 use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
@@ -21,7 +22,7 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::param::ParamConstant;
+use vulkano_bindless_shaders::desc_buffer::DescBuffer;
 use vulkano_bindless_shaders::shader_type::{FragmentShader, MeshShader, TaskShader};
 
 pub type BindlessMeshGraphicsPipeline<T> = BindlessPipeline<MeshGraphicsPipelineType, T>;
@@ -81,7 +82,7 @@ pub struct MeshGraphicsPipelineCreateInfo {
 	pub conservative_rasterization_state: Option<ConservativeRasterizationState>,
 }
 
-impl<T: ParamConstant> BindlessMeshGraphicsPipeline<T> {
+impl<T: DescBuffer + AnyBitPattern> BindlessMeshGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: MeshGraphicsPipelineCreateInfo,
@@ -163,7 +164,7 @@ impl<T: ParamConstant> BindlessMeshGraphicsPipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		group_counts: [u32; 3],
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind(cmd, param)?.draw_mesh_tasks(group_counts) }
 	}
@@ -179,7 +180,7 @@ impl<T: ParamConstant> BindlessMeshGraphicsPipeline<T> {
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DrawMeshTasksIndirectCommand]>,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind(cmd, param)?.draw_mesh_tasks_indirect(indirect_buffer) }
 	}
@@ -200,7 +201,7 @@ impl<T: ParamConstant> BindlessMeshGraphicsPipeline<T> {
 		indirect_buffer: Subbuffer<[DrawMeshTasksIndirectCommand]>,
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
-		param: T,
+		param: impl DescBuffer<DescStatic = T>,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind(cmd, param)?
