@@ -15,19 +15,6 @@ pub struct Params<'a> {
 	pub sampler: TransientDesc<'a, Sampler>,
 }
 
-impl<'a> Params<'a> {
-	/// # Safety
-	/// Should only be called by vulkano_bindless
-	pub unsafe fn to_static(&self) -> Params<'static> {
-		unsafe {
-			Params {
-				models: self.models.to_static(),
-				sampler: self.sampler.to_static(),
-			}
-		}
-	}
-}
-
 #[derive(Copy, Clone)]
 pub struct Payload {
 	pub model_offset: usize,

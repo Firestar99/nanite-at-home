@@ -49,16 +49,6 @@ impl<'a, D: DescType + ?Sized> TransientDesc<'a, D> {
 			_phantom: PhantomData {},
 		}
 	}
-
-	/// # Safety
-	/// Should only be called by vulkano_bindless
-	#[inline]
-	pub unsafe fn to_static(&self) -> TransientDesc<'static, D> {
-		TransientDesc {
-			id: self.id,
-			_phantom: PhantomData {},
-		}
-	}
 }
 
 impl<'a, D: DescType + ?Sized> ValidDesc<D> for TransientDesc<'a, D> {
