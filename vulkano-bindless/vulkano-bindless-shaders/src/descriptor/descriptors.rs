@@ -1,4 +1,5 @@
 use crate::descriptor::image_types::standard_image_types;
+use crate::descriptor::metadata::Metadata;
 use crate::descriptor::{Buffer, BufferSlice, DescType, ValidDesc};
 use spirv_std::{RuntimeArray, Sampler};
 
@@ -16,6 +17,7 @@ macro_rules! decl_descriptors {
 			$(pub $storage_name: &'a RuntimeArray<$storage_ty>,)*
 			$(pub $sampled_name: &'a RuntimeArray<$sampled_ty>,)*
 			pub samplers: &'a RuntimeArray<Sampler>,
+			pub meta: Metadata,
 		}
 		$(
 			impl<'a> DescriptorsAccess<$storage_ty> for Descriptors<'a> {
@@ -37,7 +39,7 @@ standard_image_types!(decl_descriptors);
 
 impl<'a, T: ?Sized + Send + Sync + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 	fn access(&self, desc: &impl ValidDesc<Buffer<T>>) -> <Buffer<T> as DescType>::AccessType<'_> {
-		BufferSlice::new(unsafe { self.buffers.index(desc.id() as usize) })
+		BufferSlice::new(unsafe { self.buffers.index(desc.id() as usize) }, self.meta)
 	}
 }
 

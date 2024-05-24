@@ -1,7 +1,7 @@
 use crate::image_types::standard_image_types;
 use crate::symbols::Symbols;
 use crate::AppendTokens;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use syn::spanned::Spanned;
 use syn::{Error, FnArg, ItemFn, MetaList, PatType, Result, ReturnType, Type, TypeReference};
@@ -75,7 +75,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	};
 
 	let param = gen_bindless_param(&mut context, bindless_param)?;
-	gen_bindless_descriptors(&mut context, bindless_descriptors)?;
+	gen_bindless_descriptors(&mut context, bindless_descriptors, &param)?;
 	for arg in forward {
 		let var_name = &arg.pat;
 		quote!(#arg,).to_tokens(&mut context.entry_args);
@@ -117,7 +117,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	})
 }
 
-fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>) -> Result<()> {
+fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>, param: &BindlessParam) -> Result<()> {
 	if let Some(arg) = arg {
 		let crate_shaders = &context.symbols.crate_shaders;
 		let buffers = format_ident!("__bindless_buffers");
@@ -151,11 +151,13 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>
 			#image_args
 			#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders::descriptor::Sampler>,
 		});
+		let _meta = &param.metadata;
 		context.inner_value.append_tokens(quote! {
 			&#crate_shaders::descriptor::Descriptors {
 				buffers: #buffers,
 				#image_values
 				samplers: #samplers,
+				meta: #_meta,
 			},
 		});
 		strip_attr(arg).to_tokens(&mut context.inner_arg);
@@ -166,8 +168,7 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>
 // Prepared for later
 #[allow(unused)]
 struct BindlessParam {
-	metadata: Ident,
-	metadata_extract: TokenStream,
+	metadata: TokenStream,
 	param_ty: TokenStream,
 }
 
@@ -199,12 +200,8 @@ fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> R
 		strip_attr(arg).to_tokens(&mut context.inner_arg)
 	}
 
-	let metadata = format_ident!("__bindless_metadata");
 	Ok(BindlessParam {
-		metadata_extract: quote! {
-			let #metadata = &#push_constant.metadata;
-		},
-		metadata,
+		metadata: quote!(#push_constant.metadata),
 		param_ty,
 	})
 }

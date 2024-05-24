@@ -1,4 +1,5 @@
 use crate::descriptor::descriptor_type::{private, DescType};
+use crate::descriptor::metadata::Metadata;
 use bytemuck::AnyBitPattern;
 use core::marker::PhantomData;
 use core::mem;
@@ -16,14 +17,16 @@ impl<T: ?Sized + Send + Sync + 'static> DescType for Buffer<T> {
 
 pub struct BufferSlice<'a, T: ?Sized> {
 	buffer: &'a [u32],
+	meta: Metadata,
 	_phantom: PhantomData<T>,
 }
 
 impl<'a, T: ?Sized> BufferSlice<'a, T> {
 	#[inline]
-	pub fn new(buffer: &'a [u32]) -> Self {
+	pub fn new(buffer: &'a [u32], meta: Metadata) -> Self {
 		Self {
 			buffer,
+			meta,
 			_phantom: PhantomData {},
 		}
 	}
