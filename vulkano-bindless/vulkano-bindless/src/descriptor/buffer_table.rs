@@ -5,8 +5,8 @@ use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
 use crate::rc_slots::{RCSlotsInterface, SlotIndex};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use vulkano::buffer::Buffer as VBuffer;
-use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, Subbuffer};
+use vulkano::buffer::{AllocateBufferError, BufferCreateInfo, Subbuffer};
+use vulkano::buffer::{Buffer as VBuffer, BufferContents as VBufferContents};
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
 use vulkano::descriptor_set::{DescriptorSet, InvalidateDescriptorSet, WriteDescriptorSet};
 use vulkano::device::physical::PhysicalDevice;
@@ -14,12 +14,16 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
+use vulkano_bindless_shaders::desc_buffer::{DescBuffer, DescStruct};
 use vulkano_bindless_shaders::descriptor::buffer::Buffer;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
-impl<T: BufferContents + ?Sized> DescTypeCpu for Buffer<T> {
+impl<T: DescBuffer + ?Sized> DescTypeCpu for Buffer<T>
+where
+	T::TransferDescBuffer: VBufferContents,
+{
 	type DescTable = BufferTable;
-	type VulkanType = Subbuffer<T>;
+	type VulkanType = Subbuffer<T::TransferDescBuffer>;
 
 	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
 		slot.reinterpret_ref()
@@ -78,22 +82,25 @@ impl BufferTable {
 	}
 
 	#[inline]
-	pub fn alloc_slot<T: BufferContents + ?Sized>(&self, buffer: Subbuffer<T>) -> RCDesc<Buffer<T>> {
+	pub fn alloc_slot<T: DescBuffer + ?Sized>(&self, buffer: Subbuffer<T::TransferDescBuffer>) -> RCDesc<Buffer<T>>
+	where
+		T::TransferDescBuffer: VBufferContents,
+	{
 		self.resource_table.alloc_slot(buffer)
 	}
 
-	pub fn alloc_from_data<T: BufferContents>(
+	pub fn alloc_from_data<T: DescStruct>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 		data: T,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::from_data(allocator, create_info, allocation_info, data)?;
-		Ok(self.resource_table.alloc_slot(buffer))
+		let buffer = VBuffer::from_data(allocator, create_info, allocation_info, unsafe { data.to_transfer() })?;
+		Ok(self.alloc_slot(buffer))
 	}
 
-	pub fn alloc_from_iter<T: BufferContents, I>(
+	pub fn alloc_from_iter<T: DescStruct, I>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
@@ -104,40 +111,44 @@ impl BufferTable {
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
 	{
+		let iter = iter.into_iter().map(|i| unsafe { T::to_transfer(i) });
 		let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)?;
-		Ok(self.resource_table.alloc_slot(buffer))
+		Ok(self.alloc_slot(buffer))
 	}
 
-	pub fn alloc_sized<T: BufferContents>(
+	pub fn alloc_sized<T: DescStruct>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::new_sized::<T>(allocator, create_info, allocation_info)?;
-		Ok(self.resource_table.alloc_slot(buffer))
+		let buffer = VBuffer::new_sized::<T::TransferDescStruct>(allocator, create_info, allocation_info)?;
+		Ok(self.alloc_slot(buffer))
 	}
 
-	pub fn alloc_slice<T: BufferContents>(
+	pub fn alloc_slice<T: DescStruct>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 		len: DeviceSize,
 	) -> Result<RCDesc<Buffer<[T]>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::new_slice::<T>(allocator, create_info, allocation_info, len)?;
-		Ok(self.resource_table.alloc_slot(buffer))
+		let buffer = VBuffer::new_slice::<T::TransferDescStruct>(allocator, create_info, allocation_info, len)?;
+		Ok(self.alloc_slot(buffer))
 	}
 
-	pub fn alloc_unsized<T: BufferContents + ?Sized>(
+	pub fn alloc_unsized<T: DescBuffer + ?Sized>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 		len: DeviceSize,
-	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::new_unsized::<T>(allocator, create_info, allocation_info, len)?;
-		Ok(self.resource_table.alloc_slot(buffer))
+	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>>
+	where
+		T::TransferDescBuffer: VBufferContents,
+	{
+		let buffer = VBuffer::new_unsized::<T::TransferDescBuffer>(allocator, create_info, allocation_info, len)?;
+		Ok(self.alloc_slot(buffer))
 	}
 
 	pub(crate) fn flush_updates(&self, mut writes: impl FnMut(WriteDescriptorSet)) -> FlushUpdates<BufferTable> {

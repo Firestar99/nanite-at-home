@@ -1,49 +1,68 @@
+use crate::descriptor::metadata::Metadata;
 use bytemuck::AnyBitPattern;
 
-pub unsafe trait DescBuffer: Copy + Clone + Send + Sync {
-	type DescStatic: DescBuffer + AnyBitPattern + Send + Sync;
-
-	/// Unsafely transmute TransientDesc lifetime to static
-	///
-	/// # Safety
-	/// Must only be used just before writing push constants
-	unsafe fn to_static_desc(&self) -> Self::DescStatic;
+/// Trait for contents of **buffers** that may contain descriptors requiring conversion.
+///
+/// See [`DescStruct`]. All [`DescStruct`] also implement [`DescBuffer`] with `TransferDescBuffer = TransferDescStruct`.
+///
+/// Compared to [`DescStruct`], [`DescBuffer`] also allows for unsized types such as slices to be used. Therefore, it
+/// does not offer any conversion functions, since a slice can only be converted element-wise.
+///
+/// # Safety
+/// Should not be manually implemented, see [`DescStruct`].
+pub unsafe trait DescBuffer: Send + Sync {
+	type TransferDescBuffer: Send + Sync + ?Sized;
 }
 
-mod desc_buffer_native {
-	use super::*;
-	use core::marker::PhantomPinned;
+/// Trait for **sized types** that may contain descriptors requiring conversion and can be stored in a Buffer. Use
+/// `#derive[DescBuffer]` on your type to implement this trait.
+///
+/// The actual type stored in the Buffer is defined by its associated type `TransferDescStruct` and can be converted to
+/// and from using [`Self::to_transfer`] and [`Self::from_transfer`]. Types that are [`AnyBitPattern`] automatically
+/// implement `DescBuffer` with conversions being identity.
+///
+/// # Safety
+/// Should only be implemented via DescBuffer macro. Only Descriptors may have a manual implementation.
+pub unsafe trait DescStruct: Copy + Clone + Sized + Send + Sync {
+	type TransferDescStruct: AnyBitPattern + Send + Sync;
 
-	trait DescBufferNative: AnyBitPattern + Send + Sync {}
+	/// Transmute Self into a transferable struct on the CPU that can subsequently be sent to the GPU. This includes
+	/// unsafely transmuting [`FrameInFlight`] lifetimes to `'static`, so it's [`AnyBitPattern`]`: 'static` and
+	/// can be written to a buffer.
+	///
+	/// # Safety
+	/// Should only be implemented via DescBuffer macro and only used internally by `BindlessPipeline::bind`.
+	///
+	/// [`FrameInFlight`]: crate::frame_in_flight::FrameInFlight
+	unsafe fn to_transfer(self) -> Self::TransferDescStruct;
 
-	unsafe impl<T> DescBuffer for T
-	where
-		T: DescBufferNative,
-	{
-		type DescStatic = T;
+	/// On the GPU, transmute the transferable struct back to Self, keeping potential `'static` lifetimes.
+	///
+	/// # Safety
+	/// Should only be implemented via DescBuffer macro and only used internally by `BufferSlice` functions.
+	unsafe fn from_transfer(from: Self::TransferDescStruct, meta: Metadata) -> Self;
+}
 
-		unsafe fn to_static_desc(&self) -> Self::DescStatic {
-			*self
-		}
+unsafe impl<T: DescStruct> DescBuffer for T {
+	type TransferDescBuffer = T::TransferDescStruct;
+}
+
+// impl
+unsafe impl<T: AnyBitPattern + Send + Sync> DescStruct for T {
+	type TransferDescStruct = T;
+
+	unsafe fn to_transfer(self) -> Self::TransferDescStruct {
+		self
 	}
 
-	impl DescBufferNative for () {}
-	impl DescBufferNative for u8 {}
-	impl DescBufferNative for i8 {}
-	impl DescBufferNative for u16 {}
-	impl DescBufferNative for i16 {}
-	impl DescBufferNative for u32 {}
-	impl DescBufferNative for i32 {}
-	impl DescBufferNative for u64 {}
-	impl DescBufferNative for i64 {}
-	impl DescBufferNative for usize {}
-	impl DescBufferNative for isize {}
-	impl DescBufferNative for u128 {}
-	impl DescBufferNative for i128 {}
-	impl DescBufferNative for f32 {}
-	impl DescBufferNative for f64 {}
-	// impl<T: DescBufferNative> DescBufferNative for Wrapping<T> {}
-	// impl<T: ?Sized + 'static> DescBufferNative for PhantomData<T> {}
-	impl DescBufferNative for PhantomPinned {}
-	// impl<T: DescBufferNative> DescBufferNative for ManuallyDrop<T> {}
+	unsafe fn from_transfer(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
+		from
+	}
+}
+
+unsafe impl<T: DescBuffer> DescBuffer for [T]
+where
+	T::TransferDescBuffer: Sized,
+{
+	type TransferDescBuffer = [T::TransferDescBuffer];
 }

@@ -1,6 +1,8 @@
-use crate::desc_buffer::DescBuffer;
+use crate::desc_buffer::DescStruct;
 use crate::descriptor::descriptor_type::DescType;
 use crate::descriptor::descriptors::DescriptorsAccess;
+use crate::descriptor::metadata::Metadata;
+use bytemuck::{AnyBitPattern, Zeroable};
 use core::marker::PhantomData;
 
 pub trait ValidDesc<D: DescType + ?Sized>: Sized {
@@ -26,21 +28,6 @@ impl<'a, D: DescType + ?Sized> Clone for TransientDesc<'a, D> {
 	}
 }
 
-unsafe impl<D: DescType + ?Sized> bytemuck::Zeroable for TransientDesc<'static, D> {}
-
-unsafe impl<D: DescType + ?Sized> bytemuck::AnyBitPattern for TransientDesc<'static, D> {}
-
-unsafe impl<'a, D: DescType + ?Sized> DescBuffer for TransientDesc<'a, D> {
-	type DescStatic = TransientDesc<'static, D>;
-
-	unsafe fn to_static_desc(&self) -> Self::DescStatic {
-		Self::DescStatic {
-			id: self.id,
-			_phantom: PhantomData {},
-		}
-	}
-}
-
 impl<'a, D: DescType + ?Sized> TransientDesc<'a, D> {
 	#[inline]
 	pub const fn new(id: u32) -> Self {
@@ -58,6 +45,39 @@ impl<'a, D: DescType + ?Sized> ValidDesc<D> for TransientDesc<'a, D> {
 	}
 }
 
+unsafe impl<'a, D: DescType + ?Sized> DescStruct for TransientDesc<'a, D> {
+	type TransferDescStruct = TransferTransientDesc<D>;
+
+	unsafe fn to_transfer(self) -> Self::TransferDescStruct {
+		Self::TransferDescStruct {
+			id: self.id,
+			_phantom: PhantomData {},
+		}
+	}
+
+	unsafe fn from_transfer(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
+		TransientDesc::new(from.id)
+	}
+}
+
+#[repr(C)]
+pub struct TransferTransientDesc<D: DescType + ?Sized> {
+	id: u32,
+	_phantom: PhantomData<&'static D>,
+}
+
+impl<D: DescType + ?Sized> Copy for TransferTransientDesc<D> {}
+
+impl<D: DescType + ?Sized> Clone for TransferTransientDesc<D> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
+unsafe impl<D: DescType + ?Sized> Zeroable for TransferTransientDesc<D> {}
+
+unsafe impl<D: DescType + ?Sized> AnyBitPattern for TransferTransientDesc<D> {}
+
 #[repr(C)]
 pub struct WeakDesc<D: DescType + ?Sized> {
 	id: u32,
@@ -73,17 +93,9 @@ impl<D: DescType + ?Sized> Clone for WeakDesc<D> {
 	}
 }
 
-unsafe impl<D: DescType + ?Sized> bytemuck::Zeroable for WeakDesc<D> {}
+unsafe impl<D: DescType + ?Sized> Zeroable for WeakDesc<D> {}
 
-unsafe impl<D: DescType + ?Sized> bytemuck::AnyBitPattern for WeakDesc<D> {}
-
-unsafe impl<D: DescType + ?Sized> DescBuffer for WeakDesc<D> {
-	type DescStatic = WeakDesc<D>;
-
-	unsafe fn to_static_desc(&self) -> Self::DescStatic {
-		*self
-	}
-}
+unsafe impl<D: DescType + ?Sized> AnyBitPattern for WeakDesc<D> {}
 
 impl<D: DescType + ?Sized> WeakDesc<D> {
 	#[inline]

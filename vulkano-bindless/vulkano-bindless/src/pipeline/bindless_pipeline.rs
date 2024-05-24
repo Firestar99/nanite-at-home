@@ -1,5 +1,4 @@
 use crate::descriptor::Bindless;
-use bytemuck::AnyBitPattern;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::Deref;
@@ -7,7 +6,7 @@ use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescBuffer;
+use vulkano_bindless_shaders::desc_buffer::DescStruct;
 use vulkano_bindless_shaders::descriptor::metadata::PushConstant;
 
 pub trait VulkanPipeline {
@@ -21,13 +20,13 @@ pub trait VulkanPipeline {
 	) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>;
 }
 
-pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> {
+pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: DescStruct> {
 	pub bindless: Arc<Bindless>,
 	pub(crate) pipeline: Arc<Pipeline::VulkanType>,
 	_phantom: PhantomData<T>,
 }
 
-impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> Clone for BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: DescStruct> Clone for BindlessPipeline<Pipeline, T> {
 	fn clone(&self) -> Self {
 		Self {
 			bindless: self.bindless.clone(),
@@ -37,7 +36,7 @@ impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> Clone for Bindless
 	}
 }
 
-impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> Deref for BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: DescStruct> Deref for BindlessPipeline<Pipeline, T> {
 	type Target = Arc<Pipeline::VulkanType>;
 
 	fn deref(&self) -> &Self::Target {
@@ -45,7 +44,7 @@ impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> Deref for Bindless
 	}
 }
 
-impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 	/// unsafely create a BindlessPipeline from a Pipeline
 	///
 	/// # Safety
@@ -94,7 +93,7 @@ impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> BindlessPipeline<P
 	pub fn bind<'a>(
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		Pipeline::bind_pipeline(cmd, self.pipeline.clone())?
 			.bind_descriptor_sets(
@@ -103,14 +102,14 @@ impl<Pipeline: VulkanPipeline, T: DescBuffer + AnyBitPattern> BindlessPipeline<P
 				0,
 				self.bindless.descriptor_set.clone(),
 			)?
-			.push_constants(self.pipeline.layout().clone(), 0, unsafe { param.to_static_desc() })
+			.push_constants(self.pipeline.layout().clone(), 0, unsafe { param.to_transfer() })
 	}
 
 	pub fn bind_modify<'a>(
 		&self,
 		cmd: &'a mut RecordingCommandBuffer,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		self.bind(cmd, param)?;
 		modify(cmd)?;

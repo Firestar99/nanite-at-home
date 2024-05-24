@@ -3,7 +3,6 @@ use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
 use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
 use ahash::HashSet;
-use bytemuck::AnyBitPattern;
 use smallvec::SmallVec;
 use std::sync::Arc;
 use vulkano::buffer::{IndexBuffer, Subbuffer};
@@ -25,7 +24,7 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescBuffer;
+use vulkano_bindless_shaders::desc_buffer::DescStruct;
 use vulkano_bindless_shaders::shader_type::{
 	FragmentShader, GeometryShader, TesselationControlShader, TesselationEvaluationShader, VertexShader,
 };
@@ -97,7 +96,7 @@ pub struct TraditionalGraphicsPipelineCreateInfo {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
+impl<T: DescStruct> BindlessTraditionalGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: TraditionalGraphicsPipelineCreateInfo,
@@ -233,7 +232,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		first_vertex: u32,
 		first_instance: u32,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind_modify(cmd, modify, param)?
@@ -252,7 +251,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DrawIndirectCommand]>,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind_modify(cmd, modify, param)?.draw_indirect(indirect_buffer) }
 	}
@@ -273,7 +272,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind_modify(cmd, modify, param)?
@@ -296,7 +295,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		vertex_offset: i32,
 		first_instance: u32,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind_modify(cmd, modify, param)?
@@ -317,7 +316,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		index_buffer: impl Into<IndexBuffer>,
 		indirect_buffer: Subbuffer<[DrawIndexedIndirectCommand]>,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind_modify(cmd, modify, param)?
@@ -343,7 +342,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessTraditionalGraphicsPipeline<T> {
 		count_buffer: Subbuffer<u32>,
 		max_draw_count: u32,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe {
 			self.bind_modify(cmd, modify, param)?

@@ -1,12 +1,12 @@
-use bytemuck_derive::AnyBitPattern;
 use core::mem::size_of;
 use glam::{Vec2, Vec3, Vec3A};
 use spirv_std::image::Image2d;
 use static_assertions::const_assert_eq;
+use vulkano_bindless_macros::DescStruct;
 use vulkano_bindless_shaders::descriptor::WeakDesc;
 
 #[repr(C)]
-#[derive(Copy, Clone, AnyBitPattern)]
+#[derive(Copy, Clone, DescStruct)]
 pub struct ModelVertex {
 	pub position: Vec3A,
 	pub tex_coord: Vec2,

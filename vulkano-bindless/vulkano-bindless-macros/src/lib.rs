@@ -3,7 +3,7 @@ use quote::ToTokens;
 use syn::Error;
 
 mod bindless;
-mod desc_buffer;
+mod desc_struct;
 mod symbols;
 
 #[path = "../../image_types.rs"]
@@ -16,9 +16,9 @@ pub fn bindless(attr: TokenStream, item: TokenStream) -> TokenStream {
 		.into()
 }
 
-#[proc_macro_derive(DescBuffer)]
-pub fn desc_buffer(content: TokenStream) -> TokenStream {
-	desc_buffer::desc_buffer(content)
+#[proc_macro_derive(DescStruct)]
+pub fn desc_struct(content: TokenStream) -> TokenStream {
+	desc_struct::desc_struct(content)
 		.unwrap_or_else(Error::into_compile_error)
 		.into()
 }

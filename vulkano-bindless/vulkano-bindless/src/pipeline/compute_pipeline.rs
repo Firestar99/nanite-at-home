@@ -2,7 +2,6 @@ use crate::descriptor::Bindless;
 use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
 use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
-use bytemuck::AnyBitPattern;
 use std::sync::Arc;
 use vulkano::buffer::Subbuffer;
 use vulkano::command_buffer::{DispatchIndirectCommand, RecordingCommandBuffer};
@@ -11,7 +10,7 @@ use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::ComputePipeline as VComputePipeline;
 use vulkano::pipeline::{PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescBuffer;
+use vulkano_bindless_shaders::desc_buffer::DescStruct;
 use vulkano_bindless_shaders::shader_type::ComputeShader;
 
 pub type BindlessComputePipeline<T> = BindlessPipeline<ComputePipelineType, T>;
@@ -30,7 +29,7 @@ impl VulkanPipeline for ComputePipelineType {
 	}
 }
 
-impl<T: DescBuffer + AnyBitPattern> BindlessComputePipeline<T> {
+impl<T: DescStruct> BindlessComputePipeline<T> {
 	pub fn new(
 		bindless: Arc<Bindless>,
 		stage: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
@@ -57,7 +56,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessComputePipeline<T> {
 		cmd: &'a mut RecordingCommandBuffer,
 		group_counts: [u32; 3],
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer + DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind_modify(cmd, modify, param)?.dispatch(group_counts) }
 	}
@@ -74,7 +73,7 @@ impl<T: DescBuffer + AnyBitPattern> BindlessComputePipeline<T> {
 		cmd: &'a mut RecordingCommandBuffer,
 		indirect_buffer: Subbuffer<[DispatchIndirectCommand]>,
 		modify: impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>,
-		param: impl DescBuffer + DescBuffer<DescStatic = T>,
+		param: T,
 	) -> Result<&'a mut RecordingCommandBuffer, Box<ValidationError>> {
 		unsafe { self.bind_modify(cmd, modify, param)?.dispatch_indirect(indirect_buffer) }
 	}

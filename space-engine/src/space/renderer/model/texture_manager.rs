@@ -1,7 +1,7 @@
 use crate::space::Init;
 use image::{DynamicImage, ImageError};
 use std::sync::Arc;
-use vulkano::buffer::{BufferContents, BufferCreateInfo, BufferUsage};
+use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
 use vulkano::command_buffer::{
 	CommandBufferBeginInfo, CommandBufferUsage, CopyBufferToImageInfo, RecordingCommandBuffer,
@@ -12,6 +12,7 @@ use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::DeviceSize;
+use vulkano_bindless::desc_buffer::DescStruct;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::spirv_std::image::Image2d;
@@ -99,7 +100,7 @@ impl TextureManager {
 
 	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>
 	where
-		T: BufferContents,
+		T: DescStruct,
 		ITER: IntoIterator<Item = T>,
 		ITER::IntoIter: ExactSizeIterator,
 	{

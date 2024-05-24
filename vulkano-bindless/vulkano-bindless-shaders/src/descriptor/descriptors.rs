@@ -1,3 +1,4 @@
+use crate::desc_buffer::DescBuffer;
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::metadata::Metadata;
 use crate::descriptor::{Buffer, BufferSlice, DescType, ValidDesc};
@@ -37,7 +38,7 @@ macro_rules! decl_descriptors {
 }
 standard_image_types!(decl_descriptors);
 
-impl<'a, T: ?Sized + Send + Sync + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
+impl<'a, T: ?Sized + DescBuffer + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 	fn access(&self, desc: &impl ValidDesc<Buffer<T>>) -> <Buffer<T> as DescType>::AccessType<'_> {
 		BufferSlice::new(unsafe { self.buffers.index(desc.id() as usize) }, self.meta)
 	}
