@@ -1,5 +1,7 @@
+use crate::desc_buffer::DescStruct;
 use bytemuck_derive::AnyBitPattern;
 use static_assertions::const_assert;
+use vulkano_bindless_macros::DescStruct;
 
 /// Metadata about an execution, like the current frame in flight, to be able to safely upgrade weak pointers.
 /// Currently unused.
@@ -11,8 +13,8 @@ pub const METADATA_MAX_SIZE: usize = 32;
 const_assert!(core::mem::size_of::<Metadata>() <= METADATA_MAX_SIZE);
 
 #[repr(C)]
-#[derive(Copy, Clone, AnyBitPattern)]
-pub struct PushConstant<T> {
+#[derive(Copy, Clone, DescStruct)]
+pub struct PushConstant<T: DescStruct> {
 	pub t: T,
 	pub metadata: Metadata,
 }

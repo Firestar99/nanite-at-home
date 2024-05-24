@@ -1,88 +1,45 @@
 use crate::symbols::Symbols;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
+use std::collections::HashSet;
 use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
-use syn::{
-	visit_mut, Fields, GenericParam, Generics, ItemStruct, Lifetime, Result, Token, WhereClause, WherePredicate,
-};
-
-struct DescBufferContext {
-	item: ItemStruct,
-	symbols: Symbols,
-	generics_decl: TokenStream,
-	generics_ref: TokenStream,
-	transfer_generics_decl: TokenStream,
-	transfer_generics_ref: TokenStream,
-}
+use syn::{visit_mut, Fields, GenericParam, Generics, ItemStruct, Lifetime, Result, Token, TypeParam, TypeParamBound};
 
 pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
-	let context = {
-		fn decl_to_ref<'a>(generics: impl Iterator<Item = &'a GenericParam>) -> TokenStream {
-			let out = generics
-				.map(|gen| match gen {
-					GenericParam::Lifetime(l) => l.lifetime.to_token_stream(),
-					GenericParam::Type(t) => t.ident.to_token_stream(),
-					GenericParam::Const(c) => c.ident.to_token_stream(),
-				})
-				.collect::<TokenStream>();
-			if out.is_empty() {
-				TokenStream::new()
-			} else {
-				quote!(<#out>)
-			}
-		}
+	let symbols = Symbols::new();
+	let item = syn::parse::<ItemStruct>(content)?;
+	let generics = item
+		.generics
+		.params
+		.iter()
+		.filter_map(|g| match g {
+			GenericParam::Lifetime(_) => None,
+			GenericParam::Type(t) => Some(t.ident.clone()),
+			GenericParam::Const(c) => Some(c.ident.clone()),
+		})
+		.collect();
 
-		let item = syn::parse::<ItemStruct>(content)?;
-		let transfer_generics = Generics {
-			params: item
-				.generics
-				.params
-				.iter()
-				.filter(|gen| !matches!(gen, GenericParam::Lifetime(_)))
-				.cloned()
-				.collect(),
-			where_clause: item.generics.where_clause.as_ref().map(|wh| WhereClause {
-				predicates: wh
-					.predicates
-					.iter()
-					.filter(|pred| !matches!(pred, WherePredicate::Lifetime(_)))
-					.cloned()
-					.collect(),
-				..wh.clone()
-			}),
-			..item.generics.clone()
-		};
-		DescBufferContext {
-			symbols: Symbols::new(),
-			generics_decl: item.generics.to_token_stream(),
-			generics_ref: decl_to_ref(item.generics.params.iter()),
-			transfer_generics_decl: transfer_generics.to_token_stream(),
-			transfer_generics_ref: decl_to_ref(transfer_generics.params.iter()),
-			item,
-		}
-	};
-
-	let desc_buffer = impl_desc_buffer(&context)?;
-	let out = quote! {
-		#desc_buffer
-	};
-
-	Ok(out)
-}
-
-fn impl_desc_buffer(context: &DescBufferContext) -> Result<TokenStream> {
-	let crate_shaders = &context.symbols.crate_shaders;
-	let (transfer, to, from) = match &context.item.fields {
+	let crate_shaders = &symbols.crate_shaders;
+	let mut transfer = Punctuated::<TokenStream, Token![,]>::new();
+	let mut to = Punctuated::<TokenStream, Token![,]>::new();
+	let mut from = Punctuated::<TokenStream, Token![,]>::new();
+	let mut gen_name_gen = GenericNameGen::new();
+	let mut gen_ref_tys = Vec::new();
+	let (transfer, to, from) = match &item.fields {
 		Fields::Named(named) => {
-			let mut transfer = Punctuated::<TokenStream, Token![,]>::new();
-			let mut to = Punctuated::<TokenStream, Token![,]>::new();
-			let mut from = Punctuated::<TokenStream, Token![,]>::new();
 			for f in &named.named {
 				let name = f.ident.as_ref().unwrap();
 				let mut ty = f.ty.clone();
-				visit_mut::visit_type_mut(&mut RemoveLifetimesVisitor, &mut ty);
-				transfer.push(quote!(#name: <#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct));
+				let mut visitor = GenericsVisitor::new(&generics);
+				visit_mut::visit_type_mut(&mut visitor, &mut ty);
+				transfer.push(if visitor.found_generics {
+					gen_ref_tys.push(f.ty.clone());
+					let gen = gen_name_gen.next();
+					quote!(#name: #gen)
+				} else {
+					quote!(#name: <#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
+				});
 				to.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::to_transfer(self.#name)));
 				from.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::from_transfer(from.#name, meta)));
 			}
@@ -93,13 +50,16 @@ fn impl_desc_buffer(context: &DescBufferContext) -> Result<TokenStream> {
 			)
 		}
 		Fields::Unnamed(unnamed) => {
-			let mut transfer = Punctuated::<TokenStream, Token![,]>::new();
-			let mut to = Punctuated::<TokenStream, Token![,]>::new();
-			let mut from = Punctuated::<TokenStream, Token![,]>::new();
 			for (i, f) in unnamed.unnamed.iter().enumerate() {
 				let mut ty = f.ty.clone();
-				visit_mut::visit_type_mut(&mut RemoveLifetimesVisitor, &mut ty);
-				transfer.push(quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct));
+				let mut visitor = GenericsVisitor::new(&generics);
+				visit_mut::visit_type_mut(&mut visitor, &mut ty);
+				transfer.push(if visitor.found_generics {
+					gen_ref_tys.push(f.ty.clone());
+					gen_name_gen.next().into_token_stream()
+				} else {
+					quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
+				});
 				to.push(quote!(#crate_shaders::desc_buffer::DescStruct::to_transfer(self.#i)));
 				from.push(quote!(#crate_shaders::desc_buffer::DescStruct::from_transfer(from.#i, meta)));
 			}
@@ -116,13 +76,46 @@ fn impl_desc_buffer(context: &DescBufferContext) -> Result<TokenStream> {
 		),
 	};
 
-	let vis = &context.item.vis;
-	let ident = &context.item.ident;
+	let generics_decl = Generics {
+		params: item
+			.generics
+			.params
+			.iter()
+			.map(|param| match param {
+				GenericParam::Type(t) => GenericParam::Type(TypeParam {
+					bounds: t
+						.bounds
+						.iter()
+						.cloned()
+						.chain([TypeParamBound::Verbatim(quote! {
+							#crate_shaders::desc_buffer::DescStruct
+						})])
+						.collect(),
+					..t.clone()
+				}),
+				e => e.clone(),
+			})
+			.collect(),
+		..item.generics.clone()
+	};
+	let generics_ref = decl_to_ref(item.generics.params.iter());
+
+	let transfer_generics_decl = gen_name_gen.decl(quote! {
+		#crate_shaders::bytemuck::AnyBitPattern + Send + Sync
+	});
+	let transfer_generics_ref = if !gen_ref_tys.is_empty() {
+		let gen_ref_tys: Punctuated<TokenStream, Token![,]> = gen_ref_tys
+			.into_iter()
+			.map(|ty| quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct))
+			.collect();
+		quote!(<#gen_ref_tys>)
+	} else {
+		TokenStream::new()
+	};
+
+	let vis = &item.vis;
+	let ident = &item.ident;
 	let transfer_ident = format_ident!("{}Transfer", ident);
-	let generics_decl = &context.generics_decl;
-	let generics_ref = &context.generics_ref;
-	let transfer_generics_decl = &context.transfer_generics_decl;
-	let transfer_generics_ref = &context.transfer_generics_ref;
 	Ok(quote! {
 		#[derive(Copy, Clone, #crate_shaders::bytemuck_derive::AnyBitPattern)]
 		#vis struct #transfer_ident #transfer_generics_decl #transfer
@@ -141,30 +134,84 @@ fn impl_desc_buffer(context: &DescBufferContext) -> Result<TokenStream> {
 	})
 }
 
-struct RemoveLifetimesVisitor;
+struct GenericsVisitor<'a> {
+	generics: &'a HashSet<Ident>,
+	found_generics: bool,
+}
 
-impl VisitMut for RemoveLifetimesVisitor {
-	fn visit_generics_mut(&mut self, i: &mut Generics) {
-		i.params = i
-			.params
-			.iter()
-			.filter(|gen| !matches!(gen, GenericParam::Lifetime(_)))
-			.cloned()
-			.collect();
-		i.where_clause = i.where_clause.as_ref().map(|wh| WhereClause {
-			predicates: wh
-				.predicates
-				.iter()
-				.filter(|pred| !matches!(pred, WherePredicate::Lifetime(_)))
-				.cloned()
-				.collect(),
-			..wh.clone()
-		});
-		visit_mut::visit_generics_mut(self, i);
+impl<'a> GenericsVisitor<'a> {
+	pub fn new(generics: &'a HashSet<Ident>) -> Self {
+		Self {
+			generics,
+			found_generics: false,
+		}
+	}
+}
+
+impl<'a> VisitMut for GenericsVisitor<'a> {
+	fn visit_ident_mut(&mut self, i: &mut Ident) {
+		if self.generics.contains(i) {
+			self.found_generics = true;
+		}
+		visit_mut::visit_ident_mut(self, i);
 	}
 
 	fn visit_lifetime_mut(&mut self, i: &mut Lifetime) {
 		i.ident = Ident::new("static", i.ident.span());
 		visit_mut::visit_lifetime_mut(self, i);
+	}
+}
+
+struct GenericNameGen(u32);
+
+impl GenericNameGen {
+	pub fn new() -> Self {
+		Self(0)
+	}
+
+	pub fn next(&mut self) -> Ident {
+		let i = self.0;
+		self.0 += 1;
+		format_ident!("T{}", i)
+	}
+
+	pub fn decl(self, ty: TokenStream) -> Generics {
+		let params: Punctuated<GenericParam, Token![,]> = (0..self.0)
+			.map(|i| {
+				GenericParam::Type(TypeParam {
+					attrs: Vec::new(),
+					ident: format_ident!("T{}", i),
+					colon_token: Some(Default::default()),
+					bounds: Punctuated::from_iter([TypeParamBound::Verbatim(ty.clone())]),
+					eq_token: None,
+					default: None,
+				})
+			})
+			.collect();
+		if !params.is_empty() {
+			Generics {
+				lt_token: Some(Default::default()),
+				params,
+				gt_token: Some(Default::default()),
+				where_clause: None,
+			}
+		} else {
+			Generics::default()
+		}
+	}
+}
+
+fn decl_to_ref<'a>(generics: impl Iterator<Item = &'a GenericParam>) -> TokenStream {
+	let out = generics
+		.map(|gen| match gen {
+			GenericParam::Lifetime(l) => l.lifetime.to_token_stream(),
+			GenericParam::Type(t) => t.ident.to_token_stream(),
+			GenericParam::Const(c) => c.ident.to_token_stream(),
+		})
+		.collect::<TokenStream>();
+	if out.is_empty() {
+		TokenStream::new()
+	} else {
+		quote!(<#out>)
 	}
 }
