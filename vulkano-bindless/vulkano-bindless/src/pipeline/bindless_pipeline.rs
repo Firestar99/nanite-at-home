@@ -1,13 +1,12 @@
 use crate::descriptor::Bindless;
 use std::marker::PhantomData;
-use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
 use vulkano_bindless_shaders::desc_buffer::DescStruct;
-use vulkano_bindless_shaders::descriptor::metadata::PushConstant;
+use vulkano_bindless_shaders::descriptor::metadata::{Metadata, PushConstant};
 
 pub trait VulkanPipeline {
 	type VulkanType: Pipeline;
@@ -71,16 +70,11 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 			}
 			Ok(layout)
 		} else {
-			let push_constant_words = mem::size_of::<PushConstant<T>>().next_multiple_of(4) as u32;
 			Ok(bindless
-				.get_pipeline_layout(push_constant_words)
-				.ok_or_else(|| {
+				.get_pipeline_layout::<T>()
+				.map_err(|err| {
 					Validated::from(Box::new(ValidationError {
-						problem: format!(
-							"Bindless param T of word size {} is too large for minimum vulkan spec of 4",
-							push_constant_words
-						)
-						.into(),
+						problem: format!("{}", err).into(),
 						..Default::default()
 					}))
 				})?
@@ -102,7 +96,12 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 				0,
 				self.bindless.descriptor_set.clone(),
 			)?
-			.push_constants(self.pipeline.layout().clone(), 0, unsafe { param.to_transfer() })
+			.push_constants(self.pipeline.layout().clone(), 0, unsafe {
+				PushConstant::<T::TransferDescStruct> {
+					t: <T as DescStruct>::to_transfer(param),
+					metadata: Metadata,
+				}
+			})
 	}
 
 	pub fn bind_modify<'a>(

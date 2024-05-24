@@ -1,6 +1,5 @@
 use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
 use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
-use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -12,11 +11,9 @@ use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
+use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::PipelineBindPoint::Graphics;
 use vulkano::pipeline::{DynamicState, Pipeline, PipelineLayout};
-use vulkano::shader::ShaderStages;
-use vulkano_bindless::descriptor::metadata::PushConstant;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::descriptor::{Buffer, Sampler};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
@@ -45,12 +42,7 @@ impl OpaqueDrawPipeline {
 					GlobalDescriptorSetLayout::new(init).0,
 				]
 				.to_vec(),
-				push_constant_ranges: [PushConstantRange {
-					stages: ShaderStages::TASK | ShaderStages::MESH | ShaderStages::FRAGMENT,
-					offset: 0,
-					size: mem::size_of::<PushConstant<Params>>() as u32,
-				}]
-				.to_vec(),
+				push_constant_ranges: init.bindless.get_push_constant::<Params<'static>>(),
 				..PipelineLayoutCreateInfo::default()
 			},
 		)

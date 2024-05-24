@@ -8,9 +8,10 @@ use crate::descriptor::sampler_table::SamplerTable;
 use crate::sync::Mutex;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
-use std::array;
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
+use std::{array, mem};
 use vulkano::descriptor_set::layout::{
 	DescriptorSetLayout, DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo,
 };
@@ -19,13 +20,16 @@ use vulkano::device::Device;
 use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
 use vulkano::pipeline::PipelineLayout;
 use vulkano::shader::ShaderStages;
+use vulkano_bindless_shaders::desc_buffer::DescStruct;
+use vulkano_bindless_shaders::descriptor::metadata::PushConstant;
 
-pub const BINDLESS_PIPELINE_LAYOUT_PUSH_CONSTANT_WORDS: usize = 5;
+pub const BINDLESS_MAX_PUSH_CONSTANT_WORDS: usize = 4;
 
 pub struct Bindless {
 	pub device: Arc<Device>,
+	pub stages: ShaderStages,
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
-	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_PIPELINE_LAYOUT_PUSH_CONSTANT_WORDS],
+	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],
 	pub descriptor_set: Arc<DescriptorSet>,
 	pub buffer: BufferTable,
 	pub image: ImageTable,
@@ -78,15 +82,7 @@ impl Bindless {
 				device.clone(),
 				PipelineLayoutCreateInfo {
 					set_layouts: Vec::from([descriptor_set_layout.clone()]),
-					push_constant_ranges: if i == 0 {
-						Vec::new()
-					} else {
-						Vec::from([PushConstantRange {
-							stages,
-							offset: 0,
-							size: i as u32 * 4,
-						}])
-					},
+					push_constant_ranges: Self::get_push_constant_inner(stages, i),
 					..PipelineLayoutCreateInfo::default()
 				},
 			)
@@ -100,6 +96,7 @@ impl Bindless {
 			descriptor_set_layout,
 			pipeline_layouts,
 			descriptor_set,
+			stages,
 			device,
 			flush_lock: Mutex::new(()),
 		})
@@ -138,9 +135,53 @@ impl Bindless {
 		}
 	}
 
-	/// Get a pipeline layout with just the bindless descriptor set and some amount of push constant words (of u32's).
-	/// `push_constant_words` must be within `0..=4`, the minimum the vulkan spec requires.
-	pub fn get_pipeline_layout(&self, push_constant_words: u32) -> Option<&Arc<PipelineLayout>> {
-		self.pipeline_layouts.get(push_constant_words as usize)
+	/// Get a pipeline layout with just the bindless descriptor set and the correct push constant size  for your
+	/// `param_constant` `T`.
+	/// The push constant size must not exceed 4 words (of u32's), the minimum the vulkan spec requires.
+	pub fn get_pipeline_layout<T: DescStruct>(&self) -> Result<&Arc<PipelineLayout>, PushConstantError> {
+		let words = Self::get_push_constant_words::<T>();
+		self.pipeline_layouts
+			.get(words)
+			.ok_or(PushConstantError::TooLarge(words))
+	}
+
+	/// Get a `Vec<PushConstantRange>` with the correct push constant size for your `param_constant` `T`.
+	/// The push constant size must not exceed 4 words (of u32's), the minimum the vulkan spec requires.
+	pub fn get_push_constant<T: DescStruct>(&self) -> Vec<PushConstantRange> {
+		Self::get_push_constant_inner(self.stages, Self::get_push_constant_words::<T>())
+	}
+
+	fn get_push_constant_inner(stages: ShaderStages, words: usize) -> Vec<PushConstantRange> {
+		if words == 0 {
+			Vec::new()
+		} else {
+			Vec::from([PushConstantRange {
+				stages,
+				offset: 0,
+				size: words as u32 * 4,
+			}])
+		}
+	}
+
+	/// Get the push constant word size (of u32's) for your `param_constant` `T`.
+	pub fn get_push_constant_words<T: DescStruct>() -> usize {
+		let i = mem::size_of::<PushConstant<T::TransferDescStruct>>();
+		// round up to next multiple of words
+		(i + 3) / 4
+	}
+}
+
+pub enum PushConstantError {
+	TooLarge(usize),
+}
+
+impl Display for PushConstantError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			PushConstantError::TooLarge(words) => f.write_fmt(format_args!(
+				"Bindless param T of word size {} is too large for minimum vulkan spec of 4",
+				words
+			)),
+		}
 	}
 }
