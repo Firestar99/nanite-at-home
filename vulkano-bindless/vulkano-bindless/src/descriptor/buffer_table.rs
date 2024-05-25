@@ -17,6 +17,7 @@ use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
 use vulkano_bindless_shaders::desc_buffer::{DescBuffer, DescStruct};
 use vulkano_bindless_shaders::descriptor::buffer::Buffer;
+use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
 impl<T: DescBuffer + ?Sized> DescTypeCpu for Buffer<T>
@@ -29,13 +30,10 @@ where
 	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
 		slot.reinterpret_ref()
 	}
-
-	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
-		from.into_bytes()
-	}
 }
 
 impl DescTable for BufferTable {
+	const DESC_ENUM: DescEnum = DescEnum::Buffer;
 	type Slot = Subbuffer<[u8]>;
 	type RCSlotsInterface = BufferInterface;
 
@@ -87,7 +85,7 @@ impl BufferTable {
 	where
 		T::TransferDescBuffer: VBufferContents,
 	{
-		self.resource_table.alloc_slot(buffer)
+		self.resource_table.alloc_slot(buffer.into_bytes())
 	}
 
 	pub fn alloc_from_data<T: DescStruct>(

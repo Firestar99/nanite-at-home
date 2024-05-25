@@ -12,6 +12,7 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::sampler::{Sampler as VSampler, SamplerCreateInfo};
 use vulkano::shader::ShaderStages;
 use vulkano::{Validated, VulkanError};
+use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
 use vulkano_bindless_shaders::descriptor::sampler::Sampler;
 use vulkano_bindless_shaders::descriptor::BINDING_SAMPLER;
 
@@ -22,13 +23,10 @@ impl DescTypeCpu for Sampler {
 	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
 		slot
 	}
-
-	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
-		from
-	}
 }
 
 impl DescTable for SamplerTable {
+	const DESC_ENUM: DescEnum = DescEnum::Sampler;
 	type Slot = Arc<VSampler>;
 	type RCSlotsInterface = SamplerInterface;
 

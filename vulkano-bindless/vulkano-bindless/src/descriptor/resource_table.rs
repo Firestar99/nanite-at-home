@@ -21,8 +21,8 @@ impl<T: DescTable> ResourceTable<T> {
 		}
 	}
 
-	pub fn alloc_slot<D: DescTypeCpu<DescTable = T>>(&self, cpu_type: D::VulkanType) -> RCDesc<D> {
-		let slot = self.slots.allocate(D::to_table(cpu_type));
+	pub fn alloc_slot<D: DescTypeCpu<DescTable = T>>(&self, cpu_type: <D::DescTable as DescTable>::Slot) -> RCDesc<D> {
+		let slot = self.slots.allocate(cpu_type);
 		// Safety: we'll pull from the queue later and destroy the slots
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);

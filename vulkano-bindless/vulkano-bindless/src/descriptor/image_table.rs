@@ -14,6 +14,7 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::view::{ImageView, ImageViewType};
 use vulkano::image::ImageUsage;
 use vulkano::shader::ShaderStages;
+use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
 use vulkano_bindless_shaders::descriptor::image::SampleType;
 use vulkano_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
 use vulkano_bindless_shaders::spirv_std::image::Image2d;
@@ -35,13 +36,10 @@ impl<
 	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
 		slot
 	}
-
-	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot {
-		from
-	}
 }
 
 impl DescTable for ImageTable {
+	const DESC_ENUM: DescEnum = DescEnum::Image;
 	type Slot = Arc<ImageView>;
 	type RCSlotsInterface = ImageInterface;
 

@@ -8,4 +8,13 @@ pub(crate) mod private {
 /// * [`crate::descriptor::sampler::Sampler`]
 pub trait DescType: private::SealedTrait + Send + Sync + 'static {
 	type AccessType<'a>;
+
+	const DESC_ENUM: DescEnum;
+}
+
+/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescType::DESC_ENUM`].
+pub enum DescEnum {
+	Buffer,
+	Image,
+	Sampler,
 }

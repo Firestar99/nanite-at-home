@@ -6,6 +6,7 @@ use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::shader::ShaderStages;
+use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
 use vulkano_bindless_shaders::descriptor::DescType;
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
@@ -18,14 +19,11 @@ pub trait DescTypeCpu: DescType {
 
 	/// deref [`Self::TableType`] to exposed [`Self::VulkanType`]
 	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType;
-
-	/// turn [`Self::VulkanType`] into the internal [`Self::DescTable::Slot`]
-	#[allow(clippy::wrong_self_convention)]
-	fn to_table(from: Self::VulkanType) -> <Self::DescTable as DescTable>::Slot;
 }
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
 pub trait DescTable: Sized {
+	const DESC_ENUM: DescEnum;
 	/// internal non-generic type used within the resource table
 	type Slot: Clone;
 	type RCSlotsInterface: RCSlotsInterface<Self::Slot>;
