@@ -4,22 +4,16 @@ use std::sync::Arc;
 use vulkano::buffer::BufferUsage;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::spirv_std::image::Image2d;
 
 pub struct OpaqueModel {
-	pub vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
+	pub vertex_buffer: RCDesc<Buffer<[ModelVertex<'static>]>>,
 	pub index_buffer: RCDesc<Buffer<[u32]>>,
-	pub strong_refs: Vec<RCDesc<Image2d>>,
 }
 
 impl OpaqueModel {
-	pub fn direct<V>(
-		texture_manager: &Arc<TextureManager>,
-		vertex_data: V,
-		strong_refs: impl IntoIterator<Item = RCDesc<Image2d>>,
-	) -> Self
+	pub fn direct<'a, V>(texture_manager: &Arc<TextureManager>, vertex_data: V) -> Self
 	where
-		V: IntoIterator<Item = ModelVertex>,
+		V: IntoIterator<Item = ModelVertex<'a>>,
 		V::IntoIter: ExactSizeIterator,
 	{
 		let vertex_data = vertex_data.into_iter();
@@ -31,20 +25,14 @@ impl OpaqueModel {
 		Self {
 			vertex_buffer,
 			index_buffer,
-			strong_refs: strong_refs.into_iter().collect(),
 		}
 	}
 
-	pub fn indexed<I, V>(
-		texture_manager: &Arc<TextureManager>,
-		index_data: I,
-		vertex_data: V,
-		strong_refs: impl IntoIterator<Item = RCDesc<Image2d>>,
-	) -> Self
+	pub fn indexed<'a, I, V>(texture_manager: &Arc<TextureManager>, index_data: I, vertex_data: V) -> Self
 	where
 		I: IntoIterator<Item = u32>,
 		I::IntoIter: ExactSizeIterator,
-		V: IntoIterator<Item = ModelVertex>,
+		V: IntoIterator<Item = ModelVertex<'a>>,
 		V::IntoIter: ExactSizeIterator,
 	{
 		let vertex_buffer =
@@ -54,7 +42,6 @@ impl OpaqueModel {
 		Self {
 			vertex_buffer,
 			index_buffer,
-			strong_refs: strong_refs.into_iter().collect(),
 		}
 	}
 }

@@ -3,7 +3,7 @@ use crate::sync::atomic::fence;
 use crate::sync::atomic::AtomicU32;
 use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use crate::sync::cell::UnsafeCell;
-use crate::sync::Arc;
+use crate::sync::{Arc, Backoff};
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -90,7 +90,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	/// must follow ref counting: after incrementing one must also decrement exactly that many times
 	#[inline]
 	unsafe fn ref_inc(&self) {
-		let _prev = self.with_slot(|slot| slot.atomic.fetch_add(1, Relaxed));
+		let _prev = self.with_slot(|slot| slot.ref_count.fetch_add(1, Relaxed));
 		debug_assert!(_prev > 0, "Invalid state: Slot is alive but ref count was 0!");
 	}
 
@@ -100,7 +100,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	/// must follow ref counting: after incrementing one must also decrement exactly that many times
 	#[inline]
 	unsafe fn ref_dec(&self) -> bool {
-		let _prev = self.with_slot(|slot| slot.atomic.fetch_sub(1, Relaxed));
+		let _prev = self.with_slot(|slot| slot.ref_count.fetch_sub(1, Relaxed));
 		debug_assert!(_prev > 0, "Invalid state: Slot is alive but ref count was 0!");
 		if _prev == 1 {
 			fence(Acquire);
@@ -116,7 +116,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 
 	#[inline]
 	pub fn ref_count(&self) -> u32 {
-		self.with_slot(|slot| slot.atomic.load(Relaxed))
+		self.with_slot(|slot| slot.ref_count.load(Relaxed))
 	}
 
 	#[inline]
@@ -145,10 +145,11 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	///
 	/// # Safety
 	/// The [`SlotIndex`] must have originated from [`Self::from_raw_index`], this method must only be called once with
-	/// that particular [`SlotIndex`], `slots` must be the same instance as the original `RCSlot` and the T generic must be the same
+	/// that particular [`SlotIndex`], `slots` must be the same instance as the original `RCSlot` and the T generic
+	/// must be the same
 	#[inline]
 	pub unsafe fn from_raw_index(slots: &Arc<RCSlots<T, Interface>>, index: SlotIndex) -> Self {
-		RCSlot::new(Arc::as_ptr(slots) as *const _, index)
+		unsafe { RCSlot::new(Arc::as_ptr(slots) as *const _, index) }
 	}
 }
 
@@ -212,6 +213,7 @@ impl<T, Interface: RCSlotsInterface<T>> Hash for RCSlot<T, Interface> {
 	}
 }
 
+// FIXME outdated docs
 /// A `Slot` is the backing slot of [`RCSlot`] and stored within [`AtomicSlots`]. The atomic `version` determines the state this slot is in. When switching states
 /// `version` will always be wrapping incremented so that each reuse of a slot results in a different version (apart from wrapping around after many reuses).
 ///
@@ -223,14 +225,13 @@ impl<T, Interface: RCSlotsInterface<T>> Hash for RCSlot<T, Interface> {
 /// * Upgrading weak pointers will succeed and increment the ref count.
 ///
 /// # slot is dead: `version & 1 == 0`
-/// * `atomic` is *generally* undefined and should not be accessed externally. Typically, it's used to point to the next free slot index while the slot is in any of the
-/// queues. However, during transition between the states (e.g. allocation and freeing), `atomic` is undefined.
+/// * `atomic`
 /// * `t` is uninitialized and should not be accessed, as during state transitions a mut reference may be held against it.
 /// * `free_timestamp` is the timestamp until which the slot may be in use, if the `finished_lock_counter` timestamp progresses past this the slot may be dropped and
 /// reused.
 /// * Upgrading weak pointers will fail.
 struct Slot<T> {
-	atomic: AtomicU32,
+	ref_count: AtomicU32,
 	version: AtomicU32,
 	free_timestamp: UnsafeCell<Timestamp>,
 	t: UnsafeCell<MaybeUninit<T>>,
@@ -286,14 +287,14 @@ impl<T> Slot<T> {
 /// we can't do much more, as we'd need to assume read-only access to inner
 impl<T> Debug for Slot<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Slot").field("atomic", &self.atomic).finish()
+		f.debug_struct("Slot").field("atomic", &self.ref_count).finish()
 	}
 }
 
 impl<T> Default for Slot<T> {
 	fn default() -> Self {
 		Self {
-			atomic: AtomicU32::new(0),
+			ref_count: AtomicU32::new(0),
 			version: AtomicU32::new(0),
 			free_timestamp: UnsafeCell::new(Timestamp::new(0)),
 			t: UnsafeCell::new(MaybeUninit::uninit()),
@@ -326,16 +327,6 @@ impl<T, Interface: RCSlotsInterface<T>> Lock<T, Interface> {
 		// Safety: Only reapered slots that are protected by this lock are accessible
 		unsafe { self.slots.iter_with(reaper_include, f) }
 	}
-
-	// FIXME: unsound: slots may be accessed that are freed concurrently
-	// /// Same functionality as iter_last
-	// pub fn iter_latest<'a, R>(
-	// 	this: &'a Arc<Self>,
-	// 	_lock: &AtomicRCSlotsLock<T>,
-	// 	mut f: impl FnMut(Option<&RCSlot<T>>) -> R + 'a,
-	// ) {
-	// 	self.iter_with()
-	// }
 }
 
 impl<T, Interface: RCSlotsInterface<T>> Drop for Lock<T, Interface> {
@@ -403,12 +394,43 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 			});
 		}
 		// ref count of 1
-		slot.atomic.store(1, Relaxed);
+		slot.ref_count.store(1, Relaxed);
 		// slot is now alive and t may be referenced by many shared references beyond this point
 		slot.version_swap(Dead, Alive, Release);
 
-		// Safety: transfer ownership of the ref increment done above
+		// Safety: transfer ownership of slot's ref inc done above and ref inc the slots collection for this slot once
 		unsafe { RCSlot::new(Arc::into_raw(self.clone()), index) }
+	}
+
+	/// Try and get a reference to an alive slot. The slot must be alive, must not be dead or in reaper state.
+	pub fn try_get_alive_slot(self: &Arc<Self>, index: SlotIndex) -> Option<RCSlot<T, Interface>> {
+		let mut backoff = Backoff::new();
+		let slot = &self.array[index];
+
+		// try to ref_inc an alive slot
+		let mut old_ref = slot.ref_count.load(Relaxed);
+		loop {
+			if old_ref == 0 {
+				return None;
+			}
+			match slot
+				.ref_count
+				.compare_exchange_weak(old_ref, old_ref + 1, Relaxed, Relaxed)
+			{
+				Ok(_) => break,
+				Err(e) => old_ref = e,
+			};
+			backoff.spin();
+		}
+
+		// in case this slot just got allocated, we need to wait for the version to be alive before we access T
+		while VersionState::from(slot.version.load(Acquire)).0 != Alive {
+			backoff.snooze();
+		}
+
+		// Safety: transfer ownership of slot's ref increment done above, but do NOT ref inc the slots
+		// collection, that's only done inc/dec when a slot is allocated/dropped
+		unsafe { Some(RCSlot::from_raw_index(self, index)) }
 	}
 
 	/// # Safety

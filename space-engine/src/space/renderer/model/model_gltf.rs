@@ -58,19 +58,15 @@ async fn load_gltf_inner(texture_manager: &Arc<TextureManager>, path: &Path) -> 
 					.material()
 					.pbr_metallic_roughness()
 					.base_color_texture()
-					.map(|tex| images[tex.texture().source().index()].clone())
-					.unwrap_or_else(|| white_image.clone());
-				let albedo_tex_weak = albedo_tex.to_weak();
+					.map(|tex| &images[tex.texture().source().index()])
+					.unwrap_or_else(|| &white_image);
+				let desc = albedo_tex.to_strong();
 				let model_vertices = reader
 					.read_positions()
 					.unwrap()
 					.zip(reader.read_tex_coords(0).unwrap().into_f32())
 					.map(|(pos, tex_coord)| {
-						ModelVertex::new(
-							mat.transform_point3(Vec3::from(pos)),
-							Vec2::from(tex_coord),
-							albedo_tex_weak,
-						)
+						ModelVertex::new(mat.transform_point3(Vec3::from(pos)), Vec2::from(tex_coord), desc)
 					});
 
 				if let Some(model_indices) = reader.read_indices() {
@@ -78,10 +74,9 @@ async fn load_gltf_inner(texture_manager: &Arc<TextureManager>, path: &Path) -> 
 						texture_manager,
 						model_indices.into_u32(),
 						model_vertices,
-						[albedo_tex],
 					));
 				} else {
-					models.push(OpaqueModel::direct(texture_manager, model_vertices, [albedo_tex]));
+					models.push(OpaqueModel::direct(texture_manager, model_vertices));
 				}
 			}
 		}

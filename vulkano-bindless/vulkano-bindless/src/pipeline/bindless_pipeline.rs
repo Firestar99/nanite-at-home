@@ -1,4 +1,3 @@
-use crate::desc_buffer::MetadataCpu;
 use crate::descriptor::Bindless;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -6,8 +5,10 @@ use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescStruct;
+use vulkano_bindless_shaders::desc_buffer::{DescStruct, MetadataCpuInterface};
 use vulkano_bindless_shaders::descriptor::metadata::{Metadata, PushConstant};
+use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
+use vulkano_bindless_shaders::descriptor::DescType;
 
 pub trait VulkanPipeline {
 	type VulkanType: Pipeline;
@@ -99,7 +100,7 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 			)?
 			.push_constants(self.pipeline.layout().clone(), 0, unsafe {
 				PushConstant::<T::TransferDescStruct> {
-					t: <T as DescStruct>::write_cpu(param, &mut MetadataCpu::new()),
+					t: <T as DescStruct>::write_cpu(param, &mut PushConstantMetadataCpu),
 					metadata: Metadata,
 				}
 			})
@@ -120,4 +121,21 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 pub fn no_modify(
 ) -> impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>> {
 	|cmd| Ok(cmd)
+}
+
+struct PushConstantMetadataCpu;
+
+impl Deref for PushConstantMetadataCpu {
+	type Target = Metadata;
+
+	fn deref(&self) -> &Self::Target {
+		&Metadata
+	}
+}
+
+unsafe impl MetadataCpuInterface for PushConstantMetadataCpu {
+	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<'_, D>) {
+		// ignore. The push constant is only valid during this frame, and the locking system guarantees the descriptor
+		// is valid for at least this frame as well.
+	}
 }

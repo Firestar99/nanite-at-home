@@ -2,10 +2,11 @@ use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
-use crate::descriptor::Image;
+use crate::descriptor::{Bindless, Image};
 use crate::rc_slots::{RCSlotsInterface, SlotIndex};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
 use vulkano::descriptor_set::{DescriptorSet, InvalidateDescriptorSet, WriteDescriptorSet};
@@ -96,13 +97,27 @@ impl ImageTable {
 			resource_table: ResourceTable::new(count, ImageInterface { descriptor_set }),
 		}
 	}
+}
 
+pub struct ImageTableAccess<'a>(pub &'a Arc<Bindless>);
+
+impl<'a> Deref for ImageTableAccess<'a> {
+	type Target = ImageTable;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0.image
+	}
+}
+
+impl<'a> ImageTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot_2d(&self, image_view: Arc<ImageView>) -> RCDesc<Image2d> {
 		assert_eq!(image_view.view_type(), ImageViewType::Dim2d);
 		self.resource_table.alloc_slot(image_view)
 	}
+}
 
+impl ImageTable {
 	pub(crate) fn flush_updates(&self, mut writes: impl FnMut(WriteDescriptorSet)) -> FlushUpdates<ImageTable> {
 		// TODO writes is written out-of-order with regard to bindings.
 		//   Would it be worth to buffer all writes of one binding, only flushing at the end?
@@ -114,24 +129,23 @@ impl ImageTable {
 			storage_buf.start(start, buffer.capacity());
 			sampled_buf.start(start, buffer.capacity());
 
-			for image in buffer.drain(..) {
+			for image in buffer.iter() {
 				let sampled = image.usage().contains(ImageUsage::SAMPLED);
 				let storage = image.usage().contains(ImageUsage::STORAGE);
 				match (storage, sampled) {
 					(true, true) => {
 						storage_buf.advance_push(image.clone());
-						sampled_buf.advance_push(image);
+						sampled_buf.advance_push(image.clone());
 					}
 					(true, false) => {
-						storage_buf.advance_push(image);
+						storage_buf.advance_push(image.clone());
 						sampled_buf.advance_flush(&mut writes);
 					}
 					(false, true) => {
 						storage_buf.advance_flush(&mut writes);
-						sampled_buf.advance_push(image);
+						sampled_buf.advance_push(image.clone());
 					}
 					(false, false) => {
-						drop(image);
 						storage_buf.advance_flush(&mut writes);
 						sampled_buf.advance_flush(&mut writes);
 					}

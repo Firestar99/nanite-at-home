@@ -95,7 +95,7 @@ impl TextureManager {
 			.await
 			.unwrap();
 
-		self.init.bindless.image.alloc_slot_2d(image_view)
+		self.init.bindless.image().alloc_slot_2d(image_view)
 	}
 
 	pub fn upload_buffer<T, ITER>(&self, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>
@@ -106,7 +106,7 @@ impl TextureManager {
 	{
 		self.init
 			.bindless
-			.buffer
+			.buffer()
 			.alloc_from_iter(
 				self.init.memory_allocator.clone(),
 				BufferCreateInfo {

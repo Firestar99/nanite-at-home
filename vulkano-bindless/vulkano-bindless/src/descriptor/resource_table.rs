@@ -1,5 +1,5 @@
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
-use crate::descriptor::rc_reference::RCDesc;
+use crate::descriptor::rc_reference::{AnyRCDesc, RCDesc};
 use crate::rc_slots::{Lock as RCLock, RCSlot, RCSlots, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
@@ -27,6 +27,12 @@ impl<T: DescTable> ResourceTable<T> {
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);
 		RCDesc::<D>::new(slot)
+	}
+
+	pub fn try_get_rc(&self, id: u32) -> Option<AnyRCDesc<T>> {
+		self.slots
+			.try_get_alive_slot(SlotIndex(id as usize))
+			.map(AnyRCDesc::new)
 	}
 }
 
@@ -75,8 +81,23 @@ pub struct FlushUpdates<'a, T: DescTable> {
 	ranges: RangeSet<u32>,
 }
 
+/// this type only exists as you cannot nest `impl Trait`
+pub struct FlushSequence<'a, T: DescTable>(
+	&'a mut Vec<ManuallyDrop<RCSlot<<T as DescTable>::Slot, <T as DescTable>::RCSlotsInterface>>>,
+);
+
+impl<'a, T: DescTable> FlushSequence<'a, T> {
+	pub fn iter(&mut self) -> impl Iterator<Item = &T::Slot> {
+		self.0.iter().map(|slot| &***slot)
+	}
+
+	pub fn capacity(&self) -> usize {
+		self.0.capacity()
+	}
+}
+
 impl<'a, T: DescTable> FlushUpdates<'a, T> {
-	pub fn iter(&self, mut f: impl FnMut(u32, &mut Vec<<T as DescTable>::Slot>)) {
+	pub fn iter(&self, mut f: impl FnMut(u32, &mut FlushSequence<T>)) {
 		if self.ranges.is_empty() {
 			return;
 		}
@@ -88,13 +109,13 @@ impl<'a, T: DescTable> FlushUpdates<'a, T> {
 		for range in self.ranges.iter() {
 			let range = (range.start as usize)..(range.end as usize);
 			for index in range.clone() {
+				// don't drop the here, drop them when FlushUpdates is dropped
 				// Safety: indices come from alloc_slot
-				let slot = unsafe { ManuallyDrop::new(RCSlot::from_raw_index(&self.table.slots, SlotIndex(index))) };
-				buffer.push((**slot).clone());
+				buffer.push(unsafe { ManuallyDrop::new(RCSlot::from_raw_index(&self.table.slots, SlotIndex(index))) });
 			}
 
-			f(range.start as u32, &mut buffer);
-			assert!(buffer.is_empty());
+			f(range.start as u32, &mut FlushSequence(&mut buffer));
+			buffer.clear();
 		}
 	}
 }

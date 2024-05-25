@@ -46,7 +46,7 @@ impl OpaqueRenderTask {
 		let models = {
 			let guard = self.models.lock();
 			init.bindless
-				.buffer
+				.buffer()
 				.alloc_from_iter(
 					init.memory_allocator.clone(),
 					BufferCreateInfo {
@@ -58,8 +58,8 @@ impl OpaqueRenderTask {
 						..AllocationCreateInfo::default()
 					},
 					guard.iter().map(|model| OpaqueGpuModel {
-						vertex_buffer: model.vertex_buffer.to_weak(),
-						index_buffer: model.index_buffer.to_weak(),
+						vertex_buffer: model.vertex_buffer.to_strong(),
+						index_buffer: model.index_buffer.to_strong(),
 						triangle_count: (model.index_buffer.len() / 3) as u32,
 					}),
 				)

@@ -25,7 +25,7 @@ pub trait DescTypeCpu: DescType {
 pub trait DescTable: Sized {
 	const DESC_ENUM: DescEnum;
 	/// internal non-generic type used within the resource table
-	type Slot: Clone;
+	type Slot;
 	type RCSlotsInterface: RCSlotsInterface<Self::Slot>;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32;

@@ -1,10 +1,10 @@
 use crate::descriptor::bindless_descriptor_allocator::BindlessDescriptorSetAllocator;
-use crate::descriptor::buffer_table::BufferTable;
+use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::DescTable;
-use crate::descriptor::image_table::ImageTable;
+use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::resource_table::Lock;
-use crate::descriptor::sampler_table::SamplerTable;
+use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
 use crate::sync::Mutex;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
@@ -31,9 +31,9 @@ pub struct Bindless {
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],
 	pub descriptor_set: Arc<DescriptorSet>,
-	pub buffer: BufferTable,
-	pub image: ImageTable,
-	pub sampler: SamplerTable,
+	pub(super) buffer: BufferTable,
+	pub(super) image: ImageTable,
+	pub(super) sampler: SamplerTable,
 	flush_lock: Mutex<()>,
 }
 
@@ -102,9 +102,21 @@ impl Bindless {
 		})
 	}
 
+	pub fn buffer<'a>(self: &'a Arc<Self>) -> BufferTableAccess<'a> {
+		BufferTableAccess(self)
+	}
+
+	pub fn image<'a>(self: &'a Arc<Self>) -> ImageTableAccess<'a> {
+		ImageTableAccess(self)
+	}
+
+	pub fn sampler<'a>(self: &'a Arc<Self>) -> SamplerTableAccess<'a> {
+		SamplerTableAccess(self)
+	}
+
 	/// Flush the bindless descriptor set. All newly allocated resources before this call will be written.
 	/// Instead of manual flushing, one should prefer to use [`FrameManager`]'s flushing capabilities.
-	pub fn flush(&self) {
+	pub fn flush(self: &Arc<Self>) {
 		// flushes must be sequential. Finer sync may be possible, but probably not worth it.
 		let _flush_guard = self.flush_lock.lock();
 

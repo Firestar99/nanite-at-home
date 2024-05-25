@@ -2,8 +2,10 @@ use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
+use crate::descriptor::Bindless;
 use crate::rc_slots::{RCSlotsInterface, SlotIndex};
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
 use vulkano::descriptor_set::{DescriptorSet, InvalidateDescriptorSet, WriteDescriptorSet};
@@ -72,7 +74,19 @@ impl SamplerTable {
 			resource_table: ResourceTable::new(count, SamplerInterface { descriptor_set }),
 		}
 	}
+}
 
+pub struct SamplerTableAccess<'a>(pub &'a Arc<Bindless>);
+
+impl<'a> Deref for SamplerTableAccess<'a> {
+	type Target = SamplerTable;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0.sampler
+	}
+}
+
+impl<'a> SamplerTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot(&self, sampler: Arc<VSampler>) -> RCDesc<Sampler> {
 		self.resource_table.alloc_slot(sampler)
@@ -82,14 +96,16 @@ impl SamplerTable {
 		let sampler = VSampler::new(self.device.clone(), sampler_create_info)?;
 		Ok(self.resource_table.alloc_slot(sampler))
 	}
+}
 
+impl SamplerTable {
 	pub(crate) fn flush_updates(&self, mut writes: impl FnMut(WriteDescriptorSet)) -> FlushUpdates<SamplerTable> {
 		let flush_updates = self.resource_table.flush_updates();
 		flush_updates.iter(|first_array_element, buffer| {
 			writes(WriteDescriptorSet::sampler_array(
 				BINDING_SAMPLER,
 				first_array_element,
-				buffer.drain(..),
+				buffer.iter().cloned(),
 			));
 		});
 		flush_updates

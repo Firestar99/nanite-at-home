@@ -88,7 +88,7 @@ impl OpaqueDrawPipeline {
 
 		let sampler = init
 			.bindless
-			.sampler
+			.sampler()
 			.alloc(SamplerCreateInfo::simple_repeat_linear())
 			.unwrap();
 
