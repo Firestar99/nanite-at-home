@@ -1,3 +1,4 @@
+use crate::desc_buffer::MetadataCpu;
 use crate::descriptor::Bindless;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -98,7 +99,7 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 			)?
 			.push_constants(self.pipeline.layout().clone(), 0, unsafe {
 				PushConstant::<T::TransferDescStruct> {
-					t: <T as DescStruct>::to_transfer(param),
+					t: <T as DescStruct>::write_cpu(param, &mut MetadataCpu::new()),
 					metadata: Metadata,
 				}
 			})

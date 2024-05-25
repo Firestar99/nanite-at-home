@@ -22,11 +22,11 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 
 	let crate_shaders = &symbols.crate_shaders;
 	let mut transfer = Punctuated::<TokenStream, Token![,]>::new();
-	let mut to = Punctuated::<TokenStream, Token![,]>::new();
-	let mut from = Punctuated::<TokenStream, Token![,]>::new();
+	let mut write_cpu = Punctuated::<TokenStream, Token![,]>::new();
+	let mut read = Punctuated::<TokenStream, Token![,]>::new();
 	let mut gen_name_gen = GenericNameGen::new();
 	let mut gen_ref_tys = Vec::new();
-	let (transfer, to, from) = match &item.fields {
+	let (transfer, write_cpu, read) = match &item.fields {
 		Fields::Named(named) => {
 			for f in &named.named {
 				let name = f.ident.as_ref().unwrap();
@@ -40,13 +40,13 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 				} else {
 					quote!(#name: <#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
 				});
-				to.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::to_transfer(self.#name)));
-				from.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::from_transfer(from.#name, meta)));
+				write_cpu.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::write_cpu(self.#name, meta)));
+				read.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::read(from.#name, meta)));
 			}
 			(
 				quote!({#transfer}),
-				quote!(Self::TransferDescStruct {#to}),
-				quote!(Self {#from}),
+				quote!(Self::TransferDescStruct {#write_cpu}),
+				quote!(Self {#read}),
 			)
 		}
 		Fields::Unnamed(unnamed) => {
@@ -60,18 +60,18 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 				} else {
 					quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
 				});
-				to.push(quote!(#crate_shaders::desc_buffer::DescStruct::to_transfer(self.#i)));
-				from.push(quote!(#crate_shaders::desc_buffer::DescStruct::from_transfer(from.#i, meta)));
+				write_cpu.push(quote!(#crate_shaders::desc_buffer::DescStruct::write_cpu(self.#i, meta)));
+				read.push(quote!(#crate_shaders::desc_buffer::DescStruct::read(from.#i, meta)));
 			}
 			(
 				quote!((#transfer)),
-				quote!(Self::TransferDescStruct(#to)),
-				quote!(Self(#from)),
+				quote!(Self::TransferDescStruct(#write_cpu)),
+				quote!(Self(#read)),
 			)
 		}
 		Fields::Unit => (
 			quote!(;),
-			quote!(let _ = self; Self::TransferDescStruct),
+			quote!(let _ = (self, meta); Self::TransferDescStruct),
 			quote!(let _ = (from, meta); Self),
 		),
 	};
@@ -123,12 +123,12 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 		unsafe impl #generics_decl #crate_shaders::desc_buffer::DescStruct for #ident #generics_ref {
 			type TransferDescStruct = #transfer_ident #transfer_generics_ref;
 
-			unsafe fn to_transfer(self) -> Self::TransferDescStruct {
-				#to
+			unsafe fn write_cpu(self, meta: &mut impl #crate_shaders::desc_buffer::MetadataCpuInterface) -> Self::TransferDescStruct {
+				#write_cpu
 			}
 
-			unsafe fn from_transfer(from: Self::TransferDescStruct, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
-				#from
+			unsafe fn read(from: Self::TransferDescStruct, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
+				#read
 			}
 		}
 	})

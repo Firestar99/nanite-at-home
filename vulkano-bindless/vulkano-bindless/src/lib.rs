@@ -16,6 +16,7 @@
 //! [`GpuFuture::flush`]: vulkano::sync::GpuFuture::flush
 //! [`GpuFuture::then_signal_semaphore_and_flush`]: vulkano::sync::GpuFuture::then_signal_semaphore_and_flush
 //! [`GpuFuture::then_signal_fence_and_flush`]: vulkano::sync::GpuFuture::then_signal_fence_and_flush
+pub mod desc_buffer;
 pub mod descriptor;
 pub mod frame_in_flight;
 pub mod frame_manager;
@@ -24,6 +25,5 @@ pub mod rc_slots;
 pub mod required_features;
 pub mod sync;
 
-pub use vulkano_bindless_shaders::desc_buffer;
 pub use vulkano_bindless_shaders::shader_type;
 pub use vulkano_bindless_shaders::{spirv, spirv_std, Image};

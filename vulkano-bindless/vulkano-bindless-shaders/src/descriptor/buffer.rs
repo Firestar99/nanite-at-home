@@ -36,7 +36,7 @@ impl<'a, T: DescStruct> BufferSlice<'a, T> {
 	/// Loads a T from the buffer.
 	pub fn load(&self) -> T {
 		unsafe {
-			T::from_transfer(
+			T::read(
 				buffer_load_intrinsic::<T::TransferDescStruct>(self.buffer, 0),
 				self.meta,
 			)
@@ -52,7 +52,7 @@ impl<'a, T: DescStruct> BufferSlice<'a, [T]> {
 		let len = self.buffer.len() * 4;
 		if byte_offset + size <= len {
 			unsafe {
-				T::from_transfer(
+				T::read(
 					buffer_load_intrinsic::<T::TransferDescStruct>(self.buffer, byte_offset as u32),
 					self.meta,
 				)
@@ -71,7 +71,7 @@ impl<'a, T: DescStruct> BufferSlice<'a, [T]> {
 	pub unsafe fn load_unchecked(&self, index: usize) -> T {
 		unsafe {
 			let byte_offset = (index * mem::size_of::<T::TransferDescStruct>()) as u32;
-			T::from_transfer(
+			T::read(
 				buffer_load_intrinsic::<T::TransferDescStruct>(self.buffer, byte_offset),
 				self.meta,
 			)
@@ -107,7 +107,7 @@ impl<'a, T: ?Sized> BufferSlice<'a, T> {
 	/// `byte_index` must be in bounds of the buffer
 	pub unsafe fn load_at_offset_unchecked<E: DescStruct>(&self, byte_offset: usize) -> E {
 		unsafe {
-			E::from_transfer(
+			E::read(
 				buffer_load_intrinsic::<E::TransferDescStruct>(self.buffer, byte_offset as u32),
 				self.meta,
 			)

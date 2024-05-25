@@ -1,3 +1,4 @@
+use crate::desc_buffer::MetadataCpu;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
@@ -96,7 +97,9 @@ impl BufferTable {
 		allocation_info: AllocationCreateInfo,
 		data: T,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::from_data(allocator, create_info, allocation_info, unsafe { data.to_transfer() })?;
+		let buffer = VBuffer::from_data(allocator, create_info, allocation_info, unsafe {
+			T::write_cpu(data, &mut MetadataCpu::new())
+		})?;
 		Ok(self.alloc_slot(buffer))
 	}
 
@@ -111,7 +114,9 @@ impl BufferTable {
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
 	{
-		let iter = iter.into_iter().map(|i| unsafe { T::to_transfer(i) });
+		let iter = iter
+			.into_iter()
+			.map(|i| unsafe { T::write_cpu(i, &mut MetadataCpu::new()) });
 		let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)?;
 		Ok(self.alloc_slot(buffer))
 	}

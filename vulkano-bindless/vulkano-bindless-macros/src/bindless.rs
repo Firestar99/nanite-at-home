@@ -194,7 +194,7 @@ fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> R
 		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::metadata::PushConstant<<#param_ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct>,
 	});
 	context.inner_value.append_tokens(quote! {
-		unsafe { &<#param_ty as #crate_shaders::desc_buffer::DescStruct>::from_transfer(#push_constant.t, #push_constant.metadata) },
+		unsafe { &<#param_ty as #crate_shaders::desc_buffer::DescStruct>::read(#push_constant.t, #push_constant.metadata) },
 	});
 	if let Some(arg) = arg {
 		strip_attr(arg).to_tokens(&mut context.inner_arg)

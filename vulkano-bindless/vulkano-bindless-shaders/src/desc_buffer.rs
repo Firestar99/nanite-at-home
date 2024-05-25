@@ -1,5 +1,6 @@
 use crate::descriptor::metadata::Metadata;
 use bytemuck::AnyBitPattern;
+use core::ops::Deref;
 
 /// Trait for contents of **buffers** that may contain descriptors requiring conversion.
 ///
@@ -18,7 +19,7 @@ pub unsafe trait DescBuffer: Send + Sync {
 /// `#derive[DescBuffer]` on your type to implement this trait.
 ///
 /// The actual type stored in the Buffer is defined by its associated type `TransferDescStruct` and can be converted to
-/// and from using [`Self::to_transfer`] and [`Self::from_transfer`]. Types that are [`AnyBitPattern`] automatically
+/// and from using [`Self::to_transfer`] and [`Self::read`]. Types that are [`AnyBitPattern`] automatically
 /// implement `DescBuffer` with conversions being identity.
 ///
 /// # Safety
@@ -34,28 +35,31 @@ pub unsafe trait DescStruct: Copy + Clone + Sized + Send + Sync {
 	/// Should only be implemented via DescBuffer macro and only used internally by `BindlessPipeline::bind`.
 	///
 	/// [`FrameInFlight`]: crate::frame_in_flight::FrameInFlight
-	unsafe fn to_transfer(self) -> Self::TransferDescStruct;
+	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct;
 
 	/// On the GPU, transmute the transferable struct back to Self, keeping potential `'static` lifetimes.
 	///
 	/// # Safety
 	/// Should only be implemented via DescBuffer macro and only used internally by `BufferSlice` functions.
-	unsafe fn from_transfer(from: Self::TransferDescStruct, meta: Metadata) -> Self;
+	unsafe fn read(from: Self::TransferDescStruct, meta: Metadata) -> Self;
 }
 
 unsafe impl<T: DescStruct> DescBuffer for T {
 	type TransferDescBuffer = T::TransferDescStruct;
 }
 
+/// An internal interface to CPU-only code. May change at any time.
+pub trait MetadataCpuInterface: Deref<Target = Metadata> {}
+
 // impl
 unsafe impl<T: AnyBitPattern + Send + Sync> DescStruct for T {
 	type TransferDescStruct = T;
 
-	unsafe fn to_transfer(self) -> Self::TransferDescStruct {
+	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		self
 	}
 
-	unsafe fn from_transfer(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
+	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
 		from
 	}
 }

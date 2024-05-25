@@ -1,4 +1,4 @@
-use crate::desc_buffer::DescStruct;
+use crate::desc_buffer::{DescStruct, MetadataCpuInterface};
 use crate::descriptor::descriptor_type::DescType;
 use crate::descriptor::descriptors::DescriptorsAccess;
 use crate::descriptor::metadata::Metadata;
@@ -48,14 +48,14 @@ impl<'a, D: DescType + ?Sized> ValidDesc<D> for TransientDesc<'a, D> {
 unsafe impl<'a, D: DescType + ?Sized> DescStruct for TransientDesc<'a, D> {
 	type TransferDescStruct = TransferTransientDesc<D>;
 
-	unsafe fn to_transfer(self) -> Self::TransferDescStruct {
+	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		Self::TransferDescStruct {
 			id: self.id,
 			_phantom: PhantomData {},
 		}
 	}
 
-	unsafe fn from_transfer(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
+	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
 		TransientDesc::new(from.id)
 	}
 }
