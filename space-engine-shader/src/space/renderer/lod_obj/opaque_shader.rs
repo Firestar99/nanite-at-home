@@ -12,7 +12,7 @@ use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 
 #[derive(Copy, Clone, DescStruct)]
 pub struct Params<'a> {
-	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel<'static>]>>,
+	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel]>>,
 	pub sampler: TransientDesc<'a, Sampler>,
 }
 

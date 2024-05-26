@@ -7,17 +7,17 @@ use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 
 #[repr(C)]
 #[derive(Copy, Clone, DescStruct)]
-pub struct ModelVertex<'a> {
+pub struct ModelVertex {
 	pub position: Vec3A,
 	pub tex_coord: Vec2,
-	pub tex_id: StrongDesc<'a, Image2d>,
+	pub tex_id: StrongDesc<Image2d>,
 }
 
 const_assert_eq!(size_of::<ModelVertex>(), 32);
 
-impl<'a> ModelVertex<'a> {
+impl ModelVertex {
 	#[inline]
-	pub const fn new(position: Vec3, tex_coord: Vec2, tex_id: StrongDesc<'a, Image2d>) -> Self {
+	pub const fn new(position: Vec3, tex_coord: Vec2, tex_id: StrongDesc<Image2d>) -> Self {
 		Self {
 			position: Vec3A::new(position.x, position.y, position.z),
 			tex_coord,

@@ -6,14 +6,14 @@ use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 
 pub struct OpaqueModel {
-	pub vertex_buffer: RCDesc<Buffer<[ModelVertex<'static>]>>,
+	pub vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
 	pub index_buffer: RCDesc<Buffer<[u32]>>,
 }
 
 impl OpaqueModel {
-	pub fn direct<'a, V>(texture_manager: &Arc<TextureManager>, vertex_data: V) -> Self
+	pub fn direct<V>(texture_manager: &Arc<TextureManager>, vertex_data: V) -> Self
 	where
-		V: IntoIterator<Item = ModelVertex<'a>>,
+		V: IntoIterator<Item = ModelVertex>,
 		V::IntoIter: ExactSizeIterator,
 	{
 		let vertex_data = vertex_data.into_iter();
@@ -28,11 +28,11 @@ impl OpaqueModel {
 		}
 	}
 
-	pub fn indexed<'a, I, V>(texture_manager: &Arc<TextureManager>, index_data: I, vertex_data: V) -> Self
+	pub fn indexed<I, V>(texture_manager: &Arc<TextureManager>, index_data: I, vertex_data: V) -> Self
 	where
 		I: IntoIterator<Item = u32>,
 		I::IntoIter: ExactSizeIterator,
-		V: IntoIterator<Item = ModelVertex<'a>>,
+		V: IntoIterator<Item = ModelVertex>,
 		V::IntoIter: ExactSizeIterator,
 	{
 		let vertex_buffer =

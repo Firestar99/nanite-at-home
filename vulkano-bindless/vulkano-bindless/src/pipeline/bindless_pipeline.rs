@@ -134,7 +134,7 @@ impl Deref for PushConstantMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for PushConstantMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<'_, D>) {
+	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<D>) {
 		// ignore. The push constant is only valid during this frame, and the locking system guarantees the descriptor
 		// is valid for at least this frame as well.
 	}

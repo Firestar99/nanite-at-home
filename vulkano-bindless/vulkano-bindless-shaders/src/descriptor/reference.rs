@@ -134,20 +134,20 @@ impl<D: DescType + ?Sized> WeakDesc<D> {
 }
 
 #[repr(C)]
-pub struct StrongDesc<'a, D: DescType + ?Sized> {
+pub struct StrongDesc<D: DescType + ?Sized> {
 	id: u32,
-	_phantom: PhantomData<(&'a (), D)>,
+	_phantom: PhantomData<D>,
 }
 
-impl<'a, D: DescType + ?Sized> Copy for StrongDesc<'a, D> {}
+impl<D: DescType + ?Sized> Copy for StrongDesc<D> {}
 
-impl<'a, D: DescType + ?Sized> Clone for StrongDesc<'a, D> {
+impl<D: DescType + ?Sized> Clone for StrongDesc<D> {
 	fn clone(&self) -> Self {
 		*self
 	}
 }
 
-impl<'a, D: DescType + ?Sized> StrongDesc<'a, D> {
+impl<D: DescType + ?Sized> StrongDesc<D> {
 	/// Create a new StrongDesc
 	///
 	/// # Safety
@@ -168,14 +168,14 @@ impl<'a, D: DescType + ?Sized> StrongDesc<'a, D> {
 	}
 }
 
-impl<'a, D: DescType + ?Sized> ValidDesc<D> for StrongDesc<'a, D> {
+impl<D: DescType + ?Sized> ValidDesc<D> for StrongDesc<D> {
 	#[inline]
 	fn id(&self) -> u32 {
 		self.id
 	}
 }
 
-unsafe impl<'a, D: DescType + ?Sized> DescStruct for StrongDesc<'a, D> {
+unsafe impl<D: DescType + ?Sized> DescStruct for StrongDesc<D> {
 	type TransferDescStruct = TransferStrongDesc<D>;
 
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {

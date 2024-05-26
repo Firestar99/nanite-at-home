@@ -5,7 +5,7 @@ use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
-use vulkano_bindless::descriptor::WeakDesc;
+use vulkano_bindless::descriptor::reference::StrongDesc;
 use vulkano_bindless::spirv_std::image::Image2d;
 
 pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueModel> {
@@ -25,7 +25,7 @@ pub async fn load_scene(texture_manager: &Arc<TextureManager>) -> Vec<OpaqueMode
 }
 
 pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out: &mut Vec<OpaqueModel>) {
-	let create_model = |texture: WeakDesc<Image2d>| {
+	let create_model = |texture: StrongDesc<Image2d>| {
 		let vertices = [
 			ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), texture),
 			ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), texture),
@@ -44,15 +44,11 @@ pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out:
 	let rust_mascot_tex = rust_mascot_tex.await.unwrap();
 
 	// unroll indices
-	let (vertices, indices) = create_model(vulkano_tex.to_weak());
-	let vulkano_logo = OpaqueModel::direct(
-		texture_manager,
-		indices.map(|i| vertices[i as usize]).into_iter(),
-		[vulkano_tex],
-	);
+	let (vertices, indices) = create_model(vulkano_tex.to_strong());
+	let vulkano_logo = OpaqueModel::direct(texture_manager, indices.map(|i| vertices[i as usize]).into_iter());
 
 	// use indices
-	let (vertices, indices) = create_model(rust_mascot_tex.to_weak());
+	let (vertices, indices) = create_model(rust_mascot_tex.to_strong());
 	let rust_mascot = OpaqueModel::indexed(
 		texture_manager,
 		indices,
@@ -60,7 +56,6 @@ pub async fn load_rust_vulkano_logos(texture_manager: &Arc<TextureManager>, out:
 			position: v.position + vec3a(0., 0.5, 1.),
 			..v
 		}),
-		[rust_mascot_tex],
 	);
 	out.extend([vulkano_logo, rust_mascot])
 }

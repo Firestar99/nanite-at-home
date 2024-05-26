@@ -5,8 +5,8 @@ use vulkano_bindless_shaders::descriptor::Buffer;
 
 #[repr(C)]
 #[derive(Copy, Clone, DescStruct)]
-pub struct OpaqueGpuModel<'a> {
-	pub vertex_buffer: StrongDesc<'a, Buffer<[ModelVertex<'static>]>>,
-	pub index_buffer: StrongDesc<'a, Buffer<[u32]>>,
+pub struct OpaqueGpuModel {
+	pub vertex_buffer: StrongDesc<Buffer<[ModelVertex]>>,
+	pub index_buffer: StrongDesc<Buffer<[u32]>>,
 	pub triangle_count: u32,
 }

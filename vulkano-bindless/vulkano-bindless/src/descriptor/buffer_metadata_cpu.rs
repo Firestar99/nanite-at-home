@@ -84,7 +84,7 @@ impl StrongMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for StrongMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, desc: StrongDesc<'_, D>) {
+	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, desc: StrongDesc<D>) {
 		match D::DESC_ENUM {
 			DescEnum::Buffer => &mut self.buffer,
 			DescEnum::Image => &mut self.image,
