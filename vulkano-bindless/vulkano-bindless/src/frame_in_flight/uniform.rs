@@ -48,7 +48,7 @@ impl<T: BufferContents> UniformInFlight<T> {
 
 			// this will clone the buffer once too many times, and drop it afterwards
 			UniformInFlight {
-				sub: ResourceInFlight::new(seed, |i| buffer.clone().index(i.index() as DeviceSize)),
+				sub: ResourceInFlight::new(seed, |i| buffer.clone().index(i.frame_index() as DeviceSize)),
 			}
 		}
 		inner(allocator, sharing, seed.into(), dedicated_alloc)

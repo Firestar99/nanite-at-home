@@ -1,7 +1,6 @@
 pub use frame::*;
-pub use resource::*;
 
 mod frame;
-mod resource;
 
-pub const FRAMES_LIMIT: u32 = 3;
+pub const FRAMES_LIMIT: u32 = 16;
+pub const FRAMES_SMALLVEC: usize = 3;

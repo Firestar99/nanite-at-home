@@ -1,10 +1,10 @@
 use crate::descriptor::bindless::BindlessLock;
 use crate::descriptor::Bindless;
+use crate::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 use std::sync::Arc;
 use vulkano::sync::future::{FenceSignalFuture, NowFuture, SemaphoreSignalFuture};
 use vulkano::sync::{now, GpuFuture};
 use vulkano::{Validated, VulkanError};
-use vulkano_bindless_shaders::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 
 pub struct FrameManager {
 	bindless: Arc<Bindless>,
@@ -38,16 +38,16 @@ impl FrameManager {
 	///
 	/// Two conditions are always satisfied by this function to prevent race conditions between CPU and GPU:
 	/// * A new frame with the same frame-in-flight id is only started once the last frame with the same frame-in-flight
-	/// id has finished rendering on the GPU. This ensures uniform buffers can be safety updated by the CPU without the
-	/// GPU still accessing them.
+	///   id has finished rendering on the GPU. This ensures uniform buffers can be safety updated by the CPU without
+	///   the GPU still accessing them.
 	/// * The next frame does not start rendering on the GPU before the previous has finished. This allows all frames in
-	/// flight to share temporary resources needed for rendering, like a depth buffer.
+	///   flight to share temporary resources needed for rendering, like a depth buffer.
 	///
 	/// # Impl-Note
 	/// * `frame`: the current "new" frame that should be rendered
 	/// * `*_prev`: the previous frame that came immediately before this frame
-	/// * `*_last`: the last frame with the same frame in flight index,
-	/// GPU execution of this frame must complete before this frame can start being recorded due to them sharing resources
+	/// * `*_last`: the last frame with the same frame in flight index, GPU execution of this frame must complete before
+	///   this frame can start being recorded due to them sharing resources
 	///
 	/// [`device_wait_idle`]: vulkano::device::Device::wait_idle
 	pub fn new_frame<F>(&mut self, f: F)

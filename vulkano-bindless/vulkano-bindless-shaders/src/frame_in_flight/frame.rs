@@ -1,23 +1,22 @@
 use crate::frame_in_flight::FRAMES_LIMIT;
+use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
 use core::mem::size_of;
 use static_assertions::const_assert_eq;
 
 /// The index of a frame that is in flight. See [mod](self) for docs.
 #[derive(Copy, Clone)]
-#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
 pub struct FrameInFlight<'a> {
-	seed: SeedInFlight,
-	index: u8,
+	value: u16,
 	phantom: PhantomData<&'a ()>,
 }
-const_assert_eq!(size_of::<FrameInFlight>(), 4);
+const_assert_eq!(size_of::<FrameInFlight>(), 2);
 
 impl<'a> FrameInFlight<'a> {
 	/// `FrameInFlight` should be handled carefully as it allows access to a resource that may be in flight. To prevent mis-use it is usually constrained
 	/// to an invocation of a `Fn` lambda from where it should not escape, enforced with the (unused) lifetime.
-	/// Thus the only two ways to create one safely are:
+	/// Thus, the only two ways to create one safely are:
 	/// * When creating a [`ResourceInFlight`] with [`ResourceInFlight::new`] where it may be used to access other `ResourceInFlight`s this one may depend
 	///   upon for construction.
 	/// * Using `FrameManager` from the `space-engine` crate to control when a frame starts and ends.
@@ -25,38 +24,50 @@ impl<'a> FrameInFlight<'a> {
 	/// # Safety
 	/// One may not use the `FrameInFlight` to access a Resource that is currently in use.
 	#[inline]
-	pub unsafe fn new(seed: impl Into<SeedInFlight>, index: u32) -> Self {
+	pub unsafe fn new(seed: impl Into<SeedInFlight>, frame_index: u32) -> Self {
 		fn inner<'a>(seed: SeedInFlight, index: u32) -> FrameInFlight<'a> {
 			assert!(index < seed.frames_in_flight());
+			let mut value = seed.0;
+			value |= (index as u16) & 0xFF;
 			FrameInFlight {
-				seed,
-				index: index as u8,
+				value,
 				phantom: Default::default(),
 			}
 		}
-		inner(seed.into(), index)
+		inner(seed.into(), frame_index)
 	}
 
-	#[inline(always)]
-	pub fn index(&self) -> usize {
-		self.index as usize
+	#[inline]
+	pub fn frame_index(&self) -> usize {
+		(self.value & 0xF) as usize
 	}
 
-	#[inline(always)]
+	#[inline]
 	pub fn seed(&self) -> SeedInFlight {
-		self.seed
+		// exclude index
+		SeedInFlight(self.value & 0xFFF0)
+	}
+}
+
+impl<'a> Debug for FrameInFlight<'a> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("FrameInFlight")
+			.field("seed", &self.seed().seed_u8())
+			.field("frames_in_flight", &self.seed().frames_in_flight())
+			.field("frame_index", &self.seed().frames_in_flight())
+			.finish()
 	}
 }
 
 impl<'a> From<FrameInFlight<'a>> for usize {
 	fn from(value: FrameInFlight) -> Self {
-		value.index as usize
+		value.frame_index()
 	}
 }
 
 impl<'a> From<FrameInFlight<'a>> for u32 {
 	fn from(value: FrameInFlight) -> Self {
-		value.index as u32
+		value.frame_index() as u32
 	}
 }
 
@@ -67,24 +78,18 @@ impl<'a> From<&FrameInFlight<'a>> for SeedInFlight {
 }
 
 /// The seed is the configuration of the Frame in flight system and ensures different seeds are not mixed or matched. See [mod](self) for docs.
-#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 #[repr(C)]
-pub struct SeedInFlight {
-	/// this is a `[u8; 2]` instead of an `u16` to make `FrameInFlight` be 32 bits instead of 48, due to sizeof struct rounding to nearest alignment.
-	/// This may allow an alignment of 8 bits, but at the end of the day the most important operation is equality and that should not care.
-	seed: [u8; 2],
-	frames_in_flight: u8,
-}
-const_assert_eq!(size_of::<SeedInFlight>(), 3);
+pub struct SeedInFlight(u16);
 
 impl SeedInFlight {
 	#[cfg(not(target_arch = "spirv"))]
 	#[must_use]
 	pub fn new(frames_in_flight: u32) -> Self {
-		use core::sync::atomic::AtomicU16;
+		use core::sync::atomic::AtomicU8;
 		use core::sync::atomic::Ordering::Relaxed;
 
-		static SEED_CNT: AtomicU16 = AtomicU16::new(42);
+		static SEED_CNT: AtomicU8 = AtomicU8::new(42);
 		let seed = SEED_CNT.fetch_add(1, Relaxed);
 		// SAFETY: global atomic counter ensures seeds are unique
 		unsafe { Self::assemble(seed, frames_in_flight) }
@@ -93,18 +98,18 @@ impl SeedInFlight {
 	/// # Safety
 	/// Only there for internal testing. The seed must never repeat, which `Self::new()` ensures.
 	#[must_use]
-	pub unsafe fn assemble(seed: u16, frames_in_flight: u32) -> Self {
+	pub unsafe fn assemble(seed: u8, frames_in_flight: u32) -> Self {
+		assert_ne!(frames_in_flight, 0, "frames_in_flight must not be 0",);
 		assert!(
 			frames_in_flight <= FRAMES_LIMIT,
-			"frames_in_flight_max of {} is over FRAMES_IN_FLIGHT_LIMIT {}",
+			"frames_in_flight of {} is over FRAMES_LIMIT {}",
 			frames_in_flight,
 			FRAMES_LIMIT
 		);
-		Self {
-			seed: seed.to_ne_bytes(),
-			// conversion will always succeed with assert above
-			frames_in_flight: frames_in_flight as u8,
-		}
+		let mut out = 0;
+		out |= (seed as u16) << 8;
+		out |= (((frames_in_flight - 1) as u16) & 0xF) << 4;
+		Self(out)
 	}
 
 	/// Should only be used if [`ResourceInFlight::new`] is not sufficient for creating a resource.
@@ -119,17 +124,26 @@ impl SeedInFlight {
 	}
 
 	#[must_use]
-	#[inline(always)]
+	#[inline]
 	pub fn frames_in_flight(&self) -> u32 {
-		self.frames_in_flight as u32
+		((self.0 >> 4) & 0xF) as u32 + 1
 	}
 
 	/// for testing only, thus not pub
 	#[must_use]
 	#[allow(dead_code)]
-	#[inline(always)]
-	pub fn seed_u16(&self) -> u16 {
-		u16::from_ne_bytes(self.seed)
+	#[inline]
+	pub fn seed_u8(&self) -> u8 {
+		((self.0 >> 8) & 0xFF) as u8
+	}
+}
+
+impl Debug for SeedInFlight {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("SeedInFlight")
+			.field("seed", &self.seed_u8())
+			.field("frames_in_flight", &self.frames_in_flight())
+			.finish()
 	}
 }
 
@@ -138,25 +152,28 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn seed_happy() {
+	fn seed_bit_packing() {
 		unsafe {
-			for i in 0..=FRAMES_LIMIT {
-				let seed = 0xDEAD + i as u16;
+			for i in 1..=FRAMES_LIMIT {
+				let seed = 0xDE + i as u8;
 				let s = SeedInFlight::assemble(seed, i);
 				assert_eq!(s.frames_in_flight(), i);
-				assert_eq!(s.seed_u16(), seed);
+				assert_eq!(s.seed_u8(), seed);
 				assert_eq!(s, s.clone());
 			}
-
-			const SEEDS_TO_CHECK: usize = 5;
-			let seeds = [(); SEEDS_TO_CHECK].map(|_| SeedInFlight::new(FRAMES_LIMIT));
-			(0..SEEDS_TO_CHECK)
-				.flat_map(|a| (0..SEEDS_TO_CHECK).map(move |b| (a, b)))
-				.filter(|(a, b)| a != b)
-				.for_each(|(a, b)| {
-					assert_ne!(seeds[a], seeds[b]);
-				})
 		}
+	}
+
+	#[test]
+	fn seed_distinct() {
+		const SEEDS_TO_CHECK: usize = 5;
+		let seeds = [(); SEEDS_TO_CHECK].map(|_| SeedInFlight::new(FRAMES_LIMIT));
+		(0..SEEDS_TO_CHECK)
+			.flat_map(|a| (0..SEEDS_TO_CHECK).map(move |b| (a, b)))
+			.filter(|(a, b)| a != b)
+			.for_each(|(a, b)| {
+				assert_ne!(seeds[a], seeds[b]);
+			});
 	}
 
 	#[test]
@@ -164,6 +181,29 @@ mod tests {
 	fn seed_too_high_fif() {
 		unsafe {
 			let _ = SeedInFlight::assemble(0, FRAMES_LIMIT + 1);
+		}
+	}
+
+	#[test]
+	#[should_panic]
+	fn seed_0_fif() {
+		unsafe {
+			let _ = SeedInFlight::assemble(0, 0);
+		}
+	}
+
+	#[test]
+	fn fif_bit_packing() {
+		unsafe {
+			for limit in 1..=FRAMES_LIMIT {
+				let seed = 0x12 + limit as u8;
+				let s = SeedInFlight::assemble(seed, limit);
+				for (id, fif) in s.iter().enumerate() {
+					assert_eq!(fif.frame_index(), id);
+					assert_eq!(fif.seed().frames_in_flight(), limit);
+					assert_eq!(fif.seed().seed_u8(), seed);
+				}
+			}
 		}
 	}
 }

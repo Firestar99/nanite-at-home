@@ -1,7 +1,7 @@
-use crate::frame_in_flight::{FrameInFlight, SeedInFlight, FRAMES_LIMIT};
-use core::mem::MaybeUninit;
+use smallvec::SmallVec;
+use vulkano_bindless_shaders::frame_in_flight::{FrameInFlight, SeedInFlight, FRAMES_SMALLVEC};
 
-/// A `ResourceInFlight` is a resource that is allocated once per frame that may be in flight at the same time. See [mod](super) for docs.
+/// A `ResourceInFlight` is a resource that is allocated once per frame that may be in flight at the same time. See [mod](vulkano_bindless_shaders::frame_in_flight) for docs.
 ///
 /// # Indexing
 /// There are two possible ways to implement indexing into a `ResourceInFlight`:
@@ -18,9 +18,8 @@ use core::mem::MaybeUninit;
 /// [`Index`]: core::ops::Index
 /// [`IndexMut`]: core::ops::IndexMut
 #[derive(Debug)]
-#[repr(C)]
 pub struct ResourceInFlight<T> {
-	vec: [MaybeUninit<T>; FRAMES_LIMIT as usize],
+	vec: SmallVec<[T; FRAMES_SMALLVEC]>,
 	seed: SeedInFlight,
 }
 
@@ -34,19 +33,11 @@ impl<T> ResourceInFlight<T> {
 		F: FnMut(FrameInFlight) -> T,
 	{
 		let seed = seed.into();
-		// just using arrays and a counter, instead of Slices and try_into() array, as it prevents heap allocation
-		let mut i = 0;
-		let vec = [(); FRAMES_LIMIT as usize].map(|_| {
-			let ret = if i < seed.frames_in_flight() {
-				// SAFETY: allows access to other ResourceInFlights it may depend on, but only with the same index
-				let fif = unsafe { FrameInFlight::new(seed, i) };
-				MaybeUninit::new(f(fif))
-			} else {
-				MaybeUninit::uninit()
-			};
-			i += 1;
-			ret
-		});
+		let vec = SmallVec::from_iter((0..seed.frames_in_flight()).map(|i| {
+			// SAFETY: allows access to other ResourceInFlights it may depend on, but only with the same index
+			let fif = unsafe { FrameInFlight::new(seed, i) };
+			f(fif)
+		}));
 		Self { seed, vec }
 	}
 
@@ -74,7 +65,7 @@ impl<T> ResourceInFlight<T> {
 		assert_eq!(self.seed, index.seed());
 		// SAFETY: self.seed.frames_in_flight is the initialized size of the array,
 		// the assert above verifies that index is not greater than frames_in_flight
-		unsafe { self.vec.get_unchecked(index.index()).assume_init_ref() }
+		unsafe { self.vec.get_unchecked(index.frame_index()) }
 	}
 
 	#[must_use]
@@ -83,31 +74,7 @@ impl<T> ResourceInFlight<T> {
 		assert_eq!(self.seed, index.seed());
 		// SAFETY: self.seed.frames_in_flight is the initialized size of the array,
 		// the assert above verifies that index is not greater than frames_in_flight
-		unsafe { self.vec.get_unchecked_mut(index.index()).assume_init_mut() }
-	}
-}
-
-impl<T: Clone> Clone for ResourceInFlight<T> {
-	#[must_use]
-	fn clone(&self) -> Self {
-		// SAFETY: Self::from_function() will call f() exactly self.seed.frames_in_flight times
-		// and self.seed.frames_in_flight is the initialized size of the array
-		unsafe {
-			ResourceInFlight::new(self.seed, |i| {
-				self.vec.get_unchecked(i.index()).assume_init_ref().clone()
-			})
-		}
-	}
-}
-
-impl<T> Drop for ResourceInFlight<T> {
-	fn drop(&mut self) {
-		// SAFETY: self.seed.frames_in_flight is the initialized size of the array
-		unsafe {
-			for i in 0..self.seed.frames_in_flight() as usize {
-				self.vec[i].assume_init_drop();
-			}
-		}
+		unsafe { self.vec.get_unchecked_mut(index.frame_index()) }
 	}
 }
 
@@ -119,16 +86,17 @@ impl<T> From<&ResourceInFlight<T>> for SeedInFlight {
 
 #[cfg(test)]
 mod tests {
-	use alloc::rc::Rc;
+	use crate::frame_in_flight::FRAMES_LIMIT;
+	use std::rc::Rc;
 
 	use super::*;
 
 	#[test]
 	fn resource_happy() {
 		unsafe {
-			for n in 0..FRAMES_LIMIT {
+			for n in 1..=FRAMES_LIMIT {
 				let seed = SeedInFlight::new(n);
-				let resource = ResourceInFlight::new(seed, |i| i.index() as u32);
+				let resource = ResourceInFlight::new(seed, |i| i.frame_index() as u32);
 
 				for i in 0..n {
 					let fif = FrameInFlight::new(seed, i);
@@ -140,7 +108,6 @@ mod tests {
 
 	#[test]
 	fn resource_from_array() {
-		resource_from_array_n([]);
 		resource_from_array_n([42]);
 		resource_from_array_n([42, 69]);
 		resource_from_array_n([42, 69, -12345]);
@@ -160,7 +127,7 @@ mod tests {
 
 	#[test]
 	fn resource_drop() {
-		for i in 0..FRAMES_LIMIT {
+		for i in 1..FRAMES_LIMIT {
 			let seed = SeedInFlight::new(i);
 			let rc = Rc::new(());
 			assert_eq!(Rc::strong_count(&rc), 1);
@@ -169,27 +136,6 @@ mod tests {
 			assert_eq!(Rc::strong_count(&rc), i as usize + 1);
 
 			drop(resource);
-			assert_eq!(Rc::strong_count(&rc), 1);
-		}
-	}
-
-	#[test]
-	fn resource_clone_drop() {
-		for i in 0..FRAMES_LIMIT {
-			let seed = SeedInFlight::new(i);
-			let rc = Rc::new(());
-			assert_eq!(Rc::strong_count(&rc), 1);
-
-			let resource = ResourceInFlight::new(seed, |_| rc.clone());
-			assert_eq!(Rc::strong_count(&rc), i as usize + 1);
-
-			let resource2 = resource.clone();
-			assert_eq!(Rc::strong_count(&rc), i as usize * 2 + 1);
-
-			drop(resource);
-			assert_eq!(Rc::strong_count(&rc), i as usize + 1);
-
-			drop(resource2);
 			assert_eq!(Rc::strong_count(&rc), 1);
 		}
 	}
