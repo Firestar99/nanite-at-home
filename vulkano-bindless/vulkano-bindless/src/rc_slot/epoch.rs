@@ -5,10 +5,10 @@ use std::ops::Deref;
 
 use static_assertions::const_assert_eq;
 
-/// Timestamp is represented by [`Wrapping`]`<u32>`.
+/// Epoch is represented by [`Wrapping`]`<u32>`.
 ///
 /// # Ordering
-/// Timestamp are technically only partially ordered using [`Timestamp::compare_wrapping`] due to being able to wrap
+/// Epochs are technically only partially ordered using [`Epoch::compare_wrapping`] due to being able to wrap
 /// around. If two timestamps are within `0x3FFFFFFFu32` (or one quarter of [`u32::MAX`]) of each other, they can be
 /// compared. Otherwise, the timestamps are considered too far apart for safe comparison and will return an error.
 ///
@@ -17,9 +17,9 @@ use static_assertions::const_assert_eq;
 /// with Timestamps. In case of a comparison error, [`PartialOrd`] returns None and [`Ord`] panics.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(transparent)]
-pub struct Timestamp(pub Wrapping<u32>);
+pub struct Epoch(pub Wrapping<u32>);
 
-impl Timestamp {
+impl Epoch {
 	#[inline]
 	pub fn new(value: u32) -> Self {
 		Self(Wrapping(value))
@@ -30,7 +30,7 @@ impl Timestamp {
 	}
 }
 
-impl Deref for Timestamp {
+impl Deref for Epoch {
 	type Target = Wrapping<u32>;
 
 	fn deref(&self) -> &Self::Target {
@@ -38,28 +38,28 @@ impl Deref for Timestamp {
 	}
 }
 
-impl From<Timestamp> for Wrapping<u32> {
-	fn from(value: Timestamp) -> Self {
+impl From<Epoch> for Wrapping<u32> {
+	fn from(value: Epoch) -> Self {
 		value.0
 	}
 }
 
-impl From<Timestamp> for u32 {
-	fn from(value: Timestamp) -> Self {
+impl From<Epoch> for u32 {
+	fn from(value: Epoch) -> Self {
 		value.0 .0
 	}
 }
 
-impl Display for Timestamp {
+impl Display for Epoch {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(&self.0, f)
 	}
 }
 
-impl Timestamp {
-	/// see [`Timestamp`] #Ordering
+impl Epoch {
+	/// see [`Epoch`] #Ordering
 	#[inline]
-	pub fn compare_wrapping(&self, other: &Self) -> Result<Ordering, TimestampCompareError> {
+	pub fn compare_wrapping(&self, other: &Self) -> Result<Ordering, EpochCompareError> {
 		// assert same valid value range
 		const_assert_eq!(0xFFFFFFFFu32 - 0xC0000000u32, 0x3FFFFFFFu32);
 		// assert invalid range -1 == both valid ranges
@@ -70,20 +70,20 @@ impl Timestamp {
 		match diff {
 			0 => Ok(Ordering::Equal),
 			1..=0x3FFFFFFF => Ok(Ordering::Less),
-			0x40000000..=0xBFFFFFFF => Err(TimestampCompareError::WrappingOverflow(*self, *other, diff)),
+			0x40000000..=0xBFFFFFFF => Err(EpochCompareError::WrappingOverflow(*self, *other, diff)),
 			0xC0000000..=0xFFFFFFFF => Ok(Ordering::Greater),
 		}
 	}
 }
 
-pub enum TimestampCompareError {
-	WrappingOverflow(Timestamp, Timestamp, u32),
+pub enum EpochCompareError {
+	WrappingOverflow(Epoch, Epoch, u32),
 }
 
-impl Debug for TimestampCompareError {
+impl Debug for EpochCompareError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
-			TimestampCompareError::WrappingOverflow(first, other, diff) => {
+			EpochCompareError::WrappingOverflow(first, other, diff) => {
 				f.write_fmt(format_args!("{} and {} have a difference of {}, which is considered too far apart to reasonable differentiate order", first, other, diff))
 			}
 		}
@@ -91,14 +91,14 @@ impl Debug for TimestampCompareError {
 }
 
 #[allow(clippy::non_canonical_partial_ord_impl)]
-impl PartialOrd<Self> for Timestamp {
+impl PartialOrd<Self> for Epoch {
 	#[inline]
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		self.compare_wrapping(other).ok()
 	}
 }
 
-impl Ord for Timestamp {
+impl Ord for Epoch {
 	#[inline]
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.compare_wrapping(other).unwrap()

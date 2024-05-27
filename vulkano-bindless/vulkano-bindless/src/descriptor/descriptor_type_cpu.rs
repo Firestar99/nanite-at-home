@@ -1,6 +1,6 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::resource_table::Lock;
-use crate::rc_slots::RCSlotsInterface;
+use crate::descriptor::resource_table::TableEpochGuard;
+use crate::rc_slot::RCSlotsInterface;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
@@ -40,5 +40,5 @@ pub trait DescTable: Sized {
 		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
 	);
 
-	fn lock_table(&self) -> Lock<Self>;
+	fn lock_table(&self) -> TableEpochGuard<Self>;
 }

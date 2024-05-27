@@ -1,4 +1,4 @@
-use crate::rc_slots::timestamp::Timestamp;
+use crate::rc_slot::epoch::Epoch;
 use crate::sync::atomic::fence;
 use crate::sync::atomic::AtomicU32;
 use crate::sync::atomic::Ordering::{Acquire, Relaxed, Release};
@@ -51,7 +51,7 @@ impl<T> RCSlotsInterface<T> for DefaultRCSlotInterface {
 }
 
 pub struct RCSlot<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
-	slots: *const RCSlots<T, Interface>,
+	slots: *const RCSlotArray<T, Interface>,
 	index: SlotIndex,
 }
 
@@ -65,12 +65,12 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	/// the slot must be alive, to ensure the Arc of `slots` is ref counted correctly
 	/// `ref_count` must have been incremented for this slot previously, and ownership to decrement it again is transferred to Self
 	#[inline]
-	unsafe fn new(slots: *const RCSlots<T, Interface>, index: SlotIndex) -> Self {
+	unsafe fn new(slots: *const RCSlotArray<T, Interface>, index: SlotIndex) -> Self {
 		Self { slots, index }
 	}
 
 	#[inline]
-	pub fn slots(&self) -> &RCSlots<T, Interface> {
+	pub fn slots(&self) -> &RCSlotArray<T, Interface> {
 		unsafe { &*self.slots }
 	}
 
@@ -148,7 +148,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlot<T, Interface> {
 	/// that particular [`SlotIndex`], `slots` must be the same instance as the original `RCSlot` and the T generic
 	/// must be the same
 	#[inline]
-	pub unsafe fn from_raw_index(slots: &Arc<RCSlots<T, Interface>>, index: SlotIndex) -> Self {
+	pub unsafe fn from_raw_index(slots: &Arc<RCSlotArray<T, Interface>>, index: SlotIndex) -> Self {
 		unsafe { RCSlot::new(Arc::as_ptr(slots) as *const _, index) }
 	}
 }
@@ -219,7 +219,7 @@ impl<T, Interface: RCSlotsInterface<T>> Hash for RCSlot<T, Interface> {
 ///
 /// # slot is alive: `version & 1 == 1`
 /// * `atomic` is the ref count of the alive slot. Should it decrement to 0, the slot will be "start dying" by being added to the
-/// [reaper queue](RCSlots::reaper_queue_add), but may stay alive for some time.
+/// [reaper queue](RCSlotArray::reaper_queue_add), but may stay alive for some time.
 /// * `t` is initialized, may be referenced by many shared references and contains the data contents of this slot.
 /// * `free_timestamp` is unused and should not be accessed, as during state transitions a mut reference may be held against it.
 /// * Upgrading weak pointers will succeed and increment the ref count.
@@ -233,7 +233,7 @@ impl<T, Interface: RCSlotsInterface<T>> Hash for RCSlot<T, Interface> {
 struct Slot<T> {
 	ref_count: AtomicU32,
 	version: AtomicU32,
-	free_timestamp: UnsafeCell<Timestamp>,
+	free_timestamp: UnsafeCell<Epoch>,
 	t: UnsafeCell<MaybeUninit<T>>,
 }
 
@@ -296,29 +296,30 @@ impl<T> Default for Slot<T> {
 		Self {
 			ref_count: AtomicU32::new(0),
 			version: AtomicU32::new(0),
-			free_timestamp: UnsafeCell::new(Timestamp::new(0)),
+			free_timestamp: UnsafeCell::new(Epoch::new(0)),
 			t: UnsafeCell::new(MaybeUninit::uninit()),
 		}
 	}
 }
 
-pub struct Lock<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
-	slots: Arc<RCSlots<T, Interface>>,
-	lock_timestamp: Timestamp,
+pub struct EpochGuard<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
+	slots: Arc<RCSlotArray<T, Interface>>,
+	lock_timestamp: Epoch,
 }
 
-impl<T, Interface: RCSlotsInterface<T>> Lock<T, Interface> {
+impl<T, Interface: RCSlotsInterface<T>> EpochGuard<T, Interface> {
 	pub fn unlock(self) {
 		// impl in drop
 	}
 
+	/// **Iteration is currently unused and could be removed if necessary**
 	/// Iterates over all slots that have been allocated thus far.
 	/// It is NOT sound to clone returned [`RCSlot`] and doing so may result in a panic! Doing so could revive a slot marked to be reaper'ed, which is currently not
 	/// (yet) supported.
 	pub fn iter_with<'a, R>(
 		&'a self,
 		f: impl FnMut(Option<&RCSlot<T, Interface>>) -> R + 'a,
-	) -> impl Iterator<Item = R> + ExactSizeIterator + 'a {
+	) -> impl ExactSizeIterator<Item = R> + 'a {
 		let reaper_include = |_, slot: &Slot<T>| {
 			// Safety: Reaper state ensures free_timestamp has been written
 			let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
@@ -329,13 +330,13 @@ impl<T, Interface: RCSlotsInterface<T>> Lock<T, Interface> {
 	}
 }
 
-impl<T, Interface: RCSlotsInterface<T>> Drop for Lock<T, Interface> {
+impl<T, Interface: RCSlotsInterface<T>> Drop for EpochGuard<T, Interface> {
 	fn drop(&mut self) {
-		self.slots.unlock(self.lock_timestamp);
+		self.slots.unlock_epoch(self.lock_timestamp);
 	}
 }
 
-pub struct RCSlots<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
+pub struct RCSlotArray<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
 	interface: Interface,
 	array: Box<[Slot<T>]>,
 	next_free: CachePadded<AtomicUsize>,
@@ -353,24 +354,24 @@ pub struct RCSlots<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
 	/// thus must wait for a previous lock to unlock before being able to clean up their resources.
 	///
 	/// Note: A RangeMap does not support wrapping numbers, but should be fine for now. Will fix when it causes issues.
-	unlock_future_timestamp: CachePadded<Mutex<RangeSet<Timestamp>>>,
+	unlock_future_timestamp: CachePadded<Mutex<RangeSet<Epoch>>>,
 	/// Contains `UNLOCK_CONTROL_*` bitflags to sync unlock logic between threads without causing stalls.
 	unlock_control: CachePadded<AtomicU32>,
 }
 
-unsafe impl<T, Interface: RCSlotsInterface<T>> Send for RCSlots<T, Interface> {}
-unsafe impl<T, Interface: RCSlotsInterface<T>> Sync for RCSlots<T, Interface> {}
+unsafe impl<T, Interface: RCSlotsInterface<T>> Send for RCSlotArray<T, Interface> {}
+unsafe impl<T, Interface: RCSlotsInterface<T>> Sync for RCSlotArray<T, Interface> {}
 
 const UNLOCK_CONTROL_LOCKED: u32 = 0x1;
 const UNLOCK_CONTROL_MORE: u32 = 0x01;
 
-impl<T> RCSlots<T, DefaultRCSlotInterface> {
+impl<T> RCSlotArray<T, DefaultRCSlotInterface> {
 	pub fn new(len: usize) -> Arc<Self> {
 		Self::new_with_interface(len, DefaultRCSlotInterface {})
 	}
 }
 
-impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
+impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
 	pub fn new_with_interface(len: usize, interface: Interface) -> Arc<Self> {
 		Arc::new(Self {
 			interface,
@@ -445,12 +446,12 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 	#[inline(never)]
 	unsafe fn slot_starts_dying(&self, index: SlotIndex) {
 		let slot = &self.array[index];
-		let curr = Timestamp::new(self.lock_timestamp_curr.load(Relaxed));
+		let curr = Epoch::new(self.lock_timestamp_curr.load(Relaxed));
 
 		// FIXME separate these two timestamp queries:
 		// 	* First, the curr queries the current timestamp, at which this slot can be freed.
 		//  * **Then** check if it can be freed immediately, which is completely separate from above!
-		let finished = Timestamp::new(self.unlock_timestamp_curr.load(Acquire));
+		let finished = Epoch::new(self.unlock_timestamp_curr.load(Acquire));
 		// free_now means there are no locks present
 		let free_now = curr.compare_wrapping(&finished).unwrap().is_le();
 
@@ -496,18 +497,18 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 		}
 	}
 
-	pub fn lock(self: &Arc<Self>) -> Lock<T, Interface> {
-		let lock_id = Timestamp(Wrapping(self.lock_timestamp_curr.fetch_add(1, Relaxed)) + Wrapping(1));
-		Lock {
+	pub fn epoch_guard(self: &Arc<Self>) -> EpochGuard<T, Interface> {
+		let lock_id = Epoch(Wrapping(self.lock_timestamp_curr.fetch_add(1, Relaxed)) + Wrapping(1));
+		EpochGuard {
 			slots: self.clone(),
 			lock_timestamp: lock_id,
 		}
 	}
 
-	fn unlock(self: &Arc<Self>, lock_timestamp: Timestamp) {
+	fn unlock_epoch(self: &Arc<Self>, epoch: Epoch) {
 		{
 			let mut guard = self.unlock_future_timestamp.lock();
-			guard.insert(lock_timestamp..Timestamp(lock_timestamp.0 + Wrapping(1)));
+			guard.insert(epoch..Epoch(epoch.0 + Wrapping(1)));
 		}
 
 		let result = self
@@ -523,7 +524,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 	}
 
 	fn cleanup_unlock(&self) {
-		let mut unlock_timestamp = Timestamp::new(self.unlock_timestamp_curr.load(Relaxed));
+		let mut unlock_timestamp = Epoch::new(self.unlock_timestamp_curr.load(Relaxed));
 		loop {
 			{
 				// only lock while figuring out timestamps, not while dropping slots
@@ -531,9 +532,9 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 				// clear UNLOCK_CONTROL_MORE flag
 				self.unlock_control.fetch_and(UNLOCK_CONTROL_LOCKED, Relaxed);
 
-				while let Some(range) = guard.get(&Timestamp(unlock_timestamp.0 + Wrapping(1))) {
+				while let Some(range) = guard.get(&Epoch(unlock_timestamp.0 + Wrapping(1))) {
 					let range = range.clone();
-					unlock_timestamp = Timestamp(range.end.0 - Wrapping(1));
+					unlock_timestamp = Epoch(range.end.0 - Wrapping(1));
 					guard.remove(range);
 				}
 			}
@@ -631,33 +632,33 @@ mod test_utils {
 	use super::*;
 
 	pub struct LockUnlock<T, Interface: RCSlotsInterface<T>> {
-		slots: Arc<RCSlots<T, Interface>>,
-		lock: Lock<T, Interface>,
+		slots: Arc<RCSlotArray<T, Interface>>,
+		lock: EpochGuard<T, Interface>,
 	}
 
 	impl<T, Interface: RCSlotsInterface<T>> LockUnlock<T, Interface> {
-		pub fn new(slots: &Arc<RCSlots<T, Interface>>) -> Self {
+		pub fn new(slots: &Arc<RCSlotArray<T, Interface>>) -> Self {
 			Self {
 				slots: slots.clone(),
-				lock: slots.lock(),
+				lock: slots.epoch_guard(),
 			}
 		}
 
 		pub fn advance(&mut self) {
-			replace(&mut self.lock, self.slots.lock()).unlock();
+			replace(&mut self.lock, self.slots.epoch_guard()).unlock();
 		}
 	}
 }
 
 #[cfg(all(test, not(feature = "loom_tests")))]
 mod tests {
-	use crate::rc_slots::rc_slots::test_utils::LockUnlock;
+	use crate::rc_slot::rc_slot::test_utils::LockUnlock;
 
 	use super::*;
 
 	#[test]
 	fn test_ref_counting() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let slot = slots.allocate(42);
 		assert_eq!(slot.deref_copy(), 42);
 		assert_eq!(slot.ref_count(), 1);
@@ -677,7 +678,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "(state: Dead) differed from expected state Alive!")]
 	fn test_ref_counting_underflow() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let slot = slots.allocate(42);
 		let slot2 = slot.clone();
 
@@ -690,7 +691,7 @@ mod tests {
 
 	#[test]
 	fn test_alloc_unique() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 
 		let count: u32 = 5;
 		let vec = (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
@@ -709,7 +710,7 @@ mod tests {
 
 	#[test]
 	fn test_queues() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let mut lock_unlock = LockUnlock::new(&slots);
 
 		let arc1 = Arc::new(42);
@@ -752,7 +753,7 @@ mod tests {
 	// TODO test slot version!
 	#[test]
 	fn test_queues_many_entries() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let mut lock_unlock = LockUnlock::new(&slots);
 
 		for i in 0..5 {
@@ -789,7 +790,7 @@ mod tests {
 
 	#[test]
 	fn test_queues_mix_locked_and_unlocked() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 
 		// unlocked behaviour
@@ -803,7 +804,7 @@ mod tests {
 		assert_eq!(slots.dead_queue.len(), 5);
 
 		// locked behaviour
-		let lock = slots.lock();
+		let lock = slots.epoch_guard();
 		// 2 new, 5 reused
 		let vec = alloc(7);
 		assert_eq!(slots.reaper_queue.len(), 0);
@@ -830,12 +831,12 @@ mod tests {
 
 	#[test]
 	fn test_queues_drop_before_and_after_lock() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 
 		let before_lock_a = alloc(2);
 		let before_lock_b = alloc(3);
-		let lock = slots.lock();
+		let lock = slots.epoch_guard();
 		let after_lock_a = alloc(4);
 		let after_lock_b = alloc(5);
 		assert_eq!(slots.reaper_queue.len(), 0);
@@ -857,14 +858,14 @@ mod tests {
 	}
 
 	fn test_unlock_ordering(forwards: bool) {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 
 		let arc = Arc::new(42);
 		let slot = slots.allocate(arc.clone());
 		assert_eq!(Arc::strong_count(&arc), 2);
 
-		let lock1 = slots.lock();
-		let lock2 = slots.lock();
+		let lock1 = slots.epoch_guard();
+		let lock2 = slots.epoch_guard();
 		assert_eq!(Arc::strong_count(&arc), 2);
 
 		drop(slot);
@@ -892,53 +893,53 @@ mod tests {
 		test_unlock_ordering(false);
 	}
 
-	fn iter_collect<T: Clone, Interface: RCSlotsInterface<T>>(lock: &Lock<T, Interface>) -> Vec<Option<T>> {
+	fn iter_collect<T: Clone, Interface: RCSlotsInterface<T>>(lock: &EpochGuard<T, Interface>) -> Vec<Option<T>> {
 		lock.iter_with(|t| t.map(|slot| (**slot).clone())).collect::<Vec<_>>()
 	}
 
 	#[test]
 	fn test_iter_smoke() {
-		let slots = RCSlots::new(32);
-		assert_eq!(iter_collect(&slots.lock()), []);
+		let slots = RCSlotArray::new(32);
+		assert_eq!(iter_collect(&slots.epoch_guard()), []);
 
 		let slot1 = slots.allocate(42);
-		assert_eq!(iter_collect(&slots.lock()), [Some(42)]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(42)]);
 
 		let slot2 = slots.allocate(69);
-		assert_eq!(iter_collect(&slots.lock()), [Some(42), Some(69)]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(42), Some(69)]);
 
 		drop(slot2);
-		assert_eq!(iter_collect(&slots.lock()), [Some(42), None]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(42), None]);
 
 		drop(slot1);
-		assert_eq!(iter_collect(&slots.lock()), [None, None]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [None, None]);
 	}
 
 	#[test]
 	fn test_iter_locked() {
-		let slots = RCSlots::new(32);
-		assert_eq!(iter_collect(&slots.lock()), []);
+		let slots = RCSlotArray::new(32);
+		assert_eq!(iter_collect(&slots.epoch_guard()), []);
 
 		let slot1 = slots.allocate(1);
 		let slot2 = slots.allocate(2);
 		let slot3 = slots.allocate(3);
-		assert_eq!(iter_collect(&slots.lock()), [Some(1), Some(2), Some(3)]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(1), Some(2), Some(3)]);
 
 		// 1 lock
-		let lock1 = slots.lock();
+		let lock1 = slots.epoch_guard();
 		assert_eq!(iter_collect(&lock1), [Some(1), Some(2), Some(3)]);
 		drop(slot1);
 		assert_eq!(iter_collect(&lock1), [Some(1), Some(2), Some(3)]);
 		drop(lock1);
-		assert_eq!(iter_collect(&slots.lock()), [None, Some(2), Some(3)]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [None, Some(2), Some(3)]);
 
 		// 2 locks in parallel
-		let lock2 = slots.lock();
+		let lock2 = slots.epoch_guard();
 		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
 		drop(slot2);
 		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
 
-		let lock3 = slots.lock();
+		let lock3 = slots.epoch_guard();
 		assert_eq!(iter_collect(&lock2), [None, Some(2), Some(3)]);
 		assert_eq!(iter_collect(&lock3), [None, None, Some(3)]);
 		drop(slot3);
@@ -949,22 +950,22 @@ mod tests {
 		assert_eq!(iter_collect(&lock3), [None, None, Some(3)]);
 
 		drop(lock3);
-		assert_eq!(iter_collect(&slots.lock()), [None, None, None]);
+		assert_eq!(iter_collect(&slots.epoch_guard()), [None, None, None]);
 	}
 
 	#[test]
 	#[should_panic(expected = "(state: Reaper) differed from expected state Alive!")]
 	fn test_iter_clone() {
-		let slots = RCSlots::new(32);
+		let slots = RCSlotArray::new(32);
 		let slot1 = slots.allocate(42);
 
-		let lock1 = slots.lock();
+		let lock1 = slots.epoch_guard();
 		assert_eq!(iter_collect(&lock1), [Some(42)]);
 
 		drop(slot1);
 		assert_eq!(iter_collect(&lock1), [Some(42)]);
 
 		// necromancy is not allowed!
-		lock1.iter_with(|o| o.map(|s| s.clone())).next();
+		lock1.iter_with(|o| o.cloned()).next();
 	}
 }

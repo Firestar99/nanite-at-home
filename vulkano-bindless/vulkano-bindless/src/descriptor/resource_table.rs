@@ -1,6 +1,6 @@
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::{AnyRCDesc, RCDesc};
-use crate::rc_slots::{Lock as RCLock, RCSlot, RCSlots, SlotIndex};
+use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
@@ -9,14 +9,14 @@ use std::mem::ManuallyDrop;
 use std::ops::Deref;
 
 pub struct ResourceTable<T: DescTable> {
-	slots: Arc<RCSlots<T::Slot, T::RCSlotsInterface>>,
+	slots: Arc<RCSlotArray<T::Slot, T::RCSlotsInterface>>,
 	flush_queue: Mutex<RangeSet<u32>>,
 }
 
 impl<T: DescTable> ResourceTable<T> {
 	pub fn new(count: u32, interface: T::RCSlotsInterface) -> Self {
 		Self {
-			slots: RCSlots::new_with_interface(count as usize, interface),
+			slots: RCSlotArray::new_with_interface(count as usize, interface),
 			flush_queue: Mutex::new(RangeSet::new()),
 		}
 	}
@@ -46,14 +46,14 @@ impl<T: DescTable> Drop for ResourceTable<T> {
 
 // lock
 impl<T: DescTable> ResourceTable<T> {
-	pub fn lock(&self) -> Lock<T> {
-		Lock(self.slots.lock())
+	pub fn epoch_guard(&self) -> TableEpochGuard<T> {
+		TableEpochGuard(self.slots.epoch_guard())
 	}
 }
 
-pub struct Lock<T: DescTable>(RCLock<T::Slot, T::RCSlotsInterface>);
+pub struct TableEpochGuard<T: DescTable>(EpochGuard<T::Slot, T::RCSlotsInterface>);
 
-impl<T: DescTable> Deref for Lock<T> {
+impl<T: DescTable> Deref for TableEpochGuard<T> {
 	type Target = RCLock<T::Slot, T::RCSlotsInterface>;
 
 	fn deref(&self) -> &Self::Target {

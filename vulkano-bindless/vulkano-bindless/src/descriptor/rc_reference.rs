@@ -1,7 +1,7 @@
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::SamplerTable;
 use crate::frame_in_flight::FrameInFlight;
-use crate::rc_slots::RCSlot;
+use crate::rc_slot::RCSlot;
 use static_assertions::assert_impl_all;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;

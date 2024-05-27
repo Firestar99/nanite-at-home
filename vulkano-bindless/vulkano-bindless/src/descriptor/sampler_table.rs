@@ -1,9 +1,9 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::resource_table::{FlushUpdates, Lock, ResourceTable};
+use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::Bindless;
-use crate::rc_slots::{RCSlotsInterface, SlotIndex};
+use crate::rc_slot::{RCSlotsInterface, SlotIndex};
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -57,8 +57,8 @@ impl DescTable for SamplerTable {
 		.unwrap_err();
 	}
 
-	fn lock_table(&self) -> Lock<Self> {
-		self.resource_table.lock()
+	fn lock_table(&self) -> TableEpochGuard<Self> {
+		self.resource_table.epoch_guard()
 	}
 }
 
