@@ -1,4 +1,4 @@
-use crate::descriptor::buffer_metadata_cpu::{StrongBackingRefs, StrongMetadataCpu};
+use crate::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongBackingRefs, StrongMetadataCpu};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
@@ -6,6 +6,7 @@ use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochG
 use crate::descriptor::Bindless;
 use crate::rc_slot::{RCSlotsInterface, SlotIndex};
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::buffer::{AllocateBufferError, BufferCreateInfo, Subbuffer};
@@ -99,6 +100,32 @@ impl<'a> Deref for BufferTableAccess<'a> {
 	}
 }
 
+pub enum AllocFromError {
+	AllocateBufferError(AllocateBufferError),
+	BackingRefsError(BackingRefsError),
+}
+
+impl AllocFromError {
+	fn from_backing_refs(value: BackingRefsError) -> Validated<Self> {
+		Validated::Error(Self::BackingRefsError(value))
+	}
+	fn from_validated_alloc(value: Validated<AllocateBufferError>) -> Validated<Self> {
+		match value {
+			Validated::Error(e) => Validated::Error(Self::AllocateBufferError(e)),
+			Validated::ValidationError(v) => Validated::ValidationError(v),
+		}
+	}
+}
+
+impl Display for AllocFromError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			AllocFromError::AllocateBufferError(e) => e.fmt(f),
+			AllocFromError::BackingRefsError(e) => e.fmt(f),
+		}
+	}
+}
+
 impl<'a> BufferTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot<T: DescBuffer + ?Sized>(
@@ -121,11 +148,16 @@ impl<'a> BufferTableAccess<'a> {
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 		data: T,
-	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
+	) -> Result<RCDesc<Buffer<T>>, Validated<AllocFromError>> {
 		unsafe {
 			let mut meta = StrongMetadataCpu::new(Metadata);
-			let buffer = VBuffer::from_data(allocator, create_info, allocation_info, T::write_cpu(data, &mut meta))?;
-			Ok(self.alloc_slot(buffer, meta.into_backing_refs(self.0)))
+			let buffer = VBuffer::from_data(allocator, create_info, allocation_info, T::write_cpu(data, &mut meta))
+				.map_err(AllocFromError::from_validated_alloc)?;
+			Ok(self.alloc_slot(
+				buffer,
+				meta.into_backing_refs(self.0)
+					.map_err(AllocFromError::from_backing_refs)?,
+			))
 		}
 	}
 
@@ -135,7 +167,7 @@ impl<'a> BufferTableAccess<'a> {
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 		iter: I,
-	) -> Result<RCDesc<Buffer<[T]>>, Validated<AllocateBufferError>>
+	) -> Result<RCDesc<Buffer<[T]>>, Validated<AllocFromError>>
 	where
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
@@ -143,8 +175,13 @@ impl<'a> BufferTableAccess<'a> {
 		unsafe {
 			let mut meta = StrongMetadataCpu::new(Metadata);
 			let iter = iter.into_iter().map(|i| T::write_cpu(i, &mut meta));
-			let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)?;
-			Ok(self.alloc_slot(buffer, meta.into_backing_refs(self.0)))
+			let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)
+				.map_err(AllocFromError::from_validated_alloc)?;
+			Ok(self.alloc_slot(
+				buffer,
+				meta.into_backing_refs(self.0)
+					.map_err(AllocFromError::from_backing_refs)?,
+			))
 		}
 	}
 

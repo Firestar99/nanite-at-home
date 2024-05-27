@@ -47,7 +47,7 @@ impl<D: DescTypeCpu + ?Sized> RCDesc<D> {
 	#[inline]
 	pub fn to_strong(&self) -> StrongDesc<D> {
 		// Safety: when calling write_cpu() this StrongDesc is visited and the slot ref inc
-		unsafe { StrongDesc::new(self.id()) }
+		unsafe { StrongDesc::new(self.id(), self.version()) }
 	}
 
 	#[inline]

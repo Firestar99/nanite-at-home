@@ -136,6 +136,8 @@ impl<D: DescType + ?Sized> WeakDesc<D> {
 #[repr(C)]
 pub struct StrongDesc<D: DescType + ?Sized> {
 	id: u32,
+	/// internal value only used on the CPU to validate that slot wasn't reused
+	version: u32,
 	_phantom: PhantomData<D>,
 }
 
@@ -153,11 +155,21 @@ impl<D: DescType + ?Sized> StrongDesc<D> {
 	/// # Safety
 	/// id must be a valid descriptor id that is somehow ensured to stay valid for as long as this StrongDesc exists
 	#[inline]
-	pub const unsafe fn new(id: u32) -> Self {
+	pub const unsafe fn new(id: u32, version: u32) -> Self {
 		Self {
 			id,
+			version,
 			_phantom: PhantomData {},
 		}
+	}
+
+	/// Get the version
+	///
+	/// # Safety
+	/// only available on the cpu
+	#[cfg(not(target_arch = "spirv"))]
+	pub unsafe fn version_cpu(&self) -> u32 {
+		self.version
 	}
 
 	#[inline]
@@ -187,7 +199,7 @@ unsafe impl<D: DescType + ?Sized> DescStruct for StrongDesc<D> {
 	}
 
 	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
-		unsafe { StrongDesc::new(from.id) }
+		unsafe { StrongDesc::new(from.id, 0) }
 	}
 }
 

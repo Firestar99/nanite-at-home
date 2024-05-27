@@ -13,6 +13,7 @@ pub trait DescType: private::SealedTrait + Send + Sync + 'static {
 }
 
 /// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescType::DESC_ENUM`].
+#[derive(Copy, Clone, Debug)]
 pub enum DescEnum {
 	Buffer,
 	Image,

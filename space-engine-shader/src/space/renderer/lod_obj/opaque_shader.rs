@@ -51,7 +51,7 @@ pub fn opaque_mesh(
 	#[spirv(primitive_triangle_indices_ext)] indices: &mut [UVec3; OUTPUT_TRIANGLES],
 	#[spirv(position)] positions: &mut [Vec4; OUTPUT_VERTICES],
 	vert_tex_coords: &mut [Vec2; OUTPUT_VERTICES],
-	vert_texture: &mut [StrongDesc<Image2d>; OUTPUT_VERTICES],
+	vert_texture: &mut [(StrongDesc<Image2d>, u32); OUTPUT_VERTICES],
 ) {
 	unsafe {
 		set_mesh_outputs_ext(OUTPUT_VERTICES as u32, OUTPUT_TRIANGLES as u32);
@@ -68,7 +68,7 @@ pub fn opaque_mesh(
 		let position_world = camera.transform.transform_point3(vertex_input.position.into());
 		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
 		vert_tex_coords[i] = vertex_input.tex_coord;
-		vert_texture[i] = vertex_input.tex_id;
+		vert_texture[i].0 = vertex_input.tex_id;
 	}
 
 	const_assert_eq!(OUTPUT_TRIANGLES, 1);
@@ -80,10 +80,10 @@ pub fn opaque_fs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[bindless(param_constants)] param: &Params<'static>,
 	vert_tex_coords: Vec2,
-	#[spirv(flat)] vert_texture: StrongDesc<Image2d>,
+	#[spirv(flat)] vert_texture: (StrongDesc<Image2d>, u32),
 	output: &mut Vec4,
 ) {
-	let image: &Image2d = vert_texture.access(descriptors);
+	let image: &Image2d = vert_texture.0.access(descriptors);
 	*output = image.sample(*param.sampler.access(descriptors), vert_tex_coords);
 	if output.w < 0.01 {
 		spirv_std::arch::kill();

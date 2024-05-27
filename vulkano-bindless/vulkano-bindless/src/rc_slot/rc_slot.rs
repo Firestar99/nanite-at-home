@@ -410,7 +410,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
 	}
 
 	/// Try and get a reference to an alive slot. The slot must be alive, must not be dead or in reaper state.
-	pub fn try_get_alive_slot(self: &Arc<Self>, index: SlotIndex) -> Option<RCSlot<T, Interface>> {
+	pub fn try_get_alive_slot(self: &Arc<Self>, index: SlotIndex, version: u32) -> Option<RCSlot<T, Interface>> {
 		let mut backoff = Backoff::new();
 		let slot = &self.array[index];
 
@@ -437,7 +437,14 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
 
 		// Safety: transfer ownership of slot's ref increment done above, but do NOT ref inc the slots
 		// collection, that's only done inc/dec when a slot is allocated/dropped
-		unsafe { Some(RCSlot::from_raw_index(self, index)) }
+		let slot = unsafe { RCSlot::from_raw_index(self, index) };
+		if slot.version() == version {
+			Some(slot)
+		} else {
+			// version has changed, not the correct slot anymore
+			drop(slot);
+			None
+		}
 	}
 
 	/// # Safety

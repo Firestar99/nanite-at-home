@@ -29,9 +29,9 @@ impl<T: DescTable> ResourceTable<T> {
 		RCDesc::<D>::new(slot)
 	}
 
-	pub fn try_get_rc(&self, id: u32) -> Option<AnyRCDesc<T>> {
+	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<AnyRCDesc<T>> {
 		self.slots
-			.try_get_alive_slot(SlotIndex(id as usize))
+			.try_get_alive_slot(SlotIndex(id as usize), version)
 			.map(AnyRCDesc::new)
 	}
 }
