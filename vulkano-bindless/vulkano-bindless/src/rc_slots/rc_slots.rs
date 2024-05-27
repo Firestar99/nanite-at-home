@@ -341,6 +341,8 @@ pub struct RCSlots<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
 	next_free: CachePadded<AtomicUsize>,
 	/// queue of slots that can be dropped and reclaimed, as soon as all locks that may be using them have finished
 	reaper_queue: SegQueue<SlotIndex>,
+	/// SegQueue cannot peak, so we have to pop. If the slot should not yet be dropped, it's stored here. Must be Mutex with `unlock_control`'s lock.
+	reaper_peak: UnsafeCell<Option<SlotIndex>>,
 	/// queue of slots that are dead and may be reused
 	dead_queue: SegQueue<SlotIndex>,
 	/// Every created lock gets a new timestamp from this counter. Current active locks is `next_lock_counter.wrapping_sub(finished_lock_counter)`. May wrap around.
@@ -355,6 +357,9 @@ pub struct RCSlots<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
 	/// Contains `UNLOCK_CONTROL_*` bitflags to sync unlock logic between threads without causing stalls.
 	unlock_control: CachePadded<AtomicU32>,
 }
+
+unsafe impl<T, Interface: RCSlotsInterface<T>> Send for RCSlots<T, Interface> {}
+unsafe impl<T, Interface: RCSlotsInterface<T>> Sync for RCSlots<T, Interface> {}
 
 const UNLOCK_CONTROL_LOCKED: u32 = 0x1;
 const UNLOCK_CONTROL_MORE: u32 = 0x01;
@@ -372,6 +377,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 			array: (0..len).map(|_| Slot::default()).collect::<Vec<_>>().into_boxed_slice(),
 			next_free: CachePadded::new(AtomicUsize::new(0)),
 			reaper_queue: SegQueue::new(),
+			reaper_peak: UnsafeCell::new(None),
 			dead_queue: SegQueue::new(),
 			lock_timestamp_curr: CachePadded::new(AtomicU32::new(0)),
 			unlock_timestamp_curr: CachePadded::new(AtomicU32::new(0)),
@@ -533,30 +539,41 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlots<T, Interface> {
 			}
 			self.unlock_timestamp_curr.store(unlock_timestamp.0 .0, Relaxed);
 
-			while let Some(index) = self.reaper_queue.pop() {
-				let slot = &self.array[index];
-				// Safety: slots in the reaper queue must be in Reaper state, and thus have the timestamp initialized
-				// and readable by shared ref
-				let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
-				// TODO move this to docs
-				// It is required to be less_than and not just equal, as some entries may get stuck due to entries being
-				// added out of order compared to their timestamp. Thus, we also have to free previously unlocked
-				// entries, which have gone stuck. But there is a risk: Constant locking without any new entries to
-				// flush the queue can cause timestamps to wrap around, and then we don't know if it was before or after
-				// us!
-				if free_timestamp
-					.compare_wrapping(&unlock_timestamp)
-					.expect("Reaper queue stood still for too long, timestamps have wrapped around!")
-					.is_le()
-				{
-					// Safety: we have exclusive access to this slot, and just verified that the last lock access to
-					// this slot has dropped, so we may drop the slot
-					unsafe { self.free_slot(index, Reaper) };
-					self.dead_queue.push(index);
-				} else {
-					break;
+			let cleanup = |reaper_peak: &mut Option<SlotIndex>| {
+				while let Some(index) = {
+					if let Some(peak) = reaper_peak.take() {
+						Some(peak)
+					} else {
+						self.reaper_queue.pop()
+					}
+				} {
+					let slot = &self.array[index];
+					// Safety: slots in the reaper queue must be in Reaper state, and thus have the timestamp initialized
+					// and readable by shared ref
+					let free_timestamp = unsafe { slot.free_timestamp.with(|t| *t) };
+					// TODO move this to docs
+					// It is required to be less_than and not just equal, as some entries may get stuck due to entries being
+					// added out of order compared to their timestamp. Thus, we also have to free previously unlocked
+					// entries, which have gone stuck. But there is a risk: Constant locking without any new entries to
+					// flush the queue can cause timestamps to wrap around, and then we don't know if it was before or after
+					// us!
+					if free_timestamp
+						.compare_wrapping(&unlock_timestamp)
+						.expect("Reaper queue stood still for too long, timestamps have wrapped around!")
+						.is_le()
+					{
+						// Safety: we have exclusive access to this slot, and just verified that the last lock access to
+						// this slot has dropped, so we may drop the slot
+						unsafe { self.free_slot(index, Reaper) };
+						self.dead_queue.push(index);
+					} else {
+						reaper_peak.replace(index);
+						break;
+					}
 				}
-			}
+			};
+			// Safety: reaper_peak is protested by unlock_control
+			unsafe { self.reaper_peak.with_mut(cleanup) };
 
 			// unlock, or retry if MORE flag was set
 			if self
@@ -679,7 +696,7 @@ mod tests {
 		let vec = (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 		for (i, slot) in vec.iter().enumerate() {
 			assert_eq!(slot.deref_copy(), i as u32);
-			assert_eq!(slots.array.key_to_raw_index(slot.index), i as u32);
+			assert_eq!(slot.index.0, i);
 
 			assert_eq!(slot.ref_count(), 1);
 			{
@@ -692,266 +709,158 @@ mod tests {
 
 	#[test]
 	fn test_queues() {
-		unsafe {
-			let slots = RCSlots::new(32);
-			let mut lock_unlock = LockUnlock::new(&slots);
+		let slots = RCSlots::new(32);
+		let mut lock_unlock = LockUnlock::new(&slots);
 
-			let arc1 = Arc::new(42);
-			let slot1 = slots.allocate(arc1.clone());
-			assert_eq!(slots.array.key_to_raw_index(slot1.index), 0);
-			let arc2 = Arc::new(69);
-			let slot2 = slots.allocate(arc2.clone());
-			assert_eq!(slots.array.key_to_raw_index(slot2.index), 1);
+		let arc1 = Arc::new(42);
+		let slot1 = slots.allocate(arc1.clone());
+		assert_eq!(slot1.index.0, 0);
+		let arc2 = Arc::new(69);
+		let slot2 = slots.allocate(arc2.clone());
+		assert_eq!(slot2.index.0, 1);
 
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-			assert_eq!(Arc::strong_count(&arc1), 2); // alive
-			assert_eq!(Arc::strong_count(&arc2), 2); // alive
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 0);
+		assert_eq!(Arc::strong_count(&arc1), 2); // alive
+		assert_eq!(Arc::strong_count(&arc2), 2); // alive
 
-			drop(slot1);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-			assert_eq!(Arc::strong_count(&arc1), 2); // alive
-			assert_eq!(Arc::strong_count(&arc2), 2); // alive
+		drop(slot1);
+		assert_eq!(slots.reaper_queue.len(), 1);
+		assert_eq!(slots.dead_queue.len(), 0);
+		assert_eq!(Arc::strong_count(&arc1), 2); // reaper
+		assert_eq!(Arc::strong_count(&arc2), 2); // alive
 
-			// reaper_queue retains 1 slot
-			lock_unlock.advance();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-			assert_eq!(Arc::strong_count(&arc1), 2); // reaper
-			assert_eq!(Arc::strong_count(&arc2), 2); // alive
+		lock_unlock.advance();
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 1);
+		assert_eq!(Arc::strong_count(&arc1), 1); // dead
+		assert_eq!(Arc::strong_count(&arc2), 2); // alive
 
-			drop(slot2);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 2);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-			assert_eq!(Arc::strong_count(&arc1), 2); // reaper
-			assert_eq!(Arc::strong_count(&arc2), 2); // reaper
+		drop(slot2);
+		assert_eq!(slots.reaper_queue.len(), 1);
+		assert_eq!(slots.dead_queue.len(), 1);
+		assert_eq!(Arc::strong_count(&arc1), 1); // dead
+		assert_eq!(Arc::strong_count(&arc2), 2); // reaper
 
-			// reaper_queue retains 1 slot
-			lock_unlock.advance();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-			assert_eq!(Arc::strong_count(&arc1), 1); // dead
-			assert_eq!(Arc::strong_count(&arc2), 2); // reaper
-
-			// we asserted that it was freed, useless now
-			drop(arc1);
-
-			// new slot will allocate a new slot, not reuse, as dead_queue retains 1 slot
-			let arc3 = Arc::new(3);
-			let slot3 = slots.allocate(arc3.clone());
-			assert_eq!(slots.array.key_to_raw_index(slot3.index), 2);
-
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-			assert_eq!(Arc::strong_count(&arc2), 2); // reaper
-			assert_eq!(Arc::strong_count(&arc3), 2); // alive
-
-			drop(slot3);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 2);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-			assert_eq!(Arc::strong_count(&arc2), 2); // reaper
-			assert_eq!(Arc::strong_count(&arc3), 2); // reaper
-
-			// reaper_queue retains 1 slot
-			lock_unlock.advance();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 2);
-			assert_eq!(Arc::strong_count(&arc2), 1); // dead
-			assert_eq!(Arc::strong_count(&arc3), 2); // reaper
-
-			// we asserted that it was freed, useless now
-			drop(arc2);
-
-			// new slot will reuse slot 1
-			let arc4 = Arc::new(4);
-			let slot4 = slots.allocate(arc4.clone());
-			assert_eq!(slots.array.key_to_raw_index(slot4.index), 0);
-
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-			assert_eq!(Arc::strong_count(&arc3), 2); // reaper
-			assert_eq!(Arc::strong_count(&arc4), 2); // alive
-
-			// new slot will allocate a new slot, not reuse, as dead_queue retains 1 slot
-			let arc5 = Arc::new(5);
-			let slot5 = slots.allocate(arc5.clone());
-			assert_eq!(slots.array.key_to_raw_index(slot5.index), 3);
-
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-			assert_eq!(Arc::strong_count(&arc3), 2); // reaper
-			assert_eq!(Arc::strong_count(&arc4), 2); // alive
-			assert_eq!(Arc::strong_count(&arc5), 2); // alive
-		}
+		lock_unlock.advance();
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 2);
+		assert_eq!(Arc::strong_count(&arc1), 1); // dead
+		assert_eq!(Arc::strong_count(&arc2), 1); // dead
 	}
 
 	// TODO test slot version!
 	#[test]
 	fn test_queues_many_entries() {
-		unsafe {
-			let slots = RCSlots::new(32);
-			let mut lock_unlock = LockUnlock::new(&slots);
+		let slots = RCSlots::new(32);
+		let mut lock_unlock = LockUnlock::new(&slots);
 
-			for i in 0..5 {
-				let slot = slots.allocate(());
-				assert_eq!(slots.array.key_to_raw_index(slot.index), i);
-			}
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 5);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-
-			lock_unlock.advance();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 4);
-
-			// 3 reused
-			for i in 0..3 {
-				let slot = slots.allocate(());
-				assert_eq!(slots.array.key_to_raw_index(slot.index), i);
-				assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1 + i);
-				assert_eq!(slots.dead_queue.debug_count(&slots.array), 3 - i);
-			}
-
-			// 2 newly allocated
-			for i in 0..2 {
-				let slot = slots.allocate(());
-				assert_eq!(slots.array.key_to_raw_index(slot.index), i + 5);
-				assert_eq!(slots.reaper_queue.debug_count(&slots.array), 4 + i);
-				assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-			}
-
-			lock_unlock.advance();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 6);
+		for i in 0..5 {
+			let slot = slots.allocate(());
+			assert_eq!(slot.index.0, i);
 		}
-	}
+		assert_eq!(slots.reaper_queue.len(), 5);
+		assert_eq!(slots.dead_queue.len(), 0);
 
-	#[test]
-	fn test_queues_while_unlocked() {
-		unsafe {
-			let slots = RCSlots::new(32);
+		lock_unlock.advance();
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 5);
 
-			drop(slots.allocate(0));
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-
-			let slot = slots.allocate(1);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-
-			drop(slot);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 2);
-
-			let slot = slots.allocate(2);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
-
-			drop(slot);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 2);
+		// 5 reused
+		for i in 0..5 {
+			let slot = slots.allocate(());
+			assert_eq!(slot.index.0, i);
+			assert_eq!(slots.reaper_queue.len(), i);
+			assert_eq!(slots.dead_queue.len(), 5 - i - 1);
 		}
+
+		// 2 newly allocated
+		for i in 0..2 {
+			let slot = slots.allocate(());
+			assert_eq!(slot.index.0, i + 5);
+			assert_eq!(slots.reaper_queue.len(), 5 + i);
+			assert_eq!(slots.dead_queue.len(), 0);
+		}
+
+		lock_unlock.advance();
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 7);
 	}
 
 	#[test]
 	fn test_queues_mix_locked_and_unlocked() {
-		unsafe {
-			let slots = RCSlots::new(32);
-			let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
+		let slots = RCSlots::new(32);
+		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 
-			// unlocked behaviour
-			// 5 new
-			let vec = alloc(5);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
+		// unlocked behaviour
+		// 5 new
+		let vec = alloc(5);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 0);
 
-			drop(vec);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 5);
+		drop(vec);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 5);
 
-			// locked behaviour
-			let lock = slots.lock();
-			// 1 new, 4 reused
-			let vec = alloc(5);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
+		// locked behaviour
+		let lock = slots.lock();
+		// 2 new, 5 reused
+		let vec = alloc(7);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 0);
 
-			drop(vec);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 5);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
+		drop(vec);
+		assert_eq!(slots.reaper_queue.len(), 7);
+		assert_eq!(slots.dead_queue.len(), 0);
 
-			lock.unlock();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 5);
+		lock.unlock();
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 7);
 
-			// unlocked behaviour
-			// 1 new, 4 reused
-			let vec = alloc(5);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 1);
+		// unlocked behaviour
+		// 3 new, 7 reused
+		let vec = alloc(10);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 0);
 
-			drop(vec);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 6);
-		}
+		drop(vec);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 10);
 	}
 
 	#[test]
 	fn test_queues_drop_before_and_after_lock() {
-		unsafe {
-			let slots = RCSlots::new(32);
-			let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
-
-			let before_lock_a = alloc(2);
-			let before_lock_b = alloc(3);
-			let lock = slots.lock();
-			let after_lock_a = alloc(4);
-			let after_lock_b = alloc(5);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 0);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-
-			drop(before_lock_a);
-			drop(after_lock_a);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 6);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 0);
-
-			lock.unlock();
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 5);
-
-			drop(before_lock_b);
-			drop(after_lock_b);
-			assert_eq!(slots.reaper_queue.debug_count(&slots.array), 1);
-			assert_eq!(slots.dead_queue.debug_count(&slots.array), 13);
-		}
-	}
-
-	#[test]
-	fn test_reaper_queue_leak() {
 		let slots = RCSlots::new(32);
+		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
 
-		let arc = Arc::new(42);
-		let slot = slots.allocate(arc.clone());
-		assert_eq!(Arc::strong_count(&arc), 2);
-
-		// get slot in the reaper queue, where it remains unfreed
+		let before_lock_a = alloc(2);
+		let before_lock_b = alloc(3);
 		let lock = slots.lock();
-		drop(slot);
-		lock.unlock();
-		assert_eq!(Arc::strong_count(&arc), 2);
+		let after_lock_a = alloc(4);
+		let after_lock_b = alloc(5);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 0);
 
-		// must free slot in reaper queue
-		drop(slots);
-		assert_eq!(Arc::strong_count(&arc), 1, "reaper queue is leaking!");
+		drop(before_lock_a);
+		drop(after_lock_a);
+		assert_eq!(slots.reaper_queue.len(), 6);
+		assert_eq!(slots.dead_queue.len(), 0);
+
+		lock.unlock();
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 6);
+
+		drop(before_lock_b);
+		drop(after_lock_b);
+		assert_eq!(slots.reaper_queue.len(), 0);
+		assert_eq!(slots.dead_queue.len(), 14);
 	}
 
-	#[test]
-	fn test_lock_timestamp_ordering() {
+	fn test_unlock_ordering(forwards: bool) {
 		let slots = RCSlots::new(32);
 
 		let arc = Arc::new(42);
 		let slot = slots.allocate(arc.clone());
-		let slot_flush = slots.allocate(Arc::new(42));
 		assert_eq!(Arc::strong_count(&arc), 2);
 
 		let lock1 = slots.lock();
@@ -959,14 +868,28 @@ mod tests {
 		assert_eq!(Arc::strong_count(&arc), 2);
 
 		drop(slot);
-		drop(slot_flush);
 		assert_eq!(Arc::strong_count(&arc), 2);
 
-		lock1.unlock();
-		assert_eq!(Arc::strong_count(&arc), 2);
-
-		lock2.unlock();
+		if forwards {
+			lock1.unlock();
+			assert_eq!(Arc::strong_count(&arc), 2);
+			lock2.unlock();
+		} else {
+			lock2.unlock();
+			assert_eq!(Arc::strong_count(&arc), 2);
+			lock1.unlock();
+		}
 		assert_eq!(Arc::strong_count(&arc), 1);
+	}
+
+	#[test]
+	fn test_unlock_ordering_forwards() {
+		test_unlock_ordering(true);
+	}
+
+	#[test]
+	fn test_unlock_ordering_backwards() {
+		test_unlock_ordering(false);
 	}
 
 	fn iter_collect<T: Clone, Interface: RCSlotsInterface<T>>(lock: &Lock<T, Interface>) -> Vec<Option<T>> {
