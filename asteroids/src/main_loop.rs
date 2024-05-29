@@ -1,7 +1,6 @@
 use glam::{Mat4, UVec3};
 use space_engine::generate_application_config;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
-use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine::space::renderer::renderer_plugin::RendererPlugin;
 use space_engine::space::renderer::renderers::main::{RenderPipelineMain, RendererMain};
 use space_engine::space::Init;
@@ -88,12 +87,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 
 	// renderer
-	let texture_manager = TextureManager::new(&init);
 	let render_pipeline_main = RenderPipelineMain::new(&init, swapchain.format());
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let models = load_scene(&texture_manager).await;
+	let models = load_scene(&init).await;
 	render_pipeline_main.opaque_task.models.lock().extend(models);
 
 	// main loop

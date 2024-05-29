@@ -126,6 +126,7 @@ dependencies = [
  "bytemuck_derive",
  "futures",
  "glam",
+ "image",
  "num-derive",
  "num-traits",
  "parking_lot",

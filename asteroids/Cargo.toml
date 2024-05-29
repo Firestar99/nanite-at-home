@@ -22,6 +22,9 @@ winit = { workspace = true }
 futures = { workspace = true }
 smol = { workspace = true }
 
+# model loader
+image = { workspace = true }
+
 # bytes and numbers
 glam = { workspace = true }
 bytemuck = { workspace = true }
