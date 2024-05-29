@@ -5,7 +5,9 @@ use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::format::Format;
 use vulkano::image::sampler::SamplerCreateInfo;
-use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
+use vulkano::pipeline::graphics::color_blend::{
+	AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
+};
 use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
@@ -48,7 +50,14 @@ impl OpaqueDrawPipeline {
 				}),
 				color_blend_state: Some(ColorBlendState {
 					attachments: vec![ColorBlendAttachmentState {
-						blend: Some(AttachmentBlend::alpha()),
+						blend: Some(AttachmentBlend {
+							src_color_blend_factor: BlendFactor::One,
+							dst_color_blend_factor: BlendFactor::Zero,
+							color_blend_op: BlendOp::Add,
+							src_alpha_blend_factor: BlendFactor::One,
+							dst_alpha_blend_factor: BlendFactor::Zero,
+							alpha_blend_op: BlendOp::Add,
+						}),
 						..ColorBlendAttachmentState::default()
 					}],
 					..Default::default()
