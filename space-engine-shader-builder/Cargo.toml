@@ -7,4 +7,4 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-shader-symbols-builder = { path = "../shader-symbols-builder", default-features = false, features = ["use-installed-tools"] }
+vulkano-bindless-shader-builder = { workspace = true }

@@ -4,14 +4,13 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
-
 use vulkano::{instance, VulkanLibrary};
 
 pub struct ValidationLayers(HashSet<LayerProperties>);
 
 impl ValidationLayers {
 	pub fn new(lib: &Arc<VulkanLibrary>) -> Self {
-		ValidationLayers(lib.layer_properties().unwrap().map(|l| LayerProperties(l)).collect())
+		ValidationLayers(lib.layer_properties().unwrap().map(LayerProperties).collect())
 	}
 }
 
@@ -42,7 +41,7 @@ impl Deref for LayerProperties {
 
 impl AsRef<<LayerProperties as Deref>::Target> for LayerProperties {
 	fn as_ref(&self) -> &<LayerProperties as Deref>::Target {
-		&*self
+		self
 	}
 }
 

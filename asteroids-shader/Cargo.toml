@@ -7,11 +7,11 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["dylib"]
+crate-type = ["lib", "dylib"]
 
 [dependencies]
-# my projects
-asteroids-common = { path = "../asteroids-common" }
+# members
+space-engine-shader = { workspace = true }
 
 # rust-gpu
 spirv-std = { workspace = true }

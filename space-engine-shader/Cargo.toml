@@ -7,11 +7,12 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["dylib"]
+crate-type = ["lib", "dylib"]
 
 [dependencies]
-# my projects
-space-engine-common = { path = "../space-engine-common" }
+# members
+vulkano-bindless-macros = { workspace = true }
+vulkano-bindless-shaders = { workspace = true }
 
 # rust-gpu
 spirv-std = { workspace = true }

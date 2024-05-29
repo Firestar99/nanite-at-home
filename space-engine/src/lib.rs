@@ -2,7 +2,6 @@ extern crate core;
 
 /// for macro use
 pub use paste;
-
 pub use vulkan::window::event_loop::event_loop_init;
 
 pub mod application_config;

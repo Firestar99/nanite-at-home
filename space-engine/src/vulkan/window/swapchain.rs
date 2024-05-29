@@ -1,9 +1,10 @@
+use crate::vulkan::window::event_loop::EventLoopExecutor;
+use crate::vulkan::window::window_ref::WindowRef;
+use smallvec::SmallVec;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
-
-use smallvec::SmallVec;
-use static_assertions::{assert_impl_all, assert_not_impl_all};
 use vulkano::device::{Device, DeviceOwned, Queue};
 use vulkano::format::{Format, FormatFeatures};
 use vulkano::image::view::ImageView;
@@ -17,11 +18,9 @@ use vulkano::swapchain::{
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
+use vulkano_bindless::frame_manager::Frame;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
-
-use crate::vulkan::window::event_loop::EventLoopExecutor;
-use crate::vulkan::window::window_ref::WindowRef;
 
 pub struct Swapchain {
 	queue: Arc<Queue>,
@@ -73,16 +72,13 @@ impl Swapchain {
 					colorspace = f.1;
 				}
 
-				let present_mode;
-				{
-					let present_modes = || {
-						device
-							.physical_device()
-							.surface_present_modes(&surface, SurfaceInfo::default())
-							.unwrap()
-					};
-					present_mode = present_modes().find(|p| *p == Mailbox).unwrap_or(Fifo);
-				}
+				let present_mode = device
+					.physical_device()
+					.surface_present_modes(&surface, SurfaceInfo::default())
+					.unwrap()
+					.into_iter()
+					.find(|p| *p == Mailbox)
+					.unwrap_or(Fifo);
 
 				let image_count;
 				{
@@ -169,7 +165,7 @@ impl Swapchain {
 	}
 	#[inline]
 	pub fn device(&self) -> &Arc<Device> {
-		&self.queue.device()
+		self.queue.device()
 	}
 	#[inline]
 	pub fn surface(&self) -> &Arc<Surface> {
@@ -275,14 +271,12 @@ impl SwapchainController {
 	}
 
 	pub fn handle_input(&mut self, event: &Event<()>) {
-		match event {
-			Event::WindowEvent {
-				event: WindowEvent::Resized(_),
-				..
-			} => {
-				self.should_recreate = true;
-			}
-			_ => (),
+		if let Event::WindowEvent {
+			event: WindowEvent::Resized(_),
+			..
+		} = event
+		{
+			self.should_recreate = true;
 		}
 	}
 }
@@ -306,18 +300,22 @@ impl<'a> AcquiredImage<'a> {
 		&self.controller.images[self.image_index as usize]
 	}
 
-	pub fn present(self, future: impl GpuFuture + 'static) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>> {
-		match future
-			.then_swapchain_present(
-				self.controller.queue.clone(),
-				SwapchainPresentInfo::swapchain_image_index(
-					self.controller.vulkano_swapchain.clone(),
-					self.image_index,
-				),
-			)
-			.boxed()
-			.then_signal_fence_and_flush()
-		{
+	pub fn present(
+		self,
+		frame: &Frame,
+		future: impl GpuFuture + 'static,
+	) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>> {
+		match frame.then_signal_fence_and_flush(
+			future
+				.then_swapchain_present(
+					self.controller.queue.clone(),
+					SwapchainPresentInfo::swapchain_image_index(
+						self.controller.vulkano_swapchain.clone(),
+						self.image_index,
+					),
+				)
+				.boxed(),
+		) {
 			Ok(e) => Some(e),
 			Err(e) => {
 				match e.unwrap() {

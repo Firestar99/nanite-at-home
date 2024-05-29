@@ -1,18 +1,10 @@
-use std::f32::consts::PI;
-use std::sync::mpsc::Receiver;
-
 use glam::{Mat4, UVec3};
-use winit::event::{Event, WindowEvent};
-use winit::window::{CursorGrabMode, WindowBuilder};
-
 use space_engine::generate_application_config;
 use space_engine::space::queue_allocation::SpaceQueueAllocator;
-use space_engine::space::renderer::model::texture_manager::TextureManager;
 use space_engine::space::renderer::renderer_plugin::RendererPlugin;
 use space_engine::space::renderer::renderers::main::{RenderPipelineMain, RendererMain};
 use space_engine::space::Init;
 use space_engine::vulkan::init::Plugin;
-use space_engine::vulkan::plugins::renderdoc_layer_plugin::RenderdocLayerPlugin;
 use space_engine::vulkan::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use space_engine::vulkan::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
 use space_engine::vulkan::plugins::vulkano_bindless::VulkanoBindless;
@@ -20,34 +12,64 @@ use space_engine::vulkan::window::event_loop::EventLoopExecutor;
 use space_engine::vulkan::window::swapchain::Swapchain;
 use space_engine::vulkan::window::window_plugin::WindowPlugin;
 use space_engine::vulkan::window::window_ref::WindowRef;
-use space_engine_common::space::renderer::camera::Camera;
-use space_engine_common::space::renderer::frame_data::FrameData;
+use space_engine_shader::space::renderer::camera::Camera;
+use space_engine_shader::space::renderer::frame_data::FrameData;
+use std::f32::consts::PI;
+use std::num::NonZeroUsize;
+use std::sync::mpsc::Receiver;
+use vulkano::shader::ShaderStages;
+use vulkano::sync::GpuFuture;
+use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
+use winit::event::{Event, WindowEvent};
+use winit::window::{CursorGrabMode, WindowBuilder};
 
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scene::load_scene;
 
-const LAYER_RENDERDOC: bool = false;
-const LAYER_VALIDATION: bool = true;
+pub enum Debugger {
+	None,
+	Validation,
+	RenderDoc,
+}
+
+const DEBUGGER: Debugger = Debugger::RenderDoc;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
-	if LAYER_RENDERDOC {
+	if matches!(DEBUGGER, Debugger::RenderDoc) {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
+		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
 	}
+	std::env::set_var(
+		"SMOL_THREADS",
+		std::thread::available_parallelism()
+			.unwrap_or(NonZeroUsize::new(1).unwrap())
+			.get()
+			.to_string(),
+	);
 
 	let init;
 	{
 		let window_plugin = WindowPlugin::new(&event_loop).await;
 		let mut vec: Vec<&dyn Plugin> = vec![&RendererPlugin, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
-		if LAYER_RENDERDOC {
-			vec.push(&RenderdocLayerPlugin);
-		}
-		if LAYER_VALIDATION {
+		if matches!(DEBUGGER, Debugger::Validation) {
 			vec.push(&StandardValidationLayerPlugin);
 		}
 
-		init = Init::new(generate_application_config!(), &vec, SpaceQueueAllocator::new()).await;
+		let stages = ShaderStages::TASK
+			| ShaderStages::MESH
+			| ShaderStages::VERTEX
+			| ShaderStages::FRAGMENT
+			| ShaderStages::COMPUTE;
+		init = Init::new(
+			generate_application_config!(),
+			&vec,
+			SpaceQueueAllocator::new(),
+			stages,
+			DescriptorCounts::reasonable_defaults,
+		)
+		.await;
 	}
 	let graphics_main = &init.queues.client.graphics_main;
 
@@ -65,31 +87,27 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
 
 	// renderer
-	let texture_manager = TextureManager::new(&init);
-	let render_pipeline_main = RenderPipelineMain::new(&init, &texture_manager, swapchain.format());
+	let render_pipeline_main = RenderPipelineMain::new(&init, swapchain.format());
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let models = load_scene(&init, &texture_manager).await;
+	let models = load_scene(&init).await;
 	render_pipeline_main.opaque_task.models.lock().extend(models);
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
-	let mut last_frame = DeltaTimeTimer::new();
+	let mut last_frame = DeltaTimeTimer::default();
 	'outer: loop {
 		// event handling
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
-			match &event {
-				Event::WindowEvent {
-					event: WindowEvent::CloseRequested,
-					..
-				} => {
-					break 'outer;
-				}
-
-				_ => (),
+			if let Event::WindowEvent {
+				event: WindowEvent::CloseRequested,
+				..
+			} = &event
+			{
+				break 'outer;
 			}
 		}
 
@@ -116,9 +134,9 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		renderer_main.as_mut().unwrap().new_frame(
 			frame_data,
 			acquired_image.image_view().clone(),
-			|_frame_context, frame| {
-				let future = frame.record(swapchain_acquire);
-				acquired_image.present(future)
+			|frame, prev_frame_future, main_frame| {
+				let future = main_frame.record(swapchain_acquire.join(prev_frame_future));
+				acquired_image.present(frame.frame, future)
 			},
 		);
 	}

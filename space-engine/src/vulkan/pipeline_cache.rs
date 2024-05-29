@@ -1,8 +1,7 @@
+use smol::fs;
 use std::io;
 use std::ops::Deref;
 use std::sync::Arc;
-
-use smol::fs;
 use vulkano::device::Device;
 use vulkano::pipeline::cache::{PipelineCache, PipelineCacheCreateInfo};
 

@@ -7,9 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# my projects
-space-engine-common = { path = "../space-engine-common" }
-vulkano-bindless = { path = "../vulkano-bindless/vulkano-bindless" }
+# members
+space-engine-shader = { workspace = true }
+vulkano-bindless = { workspace = true }
 
 # vulkan
 vulkano = { workspace = true }

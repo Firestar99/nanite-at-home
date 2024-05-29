@@ -1,6 +1,5 @@
-use futures::executor::block_on;
-
 use asteroids::main_loop::run;
+use futures::executor::block_on;
 use space_engine::event_loop_init;
 
 fn main() {

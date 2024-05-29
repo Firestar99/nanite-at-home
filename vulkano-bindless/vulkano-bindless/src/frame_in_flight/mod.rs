@@ -17,22 +17,12 @@
 //! * `SeedInFlight.frames_in_flight <= FRAMES_LIMIT` checked during Seed construction
 //! * `FrameInFlight.index < SeedInFlight.frames_in_flight` checked during `FrameInFlight` construction
 //!
-//! This has two main advantages:
-//! * As indices are always checked during construction, indexing of a `ResourceInFlight` with a `FrameInFlight` may happen without
-//! checking that the index is in bound.
-//! * `ResourceInFlight` has array of it's resource instead of having to heap allocate it's data and thus introduce an indirection.
-//! This array has a capacity of `FRAMES_LIMIT` and is the main factor in the limit, as raising the limit will inherently increase
-//! the size of all `ResourceInFlight` structs. If the seed uses less than `FRAMES_LIMIT` maximum frames in flight, the remaining
-//! slots in the array will remain uninitialized, but still contribute to the size of `ResourceInFlight`.
+//! This has the advantage that indexing of a `ResourceInFlight` with a `FrameInFlight` may happen without checking that
+//! the index is in bound.
 //!
 
-pub use frame::*;
+pub mod resource;
+pub mod upload;
+
 pub use resource::*;
-
-mod frame;
-mod resource;
-
-pub mod frame_manager;
-pub mod uniform;
-
-pub const FRAMES_LIMIT: u32 = 3;
+pub use vulkano_bindless_shaders::frame_in_flight::*;

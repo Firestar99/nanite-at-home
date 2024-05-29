@@ -1,0 +1,117 @@
+use crate::desc_buffer::{DescBuffer, DescStruct};
+use crate::descriptor::descriptor_type::{private, DescEnum, DescType};
+use crate::descriptor::metadata::Metadata;
+use core::marker::PhantomData;
+use core::mem;
+use spirv_std::byte_addressable_buffer::buffer_load_intrinsic;
+
+pub struct Buffer<T: ?Sized + DescBuffer + 'static> {
+	_phantom: PhantomData<T>,
+}
+
+impl<T: ?Sized + DescBuffer + 'static> private::SealedTrait for Buffer<T> {}
+
+impl<T: ?Sized + DescBuffer + 'static> DescType for Buffer<T> {
+	type AccessType<'a> = BufferSlice<'a, T>;
+	const DESC_ENUM: DescEnum = DescEnum::Buffer;
+}
+
+pub struct BufferSlice<'a, T: ?Sized> {
+	buffer: &'a [u32],
+	meta: Metadata,
+	_phantom: PhantomData<T>,
+}
+
+impl<'a, T: ?Sized> BufferSlice<'a, T> {
+	#[inline]
+	pub fn new(buffer: &'a [u32], meta: Metadata) -> Self {
+		Self {
+			buffer,
+			meta,
+			_phantom: PhantomData {},
+		}
+	}
+}
+
+impl<'a, T: DescStruct> BufferSlice<'a, T> {
+	/// Loads a T from the buffer.
+	pub fn load(&self) -> T {
+		unsafe {
+			T::read(
+				buffer_load_intrinsic::<T::TransferDescStruct>(self.buffer, 0),
+				self.meta,
+			)
+		}
+	}
+}
+
+impl<'a, T: DescStruct> BufferSlice<'a, [T]> {
+	/// Loads a T at an `index` offset from the buffer.
+	pub fn load(&self, index: usize) -> T {
+		let size = mem::size_of::<T::TransferDescStruct>();
+		let byte_offset = index * size;
+		let len = self.buffer.len() * 4;
+		if byte_offset + size <= len {
+			unsafe {
+				T::read(
+					buffer_load_intrinsic::<T::TransferDescStruct>(self.buffer, byte_offset as u32),
+					self.meta,
+				)
+			}
+		} else {
+			let len = len / size;
+			// TODO mispile: len and index are often wrong
+			panic!("index out of bounds: the len is {} but the index is {}", len, index);
+		}
+	}
+
+	/// Loads a T at an `index` offset from the buffer.
+	///
+	/// # Safety
+	/// `byte_index` must be in bounds of the buffer
+	pub unsafe fn load_unchecked(&self, index: usize) -> T {
+		unsafe {
+			let byte_offset = (index * mem::size_of::<T::TransferDescStruct>()) as u32;
+			T::read(
+				buffer_load_intrinsic::<T::TransferDescStruct>(self.buffer, byte_offset),
+				self.meta,
+			)
+		}
+	}
+}
+
+impl<'a, T: ?Sized> BufferSlice<'a, T> {
+	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
+	/// otherwise, it will get silently rounded down to the nearest multiple of 4.
+	///
+	/// # Safety
+	/// E must be a valid arbitrary AnyBitPattern type
+	pub unsafe fn load_at_offset<E: DescStruct>(&self, byte_offset: usize) -> E {
+		let size = mem::size_of::<E>();
+		let len = self.buffer.len() * 4;
+		if byte_offset + size <= len {
+			unsafe { self.load_at_offset_unchecked(byte_offset) }
+		} else {
+			// TODO mispile: len and byte_offset are often wrong
+			panic!(
+				"index out of bounds: the len is {} but the byte_offset is {} + size {}",
+				len, byte_offset, size
+			);
+		}
+	}
+
+	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
+	/// otherwise, it will get silently rounded down to the nearest multiple of 4.
+	///
+	/// # Safety
+	/// E must be a valid arbitrary AnyBitPattern type
+	/// `byte_index` must be in bounds of the buffer
+	pub unsafe fn load_at_offset_unchecked<E: DescStruct>(&self, byte_offset: usize) -> E {
+		unsafe {
+			E::read(
+				buffer_load_intrinsic::<E::TransferDescStruct>(self.buffer, byte_offset as u32),
+				self.meta,
+			)
+		}
+	}
+}

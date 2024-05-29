@@ -1,5 +1,9 @@
+use crate::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
+use crate::space::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
+use crate::space::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
+use crate::space::Init;
+use space_engine_shader::space::renderer::frame_data::FrameData;
 use std::sync::Arc;
-
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageCreateInfo, ImageUsage};
@@ -7,14 +11,7 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference,
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
-
-use space_engine_common::space::renderer::frame_data::FrameData;
-
-use crate::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
-use crate::space::renderer::model::texture_manager::TextureManager;
-use crate::space::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
-use crate::space::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
-use crate::space::Init;
+use vulkano_bindless::frame_manager::PrevFrameFuture;
 
 pub struct RenderPipelineMain {
 	pub init: Arc<Init>,
@@ -24,11 +21,11 @@ pub struct RenderPipelineMain {
 }
 
 impl RenderPipelineMain {
-	pub fn new(init: &Arc<Init>, texture_manager: &Arc<TextureManager>, output_format: Format) -> Arc<Self> {
+	pub fn new(init: &Arc<Init>, output_format: Format) -> Arc<Self> {
 		// always available
 		let depth_format = Format::D32_SFLOAT;
 
-		let opaque_task = OpaqueRenderTask::new(&init, &texture_manager, output_format, depth_format);
+		let opaque_task = OpaqueRenderTask::new(init, output_format, depth_format);
 		Arc::new(Self {
 			init: init.clone(),
 			output_format,
@@ -85,7 +82,7 @@ impl RendererMain {
 
 	pub fn new_frame<F>(&mut self, frame_data: FrameData, output_image: Arc<ImageView>, f: F)
 	where
-		F: FnOnce(&FrameContext, RendererMainFrame) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
+		F: FnOnce(&FrameContext, PrevFrameFuture, RendererMainFrame) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
 	{
 		self.image_supported(&output_image).unwrap();
 		let extent = output_image.image().extent();
@@ -95,12 +92,13 @@ impl RendererMain {
 			depth_range: 0f32..=1f32,
 		};
 		self.render_context_new_frame
-			.new_frame(viewport, frame_data, |frame_context| {
+			.new_frame(viewport, frame_data, |frame_context, prev_frame_future| {
 				f(
-					&frame_context,
+					frame_context,
+					prev_frame_future,
 					RendererMainFrame {
 						pipeline: &self.pipeline,
-						frame_context: &frame_context,
+						frame_context,
 						resources: &self.resources,
 						output_image,
 					},
@@ -119,12 +117,11 @@ pub struct RendererMainFrame<'a> {
 impl<'a> RendererMainFrame<'a> {
 	pub fn record(self, future_await: impl GpuFuture) -> impl GpuFuture {
 		let r = self.resources;
-		let p = &*self.pipeline;
+		let p = self.pipeline;
 		let c = self.frame_context;
 
-		let future = future_await;
-		let future = p.opaque_task.record(c, &self.output_image, &r.depth_image, future);
-		future
+		p.opaque_task
+			.record(c, &self.output_image, &r.depth_image, future_await)
 	}
 }
 

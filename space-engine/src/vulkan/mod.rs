@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
+use crate::application_config::ApplicationConfig;
+use crate::generate_application_config;
 use smallvec::SmallVec;
+use std::sync::Arc;
 use vulkano::device::Queue;
 use vulkano::sync::Sharing;
 use vulkano::sync::Sharing::{Concurrent, Exclusive};
-
-use crate::application_config::ApplicationConfig;
-use crate::generate_application_config;
 
 pub mod debug;
 pub mod init;
@@ -24,7 +22,7 @@ pub const ENGINE_APPLICATION_CONFIG: ApplicationConfig = generate_application_co
 /// as for small sizes of typically 2-3 it's not worth creating one.
 pub fn concurrent_sharing<const N: usize>(queues: &[&Arc<Queue>]) -> Sharing<SmallVec<[u32; N]>> {
 	let mut ret = SmallVec::<[u32; N]>::new();
-	for x in queues.into_iter().map(|q| q.queue_family_index()) {
+	for x in queues.iter().map(|q| q.queue_family_index()) {
 		if !ret.contains(&x) {
 			ret.push(x);
 		}

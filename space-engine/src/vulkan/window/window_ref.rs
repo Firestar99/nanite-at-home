@@ -1,5 +1,4 @@
 use std::sync::Arc;
-
 use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
 

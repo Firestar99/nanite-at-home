@@ -1,37 +1,91 @@
-use glam::{Vec2, Vec4};
-use spirv_std::{spirv, Image, RuntimeArray, Sampler};
+use crate::space::renderer::frame_data::FrameData;
+use crate::space::renderer::model::gpu_model::OpaqueGpuModel;
+use glam::{UVec3, Vec2, Vec4};
+use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
+use spirv_std::image::Image2d;
+use spirv_std::Sampler;
+use static_assertions::const_assert_eq;
+use vulkano_bindless_macros::{bindless, DescStruct};
+use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
+use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
+use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 
-use space_engine_common::space::renderer::frame_data::FrameData;
-use space_engine_common::space::renderer::model::model_vertex::ModelVertex;
-
-#[spirv(vertex)]
-pub fn opaque_vs(
-	#[spirv(descriptor_set = 0, binding = 0, uniform)] frame_data: &FrameData,
-	#[spirv(descriptor_set = 1, binding = 0, storage_buffer)] vertex_data: &[ModelVertex],
-	#[spirv(vertex_index)] vertex_id: u32,
-	#[spirv(position, invariant)] position: &mut Vec4,
-	tex_coord: &mut Vec2,
-	tex_id: &mut u32,
-) {
-	let camera = frame_data.camera;
-	let vertex_input = vertex_data[vertex_id as usize];
-
-	let position_world = camera.transform.transform_point3(vertex_input.position.into());
-	*position = camera.perspective * Vec4::from((position_world, 1.));
-	*tex_coord = vertex_input.tex_coord;
-	*tex_id = vertex_input.tex_id.0;
+#[derive(Copy, Clone, DescStruct)]
+pub struct Params<'a> {
+	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
+	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel]>>,
+	pub sampler: TransientDesc<'a, Sampler>,
 }
 
-#[spirv(fragment)]
+#[derive(Copy, Clone)]
+pub struct Payload {
+	pub model_offset: usize,
+}
+
+#[bindless(task_ext(threads(1)))]
+pub fn opaque_task(
+	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(param_constants)] param: &Params<'static>,
+	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
+	#[spirv(task_payload_workgroup_ext)] payload: &mut Payload,
+) {
+	let global_id = global_invocation_id.x as usize;
+	// Safety: cannot use load() as a panic before emit_mesh_tasks_ext() mispiles
+	let model = unsafe { param.models.access(descriptors).load_unchecked(global_id) };
+	payload.model_offset = global_id;
+
+	unsafe {
+		emit_mesh_tasks_ext_payload(model.triangle_count, 1, 1, payload);
+	}
+}
+
+const OUTPUT_VERTICES: usize = 3;
+const OUTPUT_TRIANGLES: usize = 1;
+
+#[bindless(mesh_ext(threads(1), output_vertices = 3, output_primitives_ext = 1, output_triangles_ext))]
+pub fn opaque_mesh(
+	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(param_constants)] param: &Params<'static>,
+	#[spirv(task_payload_workgroup_ext)] payload: &Payload,
+	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
+	#[spirv(primitive_triangle_indices_ext)] indices: &mut [UVec3; OUTPUT_TRIANGLES],
+	#[spirv(position)] positions: &mut [Vec4; OUTPUT_VERTICES],
+	vert_tex_coords: &mut [Vec2; OUTPUT_VERTICES],
+	vert_texture: &mut [(StrongDesc<Image2d>, u32); OUTPUT_VERTICES],
+) {
+	unsafe {
+		set_mesh_outputs_ext(OUTPUT_VERTICES as u32, OUTPUT_TRIANGLES as u32);
+	}
+
+	let model = param.models.access(descriptors).load(payload.model_offset);
+	let index_buffer = model.index_buffer.access(descriptors);
+	let vertex_buffer = model.vertex_buffer.access(descriptors);
+
+	let frame_data = param.frame_data.access(descriptors).load();
+	let camera = frame_data.camera;
+	for i in 0..OUTPUT_VERTICES {
+		let vertex_id = index_buffer.load(global_invocation_id.x as usize * 3 + i);
+		let vertex_input = vertex_buffer.load(vertex_id as usize);
+		let position_world = camera.transform.transform_point3(vertex_input.position.into());
+		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
+		vert_tex_coords[i] = vertex_input.tex_coord;
+		vert_texture[i].0 = vertex_input.tex_id;
+	}
+
+	const_assert_eq!(OUTPUT_TRIANGLES, 1);
+	indices[0] = UVec3::new(0, 1, 2);
+}
+
+#[bindless(fragment())]
 pub fn opaque_fs(
-	#[spirv(descriptor_set = 1, binding = 1)] sampler: &Sampler,
-	#[spirv(descriptor_set = 2, binding = 0)] images: &RuntimeArray<Image!(2D, type=f32, sampled)>,
-	tex_coord: Vec2,
-	#[spirv(flat)] tex_id: u32,
+	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(param_constants)] param: &Params<'static>,
+	vert_tex_coords: Vec2,
+	#[spirv(flat)] vert_texture: (StrongDesc<Image2d>, u32),
 	output: &mut Vec4,
 ) {
-	let image = unsafe { images.index(tex_id as usize) };
-	*output = image.sample(*sampler, tex_coord);
+	let image: &Image2d = vert_texture.0.access(descriptors);
+	*output = image.sample(*param.sampler.access(descriptors), vert_tex_coords);
 	if output.w < 0.01 {
 		spirv_std::arch::kill();
 	}

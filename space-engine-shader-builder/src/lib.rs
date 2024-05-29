@@ -1,8 +1,15 @@
-pub use shader_symbols_builder;
-pub use shader_symbols_builder::spirv_builder;
-use shader_symbols_builder::spirv_builder::Capability;
-use shader_symbols_builder::ShaderSymbolsBuilder;
+use vulkano_bindless_shader_builder::spirv_builder::{Capability, ShaderPanicStrategy, SpirvMetadata};
+use vulkano_bindless_shader_builder::ShaderSymbolsBuilder;
+
+pub use vulkano_bindless_shader_builder;
 
 pub fn shader_symbols_builder_configured_for_space_engine(shader_crate: &str) -> ShaderSymbolsBuilder {
-	ShaderSymbolsBuilder::new(shader_crate, "spirv-unknown-vulkan1.2").capability(Capability::RuntimeDescriptorArray)
+	ShaderSymbolsBuilder::new(shader_crate, "spirv-unknown-vulkan1.2")
+		.capability(Capability::MeshShadingEXT)
+		.extension("SPV_EXT_mesh_shader")
+		.spirv_metadata(SpirvMetadata::Full)
+		.shader_panic_strategy(ShaderPanicStrategy::DebugPrintfThenExit {
+			print_inputs: true,
+			print_backtrace: true,
+		})
 }

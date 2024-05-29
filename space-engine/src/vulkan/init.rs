@@ -1,20 +1,21 @@
-use std::cmp;
-use std::sync::Arc;
-
-use smallvec::SmallVec;
-use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
-use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
-use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo};
-use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
-use vulkano::memory::allocator::StandardMemoryAllocator;
-use vulkano::{Version, VulkanLibrary};
-
 use crate::application_config::ApplicationConfig;
 use crate::vulkan::debug::Debug;
 use crate::vulkan::pipeline_cache::SpacePipelineCache;
 use crate::vulkan::validation_layers::ValidationLayers;
 use crate::vulkan::ENGINE_APPLICATION_CONFIG;
+use smallvec::SmallVec;
+use std::cmp;
+use std::sync::Arc;
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
+use vulkano::descriptor_set::allocator::{StandardDescriptorSetAllocator, StandardDescriptorSetAllocatorCreateInfo};
+use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
+use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, DeviceFeatures, Queue, QueueCreateInfo};
+use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions, InstanceOwned};
+use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano::shader::ShaderStages;
+use vulkano::{Version, VulkanLibrary};
+use vulkano_bindless::descriptor::bindless::Bindless;
+use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
 
 pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.
@@ -31,8 +32,8 @@ pub trait Plugin {
 	/// Return what DeviceExtensions and Features you would like to be enabled.
 	/// Note that you must check that said DeviceExtensions or Features are available on the
 	/// PhysicalDevice, requesting something that the PhysicalDevice does not support will panic!
-	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, Features) {
-		(DeviceExtensions::empty(), Features::empty())
+	fn device_config(&self, _physical_device: &Arc<PhysicalDevice>) -> (DeviceExtensions, DeviceFeatures) {
+		(DeviceExtensions::empty(), DeviceFeatures::empty())
 	}
 }
 
@@ -51,6 +52,7 @@ pub trait QueueAllocation<Q: 'static> {
 pub struct Init<Q> {
 	pub device: Arc<Device>,
 	pub queues: Q,
+	pub bindless: Arc<Bindless>,
 	pub memory_allocator: Arc<StandardMemoryAllocator>,
 	pub descriptor_allocator: Arc<StandardDescriptorSetAllocator>,
 	pub cmd_buffer_allocator: Arc<StandardCommandBufferAllocator>,
@@ -63,6 +65,8 @@ impl<Q: Clone> Init<Q> {
 		application_config: ApplicationConfig,
 		plugins: &[&dyn Plugin],
 		queue_allocator: ALLOCATOR,
+		stages: ShaderStages,
+		descriptor_counts: impl FnOnce(&Arc<PhysicalDevice>) -> DescriptorCounts,
 	) -> Arc<Self>
 	where
 		Q: 'static,
@@ -133,7 +137,7 @@ impl<Q: Clone> Init<Q> {
 		let (device_extensions, device_features) = plugins
 			.iter()
 			.map(|p| p.device_config(&physical_device))
-			.fold((DeviceExtensions::empty(), Features::empty()), |a, b| {
+			.fold((DeviceExtensions::empty(), DeviceFeatures::empty()), |a, b| {
 				(a.0 | b.0, a.1 | b.1)
 			});
 
@@ -151,6 +155,8 @@ impl<Q: Clone> Init<Q> {
 		.unwrap();
 		let queues = allocation.take(queues.collect());
 
+		// Safety: it's the only instance for the device
+		let bindless = unsafe { Bindless::new(device.clone(), stages, descriptor_counts(device.physical_device())) };
 		let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 		let descriptor_allocator = Arc::new(StandardDescriptorSetAllocator::new(
 			device.clone(),
@@ -162,6 +168,7 @@ impl<Q: Clone> Init<Q> {
 		Arc::new(Self {
 			device,
 			queues,
+			bindless,
 			memory_allocator,
 			descriptor_allocator,
 			cmd_buffer_allocator,
@@ -176,5 +183,11 @@ impl<Q: Clone> Init<Q> {
 
 	pub fn library(&self) -> &Arc<VulkanLibrary> {
 		self.device.instance().library()
+	}
+}
+
+impl<Q: Clone> AsRef<Bindless> for Init<Q> {
+	fn as_ref(&self) -> &Bindless {
+		&self.bindless
 	}
 }

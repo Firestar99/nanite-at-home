@@ -6,7 +6,13 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+loom_tests = []
+
 [dependencies]
+# members
+vulkano-bindless-shaders = { workspace = true }
+
 # vulkan
 vulkano = { workspace = true }
 vulkano-shaders = { workspace = true }
@@ -29,6 +35,15 @@ num-derive = { workspace = true }
 
 # other
 parking_lot = { workspace = true }
+parking_lot_core = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
+loom = { workspace = true }
+ahash = { workspace = true }
+crossbeam-queue = { workspace = true }
+crossbeam-utils = { workspace = true }
+rangemap = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }

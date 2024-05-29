@@ -1,69 +1,46 @@
+use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
+use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
 use std::ops::Deref;
 use std::sync::Arc;
-
-use smallvec::smallvec;
 use vulkano::command_buffer::RecordingCommandBuffer;
-use vulkano::descriptor_set::layout::DescriptorSetLayout;
 use vulkano::format::Format;
-use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
+use vulkano::image::sampler::SamplerCreateInfo;
+use vulkano::pipeline::graphics::color_blend::{
+	AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
+};
 use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
-use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
-use vulkano::pipeline::graphics::vertex_input::VertexInputState;
 use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
-use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
-use vulkano::pipeline::{
-	DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
+use vulkano::pipeline::DynamicState;
+use vulkano_bindless::descriptor::rc_reference::RCDesc;
+use vulkano_bindless::descriptor::{Buffer, Sampler};
+use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
+	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
 
-use crate::shader::space::renderer::lod_obj::opaque_shader::{opaque_fs, opaque_vs};
-use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
-use crate::space::renderer::model::model::OpaqueModel;
-use crate::space::renderer::model::model_descriptor_set::ModelDescriptorSetLayout;
-use crate::space::renderer::model::texture_array_descriptor_set::{
-	TextureArrayDescriptorSet, TextureArrayDescriptorSetLayout,
-};
+use crate::shader::space::renderer::lod_obj::opaque_shader;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 
 #[derive(Clone)]
 pub struct OpaqueDrawPipeline {
-	pipeline: Arc<GraphicsPipeline>,
+	pipeline: BindlessMeshGraphicsPipeline<Params<'static>>,
+	sampler: RCDesc<Sampler>,
 }
 
 impl OpaqueDrawPipeline {
 	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
-		let device = &init.device;
-		let layout = PipelineLayout::new(
-			device.clone(),
-			PipelineLayoutCreateInfo {
-				set_layouts: [
-					GlobalDescriptorSetLayout::new(init).0,
-					ModelDescriptorSetLayout::new(init).0,
-					TextureArrayDescriptorSetLayout::new(init).0,
-				]
-				.to_vec(),
-				..PipelineLayoutCreateInfo::default()
-			},
-		)
-		.unwrap();
-
-		let pipeline = GraphicsPipeline::new(
-			device.clone(),
-			Some(init.pipeline_cache.deref().clone()),
-			GraphicsPipelineCreateInfo {
-				stages: smallvec![
-					PipelineShaderStageCreateInfo::new(opaque_vs::new(device.clone())),
-					PipelineShaderStageCreateInfo::new(opaque_fs::new(device.clone())),
-				],
-				vertex_input_state: Some(VertexInputState::default()),
-				input_assembly_state: Some(InputAssemblyState::default()),
-				rasterization_state: Some(RasterizationState::default()),
-				viewport_state: Some(ViewportState::default()),
-				multisample_state: Some(MultisampleState::default()),
+		let pipeline = BindlessMeshGraphicsPipeline::new_task(
+			init.bindless.clone(),
+			opaque_shader::opaque_task::new(),
+			opaque_shader::opaque_mesh::new(),
+			opaque_shader::opaque_fs::new(),
+			MeshGraphicsPipelineCreateInfo {
+				rasterization_state: RasterizationState::default(),
+				viewport_state: ViewportState::default(),
+				multisample_state: MultisampleState::default(),
 				depth_stencil_state: Some(DepthStencilState {
 					depth: Some(DepthState {
 						write_enable: true,
@@ -73,7 +50,14 @@ impl OpaqueDrawPipeline {
 				}),
 				color_blend_state: Some(ColorBlendState {
 					attachments: vec![ColorBlendAttachmentState {
-						blend: Some(AttachmentBlend::alpha()),
+						blend: Some(AttachmentBlend {
+							src_color_blend_factor: BlendFactor::One,
+							dst_color_blend_factor: BlendFactor::Zero,
+							color_blend_op: BlendOp::Add,
+							src_alpha_blend_factor: BlendFactor::One,
+							dst_alpha_blend_factor: BlendFactor::Zero,
+							alpha_blend_op: BlendOp::Add,
+						}),
 						..ColorBlendAttachmentState::default()
 					}],
 					..Default::default()
@@ -84,46 +68,43 @@ impl OpaqueDrawPipeline {
 					..PipelineRenderingCreateInfo::default()
 				})
 				.into(),
+				discard_rectangle_state: None,
 				dynamic_state: [DynamicState::Viewport].into_iter().collect(),
-				..GraphicsPipelineCreateInfo::layout(layout)
+				conservative_rasterization_state: None,
 			},
+			Some(init.pipeline_cache.deref().clone()),
+			Some(init.bindless.get_pipeline_layout::<Params<'static>>().unwrap().clone()),
 		)
 		.unwrap();
 
-		Self { pipeline }
+		let sampler = init
+			.bindless
+			.sampler()
+			.alloc(SamplerCreateInfo::simple_repeat_linear())
+			.unwrap();
+
+		Self { pipeline, sampler }
 	}
 
 	pub fn draw(
 		&self,
 		frame_context: &FrameContext,
 		cmd: &mut RecordingCommandBuffer,
-		model: &OpaqueModel,
-		texture_array_descriptor_set: &TextureArrayDescriptorSet,
+		models: RCDesc<Buffer<[OpaqueGpuModel]>>,
 	) {
 		unsafe {
-			cmd.bind_pipeline_graphics(self.pipeline.clone())
-				.unwrap()
-				.set_viewport(0, frame_context.viewport_smallvec())
-				.unwrap()
-				.bind_descriptor_sets(
-					PipelineBindPoint::Graphics,
-					self.pipeline.layout().clone(),
-					0,
-					(
-						frame_context.global_descriptor_set.clone().0,
-						model.descriptor.clone().0,
-						texture_array_descriptor_set.clone().0,
-					),
+			self.pipeline
+				.draw_mesh_tasks(
+					cmd,
+					[models.len() as u32, 1, 1],
+					frame_context.modify(),
+					Params {
+						frame_data: frame_context.frame_data_desc,
+						models: models.to_transient(frame_context.fif),
+						sampler: self.sampler.to_transient(frame_context.fif),
+					},
 				)
-				.unwrap()
-				.bind_index_buffer(model.index_buffer.clone())
-				.unwrap()
-				.draw_indexed(model.index_buffer.len() as u32, 1, 0, 0, 0)
 				.unwrap();
 		}
-	}
-
-	pub fn descriptor_set_layout_model(&self) -> &Arc<DescriptorSetLayout> {
-		&self.pipeline.layout().set_layouts()[1]
 	}
 }

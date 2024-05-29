@@ -8,9 +8,10 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-asteroids-common = { path = "../asteroids-common" }
-space-engine = { path = "../space-engine" }
-space-engine-common = { path = "../space-engine-common" }
+asteroids-shader = { workspace = true }
+space-engine = { workspace = true }
+space-engine-shader = { workspace = true }
+vulkano-bindless = { workspace = true }
 
 # vulkan
 vulkano = { workspace = true }
@@ -20,6 +21,9 @@ winit = { workspace = true }
 # async
 futures = { workspace = true }
 smol = { workspace = true }
+
+# model loader
+image = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }

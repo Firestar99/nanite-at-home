@@ -23,11 +23,18 @@ pub struct DeltaTimeTimer {
 	last: Instant,
 }
 
+impl Default for DeltaTimeTimer {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl DeltaTimeTimer {
 	pub fn new() -> Self {
 		Self { last: Instant::now() }
 	}
 
+	#[allow(clippy::should_implement_trait)]
 	pub fn next(&mut self) -> DeltaTime {
 		let now = Instant::now();
 		DeltaTime(now.duration_since(replace(&mut self.last, now)).as_secs_f32())
