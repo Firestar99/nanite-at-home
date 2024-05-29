@@ -183,6 +183,7 @@ impl Bindless {
 	}
 }
 
+#[derive(Debug)]
 pub enum PushConstantError {
 	TooLarge(usize),
 }

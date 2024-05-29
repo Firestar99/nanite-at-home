@@ -12,6 +12,7 @@ use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 
 #[derive(Copy, Clone, DescStruct)]
 pub struct Params<'a> {
+	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel]>>,
 	pub sampler: TransientDesc<'a, Sampler>,
 }
@@ -44,7 +45,6 @@ const OUTPUT_TRIANGLES: usize = 1;
 #[bindless(mesh_ext(threads(1), output_vertices = 3, output_primitives_ext = 1, output_triangles_ext))]
 pub fn opaque_mesh(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[spirv(descriptor_set = 1, binding = 0, uniform)] frame_data: &FrameData,
 	#[bindless(param_constants)] param: &Params<'static>,
 	#[spirv(task_payload_workgroup_ext)] payload: &Payload,
 	#[spirv(global_invocation_id)] global_invocation_id: UVec3,
@@ -61,6 +61,7 @@ pub fn opaque_mesh(
 	let index_buffer = model.index_buffer.access(descriptors);
 	let vertex_buffer = model.vertex_buffer.access(descriptors);
 
+	let frame_data = param.frame_data.access(descriptors).load();
 	let camera = frame_data.camera;
 	for i in 0..OUTPUT_VERTICES {
 		let vertex_id = index_buffer.load(global_invocation_id.x as usize * 3 + i);

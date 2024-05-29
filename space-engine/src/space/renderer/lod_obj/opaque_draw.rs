@@ -11,9 +11,7 @@ use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
-use vulkano::pipeline::PipelineBindPoint::Graphics;
-use vulkano::pipeline::{DynamicState, Pipeline, PipelineLayout};
+use vulkano::pipeline::DynamicState;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::descriptor::{Buffer, Sampler};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
@@ -21,7 +19,6 @@ use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 };
 
 use crate::shader::space::renderer::lod_obj::opaque_shader;
-use crate::space::renderer::global_descriptor_set::GlobalDescriptorSetLayout;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 
@@ -33,21 +30,6 @@ pub struct OpaqueDrawPipeline {
 
 impl OpaqueDrawPipeline {
 	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
-		let device = &init.device;
-		let layout = PipelineLayout::new(
-			device.clone(),
-			PipelineLayoutCreateInfo {
-				set_layouts: [
-					init.bindless.descriptor_set_layout.clone(),
-					GlobalDescriptorSetLayout::new(init).0,
-				]
-				.to_vec(),
-				push_constant_ranges: init.bindless.get_push_constant::<Params<'static>>(),
-				..PipelineLayoutCreateInfo::default()
-			},
-		)
-		.unwrap();
-
 		let pipeline = BindlessMeshGraphicsPipeline::new_task(
 			init.bindless.clone(),
 			opaque_shader::opaque_task::new(),
@@ -82,7 +64,7 @@ impl OpaqueDrawPipeline {
 				conservative_rasterization_state: None,
 			},
 			Some(init.pipeline_cache.deref().clone()),
-			Some(layout),
+			Some(init.bindless.get_pipeline_layout::<Params<'static>>().unwrap().clone()),
 		)
 		.unwrap();
 
@@ -106,16 +88,9 @@ impl OpaqueDrawPipeline {
 				.draw_mesh_tasks(
 					cmd,
 					[models.len() as u32, 1, 1],
-					|cmd| {
-						cmd.bind_descriptor_sets(
-							Graphics,
-							self.pipeline.layout().clone(),
-							1,
-							frame_context.global_descriptor_set.clone().0,
-						)?;
-						frame_context.modify()(cmd)
-					},
+					frame_context.modify(),
 					Params {
+						frame_data: frame_context.frame_data_desc,
 						models: models.to_transient(frame_context.fif),
 						sampler: self.sampler.to_transient(frame_context.fif),
 					},

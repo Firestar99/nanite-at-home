@@ -22,7 +22,7 @@
 //!
 
 pub mod resource;
-pub mod uniform;
+pub mod upload;
 
 pub use resource::*;
 pub use vulkano_bindless_shaders::frame_in_flight::*;

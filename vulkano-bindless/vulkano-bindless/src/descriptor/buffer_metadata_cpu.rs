@@ -1,6 +1,6 @@
+use crate::descriptor::buffer_table::StrongBackingRefs;
 use crate::descriptor::rc_reference::AnyRCDesc;
-use crate::descriptor::{Bindless, BufferTable, DescTable, ImageTable, ResourceTable, SamplerTable};
-use smallvec::SmallVec;
+use crate::descriptor::{Bindless, DescTable, ResourceTable};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -10,14 +10,6 @@ use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 use vulkano_bindless_shaders::descriptor::{DescType, ValidDesc};
-
-/// Stores [`AnyRCDesc`] to various resources, to which [`StrongDesc`] contained in some resource may refer to.
-#[derive(Clone)]
-pub struct StrongBackingRefs {
-	_buffer: SmallVec<[AnyRCDesc<BufferTable>; 4]>,
-	_image: SmallVec<[AnyRCDesc<ImageTable>; 4]>,
-	_sampler: SmallVec<[AnyRCDesc<SamplerTable>; 1]>,
-}
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
 pub struct StrongMetadataCpu {
