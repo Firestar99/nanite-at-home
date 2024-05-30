@@ -2184,6 +2184,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "space-asset"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "smallvec",
+ "space-asset-shader",
+ "static_assertions",
+]
+
+[[package]]
+name = "space-asset-pipeline"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "smallvec",
+ "space-asset",
+ "space-asset-shader",
+ "static_assertions",
+]
+
+[[package]]
+name = "space-asset-shader"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "num-derive",
+ "num-traits",
+ "spirv-std",
+ "static_assertions",
+ "vulkano-bindless-macros",
+ "vulkano-bindless-shaders",
+]
+
+[[package]]
 name = "space-engine"
 version = "0.1.0"
 dependencies = [

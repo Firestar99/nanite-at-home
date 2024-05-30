@@ -1,0 +1,20 @@
+[package]
+name = "space-asset"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# my projects
+space-asset-shader = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+
+# other
+static_assertions = { workspace = true }
+smallvec = { workspace = true }

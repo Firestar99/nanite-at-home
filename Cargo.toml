@@ -2,6 +2,9 @@
 members = [
 	"asteroids",
 	"asteroids-shader",
+	"space-asset",
+	"space-asset-pipeline",
+	"space-asset-shader",
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
@@ -27,6 +30,9 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 # members
 asteroids = { path = "asteroids" }
 asteroids-shader = { path = "asteroids-shader" }
+space-asset = { path = "space-asset" }
+space-asset-pipeline = { path = "space-asset-pipeline" }
+space-asset-shader = { path = "space-asset-shader" }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
