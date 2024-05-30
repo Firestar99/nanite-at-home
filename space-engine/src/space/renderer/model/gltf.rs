@@ -1,4 +1,5 @@
-use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::model::opaque::OpaqueModel;
+use crate::space::renderer::model::ModelVertex;
 use crate::space::Init;
 use futures::future::join_all;
 use glam::{vec4, Mat4, Vec2, Vec3};
@@ -6,7 +7,6 @@ use gltf::image::{Data, Format};
 use gltf::mesh::Mode;
 use gltf::{Document, Node, Scene};
 use image::DynamicImage;
-use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
 use std::path::Path;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;

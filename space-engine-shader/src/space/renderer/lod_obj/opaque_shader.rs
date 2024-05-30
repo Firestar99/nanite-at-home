@@ -1,5 +1,5 @@
 use crate::space::renderer::frame_data::FrameData;
-use crate::space::renderer::model::gpu_model::OpaqueGpuModel;
+use crate::space::renderer::model::OpaqueGpuModel;
 use glam::{UVec3, Vec2, Vec4};
 use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;

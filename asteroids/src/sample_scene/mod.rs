@@ -1,8 +1,8 @@
 use glam::{vec2, vec3, vec3a};
-use space_engine::space::renderer::model::model::OpaqueModel;
-use space_engine::space::renderer::model::model_gltf::load_gltf;
+use space_engine::space::renderer::model::gltf::load_gltf;
+use space_engine::space::renderer::model::opaque::OpaqueModel;
 use space_engine::space::Init;
-use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_shader::space::renderer::model::ModelVertex;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
 use vulkano_bindless::descriptor::reference::StrongDesc;

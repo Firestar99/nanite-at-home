@@ -3,7 +3,16 @@ use glam::{Vec2, Vec3, Vec3A};
 use spirv_std::image::Image2d;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::DescStruct;
+use vulkano_bindless_shaders::descriptor::buffer::Buffer;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
+
+#[repr(C)]
+#[derive(Copy, Clone, DescStruct)]
+pub struct OpaqueGpuModel {
+	pub vertex_buffer: StrongDesc<Buffer<[ModelVertex]>>,
+	pub index_buffer: StrongDesc<Buffer<[u32]>>,
+	pub triangle_count: u32,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, DescStruct)]

@@ -1,5 +1,5 @@
 use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
-use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
+use space_engine_shader::space::renderer::model::OpaqueGpuModel;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;

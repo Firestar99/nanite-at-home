@@ -1,6 +1,6 @@
 use crate::space::Init;
 use image::DynamicImage;
-use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_shader::space::renderer::model::ModelVertex;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;

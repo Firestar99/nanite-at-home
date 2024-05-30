@@ -1,9 +1,9 @@
 use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
-use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::model::opaque::OpaqueModel;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 use parking_lot::Mutex;
-use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
+use space_engine_shader::space::renderer::model::OpaqueGpuModel;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
