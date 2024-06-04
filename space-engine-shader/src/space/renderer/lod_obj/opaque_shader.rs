@@ -1,6 +1,6 @@
 use crate::space::renderer::frame_data::FrameData;
-use crate::space::renderer::model::OpaqueGpuModel;
 use glam::{UVec3, Vec2, Vec4};
+use space_asset_shader::opaque_model::OpaqueModel;
 use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;
@@ -13,7 +13,7 @@ use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
 #[derive(Copy, Clone, DescStruct)]
 pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
-	pub models: TransientDesc<'a, Buffer<[OpaqueGpuModel]>>,
+	pub models: TransientDesc<'a, Buffer<[OpaqueModel]>>,
 	pub sampler: TransientDesc<'a, Sampler>,
 }
 

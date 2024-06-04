@@ -1,5 +1,5 @@
-use crate::space::renderer::model::opaque::OpaqueModel;
-use crate::space::renderer::model::ModelVertex;
+use crate::space::renderer::model::opaque::OpaqueModelCpu;
+use crate::space::renderer::model::OpaqueVertex;
 use crate::space::Init;
 use futures::future::join_all;
 use glam::{vec4, Mat4, Vec2, Vec3};
@@ -11,11 +11,11 @@ use std::path::Path;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
 
-pub async fn load_gltf(init: &Arc<Init>, path: impl AsRef<Path>) -> Vec<OpaqueModel> {
+pub async fn load_gltf(init: &Arc<Init>, path: impl AsRef<Path>) -> Vec<OpaqueModelCpu> {
 	load_gltf_inner(init, path.as_ref()).await
 }
 
-async fn load_gltf_inner(init: &Arc<Init>, path: &Path) -> Vec<OpaqueModel> {
+async fn load_gltf_inner(init: &Arc<Init>, path: &Path) -> Vec<OpaqueModelCpu> {
 	let (document, buffers, images) = gltf::import(path).unwrap();
 
 	let scene = document.default_scene().unwrap();
@@ -28,7 +28,7 @@ async fn load_gltf_inner(init: &Arc<Init>, path: &Path) -> Vec<OpaqueModel> {
 		},
 	);
 
-	let white_image = OpaqueModel::upload_texture(
+	let white_image = OpaqueModelCpu::upload_texture(
 		init,
 		ImageUsage::SAMPLED,
 		gltf_image_to_dynamic_image(Data {
@@ -42,7 +42,7 @@ async fn load_gltf_inner(init: &Arc<Init>, path: &Path) -> Vec<OpaqueModel> {
 	let images = join_all(
 		images
 			.into_iter()
-			.map(|src| OpaqueModel::upload_texture(init, ImageUsage::SAMPLED, gltf_image_to_dynamic_image(src))),
+			.map(|src| OpaqueModelCpu::upload_texture(init, ImageUsage::SAMPLED, gltf_image_to_dynamic_image(src))),
 	)
 	.await;
 
@@ -66,13 +66,13 @@ async fn load_gltf_inner(init: &Arc<Init>, path: &Path) -> Vec<OpaqueModel> {
 					.unwrap()
 					.zip(reader.read_tex_coords(0).unwrap().into_f32())
 					.map(|(pos, tex_coord)| {
-						ModelVertex::new(mat.transform_point3(Vec3::from(pos)), Vec2::from(tex_coord), desc)
+						OpaqueVertex::new(mat.transform_point3(Vec3::from(pos)), Vec2::from(tex_coord), desc)
 					});
 
 				if let Some(model_indices) = reader.read_indices() {
-					models.push(OpaqueModel::indexed(init, model_indices.into_u32(), model_vertices));
+					models.push(OpaqueModelCpu::indexed(init, model_indices.into_u32(), model_vertices));
 				} else {
-					models.push(OpaqueModel::direct(init, model_vertices));
+					models.push(OpaqueModelCpu::direct(init, model_vertices));
 				}
 			}
 		}

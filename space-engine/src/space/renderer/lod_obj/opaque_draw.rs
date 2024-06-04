@@ -1,5 +1,5 @@
 use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
-use space_engine_shader::space::renderer::model::OpaqueGpuModel;
+use space_engine_shader::space::renderer::opaque_model::OpaqueModel;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -90,7 +90,7 @@ impl OpaqueDrawPipeline {
 		&self,
 		frame_context: &FrameContext,
 		cmd: &mut RecordingCommandBuffer,
-		models: RCDesc<Buffer<[OpaqueGpuModel]>>,
+		models: RCDesc<Buffer<[OpaqueModel]>>,
 	) {
 		unsafe {
 			self.pipeline

@@ -1,14 +1,14 @@
 use glam::{vec2, vec3, vec3a};
 use space_engine::space::renderer::model::gltf::load_gltf;
-use space_engine::space::renderer::model::opaque::OpaqueModel;
+use space_engine::space::renderer::model::opaque::OpaqueModelCpu;
 use space_engine::space::Init;
-use space_engine_shader::space::renderer::model::ModelVertex;
+use space_engine_shader::space::renderer::opaque_model::OpaqueVertex;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
 use vulkano_bindless::descriptor::reference::StrongDesc;
 use vulkano_bindless::spirv_std::image::Image2d;
 
-pub async fn load_scene(init: &Arc<Init>) -> Vec<OpaqueModel> {
+pub async fn load_scene(init: &Arc<Init>) -> Vec<OpaqueModelCpu> {
 	let mut out = Vec::new();
 	load_rust_vulkano_logos(init, &mut out).await;
 	out.extend(
@@ -24,24 +24,24 @@ pub async fn load_scene(init: &Arc<Init>) -> Vec<OpaqueModel> {
 	out
 }
 
-pub async fn load_rust_vulkano_logos(init: &Arc<Init>, out: &mut Vec<OpaqueModel>) {
+pub async fn load_rust_vulkano_logos(init: &Arc<Init>, out: &mut Vec<OpaqueModelCpu>) {
 	let create_model = |texture: StrongDesc<Image2d>| {
 		let vertices = [
-			ModelVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), texture),
-			ModelVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), texture),
-			ModelVertex::new(vec3(1., -1., 0.), vec2(1., 0.), texture),
-			ModelVertex::new(vec3(1., 1., 0.), vec2(1., 1.), texture),
+			OpaqueVertex::new(vec3(-1., -1., 0.), vec2(0., 0.), texture),
+			OpaqueVertex::new(vec3(-1., 1., 0.), vec2(0., 1.), texture),
+			OpaqueVertex::new(vec3(1., -1., 0.), vec2(1., 0.), texture),
+			OpaqueVertex::new(vec3(1., 1., 0.), vec2(1., 1.), texture),
 		];
 		let indices = [0, 1, 2, 1, 2, 3];
 		(vertices, indices)
 	};
 
-	let vulkano_tex = OpaqueModel::upload_texture(
+	let vulkano_tex = OpaqueModelCpu::upload_texture(
 		init,
 		ImageUsage::SAMPLED,
 		image::load_from_memory(include_bytes!("vulkano_logo.png")).unwrap(),
 	);
-	let rust_mascot_tex = OpaqueModel::upload_texture(
+	let rust_mascot_tex = OpaqueModelCpu::upload_texture(
 		init,
 		ImageUsage::SAMPLED,
 		image::load_from_memory(include_bytes!("rust_mascot.png")).unwrap(),
@@ -51,14 +51,14 @@ pub async fn load_rust_vulkano_logos(init: &Arc<Init>, out: &mut Vec<OpaqueModel
 
 	// unroll indices
 	let (vertices, indices) = create_model(vulkano_tex.to_strong());
-	let vulkano_logo = OpaqueModel::direct(init, indices.map(|i| vertices[i as usize]).into_iter());
+	let vulkano_logo = OpaqueModelCpu::direct(init, indices.map(|i| vertices[i as usize]).into_iter());
 
 	// use indices
 	let (vertices, indices) = create_model(rust_mascot_tex.to_strong());
-	let rust_mascot = OpaqueModel::indexed(
+	let rust_mascot = OpaqueModelCpu::indexed(
 		init,
 		indices,
-		vertices.map(|v| ModelVertex {
+		vertices.map(|v| OpaqueVertex {
 			position: v.position + vec3a(0., 0.5, 1.),
 			..v
 		}),

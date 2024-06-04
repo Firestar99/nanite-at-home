@@ -11,6 +11,10 @@ repository.workspace = true
 space-asset = { workspace = true }
 space-asset-shader = { workspace = true }
 
+# model loader
+gltf = { workspace = true }
+image = { workspace = true }
+
 # bytes and numbers
 glam = { workspace = true }
 bytemuck = { workspace = true }
