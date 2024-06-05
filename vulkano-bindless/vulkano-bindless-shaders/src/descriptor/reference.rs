@@ -10,7 +10,7 @@ pub trait ValidDesc<D: DescType + ?Sized>: Sized {
 	fn id(&self) -> u32;
 
 	#[inline]
-	fn access<'a>(&'a self, descriptors: &'a impl DescriptorsAccess<D>) -> D::AccessType<'a> {
+	fn access<'a>(&self, descriptors: &'a impl DescriptorsAccess<D>) -> D::AccessType<'a> {
 		descriptors.access(self)
 	}
 }

@@ -1,5 +1,5 @@
+use crate::meshlet::indices::{CompressedIndices, IndicesReader, SourceGpu};
 use crate::meshlet::offset::MeshletOffset;
-use crate::meshlet::MESHLET_INDICES_BITS;
 use core::mem;
 use glam::Vec3;
 use static_assertions::const_assert_eq;
@@ -21,10 +21,6 @@ impl MeshletVertex {
 }
 
 #[derive(Copy, Clone, DescStruct)]
-#[repr(transparent)]
-pub struct MeshletCompactedIndex(pub u32);
-
-#[derive(Copy, Clone, DescStruct)]
 #[repr(C)]
 pub struct Meshlet {
 	pub vertex_offset: MeshletOffset,
@@ -37,7 +33,7 @@ const_assert_eq!(mem::size_of::<Meshlet>(), 2 * 4);
 pub struct MeshletModel {
 	pub meshlets: StrongDesc<Buffer<[Meshlet]>>,
 	pub vertices: StrongDesc<Buffer<[MeshletVertex]>>,
-	pub indices: StrongDesc<Buffer<[MeshletCompactedIndex]>>,
+	pub indices: StrongDesc<Buffer<[CompressedIndices]>>,
 }
 
 impl Meshlet {
@@ -51,65 +47,31 @@ impl Meshlet {
 			index < len,
 			"index out of bounds: the len is {len} but the index is {index}"
 		);
-		self.load_vertex_unchecked(descriptors, meshlet_model, index)
+		unsafe { self.load_vertex_unchecked(descriptors, meshlet_model, index) }
 	}
 
+	/// # Safety
+	/// must be in bounds
 	#[inline]
-	pub fn load_vertex_unchecked(
+	pub unsafe fn load_vertex_unchecked(
 		&self,
 		descriptors: &Descriptors,
 		meshlet_model: MeshletModel,
 		index: usize,
 	) -> MeshletVertex {
 		let global_index = self.vertex_offset.start() + index;
-		meshlet_model.vertices.access(descriptors).load(global_index)
+		meshlet_model.vertices.access(descriptors).load_unchecked(global_index)
 	}
 
 	pub fn triangles(&self) -> usize {
 		self.index_offset.len()
 	}
-}
 
-const INDICES_PER_WORD: usize = 32 / MESHLET_INDICES_BITS as usize;
-const INDICES_MASK: u32 = (1 << MESHLET_INDICES_BITS) - 1;
-impl Meshlet {
-	pub fn load_triangle_indices(
+	pub fn indices_reader<'a>(
 		&self,
-		descriptors: &Descriptors,
+		descriptors: &'a Descriptors,
 		meshlet_model: MeshletModel,
-		triangle: usize,
-	) -> [u32; 3] {
-		let len = self.index_offset.len();
-		assert!(
-			triangle < len,
-			"index out of bounds: the len is {len} but the index is {triangle}"
-		);
-		self.load_triangle_indices_unchecked(descriptors, meshlet_model, triangle)
-	}
-
-	pub fn load_triangle_indices_unchecked(
-		&self,
-		descriptors: &Descriptors,
-		meshlet_model: MeshletModel,
-		triangle: usize,
-	) -> [u32; 3] {
-		let indices = meshlet_model.indices.access(descriptors);
-
-		let mut index = (triangle * 3) / INDICES_PER_WORD;
-		let mut rem = (triangle * 3) % INDICES_PER_WORD;
-		let mut load = indices.load(self.index_offset.start() + index);
-		let load0 = (rem, load);
-		let mut load_next = || {
-			rem += 1;
-			if rem == INDICES_PER_WORD {
-				rem = 0;
-				index += 1;
-				load = indices.load(self.index_offset.start() + index);
-			}
-			(rem, load)
-		};
-		let loads = [load0, load_next(), load_next()];
-
-		loads.map(|(rem, load)| (load.0 >> (rem as u32 * MESHLET_INDICES_BITS)) & INDICES_MASK)
+	) -> IndicesReader<SourceGpu<'a>> {
+		IndicesReader::from_bindless(descriptors, meshlet_model, *self)
 	}
 }

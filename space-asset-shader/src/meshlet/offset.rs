@@ -10,7 +10,7 @@ const LEN_MASK: u32 = LEN_LIMIT - 1;
 const LEN_SHIFT: u32 = START_BITS;
 
 /// a "slice" into a vertex buffer, or rather the start index and len of the slice
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, DescStruct, Default)]
 #[repr(transparent)]
 pub struct MeshletOffset(u32);
 
@@ -75,5 +75,12 @@ mod tests {
 	#[should_panic(expected = "len < LEN_")]
 	fn meshlet_index_oob_len() {
 		MeshletOffset::new(0, 1 << LEN_BITS);
+	}
+
+	#[test]
+	fn meshlet_default() {
+		let offset = MeshletOffset::default();
+		assert_eq!(offset.start(), 0);
+		assert_eq!(offset.len(), 0);
 	}
 }

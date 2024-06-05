@@ -1,5 +1,6 @@
 use static_assertions::const_assert;
 
+pub mod indices;
 pub mod model;
 pub mod offset;
 
