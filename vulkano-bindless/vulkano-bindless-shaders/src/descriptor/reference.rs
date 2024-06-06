@@ -59,6 +59,11 @@ where
 }
 
 // valid
+// FIXME ValidDesc and ValidDescRef should probably collapse into one type, but I can't figure out how to do it properly
+pub trait ValidDescRef: DescRef {
+	fn id<C: DescContent + ?Sized>(desc: &Desc<Self, C>) -> u32;
+}
+
 /// A Descriptor that is valid to [`Self::access`].
 pub trait ValidDesc<C: DescContent + ?Sized>: Sized {
 	fn id(&self) -> u32;
@@ -72,11 +77,10 @@ pub trait ValidDesc<C: DescContent + ?Sized>: Sized {
 
 impl<R: DescRef, C: DescContent + ?Sized> ValidDesc<C> for Desc<R, C>
 where
-	R::Of<C>: ValidDesc<C>,
+	R: ValidDescRef,
 {
-	#[inline]
 	fn id(&self) -> u32 {
-		self.0.id()
+		R::id(self)
 	}
 }
 
@@ -89,6 +93,12 @@ const_assert_eq!(mem::size_of::<Transient>(), 0);
 
 impl<'a> DescRef for Transient<'a> {
 	type Of<C: DescContent + ?Sized> = TransientDesc<'a, C>;
+}
+
+impl<'a> ValidDescRef for Transient<'a> {
+	fn id<C: DescContent + ?Sized>(desc: &Desc<Self, C>) -> u32 {
+		desc.0.id()
+	}
 }
 
 #[repr(C)]
@@ -225,6 +235,12 @@ const_assert_eq!(mem::size_of::<Strong>(), 0);
 
 impl DescRef for Strong {
 	type Of<C: DescContent + ?Sized> = StrongDesc<C>;
+}
+
+impl ValidDescRef for Strong {
+	fn id<C: DescContent + ?Sized>(desc: &Desc<Self, C>) -> u32 {
+		desc.0.id
+	}
 }
 
 #[repr(C)]

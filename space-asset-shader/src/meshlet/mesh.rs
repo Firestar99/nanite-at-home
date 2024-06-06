@@ -4,7 +4,7 @@ use core::mem;
 use glam::Vec3;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::DescStruct;
-use vulkano_bindless_shaders::descriptor::reference::{Desc, DescRef};
+use vulkano_bindless_shaders::descriptor::reference::{Desc, DescRef, ValidDescRef};
 use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, ValidDesc};
 
 #[derive(Copy, Clone, DescStruct)]
@@ -45,12 +45,7 @@ pub struct MeshletMesh<R: DescRef> {
 	pub num_meshlets: u32,
 }
 
-impl<R: DescRef> MeshletMesh<R>
-where
-	Desc<R, Buffer<[MeshletData]>>: ValidDesc<Buffer<[MeshletData]>>,
-	Desc<R, Buffer<[MeshletVertex]>>: ValidDesc<Buffer<[MeshletVertex]>>,
-	Desc<R, Buffer<[CompressedIndices]>>: ValidDesc<Buffer<[CompressedIndices]>>,
-{
+impl<R: ValidDescRef> MeshletMesh<R> {
 	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> Meshlet<R> {
 		assert!(
 			index < self.num_meshlets as usize,
@@ -84,12 +79,7 @@ impl<R: DescRef> Meshlet<R> {
 	}
 }
 
-impl<R: DescRef> Meshlet<R>
-where
-	Desc<R, Buffer<[MeshletData]>>: ValidDesc<Buffer<[MeshletData]>>,
-	Desc<R, Buffer<[MeshletVertex]>>: ValidDesc<Buffer<[MeshletVertex]>>,
-	Desc<R, Buffer<[CompressedIndices]>>: ValidDesc<Buffer<[CompressedIndices]>>,
-{
+impl<R: ValidDescRef> Meshlet<R> {
 	pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> MeshletVertex {
 		let len = self.data.vertex_offset.len();
 		assert!(
