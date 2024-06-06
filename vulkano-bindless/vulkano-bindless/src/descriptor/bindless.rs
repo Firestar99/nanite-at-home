@@ -1,7 +1,7 @@
 use crate::descriptor::bindless_descriptor_allocator::BindlessDescriptorSetAllocator;
 use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
+use crate::descriptor::descriptor_content::DescTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::DescTable;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::resource_table::TableEpochGuard;
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};

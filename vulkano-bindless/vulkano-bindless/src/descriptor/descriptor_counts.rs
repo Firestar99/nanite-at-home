@@ -1,5 +1,5 @@
 use crate::descriptor::buffer_table::BufferTable;
-use crate::descriptor::descriptor_type_cpu::DescTable;
+use crate::descriptor::descriptor_content::DescTable;
 use crate::descriptor::image_table::ImageTable;
 use crate::descriptor::sampler_table::SamplerTable;
 use std::sync::Arc;

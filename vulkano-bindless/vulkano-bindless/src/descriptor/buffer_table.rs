@@ -1,6 +1,6 @@
 use crate::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::{AnyRCDesc, RCDesc};
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::{Bindless, ImageTable, SamplerTable};
@@ -21,11 +21,11 @@ use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
 use vulkano_bindless_shaders::desc_buffer::{DescBuffer, DescStruct};
 use vulkano_bindless_shaders::descriptor::buffer::Buffer;
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
+use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
-impl<T: DescBuffer + ?Sized> DescTypeCpu for Buffer<T>
+impl<T: DescBuffer + ?Sized> DescContentCpu for Buffer<T>
 where
 	T::TransferDescBuffer: VBufferContents,
 {
@@ -38,7 +38,7 @@ where
 }
 
 impl DescTable for BufferTable {
-	const DESC_ENUM: DescEnum = DescEnum::Buffer;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Buffer;
 	type Slot = BufferSlot;
 	type RCSlotsInterface = BufferInterface;
 

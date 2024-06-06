@@ -1,4 +1,4 @@
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::rc_reference::{AnyRCDesc, RCDesc};
 use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotIndex};
 use crate::sync::Arc;
@@ -21,12 +21,15 @@ impl<T: DescTable> ResourceTable<T> {
 		}
 	}
 
-	pub fn alloc_slot<D: DescTypeCpu<DescTable = T>>(&self, cpu_type: <D::DescTable as DescTable>::Slot) -> RCDesc<D> {
+	pub fn alloc_slot<C: DescContentCpu<DescTable = T>>(
+		&self,
+		cpu_type: <C::DescTable as DescTable>::Slot,
+	) -> RCDesc<C> {
 		let slot = self.slots.allocate(cpu_type);
 		// Safety: we'll pull from the queue later and destroy the slots
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);
-		RCDesc::<D>::new(slot)
+		RCDesc::<C>::new(slot)
 	}
 
 	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<AnyRCDesc<T>> {

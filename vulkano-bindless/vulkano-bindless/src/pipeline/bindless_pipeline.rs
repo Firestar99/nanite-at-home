@@ -8,7 +8,7 @@ use vulkano::{Validated, ValidationError, VulkanError};
 use vulkano_bindless_shaders::desc_buffer::{DescStruct, MetadataCpuInterface};
 use vulkano_bindless_shaders::descriptor::metadata::{Metadata, PushConstant};
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::DescType;
+use vulkano_bindless_shaders::descriptor::DescContent;
 
 pub trait VulkanPipeline {
 	type VulkanType: Pipeline;
@@ -134,7 +134,7 @@ impl Deref for PushConstantMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for PushConstantMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<D>) {
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, _desc: StrongDesc<C>) {
 		// ignore. The push constant is only valid during this frame, and the locking system guarantees the descriptor
 		// is valid for at least this frame as well.
 	}

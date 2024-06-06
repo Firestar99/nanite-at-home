@@ -1,5 +1,5 @@
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::Bindless;
@@ -14,11 +14,11 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::sampler::{Sampler as VSampler, SamplerCreateInfo};
 use vulkano::shader::ShaderStages;
 use vulkano::{Validated, VulkanError};
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
+use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::sampler::Sampler;
 use vulkano_bindless_shaders::descriptor::BINDING_SAMPLER;
 
-impl DescTypeCpu for Sampler {
+impl DescContentCpu for Sampler {
 	type DescTable = SamplerTable;
 	type VulkanType = Arc<VSampler>;
 
@@ -28,7 +28,7 @@ impl DescTypeCpu for Sampler {
 }
 
 impl DescTable for SamplerTable {
-	const DESC_ENUM: DescEnum = DescEnum::Sampler;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Sampler;
 	type Slot = Arc<VSampler>;
 	type RCSlotsInterface = SamplerInterface;
 

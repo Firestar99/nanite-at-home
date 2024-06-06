@@ -1,5 +1,5 @@
 pub mod buffer;
-pub mod descriptor_type;
+pub mod descriptor_content;
 pub mod descriptors;
 pub mod image;
 pub mod reference;
@@ -12,7 +12,7 @@ pub mod metadata;
 mod image_types;
 
 pub use buffer::{Buffer, BufferSlice};
-pub use descriptor_type::DescType;
+pub use descriptor_content::DescContent;
 pub use descriptors::Descriptors;
 pub use image::Image;
 pub use reference::{TransientDesc, ValidDesc, WeakDesc};

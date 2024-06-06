@@ -1,5 +1,5 @@
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::{Bindless, Image};
@@ -15,7 +15,7 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::view::{ImageView, ImageViewType};
 use vulkano::image::ImageUsage;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
+use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::image::SampleType;
 use vulkano_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
 use vulkano_bindless_shaders::spirv_std::image::Image2d;
@@ -29,7 +29,7 @@ impl<
 		const SAMPLED: u32,
 		const FORMAT: u32,
 		const COMPONENTS: u32,
-	> DescTypeCpu for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
+	> DescContentCpu for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
 {
 	type DescTable = ImageTable;
 	type VulkanType = Arc<ImageView>;
@@ -40,7 +40,7 @@ impl<
 }
 
 impl DescTable for ImageTable {
-	const DESC_ENUM: DescEnum = DescEnum::Image;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Image;
 	type Slot = Arc<ImageView>;
 	type RCSlotsInterface = ImageInterface;
 

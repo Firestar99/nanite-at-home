@@ -13,7 +13,7 @@ use vulkano::{Validated, VulkanError};
 use vulkano_bindless_shaders::desc_buffer::{DescStruct, MetadataCpuInterface};
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{Buffer, DescType, TransientDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, DescContent, TransientDesc};
 
 pub struct UploadInFlight<T: DescStruct + 'static> {
 	sub: ResourceInFlight<RCDesc<Buffer<T>>>,
@@ -111,7 +111,7 @@ impl Deref for UniformMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for UniformMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<D>) {
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, _desc: StrongDesc<C>) {
 		// don't care, will be alive for this fif anyway
 	}
 }

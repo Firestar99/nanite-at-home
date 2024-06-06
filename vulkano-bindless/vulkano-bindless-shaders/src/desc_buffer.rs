@@ -1,6 +1,6 @@
 use crate::descriptor::metadata::Metadata;
 use crate::descriptor::reference::StrongDesc;
-use crate::descriptor::DescType;
+use crate::descriptor::DescContent;
 use bytemuck::AnyBitPattern;
 use core::ops::Deref;
 
@@ -55,7 +55,7 @@ unsafe impl<T: DescStruct> DescBuffer for T {
 /// # Safety
 /// Internal interface to CPU code
 pub unsafe trait MetadataCpuInterface: Deref<Target = Metadata> {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, desc: StrongDesc<D>);
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>);
 }
 
 // impl

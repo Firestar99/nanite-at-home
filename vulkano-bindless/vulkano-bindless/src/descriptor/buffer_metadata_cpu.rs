@@ -6,10 +6,10 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano_bindless_shaders::desc_buffer::MetadataCpuInterface;
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
+use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{DescType, ValidDesc};
+use vulkano_bindless_shaders::descriptor::{DescContent, ValidDesc};
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
 pub struct StrongMetadataCpu {
@@ -43,7 +43,7 @@ impl StrongMetadataCpu {
 				.map(|(id, version)| {
 					resource_table
 						.try_get_rc(id, version)
-						.ok_or(BackingRefsError::NoLongerAlive(T::DESC_ENUM, id, version))
+						.ok_or(BackingRefsError::NoLongerAlive(T::CONTENT_ENUM, id, version))
 				})
 				.collect()
 		}
@@ -56,13 +56,13 @@ impl StrongMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for StrongMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, desc: StrongDesc<D>) {
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>) {
 		// Safety: we are on CPU
 		let version = unsafe { desc.version_cpu() };
-		match D::DESC_ENUM {
-			DescEnum::Buffer => &mut self.buffer,
-			DescEnum::Image => &mut self.image,
-			DescEnum::Sampler => &mut self.sampler,
+		match C::CONTENT_ENUM {
+			DescContentEnum::Buffer => &mut self.buffer,
+			DescContentEnum::Image => &mut self.image,
+			DescContentEnum::Sampler => &mut self.sampler,
 		}
 		.insert(desc.id(), version);
 	}
@@ -77,7 +77,7 @@ impl Deref for StrongMetadataCpu {
 }
 
 pub enum BackingRefsError {
-	NoLongerAlive(DescEnum, u32, u32),
+	NoLongerAlive(DescContentEnum, u32, u32),
 }
 
 impl Display for BackingRefsError {
