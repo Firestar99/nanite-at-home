@@ -80,42 +80,22 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 		),
 	};
 
-	let generics_decl = Generics {
-		params: item
-			.generics
-			.params
-			.iter()
-			.map(|param| match param {
-				GenericParam::Type(t) => GenericParam::Type(TypeParam {
-					bounds: t
-						.bounds
-						.iter()
-						.cloned()
-						.chain([TypeParamBound::Verbatim(quote! {
-							#crate_shaders::desc_buffer::DescStruct
-						})])
-						.collect(),
-					..t.clone()
-				}),
-				e => e.clone(),
-			})
-			.collect(),
-		..item.generics.clone()
-	};
+	let generics_decl = &item.generics;
 	let generics_ref = decl_to_ref(item.generics.params.iter());
+	let generics_where = gen_ref_tys
+		.iter()
+		.map(|ty| quote!(#ty: #crate_shaders::desc_buffer::DescStruct))
+		.collect::<Punctuated<TokenStream, Token![,]>>()
+		.into_token_stream();
 
 	let transfer_generics_decl = gen_name_gen.decl(quote! {
 		#crate_shaders::bytemuck::AnyBitPattern + Send + Sync
 	});
-	let transfer_generics_ref = if !gen_ref_tys.is_empty() {
-		let gen_ref_tys: Punctuated<TokenStream, Token![,]> = gen_ref_tys
-			.into_iter()
-			.map(|ty| quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct))
-			.collect();
-		quote!(<#gen_ref_tys>)
-	} else {
-		TokenStream::new()
-	};
+	let transfer_generics_ref = gen_ref_tys
+		.iter()
+		.map(|ty| quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct))
+		.collect::<Punctuated<TokenStream, Token![,]>>()
+		.into_token_stream();
 
 	let vis = &item.vis;
 	let ident = &item.ident;
@@ -124,8 +104,11 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 		#[derive(Copy, Clone, #crate_shaders::bytemuck_derive::AnyBitPattern)]
 		#vis struct #transfer_ident #transfer_generics_decl #transfer
 
-		unsafe impl #generics_decl #crate_shaders::desc_buffer::DescStruct for #ident #generics_ref {
-			type TransferDescStruct = #transfer_ident #transfer_generics_ref;
+		unsafe impl #generics_decl #crate_shaders::desc_buffer::DescStruct for #ident #generics_ref
+		where
+			#generics_where
+		{
+			type TransferDescStruct = #transfer_ident <#transfer_generics_ref>;
 
 			unsafe fn write_cpu(self, meta: &mut impl #crate_shaders::desc_buffer::MetadataCpuInterface) -> Self::TransferDescStruct {
 				#write_cpu
