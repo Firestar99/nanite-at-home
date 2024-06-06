@@ -1,4 +1,6 @@
+use crate::meshlet::{MESHLET_INDICES_BITS, MESHLET_TRIANGLES_BITS};
 use core::ops::{Index, Range};
+use static_assertions::const_assert;
 use vulkano_bindless_macros::DescStruct;
 
 const START_BITS: u32 = 24;
@@ -8,6 +10,9 @@ const LEN_BITS: u32 = 8;
 const LEN_LIMIT: u32 = 1 << LEN_BITS;
 const LEN_MASK: u32 = LEN_LIMIT - 1;
 const LEN_SHIFT: u32 = START_BITS;
+
+const_assert!(LEN_BITS >= MESHLET_INDICES_BITS);
+const_assert!(LEN_BITS >= MESHLET_TRIANGLES_BITS);
 
 /// a "slice" into a vertex buffer, or rather the start index and len of the slice
 #[derive(Copy, Clone, DescStruct, Default)]

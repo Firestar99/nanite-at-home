@@ -1,4 +1,4 @@
-use crate::meshlet::model::{Meshlet, MeshletModel};
+use crate::meshlet::model::{Meshlet, MeshletData, MeshletModel};
 use crate::meshlet::offset::MeshletOffset;
 use crate::meshlet::MESHLET_INDICES_BITS;
 use core::array;
@@ -20,19 +20,19 @@ pub struct IndicesReader<S: Source> {
 }
 
 impl<'a> IndicesReader<SourceSlice<'a>> {
-	pub fn from_slice(slice: &'a [CompressedIndices], meshlet: Meshlet) -> Self {
+	pub fn from_slice(slice: &'a [CompressedIndices], meshlet_data: MeshletData) -> Self {
 		Self {
-			index_offset: meshlet.index_offset,
+			index_offset: meshlet_data.index_offset,
 			source: SourceSlice(slice),
 		}
 	}
 }
 
 impl<'a> IndicesReader<SourceGpu<'a>> {
-	pub fn from_bindless(descriptors: &'a Descriptors, meshlet_model: MeshletModel, meshlet: Meshlet) -> Self {
+	pub fn from_bindless(descriptors: &'a Descriptors, meshlet: Meshlet) -> Self {
 		Self {
-			index_offset: meshlet.index_offset,
-			source: SourceGpu(meshlet_model.indices.access(descriptors)),
+			index_offset: meshlet.data.index_offset,
+			source: SourceGpu(meshlet.mesh.indices.access(descriptors)),
 		}
 	}
 }
@@ -237,7 +237,7 @@ mod tests {
 		let vec = write_indices_vec(indices.iter().copied());
 		let reader = IndicesReader::from_slice(
 			&vec,
-			Meshlet {
+			MeshletData {
 				index_offset: MeshletOffset::new(0, indices.len() / 3),
 				vertex_offset: MeshletOffset::default(),
 			},
@@ -271,7 +271,7 @@ mod tests {
 		let vec = write_indices_vec(indices.iter().copied());
 		let reader = IndicesReader::from_slice(
 			&vec,
-			Meshlet {
+			MeshletData {
 				index_offset: MeshletOffset::new(0, indices.len() / 3),
 				vertex_offset: MeshletOffset::default(),
 			},
@@ -303,7 +303,7 @@ mod tests {
 			let triangles = indices.len() / 3;
 			let reader = IndicesReader::from_slice(
 				&vec,
-				Meshlet {
+				MeshletData {
 					index_offset: MeshletOffset::new(start, triangles),
 					vertex_offset: MeshletOffset::default(),
 				},

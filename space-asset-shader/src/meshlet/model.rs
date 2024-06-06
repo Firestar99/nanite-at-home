@@ -22,56 +22,79 @@ impl MeshletVertex {
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(C)]
-pub struct Meshlet {
+pub struct MeshletData {
 	pub vertex_offset: MeshletOffset,
 	pub index_offset: MeshletOffset,
 }
-const_assert_eq!(mem::size_of::<Meshlet>(), 2 * 4);
+const_assert_eq!(mem::size_of::<MeshletData>(), 2 * 4);
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Meshlet {
+	pub data: MeshletData,
+	pub mesh: MeshletModel,
+}
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(C)]
 pub struct MeshletModel {
-	pub meshlets: StrongDesc<Buffer<[Meshlet]>>,
+	pub meshlets: StrongDesc<Buffer<[MeshletData]>>,
 	pub vertices: StrongDesc<Buffer<[MeshletVertex]>>,
 	pub indices: StrongDesc<Buffer<[CompressedIndices]>>,
+	pub num_meshlets: u32,
+}
+
+impl MeshletModel {
+	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> Meshlet {
+		assert!(
+			index < self.num_meshlets as usize,
+			"meshlet index out of bounds: the len is {} but the index is {}",
+			self.num_meshlets as usize,
+			index
+		);
+		Meshlet {
+			data: self.meshlets.access(descriptors).load(index),
+			mesh: *self,
+		}
+	}
+
+	/// # Safety
+	/// index must be in bounds
+	pub unsafe fn meshlet_unchecked(&self, descriptors: &Descriptors, index: usize) -> Meshlet {
+		Meshlet {
+			data: unsafe { self.meshlets.access(descriptors).load_unchecked(index) },
+			mesh: *self,
+		}
+	}
 }
 
 impl Meshlet {
 	pub fn vertices(&self) -> usize {
-		self.vertex_offset.len()
+		self.data.vertex_offset.len()
 	}
 
-	pub fn load_vertex(&self, descriptors: &Descriptors, meshlet_model: MeshletModel, index: usize) -> MeshletVertex {
-		let len = self.vertex_offset.len();
+	pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> MeshletVertex {
+		let len = self.data.vertex_offset.len();
 		assert!(
 			index < len,
 			"index out of bounds: the len is {len} but the index is {index}"
 		);
-		unsafe { self.load_vertex_unchecked(descriptors, meshlet_model, index) }
+		unsafe { self.load_vertex_unchecked(descriptors, index) }
 	}
 
 	/// # Safety
 	/// must be in bounds
 	#[inline]
-	pub unsafe fn load_vertex_unchecked(
-		&self,
-		descriptors: &Descriptors,
-		meshlet_model: MeshletModel,
-		index: usize,
-	) -> MeshletVertex {
-		let global_index = self.vertex_offset.start() + index;
-		meshlet_model.vertices.access(descriptors).load_unchecked(global_index)
+	pub unsafe fn load_vertex_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletVertex {
+		let global_index = self.data.vertex_offset.start() + index;
+		self.mesh.vertices.access(descriptors).load_unchecked(global_index)
 	}
 
 	pub fn triangles(&self) -> usize {
-		self.index_offset.len()
+		self.data.index_offset.len()
 	}
 
-	pub fn indices_reader<'a>(
-		&self,
-		descriptors: &'a Descriptors,
-		meshlet_model: MeshletModel,
-	) -> IndicesReader<SourceGpu<'a>> {
-		IndicesReader::from_bindless(descriptors, meshlet_model, *self)
+	pub fn indices_reader<'a>(&self, descriptors: &'a Descriptors) -> IndicesReader<SourceGpu<'a>> {
+		IndicesReader::from_bindless(descriptors, *self)
 	}
 }
