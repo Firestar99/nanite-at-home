@@ -1,4 +1,4 @@
-use crate::meshlet::model::{Meshlet, MeshletData, MeshletModel};
+use crate::meshlet::mesh::{Meshlet, MeshletData, MeshletMesh};
 use crate::meshlet::offset::MeshletOffset;
 use crate::meshlet::MESHLET_INDICES_BITS;
 use core::array;
@@ -160,7 +160,7 @@ impl<'a> Source for SourceSlice<'a> {
 pub struct SourceGpu<'a>(BufferSlice<'a, [CompressedIndices]>);
 
 impl<'a> SourceGpu<'a> {
-	pub fn new(descriptors: &'a Descriptors, meshlet_model: MeshletModel) -> Self {
+	pub fn new(descriptors: &'a Descriptors, meshlet_model: MeshletMesh) -> Self {
 		Self(meshlet_model.indices.access(descriptors))
 	}
 }

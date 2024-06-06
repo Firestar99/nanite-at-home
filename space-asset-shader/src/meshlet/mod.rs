@@ -1,7 +1,7 @@
 use static_assertions::const_assert;
 
 pub mod indices;
-pub mod model;
+pub mod mesh;
 pub mod offset;
 
 pub const MESHLET_MODEL_VERTICES_BITS: u32 = 24;

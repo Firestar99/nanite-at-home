@@ -32,19 +32,19 @@ const_assert_eq!(mem::size_of::<MeshletData>(), 2 * 4);
 #[repr(C)]
 pub struct Meshlet {
 	pub data: MeshletData,
-	pub mesh: MeshletModel,
+	pub mesh: MeshletMesh,
 }
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(C)]
-pub struct MeshletModel {
+pub struct MeshletMesh {
 	pub meshlets: StrongDesc<Buffer<[MeshletData]>>,
 	pub vertices: StrongDesc<Buffer<[MeshletVertex]>>,
 	pub indices: StrongDesc<Buffer<[CompressedIndices]>>,
 	pub num_meshlets: u32,
 }
 
-impl MeshletModel {
+impl MeshletMesh {
 	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> Meshlet {
 		assert!(
 			index < self.num_meshlets as usize,
