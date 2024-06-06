@@ -2,11 +2,20 @@ use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::SamplerTable;
 use crate::frame_in_flight::FrameInFlight;
 use crate::rc_slot::RCSlot;
-use static_assertions::assert_impl_all;
+use static_assertions::{assert_impl_all, const_assert_eq};
 use std::hash::{Hash, Hasher};
+use std::mem;
 use std::ops::Deref;
-use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{Sampler, TransientDesc, WeakDesc};
+use vulkano_bindless_shaders::descriptor::reference::{DescRef, StrongDesc};
+use vulkano_bindless_shaders::descriptor::{DescContent, Sampler, TransientDesc, WeakDesc};
+
+#[derive(Copy, Clone, Default)]
+pub struct RC;
+const_assert_eq!(mem::size_of::<RC>(), 0);
+
+impl DescRef for RC {
+	type Of<C: DescContent + ?Sized> = StrongDesc<C>;
+}
 
 pub struct RCDesc<C: DescContentCpu + ?Sized> {
 	any: AnyRCDesc<C::DescTable>,

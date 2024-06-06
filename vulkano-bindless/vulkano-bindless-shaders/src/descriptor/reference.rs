@@ -5,14 +5,90 @@ use crate::descriptor::metadata::Metadata;
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck::{AnyBitPattern, Zeroable};
 use core::marker::PhantomData;
+use core::mem;
+use core::ops::Deref;
+use static_assertions::const_assert_eq;
 
+/// See [`Desc`].
+///
+/// Must be a ZST and impl Copy and Default, but may add additional generic args if the descriptor type requires it.
+pub trait DescRef: Copy + Default {
+	type Of<C: DescContent + ?Sized>: Copy;
+}
+
+/// A generic Descriptor.
+///
+/// The T generic describes the type of descriptor this is. Think of it as representing the type of smart pointer you
+/// want to use, implemented by types similar to [`Rc`] or [`Arc`]. But it may also control when you'll have access to
+/// it, as similar to a [`Weak`] pointer the backing object could have deallocated.
+///
+/// The C generic describes the Contents that this pointer is pointing to. This may plainly be a typed [`Buffer<R>`],
+/// but could also be a `UniformConstant` like an [`Image`], [`Sampler`] or others.
+#[repr(C)]
+pub struct Desc<R: DescRef, C: DescContent + ?Sized>(pub R::Of<C>);
+
+impl<R: DescRef, C: DescContent + ?Sized> Copy for Desc<R, C> {}
+
+impl<R: DescRef, C: DescContent + ?Sized> Clone for Desc<R, C> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+
+impl<R: DescRef, C: DescContent + ?Sized> Deref for Desc<R, C> {
+	type Target = R::Of<C>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+unsafe impl<R: DescRef, C: DescContent + ?Sized> DescStruct for Desc<R, C>
+where
+	R::Of<C>: DescStruct,
+{
+	type TransferDescStruct = <R::Of<C> as DescStruct>::TransferDescStruct;
+
+	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
+		self.0.write_cpu(meta)
+	}
+
+	unsafe fn read(from: Self::TransferDescStruct, meta: Metadata) -> Self {
+		Self(<R::Of<C> as DescStruct>::read(from, meta))
+	}
+}
+
+// valid
+/// A Descriptor that is valid to [`Self::access`].
 pub trait ValidDesc<C: DescContent + ?Sized>: Sized {
 	fn id(&self) -> u32;
 
+	/// A convenience shortcut, should not be overwritten
 	#[inline]
 	fn access<'a>(&self, descriptors: &'a impl DescriptorsAccess<C>) -> C::AccessType<'a> {
 		descriptors.access(self)
 	}
+}
+
+impl<R: DescRef, C: DescContent + ?Sized> ValidDesc<C> for Desc<R, C>
+where
+	R::Of<C>: ValidDesc<C>,
+{
+	#[inline]
+	fn id(&self) -> u32 {
+		self.0.id()
+	}
+}
+
+// transient
+#[derive(Copy, Clone, Default)]
+pub struct Transient<'a> {
+	_phantom: PhantomData<&'a ()>,
+}
+const_assert_eq!(mem::size_of::<Transient>(), 0);
+
+impl<'a> DescRef for Transient<'a> {
+	type Of<C: DescContent + ?Sized> = TransientDesc<'a, C>;
 }
 
 #[repr(C)]
@@ -84,6 +160,15 @@ unsafe impl<C: DescContent + ?Sized> Zeroable for TransferTransientDesc<C> {}
 
 unsafe impl<C: DescContent + ?Sized> AnyBitPattern for TransferTransientDesc<C> {}
 
+// weak
+#[derive(Copy, Clone, Default)]
+pub struct Weak;
+const_assert_eq!(mem::size_of::<Weak>(), 0);
+
+impl DescRef for Weak {
+	type Of<C: DescContent + ?Sized> = WeakDesc<C>;
+}
+
 #[repr(C)]
 pub struct WeakDesc<C: DescContent + ?Sized> {
 	id: u32,
@@ -131,6 +216,15 @@ impl<C: DescContent + ?Sized> WeakDesc<C> {
 	pub unsafe fn upgrade_unchecked<'a>(&self) -> TransientDesc<'a, C> {
 		unsafe { TransientDesc::new(self.id) }
 	}
+}
+
+// strong
+#[derive(Copy, Clone, Default)]
+pub struct Strong;
+const_assert_eq!(mem::size_of::<Strong>(), 0);
+
+impl DescRef for Strong {
+	type Of<C: DescContent + ?Sized> = StrongDesc<C>;
 }
 
 #[repr(C)]

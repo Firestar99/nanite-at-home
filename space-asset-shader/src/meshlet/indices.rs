@@ -1,11 +1,12 @@
-use crate::meshlet::mesh::{Meshlet, MeshletData, MeshletMesh};
+use crate::meshlet::mesh::{Meshlet, MeshletData};
 use crate::meshlet::offset::MeshletOffset;
 use crate::meshlet::MESHLET_INDICES_BITS;
 use core::array;
 use core::ops::Index;
 use spirv_std::arch::IndexUnchecked;
 use vulkano_bindless_macros::DescStruct;
-use vulkano_bindless_shaders::descriptor::{BufferSlice, Descriptors, ValidDesc};
+use vulkano_bindless_shaders::descriptor::reference::{Desc, DescRef};
+use vulkano_bindless_shaders::descriptor::{Buffer, BufferSlice, Descriptors, ValidDesc};
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(transparent)]
@@ -29,7 +30,10 @@ impl<'a> IndicesReader<SourceSlice<'a>> {
 }
 
 impl<'a> IndicesReader<SourceGpu<'a>> {
-	pub fn from_bindless(descriptors: &'a Descriptors, meshlet: Meshlet) -> Self {
+	pub fn from_bindless<R: DescRef>(descriptors: &'a Descriptors, meshlet: Meshlet<R>) -> Self
+	where
+		Desc<R, Buffer<[CompressedIndices]>>: ValidDesc<Buffer<[CompressedIndices]>>,
+	{
 		Self {
 			index_offset: meshlet.data.index_offset,
 			source: SourceGpu(meshlet.mesh.indices.access(descriptors)),
@@ -158,12 +162,6 @@ impl<'a> Source for SourceSlice<'a> {
 }
 
 pub struct SourceGpu<'a>(BufferSlice<'a, [CompressedIndices]>);
-
-impl<'a> SourceGpu<'a> {
-	pub fn new(descriptors: &'a Descriptors, meshlet_model: MeshletMesh) -> Self {
-		Self(meshlet_model.indices.access(descriptors))
-	}
-}
 
 impl<'a> Source for SourceGpu<'a> {
 	fn load(&self, index: usize) -> CompressedIndices {
