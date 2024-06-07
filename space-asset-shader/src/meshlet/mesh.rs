@@ -4,8 +4,8 @@ use core::mem;
 use glam::Vec3;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::DescStruct;
-use vulkano_bindless_shaders::descriptor::reference::{Desc, DescRef, ValidDescRef};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, ValidDesc};
+use vulkano_bindless_shaders::descriptor::reference::{AliveDescRef, Desc, DescRef};
+use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors};
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(C)]
@@ -31,9 +31,9 @@ const_assert_eq!(mem::size_of::<MeshletData>(), 2 * 4);
 /// not DescStruct as this should never be read or written, only constructed when querying meshlets
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Meshlet<R: DescRef> {
+pub struct Meshlet<'a, R: DescRef> {
 	pub data: MeshletData,
-	pub mesh: MeshletMesh<R>,
+	pub mesh: &'a MeshletMesh<R>,
 }
 
 #[derive(Copy, Clone, DescStruct)]
@@ -45,7 +45,7 @@ pub struct MeshletMesh<R: DescRef> {
 	pub num_meshlets: u32,
 }
 
-impl<R: ValidDescRef> MeshletMesh<R> {
+impl<R: AliveDescRef> MeshletMesh<R> {
 	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> Meshlet<R> {
 		assert!(
 			index < self.num_meshlets as usize,
@@ -55,7 +55,7 @@ impl<R: ValidDescRef> MeshletMesh<R> {
 		);
 		Meshlet {
 			data: self.meshlets.access(descriptors).load(index),
-			mesh: *self,
+			mesh: self,
 		}
 	}
 
@@ -64,12 +64,12 @@ impl<R: ValidDescRef> MeshletMesh<R> {
 	pub unsafe fn meshlet_unchecked(&self, descriptors: &Descriptors, index: usize) -> Meshlet<R> {
 		Meshlet {
 			data: unsafe { self.meshlets.access(descriptors).load_unchecked(index) },
-			mesh: *self,
+			mesh: self,
 		}
 	}
 }
 
-impl<R: DescRef> Meshlet<R> {
+impl<'a, R: DescRef> Meshlet<'a, R> {
 	pub fn vertices(&self) -> usize {
 		self.data.vertex_offset.len()
 	}
@@ -79,7 +79,7 @@ impl<R: DescRef> Meshlet<R> {
 	}
 }
 
-impl<R: ValidDescRef> Meshlet<R> {
+impl<'a, R: AliveDescRef> Meshlet<'a, R> {
 	pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> MeshletVertex {
 		let len = self.data.vertex_offset.len();
 		assert!(
@@ -97,7 +97,7 @@ impl<R: ValidDescRef> Meshlet<R> {
 		self.mesh.vertices.access(descriptors).load_unchecked(global_index)
 	}
 
-	pub fn indices_reader<'a>(&self, descriptors: &'a Descriptors) -> IndicesReader<SourceGpu<'a>> {
-		IndicesReader::from_bindless(descriptors, *self)
+	pub fn indices_reader(&self, descriptors: &'a Descriptors) -> IndicesReader<SourceGpu<'a>> {
+		IndicesReader::from_bindless(descriptors, self)
 	}
 }

@@ -1,7 +1,7 @@
 use crate::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::rc_reference::{AnyRCDesc, RCDesc};
+use crate::descriptor::rc_reference::{RCDesc, RC};
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::{Bindless, ImageTable, SamplerTable};
 use crate::rc_slot::{RCSlotsInterface, SlotIndex};
@@ -256,10 +256,10 @@ impl RCSlotsInterface<<BufferTable as DescTable>::Slot> for BufferInterface {
 	}
 }
 
-/// Stores [`AnyRCDesc`] to various resources, to which [`StrongDesc`] contained in some resource may refer to.
+/// Stores [`RC`] to various resources, to which [`StrongDesc`] contained in some resource may refer to.
 #[derive(Clone, Default)]
 pub struct StrongBackingRefs {
-	pub _buffer: SmallVec<[AnyRCDesc<BufferTable>; 4]>,
-	pub _image: SmallVec<[AnyRCDesc<ImageTable>; 4]>,
-	pub _sampler: SmallVec<[AnyRCDesc<SamplerTable>; 1]>,
+	pub _buffer: SmallVec<[RC<BufferTable>; 4]>,
+	pub _image: SmallVec<[RC<ImageTable>; 4]>,
+	pub _sampler: SmallVec<[RC<SamplerTable>; 1]>,
 }

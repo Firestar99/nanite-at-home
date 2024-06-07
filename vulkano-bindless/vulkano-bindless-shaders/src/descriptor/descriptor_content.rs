@@ -6,7 +6,7 @@ pub(crate) mod private {
 /// * [`crate::descriptor::buffer::Buffer`]
 /// * [`crate::descriptor::image::Image`]
 /// * [`crate::descriptor::sampler::Sampler`]
-pub trait DescContent: private::SealedTrait + Send + Sync + 'static {
+pub trait DescContent: private::SealedTrait + Sized + Send + Sync + 'static {
 	type AccessType<'a>;
 
 	const CONTENT_ENUM: DescContentEnum;

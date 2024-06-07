@@ -106,6 +106,7 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 
 		unsafe impl #generics_decl #crate_shaders::desc_buffer::DescStruct for #ident #generics_ref
 		where
+			#ident #generics_ref: Copy,
 			#generics_where
 		{
 			type TransferDescStruct = #transfer_ident <#transfer_generics_ref>;

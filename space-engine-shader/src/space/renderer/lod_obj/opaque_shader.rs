@@ -8,7 +8,7 @@ use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::{bindless, DescStruct};
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc, ValidDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc};
 
 #[derive(Copy, Clone, DescStruct)]
 pub struct Params<'a> {

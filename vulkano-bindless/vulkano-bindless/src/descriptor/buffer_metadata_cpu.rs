@@ -1,5 +1,5 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
-use crate::descriptor::rc_reference::AnyRCDesc;
+use crate::descriptor::rc_reference::RC;
 use crate::descriptor::{Bindless, DescTable, ResourceTable};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -9,7 +9,7 @@ use vulkano_bindless_shaders::desc_buffer::MetadataCpuInterface;
 use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{DescContent, ValidDesc};
+use vulkano_bindless_shaders::descriptor::DescContent;
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
 pub struct StrongMetadataCpu {
@@ -34,7 +34,7 @@ impl StrongMetadataCpu {
 	}
 
 	pub fn into_backing_refs(self, bindless: &Arc<Bindless>) -> Result<StrongBackingRefs, BackingRefsError> {
-		fn convert<T: DescTable, B: FromIterator<AnyRCDesc<T>>>(
+		fn convert<T: DescTable, B: FromIterator<RC<T>>>(
 			hash_map: HashMap<u32, u32>,
 			resource_table: &ResourceTable<T>,
 		) -> Result<B, BackingRefsError> {

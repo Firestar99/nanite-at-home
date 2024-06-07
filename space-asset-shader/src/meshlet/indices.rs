@@ -5,8 +5,8 @@ use core::array;
 use core::ops::Index;
 use spirv_std::arch::IndexUnchecked;
 use vulkano_bindless_macros::DescStruct;
-use vulkano_bindless_shaders::descriptor::reference::ValidDescRef;
-use vulkano_bindless_shaders::descriptor::{BufferSlice, Descriptors, ValidDesc};
+use vulkano_bindless_shaders::descriptor::reference::AliveDescRef;
+use vulkano_bindless_shaders::descriptor::{BufferSlice, Descriptors};
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(transparent)]
@@ -30,7 +30,7 @@ impl<'a> IndicesReader<SourceSlice<'a>> {
 }
 
 impl<'a> IndicesReader<SourceGpu<'a>> {
-	pub fn from_bindless<R: ValidDescRef>(descriptors: &'a Descriptors, meshlet: Meshlet<R>) -> Self {
+	pub fn from_bindless<R: AliveDescRef>(descriptors: &'a Descriptors, meshlet: &Meshlet<'a, R>) -> Self {
 		Self {
 			index_offset: meshlet.data.index_offset,
 			source: SourceGpu(meshlet.mesh.indices.access(descriptors)),

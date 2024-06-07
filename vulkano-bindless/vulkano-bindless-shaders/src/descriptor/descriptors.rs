@@ -1,12 +1,13 @@
 use crate::desc_buffer::DescBuffer;
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::metadata::Metadata;
-use crate::descriptor::{Buffer, BufferSlice, DescContent, ValidDesc};
+use crate::descriptor::reference::{AliveDescRef, Desc};
+use crate::descriptor::{Buffer, BufferSlice, DescContent};
 use spirv_std::{RuntimeArray, Sampler};
 
 /// Some struct that facilitates access to a [`ValidDesc`] pointing to some [`DescContent`]
 pub trait DescriptorsAccess<C: DescContent + ?Sized> {
-	fn access(&self, desc: &impl ValidDesc<C>) -> C::AccessType<'_>;
+	fn access(&self, desc: &Desc<impl AliveDescRef, C>) -> C::AccessType<'_>;
 }
 
 macro_rules! decl_descriptors {
@@ -23,14 +24,14 @@ macro_rules! decl_descriptors {
 		}
 		$(
 			impl<'a> DescriptorsAccess<$storage_ty> for Descriptors<'a> {
-				fn access(&self, desc: &impl ValidDesc<$storage_ty>) -> <$storage_ty as DescContent>::AccessType<'_> {
+				fn access(&self, desc: &Desc<impl AliveDescRef, $storage_ty>) -> <$storage_ty as DescContent>::AccessType<'_> {
 					unsafe { self.$storage_name.index(desc.id() as usize) }
 				}
 			}
 		)*
 		$(
 			impl<'a> DescriptorsAccess<$sampled_ty> for Descriptors<'a> {
-				fn access(&self, desc: &impl ValidDesc<$sampled_ty>) -> <$sampled_ty as DescContent>::AccessType<'_> {
+				fn access(&self, desc: &Desc<impl AliveDescRef, $sampled_ty>) -> <$sampled_ty as DescContent>::AccessType<'_> {
 					unsafe { self.$sampled_name.index(desc.id() as usize) }
 				}
 			}
@@ -40,13 +41,13 @@ macro_rules! decl_descriptors {
 standard_image_types!(decl_descriptors);
 
 impl<'a, T: ?Sized + DescBuffer + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
-	fn access(&self, desc: &impl ValidDesc<Buffer<T>>) -> <Buffer<T> as DescContent>::AccessType<'_> {
+	fn access(&self, desc: &Desc<impl AliveDescRef, Buffer<T>>) -> <Buffer<T> as DescContent>::AccessType<'_> {
 		BufferSlice::new(unsafe { self.buffers.index(desc.id() as usize) }, self.meta)
 	}
 }
 
 impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
-	fn access(&self, desc: &impl ValidDesc<Sampler>) -> <Sampler as DescContent>::AccessType<'_> {
+	fn access(&self, desc: &Desc<impl AliveDescRef, Sampler>) -> <Sampler as DescContent>::AccessType<'_> {
 		unsafe { self.samplers.index(desc.id() as usize) }
 	}
 }
