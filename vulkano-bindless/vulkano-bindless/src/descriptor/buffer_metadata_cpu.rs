@@ -1,5 +1,5 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
-use crate::descriptor::rc_reference::RC;
+use crate::descriptor::rc_reference::RCInner;
 use crate::descriptor::{Bindless, DescTable, ResourceTable};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -34,7 +34,7 @@ impl StrongMetadataCpu {
 	}
 
 	pub fn into_backing_refs(self, bindless: &Arc<Bindless>) -> Result<StrongBackingRefs, BackingRefsError> {
-		fn convert<T: DescTable, B: FromIterator<RC<T>>>(
+		fn convert<T: DescTable, B: FromIterator<RCInner<T>>>(
 			hash_map: HashMap<u32, u32>,
 			resource_table: &ResourceTable<T>,
 		) -> Result<B, BackingRefsError> {

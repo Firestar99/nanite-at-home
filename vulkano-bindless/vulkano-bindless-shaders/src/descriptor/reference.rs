@@ -21,12 +21,16 @@ pub trait DescRef: Sized {}
 /// but could also be a `UniformConstant` like an [`Image`], [`Sampler`] or others.
 #[repr(C)]
 pub struct Desc<R: DescRef, C: DescContent> {
-	r: R,
+	pub r: R,
 	_phantom: PhantomData<&'static C>,
 }
 
 impl<R: DescRef, C: DescContent> Desc<R, C> {
-	const unsafe fn new_inner(r: R) -> Self {
+	/// Creates a new Desc from some [`DescRef`]
+	///
+	/// # Safety
+	/// The C generic must match the content that the [`DescRef`] points to
+	pub const unsafe fn new_inner(r: R) -> Self {
 		Self {
 			r,
 			_phantom: PhantomData,
@@ -66,7 +70,7 @@ where
 
 /// A Descriptor that is valid to [`Desc::access`].
 pub trait AliveDescRef: DescRef {
-	fn id<C: DescContent + ?Sized>(desc: &Desc<Self, C>) -> u32;
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32;
 }
 
 impl<R: AliveDescRef, C: DescContent> Desc<R, C> {
@@ -91,18 +95,19 @@ const_assert_eq!(mem::size_of::<Transient>(), 4);
 impl<'a> DescRef for Transient<'a> {}
 
 impl<'a> AliveDescRef for Transient<'a> {
-	fn id<C: DescContent + ?Sized>(desc: &Desc<Self, C>) -> u32 {
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
 		desc.r.id
 	}
 }
 
 pub type TransientDesc<'a, C> = Desc<Transient<'a>, C>;
 
-impl<'a, C: DescContent + ?Sized> TransientDesc<'a, C> {
+impl<'a, C: DescContent> TransientDesc<'a, C> {
 	/// Create a new TransientDesc
 	///
 	/// # Safety
-	/// id must be a valid descriptor id that stays valid for the remainder of the frame
+	/// * The C generic must match the content that the [`DescRef`] points to.
+	/// * id must be a valid descriptor id that stays valid for the remainder of the frame.
 	#[inline]
 	pub const unsafe fn new(id: u32) -> Self {
 		unsafe {
@@ -147,9 +152,13 @@ impl DescRef for Weak {}
 
 pub type WeakDesc<C> = Desc<Weak, C>;
 
-impl<C: DescContent + ?Sized> WeakDesc<C> {
+impl<C: DescContent> WeakDesc<C> {
+	/// Creates a new WeakDesc
+	///
+	/// # Safety
+	/// The C generic must match the content that the [`DescRef`] points to
 	#[inline]
-	pub const fn new(id: u32, version: u32) -> WeakDesc<C> {
+	pub const unsafe fn new(id: u32, version: u32) -> WeakDesc<C> {
 		unsafe { Self::new_inner(Weak { id, version }) }
 	}
 
@@ -163,7 +172,8 @@ impl<C: DescContent + ?Sized> WeakDesc<C> {
 		self.r.version
 	}
 
-	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor is still valid.
+	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor
+	/// pointed to is still valid.
 	///
 	/// # Safety
 	/// This unsafe variant assumes the descriptor is still alive, rather than checking whether it actually is.
@@ -185,14 +195,14 @@ const_assert_eq!(mem::size_of::<Strong>(), 8);
 impl DescRef for Strong {}
 
 impl AliveDescRef for Strong {
-	fn id<C: DescContent + ?Sized>(desc: &Desc<Self, C>) -> u32 {
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
 		desc.r.id
 	}
 }
 
 pub type StrongDesc<C> = Desc<Strong, C>;
 
-impl<C: DescContent + ?Sized> StrongDesc<C> {
+impl<C: DescContent> StrongDesc<C> {
 	/// Create a new StrongDesc
 	///
 	/// # Safety
@@ -219,7 +229,7 @@ impl<C: DescContent + ?Sized> StrongDesc<C> {
 	}
 }
 
-unsafe impl<C: DescContent + ?Sized> DescStruct for StrongDesc<C> {
+unsafe impl<C: DescContent> DescStruct for StrongDesc<C> {
 	type TransferDescStruct = TransferStrong;
 
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {

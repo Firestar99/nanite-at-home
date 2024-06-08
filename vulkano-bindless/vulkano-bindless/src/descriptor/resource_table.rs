@@ -1,5 +1,5 @@
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::rc_reference::{RCDesc, RC};
+use crate::descriptor::rc_reference::{RCDesc, RCInner};
 use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
@@ -32,10 +32,10 @@ impl<T: DescTable> ResourceTable<T> {
 		RCDesc::<C>::new(slot)
 	}
 
-	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<RC<T>> {
+	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<RCInner<T>> {
 		self.slots
 			.try_get_alive_slot(SlotIndex(id as usize), version)
-			.map(RC::new)
+			.map(RCInner::new)
 	}
 }
 
