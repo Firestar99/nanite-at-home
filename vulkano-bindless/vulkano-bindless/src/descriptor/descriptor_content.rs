@@ -7,6 +7,7 @@ use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayou
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::shader::ShaderStages;
 
+use crate::descriptor::{BufferTable, ImageTable, SamplerTable};
 pub use vulkano_bindless_shaders::descriptor::descriptor_content::*;
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
@@ -41,4 +42,41 @@ pub trait DescTable: Sized {
 	);
 
 	fn lock_table(&self) -> TableEpochGuard<Self>;
+
+	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A>;
+
+	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>>;
+
+	fn table_enum_try_into<A: DescTableEnumType>(
+		table_enum: DescTableEnum<A>,
+	) -> Result<A::Type<Self>, DescTableEnum<A>>;
+}
+
+/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_ENUM`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum DescTableEnum<A: DescTableEnumType> {
+	Buffer(A::Type<BufferTable>),
+	Image(A::Type<ImageTable>),
+	Sampler(A::Type<SamplerTable>),
+}
+
+pub trait DescTableEnumType {
+	type Type<T: DescTable>;
+}
+
+impl<A: DescTableEnumType> DescTableEnum<A> {
+	#[inline]
+	pub fn new<T: DescTable>(inner: A::Type<T>) -> Self {
+		T::table_enum_new(inner)
+	}
+
+	#[inline]
+	pub fn try_deref<T: DescTable>(&self) -> Option<&A::Type<T>> {
+		T::table_enum_try_deref(self)
+	}
+
+	#[inline]
+	pub fn try_into<T: DescTable>(self) -> Result<A::Type<T>, Self> {
+		T::table_enum_try_into(self)
+	}
 }

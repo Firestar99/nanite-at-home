@@ -15,7 +15,7 @@ use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, Pipeline
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::DynamicState;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::descriptor::{Buffer, Sampler};
+use vulkano_bindless::descriptor::{Buffer, RCDescExt, Sampler};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };

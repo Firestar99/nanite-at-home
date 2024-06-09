@@ -1,5 +1,6 @@
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::rc_reference::{RCDesc, RCInner};
+use crate::descriptor::rc_reference::{AnyRCDescExt, RCDesc};
+use crate::descriptor::{AnyRCDesc, RCDescExt};
 use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
@@ -29,13 +30,16 @@ impl<T: DescTable> ResourceTable<T> {
 		// Safety: we'll pull from the queue later and destroy the slots
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);
-		RCDesc::<C>::new(slot)
+		// Safety: C matches slot
+		unsafe { RCDesc::<C>::new(slot) }
 	}
+}
 
-	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<RCInner<T>> {
+impl<T: DescTable> ResourceTable<T> {
+	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<AnyRCDesc> {
 		self.slots
 			.try_get_alive_slot(SlotIndex(id as usize), version)
-			.map(RCInner::new)
+			.map(|slot| AnyRCDesc::new::<T>(slot))
 	}
 }
 

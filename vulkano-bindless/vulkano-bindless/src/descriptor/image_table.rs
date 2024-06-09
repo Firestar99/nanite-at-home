@@ -1,4 +1,4 @@
-use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable, DescTableEnum, DescTableEnumType};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
@@ -80,8 +80,34 @@ impl DescTable for ImageTable {
 		.unwrap_err();
 	}
 
+	#[inline]
 	fn lock_table(&self) -> TableEpochGuard<Self> {
 		self.resource_table.epoch_guard()
+	}
+
+	#[inline]
+	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A> {
+		DescTableEnum::Image(inner)
+	}
+
+	#[inline]
+	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>> {
+		if let DescTableEnum::Image(v) = table_enum {
+			Some(v)
+		} else {
+			None
+		}
+	}
+
+	#[inline]
+	fn table_enum_try_into<A: DescTableEnumType>(
+		table_enum: DescTableEnum<A>,
+	) -> Result<A::Type<Self>, DescTableEnum<A>> {
+		if let DescTableEnum::Image(v) = table_enum {
+			Ok(v)
+		} else {
+			Err(table_enum)
+		}
 	}
 }
 
@@ -104,6 +130,7 @@ pub struct ImageTableAccess<'a>(pub &'a Arc<Bindless>);
 impl<'a> Deref for ImageTableAccess<'a> {
 	type Target = ImageTable;
 
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0.image
 	}

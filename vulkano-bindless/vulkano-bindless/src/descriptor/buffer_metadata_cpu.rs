@@ -1,7 +1,8 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
-use crate::descriptor::rc_reference::RCInner;
-use crate::descriptor::{Bindless, DescTable, ResourceTable};
-use std::collections::HashMap;
+use crate::descriptor::rc_reference::AnyRCDescExt;
+use crate::descriptor::{AnyRCDesc, Bindless};
+use ahash::{HashMap, HashMapExt};
+use std::collections::hash_map::Entry;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -12,63 +13,59 @@ use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 use vulkano_bindless_shaders::descriptor::DescContent;
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
-pub struct StrongMetadataCpu {
+pub struct StrongMetadataCpu<'a> {
+	bindless: &'a Arc<Bindless>,
 	metadata: Metadata,
-	buffer: HashMap<u32, u32>,
-	image: HashMap<u32, u32>,
-	sampler: HashMap<u32, u32>,
+	refs: Result<HashMap<(DescContentEnum, u32), AnyRCDesc>, BackingRefsError>,
 }
 
-impl StrongMetadataCpu {
+impl<'a> StrongMetadataCpu<'a> {
 	/// See [`Self`]
 	///
 	/// # Safety
 	/// You must call [`Self::into_backing_refs`] to actually retrieve the [`StrongBackingRefs`] before dropping this
-	pub unsafe fn new(metadata: Metadata) -> Self {
+	pub unsafe fn new(bindless: &'a Arc<Bindless>, metadata: Metadata) -> Self {
 		Self {
+			bindless,
 			metadata,
-			buffer: HashMap::new(),
-			image: HashMap::new(),
-			sampler: HashMap::new(),
+			refs: Ok(HashMap::new()),
 		}
 	}
 
-	pub fn into_backing_refs(self, bindless: &Arc<Bindless>) -> Result<StrongBackingRefs, BackingRefsError> {
-		fn convert<T: DescTable, B: FromIterator<RCInner<T>>>(
-			hash_map: HashMap<u32, u32>,
-			resource_table: &ResourceTable<T>,
-		) -> Result<B, BackingRefsError> {
-			hash_map
-				.into_iter()
-				.map(|(id, version)| {
-					resource_table
-						.try_get_rc(id, version)
-						.ok_or(BackingRefsError::NoLongerAlive(T::CONTENT_ENUM, id, version))
-				})
-				.collect()
-		}
-		Ok(StrongBackingRefs {
-			_buffer: convert(self.buffer, &bindless.buffer.resource_table)?,
-			_image: convert(self.image, &bindless.image.resource_table)?,
-			_sampler: convert(self.sampler, &bindless.sampler.resource_table)?,
-		})
+	pub fn into_backing_refs(self) -> Result<StrongBackingRefs, BackingRefsError> {
+		Ok(StrongBackingRefs(self.refs?.into_values().collect()))
 	}
 }
 
-unsafe impl MetadataCpuInterface for StrongMetadataCpu {
+unsafe impl<'a> MetadataCpuInterface for StrongMetadataCpu<'a> {
 	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>) {
-		// Safety: we are on CPU
-		let version = unsafe { desc.version_cpu() };
-		match C::CONTENT_ENUM {
-			DescContentEnum::Buffer => &mut self.buffer,
-			DescContentEnum::Image => &mut self.image,
-			DescContentEnum::Sampler => &mut self.sampler,
+		if let Ok(refs) = &mut self.refs {
+			let id = desc.id();
+			let version = unsafe { desc.version_cpu() };
+			match refs.entry((C::CONTENT_ENUM, desc.id())) {
+				Entry::Occupied(rc) => {
+					if rc.get().version() != version {
+						self.refs = Err(BackingRefsError::NoLongerAlive(C::CONTENT_ENUM, id, version))
+					}
+				}
+				Entry::Vacant(v) => {
+					let rc = match C::CONTENT_ENUM {
+						DescContentEnum::Buffer => self.bindless.buffer().resource_table.try_get_rc(id, version),
+						DescContentEnum::Image => self.bindless.image().resource_table.try_get_rc(id, version),
+						DescContentEnum::Sampler => self.bindless.sampler().resource_table.try_get_rc(id, version),
+					};
+					if let Some(rc) = rc {
+						v.insert(rc);
+					} else {
+						self.refs = Err(BackingRefsError::NoLongerAlive(C::CONTENT_ENUM, id, version))
+					}
+				}
+			}
 		}
-		.insert(desc.id(), version);
 	}
 }
 
-impl Deref for StrongMetadataCpu {
+impl<'a> Deref for StrongMetadataCpu<'a> {
 	type Target = Metadata;
 
 	fn deref(&self) -> &Self::Target {

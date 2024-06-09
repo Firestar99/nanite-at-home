@@ -9,12 +9,12 @@ pub mod rc_reference;
 pub mod resource_table;
 pub mod sampler_table;
 
-pub use bindless::Bindless;
-pub use buffer_table::BufferTable;
-pub use descriptor_content::{DescContentCpu, DescTable};
+pub use bindless::{Bindless, BindlessLock, PushConstantError, BINDLESS_MAX_PUSH_CONSTANT_WORDS};
+pub use buffer_table::{BufferTable, BufferTableAccess, StrongBackingRefs};
+pub use descriptor_content::{DescContent, DescContentCpu, DescContentEnum, DescTable};
 pub use descriptor_counts::DescriptorCounts;
-pub use image_table::ImageTable;
-pub use rc_reference::RCDesc;
+pub use image_table::{ImageTable, ImageTableAccess};
+pub use rc_reference::{AnyRCDesc, AnyRCDescExt, RCDesc, RCDescExt, RC};
 pub use resource_table::ResourceTable;
-pub use sampler_table::SamplerTable;
+pub use sampler_table::{SamplerTable, SamplerTableAccess};
 pub use vulkano_bindless_shaders::descriptor::*;

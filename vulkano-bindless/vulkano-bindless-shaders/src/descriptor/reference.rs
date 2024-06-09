@@ -4,12 +4,20 @@ use crate::descriptor::descriptors::DescriptorsAccess;
 use crate::descriptor::metadata::Metadata;
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
+use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::mem;
+use core::ops::Deref;
 use static_assertions::const_assert_eq;
 
 /// See [`Desc`].
 pub trait DescRef: Sized {}
+
+pub trait DerefDescRef<C: DescContent>: DescRef {
+	type Target;
+
+	fn deref(desc: &Desc<Self, C>) -> &Self::Target;
+}
 
 /// A generic Descriptor.
 ///
@@ -30,17 +38,24 @@ impl<R: DescRef, C: DescContent> Desc<R, C> {
 	///
 	/// # Safety
 	/// The C generic must match the content that the [`DescRef`] points to
+	#[inline]
 	pub const unsafe fn new_inner(r: R) -> Self {
 		Self {
 			r,
 			_phantom: PhantomData,
 		}
 	}
+
+	#[inline]
+	pub fn into_any(self) -> AnyDesc<R> {
+		AnyDesc::new_inner(self.r)
+	}
 }
 
 impl<R: DescRef + Copy, C: DescContent> Copy for Desc<R, C> {}
 
 impl<R: DescRef + Clone, C: DescContent> Clone for Desc<R, C> {
+	#[inline]
 	fn clone(&self) -> Self {
 		Self {
 			r: self.r.clone(),
@@ -49,26 +64,110 @@ impl<R: DescRef + Clone, C: DescContent> Clone for Desc<R, C> {
 	}
 }
 
+impl<R: DerefDescRef<C>, C: DescContent> Deref for Desc<R, C> {
+	type Target = R::Target;
+
+	fn deref(&self) -> &Self::Target {
+		R::deref(self)
+	}
+}
+
+impl<R: DescRef + Hash, C: DescContent> Hash for Desc<R, C> {
+	#[inline]
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.r.hash(state)
+	}
+}
+
+impl<R: DescRef + PartialEq, C: DescContent> PartialEq for Desc<R, C> {
+	#[inline]
+	fn eq(&self, other: &Self) -> bool {
+		self.r == other.r
+	}
+}
+
+impl<R: DescRef + Eq, C: DescContent> Eq for Desc<R, C> {}
+
 unsafe impl<R: DescRef, C: DescContent> DescStruct for Desc<R, C>
 where
 	R: DescStruct,
 {
 	type TransferDescStruct = R::TransferDescStruct;
 
+	#[inline]
 	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		// Safety: delegated
 		unsafe { self.r.write_cpu(meta) }
 	}
 
+	#[inline]
 	unsafe fn read(from: Self::TransferDescStruct, meta: Metadata) -> Self {
 		// Safety: delegated
 		unsafe { Self::new_inner(R::read(from, meta)) }
 	}
 }
 
-// alive
+/// AnyDesc is a [`Desc`] that does not care for the contents the reference is pointing to, only for the reference
+/// existing. This is particularly useful with RC (reference counted), to keep content alive without having to know what
+/// it is. Create using [`Desc::into_any`]
+#[repr(C)]
+pub struct AnyDesc<R: DescRef> {
+	pub r: R,
+}
 
-/// A Descriptor that is valid to [`Desc::access`].
+impl<R: DescRef> AnyDesc<R> {
+	/// Creates a new AnyDesc from some [`DescRef`]
+	#[inline]
+	pub const fn new_inner(r: R) -> Self {
+		Self { r }
+	}
+}
+
+impl<R: DescRef + Copy> Copy for AnyDesc<R> {}
+
+impl<R: DescRef + Clone> Clone for AnyDesc<R> {
+	#[inline]
+	fn clone(&self) -> Self {
+		Self { r: self.r.clone() }
+	}
+}
+
+impl<R: DescRef + Hash> Hash for AnyDesc<R> {
+	#[inline]
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.r.hash(state)
+	}
+}
+
+impl<R: DescRef + PartialEq> PartialEq for AnyDesc<R> {
+	#[inline]
+	fn eq(&self, other: &Self) -> bool {
+		self.r == other.r
+	}
+}
+
+impl<R: DescRef + Eq> Eq for AnyDesc<R> {}
+
+unsafe impl<R: DescRef> DescStruct for AnyDesc<R>
+where
+	R: DescStruct,
+{
+	type TransferDescStruct = R::TransferDescStruct;
+
+	#[inline]
+	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
+		// Safety: delegated
+		unsafe { self.r.write_cpu(meta) }
+	}
+
+	#[inline]
+	unsafe fn read(from: Self::TransferDescStruct, meta: Metadata) -> Self {
+		// Safety: delegated
+		unsafe { Self::new_inner(R::read(from, meta)) }
+	}
+}
+
+/// A [`DescRef`] that somehow ensures the content it's pointing to is always alive, allowing it to be accessed.
 pub trait AliveDescRef: DescRef {
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32;
 }
@@ -95,6 +194,7 @@ const_assert_eq!(mem::size_of::<Transient>(), 4);
 impl<'a> DescRef for Transient<'a> {}
 
 impl<'a> AliveDescRef for Transient<'a> {
+	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
 		desc.r.id
 	}
@@ -122,10 +222,12 @@ impl<'a, C: DescContent> TransientDesc<'a, C> {
 unsafe impl<'a> DescStruct for Transient<'a> {
 	type TransferDescStruct = TransferTransient;
 
+	#[inline]
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		Self::TransferDescStruct { id: self.id }
 	}
 
+	#[inline]
 	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
 		Transient {
 			id: from.id,
@@ -195,6 +297,7 @@ const_assert_eq!(mem::size_of::<Strong>(), 8);
 impl DescRef for Strong {}
 
 impl AliveDescRef for Strong {
+	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
 		desc.r.id
 	}
@@ -232,11 +335,13 @@ impl<C: DescContent> StrongDesc<C> {
 unsafe impl<C: DescContent> DescStruct for StrongDesc<C> {
 	type TransferDescStruct = TransferStrong;
 
+	#[inline]
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		_meta.visit_strong_descriptor(self);
 		Self::TransferDescStruct { id: self.r.id }
 	}
 
+	#[inline]
 	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
 		unsafe { StrongDesc::new(from.id, 0) }
 	}

@@ -16,6 +16,7 @@ use vulkano::image::view::ImageView;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
+use vulkano_bindless::descriptor::RCDescExt;
 
 pub struct OpaqueRenderTask {
 	init: Arc<Init>,

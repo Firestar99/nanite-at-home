@@ -10,6 +10,7 @@ use image::DynamicImage;
 use std::path::Path;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
+use vulkano_bindless::descriptor::RCDescExt;
 
 pub async fn load_gltf(init: &Arc<Init>, path: impl AsRef<Path>) -> Vec<OpaqueModelCpu> {
 	load_gltf_inner(init, path.as_ref()).await

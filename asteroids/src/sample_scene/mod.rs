@@ -6,6 +6,7 @@ use space_engine_shader::space::renderer::opaque_model::OpaqueVertex;
 use std::sync::Arc;
 use vulkano::image::ImageUsage;
 use vulkano_bindless::descriptor::reference::StrongDesc;
+use vulkano_bindless::descriptor::RCDescExt;
 use vulkano_bindless::spirv_std::image::Image2d;
 
 pub async fn load_scene(init: &Arc<Init>) -> Vec<OpaqueModelCpu> {

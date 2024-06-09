@@ -1,9 +1,9 @@
 use crate::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
-use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable, DescTableEnum, DescTableEnumType};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::rc_reference::{RCDesc, RCInner};
+use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
-use crate::descriptor::{Bindless, ImageTable, SamplerTable};
+use crate::descriptor::{AnyRCDesc, Bindless};
 use crate::rc_slot::{RCSlotsInterface, SlotIndex};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
@@ -67,8 +67,34 @@ impl DescTable for BufferTable {
 		.unwrap_err();
 	}
 
+	#[inline]
 	fn lock_table(&self) -> TableEpochGuard<Self> {
 		self.resource_table.epoch_guard()
+	}
+
+	#[inline]
+	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A> {
+		DescTableEnum::Buffer(inner)
+	}
+
+	#[inline]
+	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>> {
+		if let DescTableEnum::Buffer(v) = table_enum {
+			Some(v)
+		} else {
+			None
+		}
+	}
+
+	#[inline]
+	fn table_enum_try_into<A: DescTableEnumType>(
+		table_enum: DescTableEnum<A>,
+	) -> Result<A::Type<Self>, DescTableEnum<A>> {
+		if let DescTableEnum::Buffer(v) = table_enum {
+			Ok(v)
+		} else {
+			Err(table_enum)
+		}
 	}
 }
 
@@ -96,6 +122,7 @@ pub struct BufferTableAccess<'a>(pub &'a Arc<Bindless>);
 impl<'a> Deref for BufferTableAccess<'a> {
 	type Target = BufferTable;
 
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0.buffer
 	}
@@ -151,13 +178,12 @@ impl<'a> BufferTableAccess<'a> {
 		data: T,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocFromError>> {
 		unsafe {
-			let mut meta = StrongMetadataCpu::new(Metadata);
+			let mut meta = StrongMetadataCpu::new(self.0, Metadata);
 			let buffer = VBuffer::from_data(allocator, create_info, allocation_info, T::write_cpu(data, &mut meta))
 				.map_err(AllocFromError::from_validated_alloc)?;
 			Ok(self.alloc_slot(
 				buffer,
-				meta.into_backing_refs(self.0)
-					.map_err(AllocFromError::from_backing_refs)?,
+				meta.into_backing_refs().map_err(AllocFromError::from_backing_refs)?,
 			))
 		}
 	}
@@ -174,14 +200,13 @@ impl<'a> BufferTableAccess<'a> {
 		I::IntoIter: ExactSizeIterator,
 	{
 		unsafe {
-			let mut meta = StrongMetadataCpu::new(Metadata);
+			let mut meta = StrongMetadataCpu::new(self.0, Metadata);
 			let iter = iter.into_iter().map(|i| T::write_cpu(i, &mut meta));
 			let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)
 				.map_err(AllocFromError::from_validated_alloc)?;
 			Ok(self.alloc_slot(
 				buffer,
-				meta.into_backing_refs(self.0)
-					.map_err(AllocFromError::from_backing_refs)?,
+				meta.into_backing_refs().map_err(AllocFromError::from_backing_refs)?,
 			))
 		}
 	}
@@ -258,8 +283,4 @@ impl RCSlotsInterface<<BufferTable as DescTable>::Slot> for BufferInterface {
 
 /// Stores [`RC`] to various resources, to which [`StrongDesc`] contained in some resource may refer to.
 #[derive(Clone, Default)]
-pub struct StrongBackingRefs {
-	pub _buffer: SmallVec<[RCInner<BufferTable>; 4]>,
-	pub _image: SmallVec<[RCInner<ImageTable>; 4]>,
-	pub _sampler: SmallVec<[RCInner<SamplerTable>; 1]>,
-}
+pub struct StrongBackingRefs(pub SmallVec<[AnyRCDesc; 5]>);

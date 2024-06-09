@@ -13,7 +13,7 @@ pub trait DescContent: private::SealedTrait + Sized + Send + Sync + 'static {
 }
 
 /// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_ENUM`].
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum DescContentEnum {
 	Buffer,
 	Image,
