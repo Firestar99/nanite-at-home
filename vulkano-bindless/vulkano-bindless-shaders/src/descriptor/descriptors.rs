@@ -42,7 +42,7 @@ standard_image_types!(decl_descriptors);
 
 impl<'a, T: ?Sized + DescBuffer + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 	fn access(&self, desc: &Desc<impl AliveDescRef, Buffer<T>>) -> <Buffer<T> as DescContent>::AccessType<'_> {
-		BufferSlice::new(unsafe { self.buffers.index(desc.id() as usize) }, self.meta)
+		unsafe { BufferSlice::new(self.buffers.index(desc.id() as usize), self.meta) }
 	}
 }
 

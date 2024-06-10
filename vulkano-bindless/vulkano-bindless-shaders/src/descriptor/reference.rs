@@ -11,7 +11,7 @@ use core::ops::Deref;
 use static_assertions::const_assert_eq;
 
 /// See [`Desc`].
-pub trait DescRef: Sized {}
+pub trait DescRef: Sized + Send + Sync {}
 
 pub trait DerefDescRef<C: DescContent>: DescRef {
 	type Target;
