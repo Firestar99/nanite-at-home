@@ -1,4 +1,6 @@
 #![no_std]
+// otherwise you won't see any warnings
+#![deny(warnings)]
 
 #[cfg(test)]
 extern crate alloc;

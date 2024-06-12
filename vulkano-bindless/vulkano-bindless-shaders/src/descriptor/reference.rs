@@ -290,7 +290,7 @@ impl<C: DescContent> WeakDesc<C> {
 pub struct Strong {
 	id: u32,
 	/// internal value only used on the CPU to validate that slot wasn't reused
-	version: u32,
+	_version: u32,
 }
 const_assert_eq!(mem::size_of::<Strong>(), 8);
 
@@ -312,7 +312,7 @@ impl<C: DescContent> StrongDesc<C> {
 	/// id must be a valid descriptor id that is somehow ensured to stay valid for as long as this StrongDesc exists
 	#[inline]
 	pub const unsafe fn new(id: u32, version: u32) -> Self {
-		unsafe { Self::new_inner(Strong { id, version }) }
+		unsafe { Self::new_inner(Strong { id, _version: version }) }
 	}
 
 	/// Get the version
@@ -321,7 +321,7 @@ impl<C: DescContent> StrongDesc<C> {
 	/// only available on the cpu
 	#[cfg(not(target_arch = "spirv"))]
 	pub unsafe fn version_cpu(&self) -> u32 {
-		self.r.version
+		self.r._version
 	}
 
 	#[inline]
