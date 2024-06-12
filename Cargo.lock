@@ -121,7 +121,6 @@ dependencies = [
 name = "asteroids"
 version = "0.1.0"
 dependencies = [
- "asteroids-shader",
  "bytemuck",
  "bytemuck_derive",
  "futures",
@@ -140,20 +139,6 @@ dependencies = [
  "vulkano-bindless",
  "vulkano-shaders",
  "winit",
-]
-
-[[package]]
-name = "asteroids-shader"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "bytemuck_derive",
- "glam",
- "num-derive",
- "num-traits",
- "space-engine-shader",
- "spirv-std",
- "static_assertions",
 ]
 
 [[package]]

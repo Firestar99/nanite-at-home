@@ -8,7 +8,6 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-asteroids-shader = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
