@@ -91,3 +91,4 @@ fabric.properties
 .idea/**/deployment.xml
 *.autosave.xopp
 pipeline_cache.bin
+rustc-ice*.txt

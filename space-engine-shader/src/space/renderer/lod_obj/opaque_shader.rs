@@ -55,25 +55,25 @@ pub fn opaque_mesh(
 ) {
 	unsafe {
 		set_mesh_outputs_ext(OUTPUT_VERTICES as u32, OUTPUT_TRIANGLES as u32);
+
+		let model = param.models.access(descriptors).load(payload.model_offset);
+		let index_buffer = model.index_buffer.access(descriptors);
+		let vertex_buffer = model.vertex_buffer.access(descriptors);
+
+		let frame_data = param.frame_data.access(descriptors).load();
+		let camera = frame_data.camera;
+		for i in 0..OUTPUT_VERTICES {
+			let vertex_id = index_buffer.load_unchecked(global_invocation_id.x as usize * 3 + i);
+			let vertex_input = vertex_buffer.load_unchecked(vertex_id as usize);
+			let position_world = camera.transform.transform_point3(vertex_input.position.into());
+			positions[i] = camera.perspective * Vec4::from((position_world, 1.));
+			vert_tex_coords[i] = vertex_input.tex_coord;
+			vert_texture[i].0 = vertex_input.tex_id;
+		}
+
+		const_assert_eq!(OUTPUT_TRIANGLES, 1);
+		indices[0] = UVec3::new(0, 1, 2);
 	}
-
-	let model = param.models.access(descriptors).load(payload.model_offset);
-	let index_buffer = model.index_buffer.access(descriptors);
-	let vertex_buffer = model.vertex_buffer.access(descriptors);
-
-	let frame_data = param.frame_data.access(descriptors).load();
-	let camera = frame_data.camera;
-	for i in 0..OUTPUT_VERTICES {
-		let vertex_id = index_buffer.load(global_invocation_id.x as usize * 3 + i);
-		let vertex_input = vertex_buffer.load(vertex_id as usize);
-		let position_world = camera.transform.transform_point3(vertex_input.position.into());
-		positions[i] = camera.perspective * Vec4::from((position_world, 1.));
-		vert_tex_coords[i] = vertex_input.tex_coord;
-		vert_texture[i].0 = vertex_input.tex_id;
-	}
-
-	const_assert_eq!(OUTPUT_TRIANGLES, 1);
-	indices[0] = UVec3::new(0, 1, 2);
 }
 
 #[bindless(fragment())]
