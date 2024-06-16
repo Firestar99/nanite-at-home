@@ -1,12 +1,8 @@
-use crate::meshlet::mesh::{Meshlet, MeshletData};
-use crate::meshlet::offset::MeshletOffset;
+use crate::meshlet::mesh::MeshletData;
 use crate::meshlet::MESHLET_INDICES_BITS;
 use core::array;
-use core::ops::Index;
-use spirv_std::arch::IndexUnchecked;
+use glam::UVec3;
 use vulkano_bindless_macros::DescStruct;
-use vulkano_bindless_shaders::descriptor::reference::AliveDescRef;
-use vulkano_bindless_shaders::descriptor::{BufferSlice, Descriptors};
 
 #[derive(Copy, Clone, DescStruct)]
 #[repr(transparent)]
@@ -15,172 +11,81 @@ pub struct CompressedIndices(pub u32);
 const INDICES_PER_WORD: usize = 32 / MESHLET_INDICES_BITS as usize;
 const INDICES_MASK: u32 = (1 << MESHLET_INDICES_BITS) - 1;
 
-pub struct IndicesReader<S: Source> {
-	index_offset: MeshletOffset,
-	source: S,
-}
-
-impl<'a> IndicesReader<SourceSlice<'a>> {
-	pub fn from_slice(slice: &'a [CompressedIndices], meshlet_data: MeshletData) -> Self {
-		Self {
-			index_offset: meshlet_data.index_offset,
-			source: SourceSlice(slice),
+// `t: T` is passed though to the function and its mainly used so BufferDescriptors can be passed though, as you can't
+// put them in a closure without rust-gpu compiling them as illegal function pointers
+pub fn triangle_indices_load_gpu<T>(
+	meshlet: impl AsRef<MeshletData>,
+	t: &T,
+	triangle: usize,
+	read_fn: impl Fn(&T, usize) -> CompressedIndices,
+) -> UVec3 {
+	let abs_triangle = meshlet.as_ref().triangle_indices_offset.start() + triangle;
+	let mut index = (abs_triangle * 3) / INDICES_PER_WORD;
+	let mut rem = (abs_triangle * 3) % INDICES_PER_WORD;
+	let mut load = read_fn(t, index);
+	let load0 = (rem, load);
+	let mut load_next = || {
+		rem += 1;
+		if rem == INDICES_PER_WORD {
+			rem = 0;
+			index += 1;
+			load = read_fn(t, index);
 		}
-	}
+		(rem, load)
+	};
+	let loads = [load0, load_next(), load_next()];
+
+	let f = |(rem, load): (usize, CompressedIndices)| (load.0 >> (rem as u32 * MESHLET_INDICES_BITS)) & INDICES_MASK;
+	UVec3::new(f(loads[0]), f(loads[1]), f(loads[2]))
 }
 
-impl<'a> IndicesReader<SourceGpu<'a>> {
-	pub fn from_bindless<R: AliveDescRef>(descriptors: &'a Descriptors, meshlet: &Meshlet<'a, R>) -> Self {
-		Self {
-			index_offset: meshlet.data.index_offset,
-			source: SourceGpu(meshlet.mesh.indices.access(descriptors)),
-		}
-	}
+pub fn triangle_indices_load_cpu<T>(
+	meshlet: impl AsRef<MeshletData>,
+	t: &T,
+	triangle: usize,
+	read_fn: impl Fn(&T, usize) -> CompressedIndices,
+) -> UVec3 {
+	let abs_triangle = meshlet.as_ref().triangle_indices_offset.start() + triangle;
+	UVec3::from_array(array::from_fn(|i| {
+		let i = abs_triangle * 3 + i;
+		let index = i / INDICES_PER_WORD;
+		let rem = i % INDICES_PER_WORD;
+		(read_fn(t, index).0 >> (rem as u32 * MESHLET_INDICES_BITS)) & INDICES_MASK
+	}))
 }
 
-impl<S: Source> IndicesReader<S> {
-	fn load_check(&self, triangle: usize) {
-		let len = self.len();
-		assert!(
-			triangle < len,
-			"index out of bounds: the len is {len} but the triangle is {triangle}"
-		);
-	}
-
-	pub fn len(&self) -> usize {
-		self.index_offset.len()
-	}
-
-	pub fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
-
-	// gpu
-	pub fn load_gpu(&self, triangle: usize) -> [u32; 3] {
-		self.load_check(triangle);
-		Self::load_gpu_absolute(self.index_offset.start() + triangle, |index| self.source.load(index))
-	}
-
-	/// # Safety
-	/// index must be in bounds
-	pub unsafe fn load_gpu_unchecked(&self, triangle: usize) -> [u32; 3] {
-		Self::load_gpu_absolute(self.index_offset.start() + triangle, |index| unsafe {
-			self.source.load_unchecked(index)
-		})
-	}
-
-	#[inline]
-	fn load_gpu_absolute(triangle: usize, read_fn: impl Fn(usize) -> CompressedIndices) -> [u32; 3] {
-		let mut index = (triangle * 3) / INDICES_PER_WORD;
-		let mut rem = (triangle * 3) % INDICES_PER_WORD;
-		let mut load = read_fn(index);
-		let load0 = (rem, load);
-		let mut load_next = || {
-			rem += 1;
-			if rem == INDICES_PER_WORD {
-				rem = 0;
-				index += 1;
-				load = read_fn(index);
-			}
-			(rem, load)
-		};
-		let loads = [load0, load_next(), load_next()];
-
-		loads.map(|(rem, load)| (load.0 >> (rem as u32 * MESHLET_INDICES_BITS)) & INDICES_MASK)
-	}
-
-	// cpu
-	pub fn load_cpu(&self, triangle: usize) -> [u32; 3] {
-		self.load_check(triangle);
-		Self::load_cpu_absolute(self.index_offset.start() + triangle, |index| self.source.load(index))
-	}
-
-	/// # Safety
-	/// index must be in bounds
-	pub unsafe fn load_cpu_unchecked(&self, triangle: usize) -> [u32; 3] {
-		Self::load_cpu_absolute(self.index_offset.start() + triangle, |index| unsafe {
-			self.source.load_unchecked(index)
-		})
-	}
-
-	fn load_cpu_absolute(triangle: usize, read_fn: impl Fn(usize) -> CompressedIndices) -> [u32; 3] {
-		array::from_fn(|i| {
-			let i = triangle * 3 + i;
-			let index = i / INDICES_PER_WORD;
-			let rem = i % INDICES_PER_WORD;
-			(read_fn(index).0 >> (rem as u32 * MESHLET_INDICES_BITS)) & INDICES_MASK
-		})
-	}
-
-	// optimal default
-	#[cfg(target_arch = "spirv")]
-	pub fn load(&self, triangle: usize) -> [u32; 3] {
-		self.load_gpu(triangle)
-	}
-
-	/// # Safety
-	/// index must be in bounds
-	#[cfg(target_arch = "spirv")]
-	pub unsafe fn load_unchecked(&self, triangle: usize) -> [u32; 3] {
-		self.load_gpu_unchecked(triangle)
-	}
-
-	#[cfg(not(target_arch = "spirv"))]
-	pub fn load(&self, triangle: usize) -> [u32; 3] {
-		self.load_cpu(triangle)
-	}
-
-	/// # Safety
-	/// index must be in bounds
-	#[cfg(not(target_arch = "spirv"))]
-	pub unsafe fn load_unchecked(&self, triangle: usize) -> [u32; 3] {
-		self.load_cpu_unchecked(triangle)
-	}
+// optimal default
+#[cfg(target_arch = "spirv")]
+pub fn triangle_indices_load<T>(
+	meshlet: impl AsRef<MeshletData>,
+	t: &T,
+	triangle: usize,
+	read_fn: impl Fn(&T, usize) -> CompressedIndices,
+) -> UVec3 {
+	triangle_indices_load_gpu(meshlet, t, triangle, read_fn)
 }
 
-pub trait Source {
-	fn load(&self, index: usize) -> CompressedIndices;
-
-	/// # Safety
-	/// index must be in bounds
-	unsafe fn load_unchecked(&self, index: usize) -> CompressedIndices;
-}
-
-pub struct SourceSlice<'a>(&'a [CompressedIndices]);
-
-impl<'a> Source for SourceSlice<'a> {
-	fn load(&self, index: usize) -> CompressedIndices {
-		*self.0.index(index)
-	}
-
-	unsafe fn load_unchecked(&self, index: usize) -> CompressedIndices {
-		*self.0.index_unchecked(index)
-	}
-}
-
-pub struct SourceGpu<'a>(BufferSlice<'a, [CompressedIndices]>);
-
-impl<'a> Source for SourceGpu<'a> {
-	fn load(&self, index: usize) -> CompressedIndices {
-		self.0.load(index)
-	}
-
-	unsafe fn load_unchecked(&self, index: usize) -> CompressedIndices {
-		self.0.load_unchecked(index)
-	}
+#[cfg(not(target_arch = "spirv"))]
+pub fn triangle_indices_load<T>(
+	meshlet: impl AsRef<MeshletData>,
+	t: &T,
+	triangle: usize,
+	read_fn: impl Fn(&T, usize) -> CompressedIndices,
+) -> UVec3 {
+	triangle_indices_load_cpu(meshlet, t, triangle, read_fn)
 }
 
 // write
-pub fn write_indices_capacity(indices_cnt: usize) -> usize {
+pub fn triangle_indices_write_capacity(indices_cnt: usize) -> usize {
 	(indices_cnt + INDICES_PER_WORD - 1) / INDICES_PER_WORD
 }
 
-pub fn write_indices<Iter>(src: Iter, dst: &mut [CompressedIndices])
+pub fn triangle_indices_write<Iter>(src: Iter, dst: &mut [CompressedIndices])
 where
 	Iter: ExactSizeIterator<Item = u32>,
 {
 	assert_eq!(src.len() % 3, 0, "indices must be multiple of 3");
-	let req_len = write_indices_capacity(src.len());
+	let req_len = triangle_indices_write_capacity(src.len());
 	assert_eq!(
 		dst.len(),
 		req_len,
@@ -199,18 +104,19 @@ where
 }
 
 #[cfg(not(target_arch = "spirv"))]
-pub fn write_indices_vec<Iter>(src: Iter) -> Vec<CompressedIndices>
+pub fn triangle_indices_write_vec<Iter>(src: Iter) -> Vec<CompressedIndices>
 where
 	Iter: ExactSizeIterator<Item = u32>,
 {
-	let mut vec = vec![CompressedIndices(0); write_indices_capacity(src.len())];
-	write_indices(src, &mut vec);
+	let mut vec = vec![CompressedIndices(0); triangle_indices_write_capacity(src.len())];
+	triangle_indices_write(src, &mut vec);
 	vec
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::meshlet::offset::MeshletOffset;
 	use crate::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 	use std::iter::repeat;
 
@@ -229,24 +135,25 @@ mod tests {
 	}
 
 	fn write_and_read_verify(indices: &[u32]) {
-		let vec = write_indices_vec(indices.iter().copied());
-		let reader = IndicesReader::from_slice(
-			&vec,
-			MeshletData {
-				index_offset: MeshletOffset::new(0, indices.len() / 3),
-				vertex_offset: MeshletOffset::default(),
-			},
-		);
-		let read_cpu: Vec<_> = (0..reader.len()).flat_map(|i| reader.load_cpu(i)).collect();
+		let vec = triangle_indices_write_vec(indices.iter().copied());
+		let meshlet = MeshletData {
+			triangle_indices_offset: MeshletOffset::new(0, indices.len() / 3),
+			vertex_offset: MeshletOffset::default(),
+		};
+		let read_cpu: Vec<_> = (0..meshlet.triangle_indices_offset.len())
+			.flat_map(|i| triangle_indices_load_cpu(&meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
+			.collect();
 		assert_eq!(indices, read_cpu, "Written and read contents do not agree");
-		let read_gpu: Vec<_> = (0..reader.len()).flat_map(|i| reader.load_gpu(i)).collect();
+		let read_gpu: Vec<_> = (0..meshlet.triangle_indices_offset.len())
+			.flat_map(|i| triangle_indices_load_gpu(&meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
+			.collect();
 		assert_eq!(indices, read_gpu, "GPU optimized loads do not match written contents");
 	}
 
 	#[test]
 	#[should_panic(expected = "is too large for")]
 	fn vertex_id_oob() {
-		write_indices_vec([1u32 << MESHLET_INDICES_BITS, 0, 0].iter().copied());
+		triangle_indices_write_vec([1u32 << MESHLET_INDICES_BITS, 0, 0].iter().copied());
 	}
 
 	#[test]
@@ -256,22 +163,7 @@ mod tests {
 			// note the +1
 			.take(3 * (MESHLET_MAX_TRIANGLES as usize + 1))
 			.collect();
-		write_indices_vec(indices.iter().copied());
-	}
-
-	#[test]
-	#[should_panic(expected = "but the triangle is")]
-	fn reading_indices_oob() {
-		let indices = [1, 2, 3];
-		let vec = write_indices_vec(indices.iter().copied());
-		let reader = IndicesReader::from_slice(
-			&vec,
-			MeshletData {
-				index_offset: MeshletOffset::new(0, indices.len() / 3),
-				vertex_offset: MeshletOffset::default(),
-			},
-		);
-		reader.load(2);
+		triangle_indices_write_vec(indices.iter().copied());
 	}
 
 	#[test]
@@ -283,7 +175,7 @@ mod tests {
 			&[42, 36, 12],
 			&[23, 63, 16, 38, 26, 48, 22, 34, 60],
 		];
-		let vec = write_indices_vec(
+		let vec = triangle_indices_write_vec(
 			INDICES
 				.iter()
 				.copied()
@@ -296,21 +188,20 @@ mod tests {
 		let mut start = 0;
 		for indices in INDICES.iter().copied() {
 			let triangles = indices.len() / 3;
-			let reader = IndicesReader::from_slice(
-				&vec,
-				MeshletData {
-					index_offset: MeshletOffset::new(start, triangles),
-					vertex_offset: MeshletOffset::default(),
-				},
-			);
+			let meshlet = MeshletData {
+				triangle_indices_offset: MeshletOffset::new(start, triangles),
+				vertex_offset: MeshletOffset::default(),
+			};
 			for tri in 0..triangles {
 				let expect = &indices[tri * 3..tri * 3 + 3];
-				unsafe {
-					assert_eq!(reader.load_cpu(tri), expect);
-					assert_eq!(reader.load_cpu_unchecked(tri), expect);
-					assert_eq!(reader.load_gpu(tri), expect);
-					assert_eq!(reader.load_gpu_unchecked(tri), expect);
-				}
+				assert_eq!(
+					triangle_indices_load_cpu(&meshlet, &(), tri, |_, i| *vec.get(i).unwrap()).to_array(),
+					expect
+				);
+				assert_eq!(
+					triangle_indices_load_gpu(&meshlet, &(), tri, |_, i| *vec.get(i).unwrap()).to_array(),
+					expect
+				);
 			}
 			start += triangles;
 		}
