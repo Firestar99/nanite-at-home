@@ -44,13 +44,9 @@ impl MeshletRenderTask {
 				..BufferCreateInfo::default()
 			};
 
-			let quads = [
-				vec3(0., 0., 0.),
-				vec3(0., 0., -1.),
-				vec3(0., 3., 0.),
-				vec3(3., 0., 0.),
-				vec3(2., 2., 0.),
-			];
+			let quads = (0..31)
+				.flat_map(|x| (0..31).map(move |y| vec3(x as f32, y as f32, 0.)))
+				.collect::<Vec<_>>();
 
 			let vertices = init
 				.bindless
@@ -120,6 +116,8 @@ impl MeshletRenderTask {
 					},
 				)
 				.unwrap();
+
+			let mesh2 = &mesh;
 			instances = init
 				.bindless
 				.buffer()
@@ -127,9 +125,21 @@ impl MeshletRenderTask {
 					init.memory_allocator.clone(),
 					buffer_info.clone(),
 					alloc_info.clone(),
-					[MeshletInstance::new(mesh.to_strong(), Affine3A::default())],
+					(0..1)
+						.flat_map(|x| {
+							(0..1).flat_map(move |y| {
+								(0..4).map(move |z| {
+									MeshletInstance::new(
+										mesh2.to_strong(),
+										Affine3A::from_translation(vec3(x as f32 * 31., y as f32 * 31., z as f32 * 4.)),
+									)
+								})
+							})
+						})
+						.collect::<Vec<_>>(),
 				)
 				.unwrap();
+
 			mesh_cpu = MeshletCpuMesh {
 				mesh,
 				num_meshlets: meshlets.len() as u32,
