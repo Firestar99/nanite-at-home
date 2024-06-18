@@ -1,6 +1,8 @@
 #![allow(warnings)]
 
 use crate::space::renderer::frame_data::FrameData;
+use crate::space::utils::gpurng::GpuRng;
+use crate::space::utils::hsv::hsv2rgb_smooth;
 use glam::{vec3, UVec3, Vec3, Vec4};
 use space_asset_shader::meshlet::mesh::{MeshletMesh, MeshletVertex};
 use space_asset_shader::meshlet::scene::MeshletInstance;
@@ -179,25 +181,6 @@ pub fn meshlet_frag_meshlet_id(
 	#[spirv(flat)] vtx_meshlet_id: u32,
 	frag_color: &mut Vec4,
 ) {
-	pub const PHI: f32 = 1.618033988749894848204586834365638118_f32;
-	let random = vtx_meshlet_id as f32 * PHI;
-
+	let random = GpuRng(vtx_meshlet_id).advance_f32();
 	*frag_color = Vec4::from((hsv2rgb_smooth(vec3(random, 1., 1.)), 1.));
-}
-
-/// Smooth HSV to RGB conversion
-/// MIT by Inigo Quilez, from https://www.shadertoy.com/view/MsS3Wc
-fn hsv2rgb_smooth(c: Vec3) -> Vec3 {
-	fn modulo(x: Vec3, y: Vec3) -> Vec3 {
-		x - y * Vec3::floor(x / y)
-	}
-
-	let rgb = Vec3::clamp(
-		Vec3::abs(modulo(c.x * 6.0 + vec3(0.0, 4.0, 2.0), Vec3::splat(6.0)) - 3.0) - 1.0,
-		Vec3::splat(0.0),
-		Vec3::splat(1.0),
-	);
-	// cubic smoothing
-	let rgb = rgb * rgb * (3.0 - 2.0 * rgb);
-	c.z * Vec3::lerp(Vec3::splat(1.0), rgb, c.y)
 }
