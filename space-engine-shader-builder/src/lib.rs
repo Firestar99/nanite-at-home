@@ -6,6 +6,8 @@ pub use vulkano_bindless_shader_builder;
 pub fn shader_symbols_builder_configured_for_space_engine(shader_crate: &str) -> ShaderSymbolsBuilder {
 	ShaderSymbolsBuilder::new(shader_crate, "spirv-unknown-vulkan1.2")
 		.capability(Capability::MeshShadingEXT)
+		.capability(Capability::GroupNonUniform)
+		.capability(Capability::GroupNonUniformBallot)
 		.extension("SPV_EXT_mesh_shader")
 		.spirv_metadata(SpirvMetadata::Full)
 		.shader_panic_strategy(ShaderPanicStrategy::DebugPrintfThenExit {

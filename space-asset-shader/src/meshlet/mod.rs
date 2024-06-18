@@ -3,6 +3,7 @@ use static_assertions::const_assert;
 pub mod indices;
 pub mod mesh;
 pub mod offset;
+pub mod scene;
 
 pub const MESHLET_MODEL_VERTICES_BITS: u32 = 24;
 pub const MESHLET_MODEL_MAX_VERTICES: u32 = 1 << MESHLET_MODEL_VERTICES_BITS;

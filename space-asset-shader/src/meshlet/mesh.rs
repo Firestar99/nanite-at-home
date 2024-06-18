@@ -16,6 +16,12 @@ pub struct MeshletVertex {
 const_assert_eq!(mem::size_of::<MeshletVertex>(), 3 * 4);
 
 impl MeshletVertex {
+	pub fn new(position: Vec3) -> Self {
+		Self {
+			position: position.to_array(),
+		}
+	}
+
 	pub fn position(&self) -> Vec3 {
 		Vec3::from(self.position)
 	}

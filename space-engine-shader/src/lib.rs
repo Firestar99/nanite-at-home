@@ -2,4 +2,6 @@
 // otherwise you won't see any warnings
 #![deny(warnings)]
 
+extern crate core;
+
 pub mod space;

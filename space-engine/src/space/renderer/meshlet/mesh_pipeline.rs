@@ -1,10 +1,12 @@
-use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
-use space_engine_shader::space::renderer::opaque_model::OpaqueModel;
+use crate::space::renderer::meshlet::scene::MeshletInstance;
+use crate::space::renderer::render_graph::context::FrameContext;
+use crate::space::Init;
+use space_asset::meshlet::mesh::MeshletCpuMesh;
+use space_engine_shader::space::renderer::meshlet::mesh_shader::{Params, TASK_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::format::Format;
-use vulkano::image::sampler::SamplerCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{
 	AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
 };
@@ -14,32 +16,26 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::DynamicState;
-use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::descriptor::{Buffer, RCDescExt, Sampler};
+use vulkano_bindless::descriptor::reference::Strong;
+use vulkano_bindless::descriptor::{Buffer, RCDesc, RCDescExt};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
 
-use crate::shader::space::renderer::lod_obj::opaque_shader;
-use crate::space::renderer::render_graph::context::FrameContext;
-use crate::space::Init;
-
-#[derive(Clone)]
-pub struct OpaqueDrawPipeline {
+pub struct MeshDrawPipeline {
 	pipeline: BindlessMeshGraphicsPipeline<Params<'static>>,
-	sampler: RCDesc<Sampler>,
 }
 
-impl OpaqueDrawPipeline {
+impl MeshDrawPipeline {
 	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
 		let pipeline = BindlessMeshGraphicsPipeline::new_task(
 			init.bindless.clone(),
-			opaque_shader::opaque_task::new(),
-			opaque_shader::opaque_mesh::new(),
-			opaque_shader::opaque_fs::new(),
+			crate::shader::space::renderer::meshlet::mesh_shader::meshlet_task::new(),
+			crate::shader::space::renderer::meshlet::mesh_shader::meshlet_mesh::new(),
+			crate::shader::space::renderer::meshlet::mesh_shader::meshlet_frag_meshlet_id::new(),
 			MeshGraphicsPipelineCreateInfo {
-				rasterization_state: RasterizationState::default(),
 				viewport_state: ViewportState::default(),
+				rasterization_state: RasterizationState::default(),
 				multisample_state: MultisampleState::default(),
 				depth_stencil_state: Some(DepthStencilState {
 					depth: Some(DepthState {
@@ -77,31 +73,27 @@ impl OpaqueDrawPipeline {
 		)
 		.unwrap();
 
-		let sampler = init
-			.bindless
-			.sampler()
-			.alloc(SamplerCreateInfo::simple_repeat_linear())
-			.unwrap();
-
-		Self { pipeline, sampler }
+		Self { pipeline }
 	}
 
 	pub fn draw(
 		&self,
 		frame_context: &FrameContext,
 		cmd: &mut RecordingCommandBuffer,
-		models: RCDesc<Buffer<[OpaqueModel]>>,
+		mesh: &MeshletCpuMesh<Strong>,
+		instances: &RCDesc<Buffer<[MeshletInstance<Strong>]>>,
 	) {
 		unsafe {
+			let groups_x = (mesh.num_meshlets + TASK_WG_SIZE - 1) / TASK_WG_SIZE;
 			self.pipeline
 				.draw_mesh_tasks(
 					cmd,
-					[models.len() as u32, 1, 1],
+					[groups_x, instances.len() as u32, 1],
 					frame_context.modify(),
 					Params {
 						frame_data: frame_context.frame_data_desc,
-						models: models.to_transient(frame_context.fif),
-						sampler: self.sampler.to_transient(frame_context.fif),
+						mesh: mesh.mesh.to_transient(frame_context.fif),
+						instances: instances.to_transient(frame_context.fif),
 					},
 				)
 				.unwrap();

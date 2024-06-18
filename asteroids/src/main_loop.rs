@@ -25,7 +25,6 @@ use winit::window::{CursorGrabMode, WindowBuilder};
 
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
-use crate::sample_scene::load_scene;
 
 pub enum Debugger {
 	None,
@@ -91,8 +90,8 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let models = load_scene(&init).await;
-	render_pipeline_main.opaque_task.models.lock().extend(models);
+	// let models = load_scene(&init).await;
+	// render_pipeline_main.opaque_task.models.lock().extend(models);
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();

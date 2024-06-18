@@ -1876,7 +1876,7 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 [[package]]
 name = "rustc_codegen_spirv"
 version = "0.9.0"
-source = "git+https://github.com/Firestar99/rust-gpu?rev=057dc0cfede7011ea2dd275374a6c5ef0cece054#057dc0cfede7011ea2dd275374a6c5ef0cece054"
+source = "git+https://github.com/Firestar99/rust-gpu?rev=093e1aa2ad05057b578d432f35d70d9dd14417fd#093e1aa2ad05057b578d432f35d70d9dd14417fd"
 dependencies = [
  "ar",
  "either",
@@ -1903,7 +1903,7 @@ dependencies = [
 [[package]]
 name = "rustc_codegen_spirv-types"
 version = "0.9.0"
-source = "git+https://github.com/Firestar99/rust-gpu?rev=057dc0cfede7011ea2dd275374a6c5ef0cece054#057dc0cfede7011ea2dd275374a6c5ef0cece054"
+source = "git+https://github.com/Firestar99/rust-gpu?rev=093e1aa2ad05057b578d432f35d70d9dd14417fd#093e1aa2ad05057b578d432f35d70d9dd14417fd"
 dependencies = [
  "rspirv",
  "serde",
@@ -2178,6 +2178,7 @@ dependencies = [
  "smallvec",
  "space-asset-shader",
  "static_assertions",
+ "vulkano-bindless",
 ]
 
 [[package]]
@@ -2229,6 +2230,7 @@ dependencies = [
  "paste",
  "smallvec",
  "smol",
+ "space-asset",
  "space-engine-shader",
  "space-engine-shader-builder",
  "static_assertions",
@@ -2293,7 +2295,7 @@ dependencies = [
 [[package]]
 name = "spirv-builder"
 version = "0.9.0"
-source = "git+https://github.com/Firestar99/rust-gpu?rev=057dc0cfede7011ea2dd275374a6c5ef0cece054#057dc0cfede7011ea2dd275374a6c5ef0cece054"
+source = "git+https://github.com/Firestar99/rust-gpu?rev=093e1aa2ad05057b578d432f35d70d9dd14417fd#093e1aa2ad05057b578d432f35d70d9dd14417fd"
 dependencies = [
  "memchr",
  "raw-string",
@@ -2306,7 +2308,7 @@ dependencies = [
 [[package]]
 name = "spirv-std"
 version = "0.9.0"
-source = "git+https://github.com/Firestar99/rust-gpu?rev=057dc0cfede7011ea2dd275374a6c5ef0cece054#057dc0cfede7011ea2dd275374a6c5ef0cece054"
+source = "git+https://github.com/Firestar99/rust-gpu?rev=093e1aa2ad05057b578d432f35d70d9dd14417fd#093e1aa2ad05057b578d432f35d70d9dd14417fd"
 dependencies = [
  "bitflags 1.3.2",
  "glam",
@@ -2318,7 +2320,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-macros"
 version = "0.9.0"
-source = "git+https://github.com/Firestar99/rust-gpu?rev=057dc0cfede7011ea2dd275374a6c5ef0cece054#057dc0cfede7011ea2dd275374a6c5ef0cece054"
+source = "git+https://github.com/Firestar99/rust-gpu?rev=093e1aa2ad05057b578d432f35d70d9dd14417fd#093e1aa2ad05057b578d432f35d70d9dd14417fd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2329,7 +2331,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-types"
 version = "0.9.0"
-source = "git+https://github.com/Firestar99/rust-gpu?rev=057dc0cfede7011ea2dd275374a6c5ef0cece054#057dc0cfede7011ea2dd275374a6c5ef0cece054"
+source = "git+https://github.com/Firestar99/rust-gpu?rev=093e1aa2ad05057b578d432f35d70d9dd14417fd#093e1aa2ad05057b578d432f35d70d9dd14417fd"
 
 [[package]]
 name = "spirv-tools"

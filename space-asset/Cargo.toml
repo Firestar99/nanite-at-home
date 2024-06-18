@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 # my projects
 space-asset-shader = { workspace = true }
+vulkano-bindless = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }

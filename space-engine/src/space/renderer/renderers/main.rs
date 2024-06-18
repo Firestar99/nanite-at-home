@@ -1,4 +1,4 @@
-use crate::space::renderer::lod_obj::opaque_render_task::OpaqueRenderTask;
+use crate::space::renderer::meshlet::meshlet_render_task::MeshletRenderTask;
 use crate::space::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
 use crate::space::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
 use crate::space::Init;
@@ -17,7 +17,7 @@ pub struct RenderPipelineMain {
 	pub init: Arc<Init>,
 	pub output_format: Format,
 	pub depth_format: Format,
-	pub opaque_task: OpaqueRenderTask,
+	pub opaque_task: MeshletRenderTask,
 }
 
 impl RenderPipelineMain {
@@ -25,7 +25,7 @@ impl RenderPipelineMain {
 		// always available
 		let depth_format = Format::D32_SFLOAT;
 
-		let opaque_task = OpaqueRenderTask::new(init, output_format, depth_format);
+		let opaque_task = MeshletRenderTask::new(init, output_format, depth_format);
 		Arc::new(Self {
 			init: init.clone(),
 			output_format,
