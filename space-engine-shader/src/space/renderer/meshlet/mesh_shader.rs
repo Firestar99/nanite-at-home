@@ -3,10 +3,12 @@
 use crate::space::renderer::frame_data::FrameData;
 use crate::space::utils::gpurng::GpuRng;
 use crate::space::utils::hsv::hsv2rgb_smooth;
-use glam::{vec3, UVec3, Vec3, Vec4};
-use space_asset_shader::meshlet::mesh::{MeshletMesh, MeshletVertex};
-use space_asset_shader::meshlet::scene::MeshletInstance;
-use space_asset_shader::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use glam::{vec3, UVec3, Vec4};
+use space_asset::meshlet::instance::MeshletInstance;
+use space_asset::meshlet::mesh::MeshletMesh;
+use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
+use space_asset::meshlet::vertex::MeshletVertex;
+use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_non_uniform_ballot,
 	subgroup_non_uniform_ballot_bit_count, subgroup_non_uniform_elect, workgroup_memory_barrier_with_group_sync,
@@ -15,14 +17,13 @@ use spirv_std::arch::{
 use spirv_std::memory::{Scope, Semantics};
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::reference::Strong;
+use vulkano_bindless_shaders::descriptor::reference::{Strong, Transient};
 use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
-	pub mesh: TransientDesc<'a, Buffer<MeshletMesh<Strong>>>,
-	pub instances: TransientDesc<'a, Buffer<[MeshletInstance<Strong>]>>,
+	pub mesh2instance: MeshletMesh2Instance<Transient<'a>, Strong>,
 }
 
 #[derive(Copy, Clone, BufferContent)]
@@ -52,11 +53,9 @@ pub fn meshlet_task(
 		let wg_instance_id = wg_id.y;
 		let meshlet_id = wg_meshlet_offset + inv_id.x;
 
-		let mesh = param.mesh.access(descriptors).load();
-		let instance = param
-			.instances
-			.access(descriptors)
-			.load_unchecked(wg_instance_id as usize);
+		let mesh = param.mesh2instance.mesh.access(descriptors).load();
+		let instances = param.mesh2instance.instances.access(descriptors);
+		let instance = instances.load_unchecked(wg_instance_id as usize);
 
 		let draw = draw_meshlet(descriptors, instance, mesh, meshlet_id);
 
@@ -93,7 +92,7 @@ pub fn meshlet_task(
 
 fn draw_meshlet(
 	_descriptors: &Descriptors,
-	_instance: MeshletInstance<Strong>,
+	_instance: MeshletInstance,
 	mesh: MeshletMesh<Strong>,
 	meshlet_id: u32,
 ) -> bool {
@@ -125,8 +124,9 @@ pub fn meshlet_mesh(
 	#[spirv(position)] vtx_positions: &mut [Vec4; MESHLET_MAX_VERTICES as usize],
 	vtx_meshlet_id: &mut [u32; MESHLET_MAX_TRIANGLES as usize],
 ) {
-	let instance = param.instances.access(descriptors).load(payload.instance_id as usize);
-	let mesh = param.mesh.access(descriptors).load();
+	let instances = param.mesh2instance.instances.access(descriptors);
+	let instance = instances.load(payload.instance_id as usize);
+	let mesh = param.mesh2instance.mesh.access(descriptors).load();
 	let frame_data = param.frame_data.access(descriptors).load();
 	let meshlet_id = payload.meshlet_offset + wg_id.x;
 	let meshlet = mesh.meshlet(descriptors, meshlet_id as usize);
@@ -168,7 +168,7 @@ pub fn meshlet_mesh(
 	}
 }
 
-fn transform_vertex(frame_data: FrameData, instance: MeshletInstance<Strong>, vertex: MeshletVertex) -> Vec4 {
+fn transform_vertex(frame_data: FrameData, instance: MeshletInstance, vertex: MeshletVertex) -> Vec4 {
 	let camera = frame_data.camera;
 	let worldspace = instance.transform().transform_point3(vertex.position());
 	let cameraspace = camera.transform.transform_point3(worldspace.into());

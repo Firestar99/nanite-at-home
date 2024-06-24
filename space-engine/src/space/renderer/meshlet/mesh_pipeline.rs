@@ -1,7 +1,7 @@
-use crate::space::renderer::meshlet::scene::MeshletInstance;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
-use space_asset::meshlet::mesh::MeshletCpuMesh;
+use space_asset::meshlet::mesh::MeshletMesh2InstanceCpu;
+use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
 use space_engine_shader::space::renderer::meshlet::mesh_shader::{Params, TASK_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -16,8 +16,7 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::DynamicState;
-use vulkano_bindless::descriptor::reference::Strong;
-use vulkano_bindless::descriptor::{Buffer, RCDesc, RCDescExt};
+use vulkano_bindless::descriptor::RCDescExt;
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
@@ -80,20 +79,21 @@ impl MeshDrawPipeline {
 		&self,
 		frame_context: &FrameContext,
 		cmd: &mut RecordingCommandBuffer,
-		mesh: &MeshletCpuMesh<Strong>,
-		instances: &RCDesc<Buffer<[MeshletInstance<Strong>]>>,
+		mesh2instance: &MeshletMesh2InstanceCpu,
 	) {
 		unsafe {
-			let groups_x = (mesh.num_meshlets + TASK_WG_SIZE - 1) / TASK_WG_SIZE;
+			let groups_x = (mesh2instance.num_meshlets + TASK_WG_SIZE - 1) / TASK_WG_SIZE;
 			self.pipeline
 				.draw_mesh_tasks(
 					cmd,
-					[groups_x, instances.len() as u32, 1],
+					[groups_x, mesh2instance.instances.len() as u32, 1],
 					frame_context.modify(),
 					Params {
 						frame_data: frame_context.frame_data_desc,
-						mesh: mesh.mesh.to_transient(frame_context.fif),
-						instances: instances.to_transient(frame_context.fif),
+						mesh2instance: MeshletMesh2Instance {
+							mesh: mesh2instance.mesh.to_transient(frame_context.fif),
+							instances: mesh2instance.instances.to_transient(frame_context.fif),
+						},
 					},
 				)
 				.unwrap();

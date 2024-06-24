@@ -207,7 +207,7 @@ fn decl_to_ref<'a>(generics: impl Iterator<Item = &'a GenericParam>) -> TokenStr
 			GenericParam::Type(t) => t.ident.to_token_stream(),
 			GenericParam::Const(c) => c.ident.to_token_stream(),
 		})
-		.collect::<TokenStream>();
+		.collect::<Punctuated<TokenStream, Token![,]>>();
 	if out.is_empty() {
 		TokenStream::new()
 	} else {

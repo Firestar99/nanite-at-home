@@ -1,3 +1,3 @@
-pub use space_asset_shader::meshlet::*;
+pub use space_asset::meshlet::*;
 
 pub mod mesh_shader;

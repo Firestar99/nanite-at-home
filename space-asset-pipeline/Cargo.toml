@@ -8,8 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-space-asset = { workspace = true }
-space-asset-shader = { workspace = true }
+space-asset = { workspace = true, features = ["disk"] }
 
 # model loader
 gltf = { workspace = true }
@@ -19,6 +18,10 @@ image = { workspace = true }
 glam = { workspace = true }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
+
+# serde
+rkyv = { workspace = true }
+zstd = { workspace = true }
 
 # other
 static_assertions = { workspace = true }

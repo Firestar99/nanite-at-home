@@ -3,7 +3,7 @@ use crate::space::renderer::model::opaque::OpaqueModelCpu;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 use parking_lot::Mutex;
-use space_engine_shader::space::renderer::opaque_model::OpaqueModel;
+use space_engine_shader::space::renderer::lod_obj::opaque_model::OpaqueModel;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;

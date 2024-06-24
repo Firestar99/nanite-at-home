@@ -1,6 +1,6 @@
 use crate::space::renderer::frame_data::FrameData;
+use crate::space::renderer::lod_obj::opaque_model::OpaqueModel;
 use glam::{UVec3, Vec2, Vec4};
-use space_asset_shader::opaque_model::OpaqueModel;
 use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;

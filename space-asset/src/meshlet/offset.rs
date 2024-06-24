@@ -15,8 +15,9 @@ const_assert!(LEN_BITS >= MESHLET_INDICES_BITS);
 const_assert!(LEN_BITS >= MESHLET_TRIANGLES_BITS);
 
 /// a "slice" into a vertex buffer, or rather the start index and len of the slice
-#[derive(Copy, Clone, BufferContent, Default)]
 #[repr(transparent)]
+#[derive(Copy, Clone, BufferContent, Default)]
+#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MeshletOffset(u32);
 
 impl MeshletOffset {

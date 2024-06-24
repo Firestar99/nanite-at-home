@@ -4,8 +4,9 @@ use core::array;
 use glam::UVec3;
 use vulkano_bindless_macros::BufferContent;
 
-#[derive(Copy, Clone, BufferContent)]
 #[repr(transparent)]
+#[derive(Copy, Clone, BufferContent)]
+#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CompressedIndices(pub u32);
 
 const INDICES_PER_WORD: usize = 32 / MESHLET_INDICES_BITS as usize;

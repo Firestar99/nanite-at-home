@@ -10,7 +10,7 @@ repository.workspace = true
 # members
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
-space-asset = { workspace = true }
+space-asset = { workspace = true, features = ["cpu"] }
 
 # vulkan
 vulkano = { workspace = true }

@@ -1,6 +1,6 @@
 use crate::space::Init;
 use image::DynamicImage;
-use space_engine_shader::space::renderer::opaque_model::OpaqueVertex;
+use space_engine_shader::space::renderer::lod_obj::opaque_model::OpaqueVertex;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;

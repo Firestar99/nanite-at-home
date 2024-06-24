@@ -7,15 +7,23 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# my projects
-space-asset-shader = { workspace = true }
-vulkano-bindless = { workspace = true }
+# members
+vulkano-bindless = { workspace = true, optional = true }
+vulkano-bindless-macros = { workspace = true }
+vulkano-bindless-shaders = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
 
+# serde
+rkyv = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
 # other
 static_assertions = { workspace = true }
-smallvec = { workspace = true }
+
+[features]
+disk = ["dep:rkyv", "dep:zstd"]
+cpu = ["disk", "dep:vulkano-bindless"]
