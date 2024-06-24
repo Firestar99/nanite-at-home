@@ -62,10 +62,12 @@ pub unsafe trait MetadataCpuInterface: Deref<Target = Metadata> {
 unsafe impl<T: AnyBitPattern + Send + Sync> DescStruct for T {
 	type TransferDescStruct = T;
 
+	#[inline]
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		self
 	}
 
+	#[inline]
 	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
 		from
 	}
