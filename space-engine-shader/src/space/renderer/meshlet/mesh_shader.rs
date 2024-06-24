@@ -112,8 +112,8 @@ pub const MESH_WG_SIZE: usize = 32;
 
 const_assert_eq!(MESH_WG_SIZE, 32);
 const_assert_eq!(MESHLET_MAX_VERTICES, 64);
-const_assert_eq!(MESHLET_MAX_TRIANGLES, 126);
-#[bindless(mesh_ext(threads(32), output_vertices = 64, output_primitives_ext = 126, output_triangles_ext))]
+const_assert_eq!(MESHLET_MAX_TRIANGLES, 124);
+#[bindless(mesh_ext(threads(32), output_vertices = 64, output_primitives_ext = 124, output_triangles_ext))]
 pub fn meshlet_mesh(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[bindless(param_constants)] param: &Params<'static>,

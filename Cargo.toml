@@ -67,6 +67,7 @@ bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 num-derive = "0.3"
+memoffset = "0.9.1"
 
 # serde
 rkyv = { version = "0.7" }
@@ -75,6 +76,7 @@ zstd = { version = "0.13" }
 # model loader
 gltf = "1.4.0"
 image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
+meshopt = "0.2.1"
 
 # other
 once_cell = "1.18"
@@ -82,7 +84,7 @@ smallvec = { version = "1.11", features = ["const_generics", "const_new"] }
 static_assertions = "1.1.0"
 parking_lot = "0.12"
 parking_lot_core = "0.9"
-clap = { version = "3.2", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 loom = "0.7.1"
 rand = "0.8"
 ahash = "0.8"

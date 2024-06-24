@@ -10,19 +10,27 @@ repository.workspace = true
 # my projects
 space-asset = { workspace = true, features = ["disk"] }
 
+# async
+futures = { workspace = true }
+smol = { workspace = true }
+
 # model loader
 gltf = { workspace = true }
 image = { workspace = true }
+meshopt = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
+memoffset = { workspace = true }
 
 # serde
 rkyv = { workspace = true }
 zstd = { workspace = true }
 
 # other
+parking_lot = { workspace = true }
 static_assertions = { workspace = true }
 smallvec = { workspace = true }
+clap = { workspace = true }
