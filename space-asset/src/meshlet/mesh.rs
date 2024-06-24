@@ -12,7 +12,7 @@ mod gpu {
 	use crate::meshlet::vertex::MeshletVertex;
 
 	#[repr(C)]
-	#[derive(Copy, Clone, BufferContent)]
+	#[derive(Copy, Clone, Debug, BufferContent)]
 	#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 	pub struct MeshletData {
 		pub vertex_offset: MeshletOffset,
@@ -148,10 +148,11 @@ mod disk {
 	use crate::meshlet::vertex::MeshletVertex;
 	use rkyv::{Archive, Deserialize, Serialize};
 
-	#[derive(Archive, Serialize, Deserialize)]
+	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletMeshDisk {
 		pub meshlets: Vec<MeshletData>,
 		pub vertices: Vec<MeshletVertex>,
+		pub vertices_indices: Vec<u32>,
 		pub triangle_indices: Vec<CompressedIndices>,
 	}
 }

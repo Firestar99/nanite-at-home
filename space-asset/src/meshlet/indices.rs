@@ -1,13 +1,28 @@
 use crate::meshlet::mesh::MeshletData;
 use crate::meshlet::MESHLET_INDICES_BITS;
 use core::array;
+use core::fmt::Debug;
+use core::fmt::Formatter;
 use glam::UVec3;
 use vulkano_bindless_macros::BufferContent;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, Default, BufferContent)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CompressedIndices(pub u32);
+
+impl Debug for CompressedIndices {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		for i in 0..INDICES_PER_WORD {
+			write!(
+				f,
+				"{:3}",
+				(self.0 >> (i * MESHLET_INDICES_BITS as usize)) & INDICES_MASK
+			)?;
+		}
+		Ok(())
+	}
+}
 
 const INDICES_PER_WORD: usize = 32 / MESHLET_INDICES_BITS as usize;
 const INDICES_MASK: u32 = (1 << MESHLET_INDICES_BITS) - 1;

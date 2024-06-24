@@ -22,7 +22,7 @@ pub const fn affine3a_from_cols_array(transform: [f32; 12]) -> Affine3A {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, Debug, BufferContent)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MeshletInstance {
 	pub transform: [f32; 12],
@@ -38,6 +38,12 @@ impl MeshletInstance {
 
 	pub fn transform(&self) -> Affine3A {
 		affine3a_from_cols_array(self.transform)
+	}
+}
+
+impl Default for MeshletInstance {
+	fn default() -> Self {
+		Self::new(Affine3A::default())
 	}
 }
 

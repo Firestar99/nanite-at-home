@@ -3,7 +3,7 @@ mod disk {
 	use crate::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 	use rkyv::{Archive, Deserialize, Serialize};
 
-	#[derive(Archive, Serialize, Deserialize)]
+	#[derive(Clone, Default, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletSceneDisk {
 		pub mesh2instance: Vec<MeshletMesh2InstanceDisk>,
 	}

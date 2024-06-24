@@ -21,7 +21,7 @@ mod disk {
 	use crate::meshlet::mesh::MeshletMeshDisk;
 	use rkyv::{Archive, Deserialize, Serialize};
 
-	#[derive(Archive, Serialize, Deserialize)]
+	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletMesh2InstanceDisk {
 		pub mesh: MeshletMeshDisk,
 		pub instances: Vec<MeshletInstance>,
