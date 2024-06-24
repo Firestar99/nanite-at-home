@@ -21,7 +21,7 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescStruct;
+use vulkano_bindless_shaders::buffer_content::BufferStruct;
 use vulkano_bindless_shaders::shader_type::{FragmentShader, MeshShader, TaskShader};
 
 pub type BindlessMeshGraphicsPipeline<T> = BindlessPipeline<MeshGraphicsPipelineType, T>;
@@ -81,7 +81,7 @@ pub struct MeshGraphicsPipelineCreateInfo {
 	pub conservative_rasterization_state: Option<ConservativeRasterizationState>,
 }
 
-impl<T: DescStruct> BindlessMeshGraphicsPipeline<T> {
+impl<T: BufferStruct> BindlessMeshGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: MeshGraphicsPipelineCreateInfo,

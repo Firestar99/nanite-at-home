@@ -2,9 +2,9 @@ use crate::meshlet::mesh::MeshletData;
 use crate::meshlet::MESHLET_INDICES_BITS;
 use core::array;
 use glam::UVec3;
-use vulkano_bindless_macros::DescStruct;
+use vulkano_bindless_macros::BufferContent;
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 #[repr(transparent)]
 pub struct CompressedIndices(pub u32);
 

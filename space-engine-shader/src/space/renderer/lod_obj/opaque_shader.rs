@@ -5,12 +5,12 @@ use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, DescStruct};
+use vulkano_bindless_macros::{bindless, BufferContent};
 use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc};
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub models: TransientDesc<'a, Buffer<[OpaqueModel]>>,

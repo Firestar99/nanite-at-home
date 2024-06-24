@@ -13,7 +13,7 @@ use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::DeviceSize;
-use vulkano_bindless::desc_buffer::DescStruct;
+use vulkano_bindless::buffer_content::BufferStruct;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::spirv_std::image::Image2d;
@@ -58,7 +58,7 @@ impl OpaqueModelCpu {
 
 	fn upload_buffer<T, ITER>(init: &Arc<Init>, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>
 	where
-		T: DescStruct,
+		T: BufferStruct,
 		ITER: IntoIterator<Item = T>,
 		ITER::IntoIter: ExactSizeIterator,
 	{

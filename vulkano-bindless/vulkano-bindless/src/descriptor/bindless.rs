@@ -20,7 +20,7 @@ use vulkano::device::Device;
 use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
 use vulkano::pipeline::PipelineLayout;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::desc_buffer::DescStruct;
+use vulkano_bindless_shaders::buffer_content::BufferStruct;
 use vulkano_bindless_shaders::descriptor::metadata::PushConstant;
 
 pub const BINDLESS_MAX_PUSH_CONSTANT_WORDS: usize = 4;
@@ -150,7 +150,7 @@ impl Bindless {
 	/// Get a pipeline layout with just the bindless descriptor set and the correct push constant size  for your
 	/// `param_constant` `T`.
 	/// The push constant size must not exceed 4 words (of u32's), the minimum the vulkan spec requires.
-	pub fn get_pipeline_layout<T: DescStruct>(&self) -> Result<&Arc<PipelineLayout>, PushConstantError> {
+	pub fn get_pipeline_layout<T: BufferStruct>(&self) -> Result<&Arc<PipelineLayout>, PushConstantError> {
 		let words = Self::get_push_constant_words::<T>();
 		self.pipeline_layouts
 			.get(words)
@@ -159,7 +159,7 @@ impl Bindless {
 
 	/// Get a `Vec<PushConstantRange>` with the correct push constant size for your `param_constant` `T`.
 	/// The push constant size must not exceed 4 words (of u32's), the minimum the vulkan spec requires.
-	pub fn get_push_constant<T: DescStruct>(&self) -> Vec<PushConstantRange> {
+	pub fn get_push_constant<T: BufferStruct>(&self) -> Vec<PushConstantRange> {
 		Self::get_push_constant_inner(self.stages, Self::get_push_constant_words::<T>())
 	}
 
@@ -176,8 +176,8 @@ impl Bindless {
 	}
 
 	/// Get the push constant word size (of u32's) for your `param_constant` `T`.
-	pub fn get_push_constant_words<T: DescStruct>() -> usize {
-		let i = mem::size_of::<PushConstant<T::TransferDescStruct>>();
+	pub fn get_push_constant_words<T: BufferStruct>() -> usize {
+		let i = mem::size_of::<PushConstant<T::Transfer>>();
 		// round up to next multiple of words
 		(i + 3) / 4
 	}

@@ -6,7 +6,7 @@ use std::collections::hash_map::Entry;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
-use vulkano_bindless_shaders::desc_buffer::MetadataCpuInterface;
+use vulkano_bindless_shaders::buffer_content::MetadataCpuInterface;
 use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;

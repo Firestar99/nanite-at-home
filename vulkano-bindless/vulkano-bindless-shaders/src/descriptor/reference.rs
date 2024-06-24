@@ -1,4 +1,4 @@
-use crate::desc_buffer::{DescStruct, MetadataCpuInterface};
+use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
 use crate::descriptor::descriptor_content::DescContent;
 use crate::descriptor::descriptors::DescriptorsAccess;
 use crate::descriptor::metadata::Metadata;
@@ -89,10 +89,10 @@ impl<R: DerefDescRef<C>, C: DescContent> Deref for Desc<R, C> {
 	}
 }
 
-/// works just like [`DescStruct`] but on [`Desc`] instead of Self
+/// works just like [`BufferStruct`] but on [`Desc`] instead of Self
 ///
 /// # Safety
-/// see [`DescStruct`]
+/// see [`BufferStruct`]
 #[allow(clippy::missing_safety_doc)]
 pub unsafe trait DescStructRef: DescRef + Copy {
 	type TransferDescStruct: bytemuck::AnyBitPattern + Send + Sync;
@@ -105,17 +105,17 @@ pub unsafe trait DescStructRef: DescRef + Copy {
 	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, meta: Metadata) -> Desc<Self, C>;
 }
 
-unsafe impl<R: DescStructRef, C: DescContent> DescStruct for Desc<R, C> {
-	type TransferDescStruct = R::TransferDescStruct;
+unsafe impl<R: DescStructRef, C: DescContent> BufferStruct for Desc<R, C> {
+	type Transfer = R::TransferDescStruct;
 
 	#[inline]
-	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
+	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
 		// Safety: delegated
 		unsafe { R::desc_write_cpu(self, meta) }
 	}
 
 	#[inline]
-	unsafe fn read(from: Self::TransferDescStruct, meta: Metadata) -> Self {
+	unsafe fn read(from: Self::Transfer, meta: Metadata) -> Self {
 		// Safety: delegated
 		unsafe { R::desc_read(from, meta) }
 	}

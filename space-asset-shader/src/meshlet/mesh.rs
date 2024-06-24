@@ -4,11 +4,11 @@ use core::mem;
 use core::ops::Deref;
 use glam::{UVec3, Vec3};
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::DescStruct;
+use vulkano_bindless_macros::BufferContent;
 use vulkano_bindless_shaders::descriptor::reference::{AliveDescRef, Desc, DescRef};
 use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors};
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 #[repr(C)]
 pub struct MeshletVertex {
 	pub position: [f32; 3],
@@ -27,7 +27,7 @@ impl MeshletVertex {
 	}
 }
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 #[repr(C)]
 pub struct MeshletData {
 	pub vertex_offset: MeshletOffset,
@@ -67,7 +67,7 @@ where
 	}
 }
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 #[repr(C)]
 pub struct MeshletMesh<R: DescRef> {
 	pub meshlets: Desc<R, Buffer<[MeshletData]>>,

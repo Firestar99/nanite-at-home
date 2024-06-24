@@ -19,18 +19,18 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
-use vulkano_bindless_shaders::desc_buffer::{DescBuffer, DescStruct};
+use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use vulkano_bindless_shaders::descriptor::buffer::Buffer;
 use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
-impl<T: DescBuffer + ?Sized> DescContentCpu for Buffer<T>
+impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T>
 where
-	T::TransferDescBuffer: VBufferContents,
+	T::Transfer: VBufferContents,
 {
 	type DescTable = BufferTable;
-	type VulkanType = Subbuffer<T::TransferDescBuffer>;
+	type VulkanType = Subbuffer<T::Transfer>;
 
 	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
 		slot.buffer.reinterpret_ref()
@@ -156,13 +156,13 @@ impl Display for AllocFromError {
 
 impl<'a> BufferTableAccess<'a> {
 	#[inline]
-	pub fn alloc_slot<T: DescBuffer + ?Sized>(
+	pub fn alloc_slot<T: BufferContent + ?Sized>(
 		&self,
-		buffer: Subbuffer<T::TransferDescBuffer>,
+		buffer: Subbuffer<T::Transfer>,
 		strong_refs: StrongBackingRefs,
 	) -> RCDesc<Buffer<T>>
 	where
-		T::TransferDescBuffer: VBufferContents,
+		T::Transfer: VBufferContents,
 	{
 		self.resource_table.alloc_slot(BufferSlot {
 			buffer: buffer.into_bytes(),
@@ -170,7 +170,7 @@ impl<'a> BufferTableAccess<'a> {
 		})
 	}
 
-	pub fn alloc_from_data<T: DescStruct>(
+	pub fn alloc_from_data<T: BufferStruct>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
@@ -188,7 +188,7 @@ impl<'a> BufferTableAccess<'a> {
 		}
 	}
 
-	pub fn alloc_from_iter<T: DescStruct, I>(
+	pub fn alloc_from_iter<T: BufferStruct, I>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
@@ -211,18 +211,18 @@ impl<'a> BufferTableAccess<'a> {
 		}
 	}
 
-	pub fn alloc_sized<T: DescStruct>(
+	pub fn alloc_sized<T: BufferStruct>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
 		allocation_info: AllocationCreateInfo,
 		strong_refs: StrongBackingRefs,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::new_sized::<T::TransferDescStruct>(allocator, create_info, allocation_info)?;
+		let buffer = VBuffer::new_sized::<T::Transfer>(allocator, create_info, allocation_info)?;
 		Ok(self.alloc_slot(buffer, strong_refs))
 	}
 
-	pub fn alloc_slice<T: DescStruct>(
+	pub fn alloc_slice<T: BufferStruct>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
@@ -230,11 +230,11 @@ impl<'a> BufferTableAccess<'a> {
 		len: DeviceSize,
 		strong_refs: StrongBackingRefs,
 	) -> Result<RCDesc<Buffer<[T]>>, Validated<AllocateBufferError>> {
-		let buffer = VBuffer::new_slice::<T::TransferDescStruct>(allocator, create_info, allocation_info, len)?;
+		let buffer = VBuffer::new_slice::<T::Transfer>(allocator, create_info, allocation_info, len)?;
 		Ok(self.alloc_slot(buffer, strong_refs))
 	}
 
-	pub fn alloc_unsized<T: DescBuffer + ?Sized>(
+	pub fn alloc_unsized<T: BufferContent + ?Sized>(
 		&self,
 		allocator: Arc<dyn MemoryAllocator>,
 		create_info: BufferCreateInfo,
@@ -243,9 +243,9 @@ impl<'a> BufferTableAccess<'a> {
 		strong_refs: StrongBackingRefs,
 	) -> Result<RCDesc<Buffer<T>>, Validated<AllocateBufferError>>
 	where
-		T::TransferDescBuffer: VBufferContents,
+		T::Transfer: VBufferContents,
 	{
-		let buffer = VBuffer::new_unsized::<T::TransferDescBuffer>(allocator, create_info, allocation_info, len)?;
+		let buffer = VBuffer::new_unsized::<T::Transfer>(allocator, create_info, allocation_info, len)?;
 		Ok(self.alloc_slot(buffer, strong_refs))
 	}
 }

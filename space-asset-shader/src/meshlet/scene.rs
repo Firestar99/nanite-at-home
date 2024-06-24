@@ -1,9 +1,9 @@
 use crate::meshlet::mesh::MeshletMesh;
 use glam::{Affine3A, Mat3A, Vec3A};
-use vulkano_bindless_macros::DescStruct;
+use vulkano_bindless_macros::BufferContent;
 use vulkano_bindless_shaders::descriptor::{Buffer, Desc, DescRef};
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 #[repr(C)]
 pub struct MeshletInstance<R: DescRef + 'static> {
 	pub transform: [f32; 12],
@@ -43,7 +43,7 @@ pub const fn affine3a_from_cols_array(transform: [f32; 12]) -> Affine3A {
 	}
 }
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 #[repr(C)]
 pub struct MeshletScene<R: DescRef + 'static> {
 	pub instances: Desc<R, Buffer<[MeshletInstance<R>]>>,

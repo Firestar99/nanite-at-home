@@ -5,7 +5,7 @@
 #[cfg(test)]
 extern crate alloc;
 
-pub mod desc_buffer;
+pub mod buffer_content;
 pub mod descriptor;
 pub mod frame_in_flight;
 pub mod shader_type;

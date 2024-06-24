@@ -9,7 +9,7 @@ use syn::{
 	TypeParamBound,
 };
 
-pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
+pub fn buffer_content(content: proc_macro::TokenStream) -> Result<TokenStream> {
 	let symbols = Symbols::new();
 	let item = syn::parse::<ItemStruct>(content)?;
 	let generics = item
@@ -41,14 +41,15 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 					let gen = gen_name_gen.next();
 					quote!(#name: #gen)
 				} else {
-					quote!(#name: <#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
+					quote!(#name: <#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer)
 				});
-				write_cpu.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::write_cpu(self.#name, meta)));
-				read.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::read(from.#name, meta)));
+				write_cpu
+					.push(quote!(#name: #crate_shaders::buffer_content::BufferStruct::write_cpu(self.#name, meta)));
+				read.push(quote!(#name: #crate_shaders::buffer_content::BufferStruct::read(from.#name, meta)));
 			}
 			(
 				quote!({#transfer}),
-				quote!(Self::TransferDescStruct {#write_cpu}),
+				quote!(Self::Transfer {#write_cpu}),
 				quote!(Self {#read}),
 			)
 		}
@@ -61,21 +62,22 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 					gen_ref_tys.push(f.ty.clone());
 					gen_name_gen.next().into_token_stream()
 				} else {
-					quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
+					quote!(<#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer)
 				});
 				let index = syn::Index::from(i);
-				write_cpu.push(quote!(#index: #crate_shaders::desc_buffer::DescStruct::write_cpu(self.#index, meta)));
-				read.push(quote!(#crate_shaders::desc_buffer::DescStruct::read(from.#index, meta)));
+				write_cpu
+					.push(quote!(#index: #crate_shaders::buffer_content::BufferStruct::write_cpu(self.#index, meta)));
+				read.push(quote!(#crate_shaders::buffer_content::BufferStruct::read(from.#index, meta)));
 			}
 			(
 				quote!((#transfer);),
-				quote!(Self::TransferDescStruct { #write_cpu }),
+				quote!(Self::Transfer { #write_cpu }),
 				quote!(Self(#read)),
 			)
 		}
 		Fields::Unit => (
 			quote!(;),
-			quote!(let _ = (self, meta); Self::TransferDescStruct),
+			quote!(let _ = (self, meta); Self::Transfer),
 			quote!(let _ = (from, meta); Self),
 		),
 	};
@@ -84,7 +86,7 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 	let generics_ref = decl_to_ref(item.generics.params.iter());
 	let generics_where = gen_ref_tys
 		.iter()
-		.map(|ty| quote!(#ty: #crate_shaders::desc_buffer::DescStruct))
+		.map(|ty| quote!(#ty: #crate_shaders::buffer_content::BufferStruct))
 		.collect::<Punctuated<TokenStream, Token![,]>>()
 		.into_token_stream();
 
@@ -93,7 +95,7 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 	});
 	let transfer_generics_ref = gen_ref_tys
 		.iter()
-		.map(|ty| quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct))
+		.map(|ty| quote!(<#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer))
 		.collect::<Punctuated<TokenStream, Token![,]>>()
 		.into_token_stream();
 
@@ -104,18 +106,18 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 		#[derive(Copy, Clone, #crate_shaders::bytemuck_derive::AnyBitPattern)]
 		#vis struct #transfer_ident #transfer_generics_decl #transfer
 
-		unsafe impl #generics_decl #crate_shaders::desc_buffer::DescStruct for #ident #generics_ref
+		unsafe impl #generics_decl #crate_shaders::buffer_content::BufferStruct for #ident #generics_ref
 		where
 			#ident #generics_ref: Copy,
 			#generics_where
 		{
-			type TransferDescStruct = #transfer_ident <#transfer_generics_ref>;
+			type Transfer = #transfer_ident <#transfer_generics_ref>;
 
-			unsafe fn write_cpu(self, meta: &mut impl #crate_shaders::desc_buffer::MetadataCpuInterface) -> Self::TransferDescStruct {
+			unsafe fn write_cpu(self, meta: &mut impl #crate_shaders::buffer_content::MetadataCpuInterface) -> Self::Transfer {
 				#write_cpu
 			}
 
-			unsafe fn read(from: Self::TransferDescStruct, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
+			unsafe fn read(from: Self::Transfer, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
 				#read
 			}
 		}

@@ -14,18 +14,18 @@ use spirv_std::arch::{
 };
 use spirv_std::memory::{Scope, Semantics};
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, DescStruct};
+use vulkano_bindless_macros::{bindless, BufferContent};
 use vulkano_bindless_shaders::descriptor::reference::Strong;
 use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub mesh: TransientDesc<'a, Buffer<MeshletMesh<Strong>>>,
 	pub instances: TransientDesc<'a, Buffer<[MeshletInstance<Strong>]>>,
 }
 
-#[derive(Copy, Clone, DescStruct)]
+#[derive(Copy, Clone, BufferContent)]
 struct Payload {
 	pub instance_id: u32,
 	pub meshlet_offset: u32,
