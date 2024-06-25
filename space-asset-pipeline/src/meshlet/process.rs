@@ -157,19 +157,39 @@ impl Gltf {
 			(0..vertices.len() as u32).collect()
 		};
 
-		let adapter = VertexDataAdapter::new(
-			bytemuck::cast_slice(&*vertices),
-			mem::size_of::<MeshletDrawVertex>(),
-			offset_of!(MeshletDrawVertex, position),
-		)
-		.unwrap();
-		let out = meshopt::build_meshlets(
-			&indices,
-			&adapter,
-			MESHLET_MAX_VERTICES as usize,
-			MESHLET_MAX_TRIANGLES as usize,
-			0.,
-		);
+		let out = {
+			let adapter = VertexDataAdapter::new(
+				bytemuck::cast_slice(&*vertices),
+				mem::size_of::<MeshletDrawVertex>(),
+				offset_of!(MeshletDrawVertex, position),
+			)
+			.unwrap();
+			let mut out = meshopt::build_meshlets(
+				&indices,
+				&adapter,
+				MESHLET_MAX_VERTICES as usize,
+				MESHLET_MAX_TRIANGLES as usize,
+				0.,
+			);
+			// convert meshopt triangle offset from #N of indices to #N of triangles
+			for meshlet in &mut out.meshlets {
+				meshlet.triangle_offset /= 3;
+			}
+			// resize vertex and index buffers appropriately
+			let (max_vertices, max_triangles) = out
+				.meshlets
+				.last()
+				.map(|m| {
+					(
+						m.vertex_offset as usize + m.vertex_count as usize,
+						m.triangle_offset as usize + m.triangle_count as usize,
+					)
+				})
+				.unwrap_or((0, 0));
+			out.vertices.truncate(max_vertices);
+			out.triangles.truncate(max_triangles * 3);
+			out
+		};
 
 		Ok(MeshletMeshDisk {
 			draw_vertices: out.vertices.into_iter().map(|i| vertices[i as usize]).collect(),
