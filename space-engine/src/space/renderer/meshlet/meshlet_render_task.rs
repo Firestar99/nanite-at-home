@@ -7,7 +7,7 @@ use glam::{vec3, Affine3A};
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::{MeshletData, MeshletMesh, MeshletMesh2InstanceCpu};
 use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_asset::meshlet::vertex::MeshletVertex;
+use space_asset::meshlet::vertex::MeshletDrawVertex;
 use std::iter::repeat;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
@@ -54,10 +54,10 @@ fn upload_test_mesh(init: &Arc<Init>) -> MeshletMesh2InstanceCpu {
 				.copied()
 				.flat_map(|quad| {
 					[
-						MeshletVertex::new(quad),
-						MeshletVertex::new(quad + vec3(1., 0., 0.)),
-						MeshletVertex::new(quad + vec3(0., 1., 0.)),
-						MeshletVertex::new(quad + vec3(1., 1., 0.)),
+						MeshletDrawVertex::new(quad),
+						MeshletDrawVertex::new(quad + vec3(1., 0., 0.)),
+						MeshletDrawVertex::new(quad + vec3(0., 1., 0.)),
+						MeshletDrawVertex::new(quad + vec3(1., 1., 0.)),
 					]
 				})
 				.collect::<Vec<_>>(),
@@ -89,8 +89,8 @@ fn upload_test_mesh(init: &Arc<Init>) -> MeshletMesh2InstanceCpu {
 			buffer_info.clone(),
 			alloc_info.clone(),
 			quads.iter().enumerate().map(|(i, _)| MeshletData {
-				vertex_offset: MeshletOffset::new(i * 4, 4),
-				triangle_indices_offset: MeshletOffset::new(i * 2, 2),
+				draw_vertex_offset: MeshletOffset::new(i * 4, 4),
+				triangle_offset: MeshletOffset::new(i * 2, 2),
 			}),
 		)
 		.unwrap();
@@ -103,8 +103,8 @@ fn upload_test_mesh(init: &Arc<Init>) -> MeshletMesh2InstanceCpu {
 			buffer_info.clone(),
 			alloc_info.clone(),
 			MeshletMesh {
-				vertices: vertices.to_strong(),
-				triangle_indices: indices.to_strong(),
+				draw_vertices: vertices.to_strong(),
+				triangles: indices.to_strong(),
 				meshlets: meshlets.to_strong(),
 				num_meshlets: meshlets.len() as u32,
 			},

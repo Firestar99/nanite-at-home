@@ -9,14 +9,14 @@ mod gpu {
 	use vulkano_bindless_shaders::descriptor::reference::{AliveDescRef, Desc, DescRef};
 	use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors};
 
-	use crate::meshlet::vertex::MeshletVertex;
+	use crate::meshlet::vertex::MeshletDrawVertex;
 
 	#[repr(C)]
 	#[derive(Copy, Clone, Debug, BufferContent)]
 	#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 	pub struct MeshletData {
-		pub vertex_offset: MeshletOffset,
-		pub triangle_indices_offset: MeshletOffset,
+		pub draw_vertex_offset: MeshletOffset,
+		pub triangle_offset: MeshletOffset,
 	}
 	const_assert_eq!(mem::size_of::<MeshletData>(), 2 * 4);
 
@@ -56,8 +56,8 @@ mod gpu {
 	#[derive(Copy, Clone, BufferContent)]
 	pub struct MeshletMesh<R: DescRef> {
 		pub meshlets: Desc<R, Buffer<[MeshletData]>>,
-		pub vertices: Desc<R, Buffer<[MeshletVertex]>>,
-		pub triangle_indices: Desc<R, Buffer<[CompressedIndices]>>,
+		pub draw_vertices: Desc<R, Buffer<[MeshletDrawVertex]>>,
+		pub triangles: Desc<R, Buffer<[CompressedIndices]>>,
 		pub num_meshlets: u32,
 	}
 
@@ -87,17 +87,17 @@ mod gpu {
 
 	impl<'a, R: DescRef> Meshlet<'a, R> {
 		pub fn vertices(&self) -> usize {
-			self.data.vertex_offset.len()
+			self.data.draw_vertex_offset.len()
 		}
 
 		pub fn triangles(&self) -> usize {
-			self.data.triangle_indices_offset.len()
+			self.data.triangle_offset.len()
 		}
 	}
 
 	impl<'a, R: AliveDescRef> Meshlet<'a, R> {
-		pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> MeshletVertex {
-			let len = self.data.vertex_offset.len();
+		pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> MeshletDrawVertex {
+			let len = self.data.draw_vertex_offset.len();
 			assert!(
 				index < len,
 				"index out of bounds: the len is {len} but the index is {index}"
@@ -108,19 +108,19 @@ mod gpu {
 		/// # Safety
 		/// index must be in bounds
 		#[inline]
-		pub unsafe fn load_vertex_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletVertex {
-			let global_index = self.data.vertex_offset.start() + index;
-			self.mesh.vertices.access(descriptors).load_unchecked(global_index)
+		pub unsafe fn load_vertex_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletDrawVertex {
+			let global_index = self.data.draw_vertex_offset.start() + index;
+			self.mesh.draw_vertices.access(descriptors).load_unchecked(global_index)
 		}
 
 		#[inline]
 		pub fn load_triangle_indices(&self, descriptors: &'a Descriptors, triangle: usize) -> UVec3 {
-			let len = self.data.triangle_indices_offset.len();
+			let len = self.data.triangle_offset.len();
 			assert!(
 				triangle < len,
 				"index out of bounds: the len is {len} but the index is {triangle}"
 			);
-			let triangle_indices = self.mesh.triangle_indices.access(descriptors);
+			let triangle_indices = self.mesh.triangles.access(descriptors);
 			triangle_indices_load(self, &triangle_indices, triangle, |triangle_indices, i| {
 				triangle_indices.load(i)
 			})
@@ -131,7 +131,7 @@ mod gpu {
 		#[inline]
 		pub unsafe fn load_triangle_indices_unchecked(&self, descriptors: &'a Descriptors, triangle: usize) -> UVec3 {
 			unsafe {
-				let triangle_indices = self.mesh.triangle_indices.access(descriptors);
+				let triangle_indices = self.mesh.triangles.access(descriptors);
 				triangle_indices_load(self, &triangle_indices, triangle, |triangle_indices, i| {
 					triangle_indices.load_unchecked(i)
 				})
@@ -145,14 +145,13 @@ pub use gpu::*;
 mod disk {
 	use crate::meshlet::indices::CompressedIndices;
 	use crate::meshlet::mesh::MeshletData;
-	use crate::meshlet::vertex::MeshletVertex;
+	use crate::meshlet::vertex::MeshletDrawVertex;
 	use rkyv::{Archive, Deserialize, Serialize};
 
 	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletMeshDisk {
 		pub meshlets: Vec<MeshletData>,
-		pub vertices: Vec<MeshletVertex>,
-		pub vertices_indices: Vec<u32>,
+		pub draw_vertices: Vec<MeshletDrawVertex>,
 		pub triangle_indices: Vec<CompressedIndices>,
 	}
 }

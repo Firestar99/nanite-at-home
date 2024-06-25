@@ -35,7 +35,7 @@ pub fn triangle_indices_load_gpu<T>(
 	triangle: usize,
 	read_fn: impl Fn(&T, usize) -> CompressedIndices,
 ) -> UVec3 {
-	let abs_triangle = meshlet.as_ref().triangle_indices_offset.start() + triangle;
+	let abs_triangle = meshlet.as_ref().triangle_offset.start() + triangle;
 	let mut index = (abs_triangle * 3) / INDICES_PER_WORD;
 	let mut rem = (abs_triangle * 3) % INDICES_PER_WORD;
 	let mut load = read_fn(t, index);
@@ -61,7 +61,7 @@ pub fn triangle_indices_load_cpu<T>(
 	triangle: usize,
 	read_fn: impl Fn(&T, usize) -> CompressedIndices,
 ) -> UVec3 {
-	let abs_triangle = meshlet.as_ref().triangle_indices_offset.start() + triangle;
+	let abs_triangle = meshlet.as_ref().triangle_offset.start() + triangle;
 	UVec3::from_array(array::from_fn(|i| {
 		let i = abs_triangle * 3 + i;
 		let index = i / INDICES_PER_WORD;
@@ -153,14 +153,14 @@ mod tests {
 	fn write_and_read_verify(indices: &[u32]) {
 		let vec = triangle_indices_write_vec(indices.iter().copied());
 		let meshlet = MeshletData {
-			triangle_indices_offset: MeshletOffset::new(0, indices.len() / 3),
-			vertex_offset: MeshletOffset::default(),
+			triangle_offset: MeshletOffset::new(0, indices.len() / 3),
+			draw_vertex_offset: MeshletOffset::default(),
 		};
-		let read_cpu: Vec<_> = (0..meshlet.triangle_indices_offset.len())
+		let read_cpu: Vec<_> = (0..meshlet.triangle_offset.len())
 			.flat_map(|i| triangle_indices_load_cpu(&meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
 			.collect();
 		assert_eq!(indices, read_cpu, "Written and read contents do not agree");
-		let read_gpu: Vec<_> = (0..meshlet.triangle_indices_offset.len())
+		let read_gpu: Vec<_> = (0..meshlet.triangle_offset.len())
 			.flat_map(|i| triangle_indices_load_gpu(&meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
 			.collect();
 		assert_eq!(indices, read_gpu, "GPU optimized loads do not match written contents");
@@ -205,8 +205,8 @@ mod tests {
 		for indices in INDICES.iter().copied() {
 			let triangles = indices.len() / 3;
 			let meshlet = MeshletData {
-				triangle_indices_offset: MeshletOffset::new(start, triangles),
-				vertex_offset: MeshletOffset::default(),
+				triangle_offset: MeshletOffset::new(start, triangles),
+				draw_vertex_offset: MeshletOffset::default(),
 			};
 			for tri in 0..triangles {
 				let expect = &indices[tri * 3..tri * 3 + 3];

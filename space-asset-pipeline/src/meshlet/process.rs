@@ -12,7 +12,7 @@ use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 use space_asset::meshlet::offset::MeshletOffset;
 use space_asset::meshlet::scene::MeshletSceneDisk;
-use space_asset::meshlet::vertex::MeshletVertex;
+use space_asset::meshlet::vertex::MeshletDrawVertex;
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 use std::ops::Deref;
@@ -149,7 +149,7 @@ impl Gltf {
 		let vertices: Vec<_> = reader
 			.read_positions()
 			.ok_or(Error::from(MeshletError::NoVertexPositions))?
-			.map(|pos| MeshletVertex::new(Vec3::from(pos)))
+			.map(|pos| MeshletDrawVertex::new(Vec3::from(pos)))
 			.collect();
 		let indices: Vec<_> = if let Some(indices) = reader.read_indices() {
 			indices.into_u32().collect()
@@ -159,8 +159,8 @@ impl Gltf {
 
 		let adapter = VertexDataAdapter::new(
 			bytemuck::cast_slice(&*vertices),
-			mem::size_of::<MeshletVertex>(),
-			offset_of!(MeshletVertex, position),
+			mem::size_of::<MeshletDrawVertex>(),
+			offset_of!(MeshletDrawVertex, position),
 		)
 		.unwrap();
 		let out = meshopt::build_meshlets(
@@ -172,16 +172,15 @@ impl Gltf {
 		);
 
 		Ok(MeshletMeshDisk {
-			vertices,
+			draw_vertices: out.vertices.into_iter().map(|i| vertices[i as usize]).collect(),
 			meshlets: out
 				.meshlets
 				.into_iter()
 				.map(|m| MeshletData {
-					vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
-					triangle_indices_offset: MeshletOffset::new(m.triangle_offset as usize, m.triangle_count as usize),
+					draw_vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
+					triangle_offset: MeshletOffset::new(m.triangle_offset as usize, m.triangle_count as usize),
 				})
 				.collect(),
-			vertices_indices: out.vertices,
 			triangle_indices: triangle_indices_write_vec(out.triangles.into_iter().map(|i| i as u32)),
 		})
 	}
