@@ -27,6 +27,20 @@ struct Args {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+	#[cfg(feature = "profile-with-puffin")]
+	let _puffin_server = {
+		profiling::puffin::set_scopes_on(true);
+		let server_addr = format!("127.0.0.1:{}", puffin_http::DEFAULT_PORT);
+		puffin_http::Server::new(&server_addr).unwrap()
+	};
+
+	let result = inner_main();
+	profiling::finish_frame!();
+	result
+}
+
+#[profiling::function]
+fn inner_main() -> Result<(), Box<dyn Error>> {
 	let args = Args::parse();
 	std::env::set_var(
 		"SMOL_THREADS",
@@ -39,19 +53,44 @@ fn main() -> Result<(), Box<dyn Error>> {
 	let scene = block_on(gltf.process())?;
 
 	if let Some(out) = args.out {
-		let vec = rkyv::to_bytes::<_, 1024>(&scene)?;
-		File::create(&out)?.write_all(&vec)?;
+		let vec = {
+			profiling::scope!("serializing");
+			rkyv::to_bytes::<_, 1024>(&scene)?
+		};
 
-		let out_zstd = out
-			.parent()
-			.unwrap_or(Path::new("."))
-			.join(format!("{}.zstd", out.file_name().unwrap().to_str().unwrap()));
-		zstd::stream::write::Encoder::new(File::create(out_zstd)?, 0)?
-			.auto_finish()
-			.write_all(&vec)?;
+		{
+			profiling::scope!("write uncompressed");
+			File::create(&out)?.write_all(&vec)?;
+		}
+
+		{
+			profiling::scope!("zstd stream to file");
+			let out_zstd = out
+				.parent()
+				.unwrap_or(Path::new("."))
+				.join(format!("{}.zstd", out.file_name().unwrap().to_str().unwrap()));
+			zstd::stream::write::Encoder::new(File::create(out_zstd)?, 0)?
+				.auto_finish()
+				.write_all(&vec)?;
+		}
+
+		let zstd = {
+			profiling::scope!("zstd bulk");
+			zstd::bulk::compress(&vec, 0).unwrap()
+		};
+
+		{
+			profiling::scope!("write zstd");
+			let out_zstd2 = out
+				.parent()
+				.unwrap_or(Path::new("."))
+				.join(format!("{}2.zstd", out.file_name().unwrap().to_str().unwrap()));
+			File::create(&out_zstd2)?.write_all(&zstd)?;
+		}
 	}
 
 	if args.debug_verbose {
+		profiling::scope!("debug_verbose");
 		println!("{:#?}", scene);
 	}
 

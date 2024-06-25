@@ -26,6 +26,7 @@ pub struct Gltf {
 }
 
 impl Gltf {
+	#[profiling::function]
 	pub fn open(path: PathBuf) -> Result<Arc<Self>> {
 		let base = Some(
 			path.parent()
@@ -65,6 +66,7 @@ impl Deref for Gltf {
 }
 
 impl Gltf {
+	#[profiling::function]
 	pub async fn process(self: &Arc<Self>) -> Result<MeshletSceneDisk> {
 		let meshes_primitives = futures::future::join_all(self.meshes().map(|mesh| {
 			futures::future::join_all(mesh.primitives().map(|primitive| {
@@ -107,6 +109,7 @@ impl Gltf {
 		})
 	}
 
+	#[profiling::function]
 	fn compute_transformations(&self, scene: &Scene) -> Vec<Affine3A> {
 		fn walk(out: &mut Vec<Affine3A>, node: Node, parent: Affine3A) {
 			let (translation, rotation, scale) = node.transform().decomposed();
@@ -129,6 +132,7 @@ impl Gltf {
 		out
 	}
 
+	#[profiling::function]
 	fn process_mesh_primitive(self: &Arc<Gltf>, mesh_id: usize, primitive_id: usize) -> Result<MeshletMeshDisk> {
 		let mesh = self.meshes().skip(mesh_id).next().unwrap();
 		let primitive = mesh.primitives().nth(primitive_id).unwrap();

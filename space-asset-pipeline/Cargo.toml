@@ -29,8 +29,19 @@ memoffset = { workspace = true }
 rkyv = { workspace = true }
 zstd = { workspace = true }
 
+# profiling
+profiling = { workspace = true }
+puffin_http = { workspace = true }
+
 # other
 parking_lot = { workspace = true }
 static_assertions = { workspace = true }
 smallvec = { workspace = true }
 clap = { workspace = true }
+
+[features]
+profile-with-puffin = ["profiling/profile-with-puffin"]
+profile-with-optick = ["profiling/profile-with-optick"]
+profile-with-superluminal = ["profiling/profile-with-superluminal"]
+profile-with-tracing = ["profiling/profile-with-tracing"]
+profile-with-tracy = ["profiling/profile-with-tracy"]
