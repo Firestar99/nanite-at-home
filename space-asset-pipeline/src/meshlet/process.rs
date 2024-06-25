@@ -66,8 +66,8 @@ impl Deref for Gltf {
 }
 
 impl Gltf {
-	#[profiling::function]
 	pub async fn process(self: &Arc<Self>) -> Result<MeshletSceneDisk> {
+		profiling::scope!("Gltf::process");
 		let meshes_primitives = futures::future::join_all(self.meshes().map(|mesh| {
 			futures::future::join_all(mesh.primitives().map(|primitive| {
 				let gltf = self.clone();
@@ -77,21 +77,27 @@ impl Gltf {
 			}))
 		}));
 
-		let scene = self.default_scene().ok_or(Error::from(MeshletError::NoDefaultScene))?;
-		let node_transforms = self.compute_transformations(&scene);
-
-		let meshes_primitives = meshes_primitives
-			.await
-			.into_iter()
-			.map(|v| v.into_iter().collect::<Result<Vec<_>>>())
-			.collect::<Result<Vec<_>>>()?;
-
-		let mut mesh2instance = (0..meshes_primitives.len()).map(|_| Vec::new()).collect::<Vec<_>>();
-		for node in self.nodes() {
-			if let Some(mesh) = node.mesh() {
-				mesh2instance[mesh.index()].push(MeshletInstance::new(node_transforms[node.index()]));
+		let mesh2instance = {
+			profiling::scope!("instance transformations");
+			let scene = self.default_scene().ok_or(Error::from(MeshletError::NoDefaultScene))?;
+			let node_transforms = self.compute_transformations(&scene);
+			let mut mesh2instance = (0..self.meshes().len()).map(|_| Vec::new()).collect::<Vec<_>>();
+			for node in self.nodes() {
+				if let Some(mesh) = node.mesh() {
+					mesh2instance[mesh.index()].push(MeshletInstance::new(node_transforms[node.index()]));
+				}
 			}
-		}
+			mesh2instance
+		};
+
+		let meshes_primitives = {
+			profiling::scope!("await meshes");
+			meshes_primitives
+				.await
+				.into_iter()
+				.map(|v| v.into_iter().collect::<Result<Vec<_>>>())
+				.collect::<Result<Vec<_>>>()?
+		};
 
 		Ok(MeshletSceneDisk {
 			mesh2instance: meshes_primitives
@@ -109,7 +115,6 @@ impl Gltf {
 		})
 	}
 
-	#[profiling::function]
 	fn compute_transformations(&self, scene: &Scene) -> Vec<Affine3A> {
 		fn walk(out: &mut Vec<Affine3A>, node: Node, parent: Affine3A) {
 			let (translation, rotation, scale) = node.transform().decomposed();
