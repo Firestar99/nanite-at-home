@@ -73,6 +73,7 @@ impl<'a> Deref for StrongMetadataCpu<'a> {
 	}
 }
 
+#[derive(Debug)]
 pub enum BackingRefsError {
 	NoLongerAlive(DescContentEnum, u32, u32),
 }

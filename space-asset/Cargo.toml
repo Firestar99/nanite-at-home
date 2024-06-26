@@ -12,6 +12,13 @@ vulkano-bindless = { workspace = true, optional = true }
 vulkano-bindless-macros = { workspace = true }
 vulkano-bindless-shaders = { workspace = true }
 
+# vulkan
+vulkano = { workspace = true, optional = true }
+
+# async
+futures = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+
 # bytes and numbers
 glam = { workspace = true }
 bytemuck = { workspace = true }
@@ -21,9 +28,12 @@ bytemuck_derive = { workspace = true }
 rkyv = { workspace = true, optional = true }
 zstd = { workspace = true, optional = true }
 
+# profiling
+profiling = { workspace = true }
+
 # other
 static_assertions = { workspace = true }
 
 [features]
 disk = ["dep:rkyv", "dep:zstd"]
-cpu = ["disk", "dep:vulkano-bindless"]
+runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon"]

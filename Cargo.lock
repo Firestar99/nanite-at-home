@@ -2469,9 +2469,13 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "bytemuck_derive",
+ "futures",
  "glam",
+ "profiling",
+ "rayon",
  "rkyv",
  "static_assertions",
+ "vulkano",
  "vulkano-bindless",
  "vulkano-bindless-macros",
  "vulkano-bindless-shaders",

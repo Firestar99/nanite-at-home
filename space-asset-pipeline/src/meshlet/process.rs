@@ -98,7 +98,7 @@ impl Gltf {
 		};
 
 		Ok(MeshletSceneDisk {
-			mesh2instance: meshes_primitives
+			mesh2instances: meshes_primitives
 				.into_iter()
 				.zip(mesh2instance.into_iter())
 				.flat_map(|(mesh_primitives, instances)| {
@@ -205,7 +205,7 @@ impl Gltf {
 					triangle_offset: MeshletOffset::new(m.triangle_offset as usize, m.triangle_count as usize),
 				})
 				.collect(),
-			triangle_indices: triangle_indices_write_vec(out.triangles.into_iter().map(|i| i as u32)),
+			triangles: triangle_indices_write_vec(out.triangles.into_iter().map(|i| i as u32)),
 		})
 	}
 }

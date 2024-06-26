@@ -1,7 +1,6 @@
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
-use space_asset::meshlet::mesh::MeshletMesh2InstanceCpu;
-use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
+use space_asset::meshlet::mesh2instance::{MeshletMesh2Instance, MeshletMesh2InstanceCpu};
 use space_engine_shader::space::renderer::meshlet::mesh_shader::{Params, TASK_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;

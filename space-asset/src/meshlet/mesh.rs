@@ -152,31 +152,45 @@ mod disk {
 	pub struct MeshletMeshDisk {
 		pub meshlets: Vec<MeshletData>,
 		pub draw_vertices: Vec<MeshletDrawVertex>,
-		pub triangle_indices: Vec<CompressedIndices>,
+		pub triangles: Vec<CompressedIndices>,
 	}
 }
 #[cfg(feature = "disk")]
 pub use disk::*;
 
-#[cfg(feature = "cpu")]
-mod cpu {
-	use crate::meshlet::mesh2instance::MeshletMesh2Instance;
-	use std::ops::Deref;
-	use vulkano_bindless::descriptor::RC;
+#[cfg(feature = "runtime")]
+mod runtime {
+	use crate::meshlet::mesh::{ArchivedMeshletMeshDisk, MeshletMesh};
+	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
+	use vulkano::Validated;
+	use vulkano_bindless::descriptor::{RCDescExt, RC};
 	use vulkano_bindless_shaders::descriptor::reference::Strong;
 
-	pub struct MeshletMesh2InstanceCpu {
-		pub mesh2instance: MeshletMesh2Instance<RC, Strong>,
-		pub num_meshlets: u32,
+	impl MeshletMesh<RC> {
+		pub fn to_strong(&self) -> MeshletMesh<Strong> {
+			MeshletMesh {
+				meshlets: self.meshlets.to_strong(),
+				draw_vertices: self.draw_vertices.to_strong(),
+				triangles: self.triangles.to_strong(),
+				num_meshlets: self.num_meshlets,
+			}
+		}
 	}
 
-	impl Deref for MeshletMesh2InstanceCpu {
-		type Target = MeshletMesh2Instance<RC, Strong>;
-
-		fn deref(&self) -> &Self::Target {
-			&self.mesh2instance
+	impl ArchivedMeshletMeshDisk {
+		pub async fn upload(&self, uploader: &Uploader) -> Result<MeshletMesh<RC>, Validated<UploadError>> {
+			profiling::scope!("ArchivedMeshletMeshDisk::upload");
+			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
+			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));
+			let triangles = uploader.upload_buffer_iter(self.triangles.iter().map(deserialize_infallible));
+			Ok(MeshletMesh {
+				meshlets: meshlets.await?.into(),
+				draw_vertices: draw_vertices.await?.into(),
+				triangles: triangles.await?.into(),
+				num_meshlets: self.meshlets.len() as u32,
+			})
 		}
 	}
 }
-#[cfg(feature = "cpu")]
-pub use cpu::*;
+#[cfg(feature = "runtime")]
+pub use runtime::*;
