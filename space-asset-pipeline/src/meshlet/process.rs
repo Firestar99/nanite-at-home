@@ -147,11 +147,16 @@ impl Gltf {
 			.ok_or(Error::from(MeshletError::NoVertexPositions))?
 			.map(|pos| MeshletDrawVertex::new(Vec3::from(pos)))
 			.collect();
-		let indices: Vec<_> = if let Some(indices) = reader.read_indices() {
+		let mut indices: Vec<_> = if let Some(indices) = reader.read_indices() {
 			indices.into_u32().collect()
 		} else {
 			(0..vertices.len() as u32).collect()
 		};
+
+		{
+			profiling::scope!("meshopt::optimize_vertex_cache");
+			meshopt::optimize_vertex_cache_in_place(&mut indices, vertices.len());
+		}
 
 		let out = {
 			let adapter = VertexDataAdapter::new(
@@ -160,13 +165,16 @@ impl Gltf {
 				offset_of!(MeshletDrawVertex, position),
 			)
 			.unwrap();
-			let mut out = meshopt::build_meshlets(
-				&indices,
-				&adapter,
-				MESHLET_MAX_VERTICES as usize,
-				MESHLET_MAX_TRIANGLES as usize,
-				0.,
-			);
+			let mut out = {
+				profiling::scope!("meshopt::build_meshlets");
+				meshopt::build_meshlets(
+					&indices,
+					&adapter,
+					MESHLET_MAX_VERTICES as usize,
+					MESHLET_MAX_TRIANGLES as usize,
+					0.,
+				)
+			};
 			// convert meshopt triangle offset from #N of indices to #N of triangles
 			for meshlet in &mut out.meshlets {
 				meshlet.triangle_offset /= 3;
