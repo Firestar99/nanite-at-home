@@ -12,7 +12,7 @@ space-asset = { workspace = true, features = ["disk"] }
 
 # async
 futures = { workspace = true }
-smol = { workspace = true }
+rayon = { workspace = true }
 
 # model loader
 gltf = { workspace = true }

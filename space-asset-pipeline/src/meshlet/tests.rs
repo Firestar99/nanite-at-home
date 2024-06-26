@@ -1,5 +1,5 @@
 use crate::meshlet::process::Gltf;
-use smol::future::block_on;
+use futures::executor::block_on;
 use std::path::PathBuf;
 
 const LANTERN_GLTF_PATH: &str = concat!(

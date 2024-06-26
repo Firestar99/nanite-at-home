@@ -1,10 +1,9 @@
 use clap::Parser;
-use smol::future::block_on;
+use futures::executor::block_on;
 use space_asset_pipeline::meshlet::process::Gltf;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -42,12 +41,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 #[profiling::function]
 fn inner_main() -> Result<(), Box<dyn Error>> {
 	let args = Args::parse();
-	std::env::set_var(
-		"SMOL_THREADS",
-		args.threads
-			.unwrap_or_else(|| std::thread::available_parallelism().map(NonZeroUsize::get).unwrap_or(1))
-			.to_string(),
-	);
+	rayon::ThreadPoolBuilder::new()
+		.num_threads(args.threads.unwrap_or(0))
+		.thread_name(|id| format!("Rayon-{}", id))
+		.build_global()
+		.unwrap();
 
 	let gltf = Gltf::open(PathBuf::from(args.path))?;
 	let scene = block_on(gltf.process())?;

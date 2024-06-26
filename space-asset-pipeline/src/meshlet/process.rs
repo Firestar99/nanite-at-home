@@ -2,9 +2,10 @@ use crate::meshlet::error::{Error, MeshletError, Result};
 use glam::{Affine3A, Quat, Vec3};
 use gltf::buffer::Data;
 use gltf::mesh::Mode;
-use gltf::{Buffer, Document, Node, Scene};
+use gltf::{Buffer, Document, Node, Primitive, Scene};
 use memoffset::offset_of;
 use meshopt::VertexDataAdapter;
+use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset::meshlet::indices::triangle_indices_write_vec;
 use space_asset::meshlet::instance::MeshletInstance;
@@ -68,14 +69,20 @@ impl Deref for Gltf {
 impl Gltf {
 	pub async fn process(self: &Arc<Self>) -> Result<MeshletSceneDisk> {
 		profiling::scope!("Gltf::process");
-		let meshes_primitives = futures::future::join_all(self.meshes().map(|mesh| {
-			futures::future::join_all(mesh.primitives().map(|primitive| {
-				let gltf = self.clone();
-				let mesh_id = mesh.index();
-				let primitive_id = primitive.index();
-				smol::spawn(async move { gltf.process_mesh_primitive(mesh_id, primitive_id) })
-			}))
-		}));
+
+		let meshes_primitives = {
+			profiling::scope!("process meshes");
+			self.meshes()
+				.collect::<Vec<_>>()
+				.into_par_iter()
+				.map(|mesh| {
+					let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
+					vec.into_par_iter()
+						.map(|primitive| self.process_mesh_primitive(primitive.clone()))
+						.collect::<Result<Vec<_>>>()
+				})
+				.collect::<Result<Vec<_>>>()
+		}?;
 
 		let mesh2instance = {
 			profiling::scope!("instance transformations");
@@ -88,15 +95,6 @@ impl Gltf {
 				}
 			}
 			mesh2instance
-		};
-
-		let meshes_primitives = {
-			profiling::scope!("await meshes");
-			meshes_primitives
-				.await
-				.into_iter()
-				.map(|v| v.into_iter().collect::<Result<Vec<_>>>())
-				.collect::<Result<Vec<_>>>()?
 		};
 
 		Ok(MeshletSceneDisk {
@@ -138,9 +136,7 @@ impl Gltf {
 	}
 
 	#[profiling::function]
-	fn process_mesh_primitive(self: &Arc<Gltf>, mesh_id: usize, primitive_id: usize) -> Result<MeshletMeshDisk> {
-		let mesh = self.meshes().skip(mesh_id).next().unwrap();
-		let primitive = mesh.primitives().nth(primitive_id).unwrap();
+	fn process_mesh_primitive(self: &Arc<Gltf>, primitive: Primitive) -> Result<MeshletMeshDisk> {
 		if primitive.mode() != Mode::Triangles {
 			return Err(MeshletError::PrimitiveMustBeTriangleList.into());
 		}
