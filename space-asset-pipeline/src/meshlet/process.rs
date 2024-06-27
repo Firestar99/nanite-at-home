@@ -175,37 +175,45 @@ impl Gltf {
 					0.,
 				)
 			};
-			// convert meshopt triangle offset from #N of indices to #N of triangles
-			for meshlet in &mut out.meshlets {
-				meshlet.triangle_offset /= 3;
-			}
-			// resize vertex and index buffers appropriately
-			let (max_vertices, max_triangles) = out
-				.meshlets
-				.last()
-				.map(|m| {
-					(
-						m.vertex_offset as usize + m.vertex_count as usize,
-						m.triangle_offset as usize + m.triangle_count as usize,
-					)
-				})
-				.unwrap_or((0, 0));
-			out.vertices.truncate(max_vertices);
-			out.triangles.truncate(max_triangles * 3);
+			// resize vertex buffer appropriately
+			out.vertices.truncate(
+				out.meshlets
+					.last()
+					.map(|m| m.vertex_offset as usize + m.vertex_count as usize)
+					.unwrap_or(0),
+			);
 			out
 		};
 
-		Ok(MeshletMeshDisk {
-			draw_vertices: out.vertices.into_iter().map(|i| vertices[i as usize]).collect(),
-			meshlets: out
-				.meshlets
-				.into_iter()
-				.map(|m| MeshletData {
+		let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
+		let triangles = triangle_indices_write_vec(indices.iter().copied().map(u32::from));
+		let indices_read = triangles
+			.iter()
+			.flat_map(|c| c.to_values())
+			.map(|i| i as u8)
+			.take(indices.len())
+			.collect::<Vec<_>>();
+		assert_eq!(indices, indices_read);
+		let draw_vertices = out.vertices.into_iter().map(|i| vertices[i as usize]).collect();
+
+		let mut i = 0;
+		let meshlets = out
+			.meshlets
+			.into_iter()
+			.map(|m| {
+				let data = MeshletData {
 					draw_vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
-					triangle_offset: MeshletOffset::new(m.triangle_offset as usize, m.triangle_count as usize),
-				})
-				.collect(),
-			triangles: triangle_indices_write_vec(out.triangles.into_iter().map(|i| i as u32)),
+					triangle_offset: MeshletOffset::new(i, m.triangle_count as usize),
+				};
+				i += m.triangle_count as usize;
+				data
+			})
+			.collect();
+
+		Ok(MeshletMeshDisk {
+			draw_vertices,
+			meshlets,
+			triangles,
 		})
 	}
 }

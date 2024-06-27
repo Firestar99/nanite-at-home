@@ -21,7 +21,7 @@ pub async fn load_scene(init: &Arc<Init>) -> Vec<Arc<MeshletSceneCpu>> {
 	let scene = upload_test_scene(init);
 
 	let mut out = Vec::new();
-	out.push(upload_test_mesh(init));
+	// out.push(upload_test_mesh(init));
 	out.push(scene.await.unwrap());
 	out
 }
