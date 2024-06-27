@@ -1,6 +1,5 @@
 use crate::meshlet::mesh::MeshletData;
 use crate::meshlet::MESHLET_INDICES_BITS;
-use core::array;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use glam::UVec3;
@@ -11,14 +10,17 @@ use vulkano_bindless_macros::BufferContent;
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CompressedIndices(pub u32);
 
+impl CompressedIndices {
+	pub fn to_values(&self) -> [u32; INDICES_PER_WORD] {
+		let f = |i| (self.0 >> (i * MESHLET_INDICES_BITS as usize)) & INDICES_MASK;
+		[f(0), f(1), f(2), f(3), f(4)]
+	}
+}
+
 impl Debug for CompressedIndices {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-		for i in 0..INDICES_PER_WORD {
-			write!(
-				f,
-				"{:3}",
-				(self.0 >> (i * MESHLET_INDICES_BITS as usize)) & INDICES_MASK
-			)?;
+		for i in self.to_values() {
+			write!(f, "{:3}", i)?;
 		}
 		Ok(())
 	}
@@ -62,12 +64,13 @@ pub fn triangle_indices_load_cpu<T>(
 	read_fn: impl Fn(&T, usize) -> CompressedIndices,
 ) -> UVec3 {
 	let abs_triangle = meshlet.as_ref().triangle_offset.start() + triangle;
-	UVec3::from_array(array::from_fn(|i| {
+	let f = |i| {
 		let i = abs_triangle * 3 + i;
 		let index = i / INDICES_PER_WORD;
 		let rem = i % INDICES_PER_WORD;
 		(read_fn(t, index).0 >> (rem as u32 * MESHLET_INDICES_BITS)) & INDICES_MASK
-	}))
+	};
+	UVec3::from_array([f(0), f(1), f(2)])
 }
 
 // optimal default
