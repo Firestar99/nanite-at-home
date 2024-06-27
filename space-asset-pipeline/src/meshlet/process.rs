@@ -118,9 +118,9 @@ impl Gltf {
 			let (translation, rotation, scale) = node.transform().decomposed();
 			let node_absolute = parent
 				* Affine3A::from_scale_rotation_translation(
-					Vec3::from(translation),
-					Quat::from_array(rotation),
 					Vec3::from(scale),
+					Quat::from_array(rotation),
+					Vec3::from(translation),
 				);
 			out[node.index()] = node_absolute;
 			for node in node.children() {
