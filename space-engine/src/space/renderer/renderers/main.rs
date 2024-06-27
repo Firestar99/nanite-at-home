@@ -17,7 +17,7 @@ pub struct RenderPipelineMain {
 	pub init: Arc<Init>,
 	pub output_format: Format,
 	pub depth_format: Format,
-	pub opaque_task: MeshletRenderTask,
+	pub meshlet_task: MeshletRenderTask,
 }
 
 impl RenderPipelineMain {
@@ -30,7 +30,7 @@ impl RenderPipelineMain {
 			init: init.clone(),
 			output_format,
 			depth_format,
-			opaque_task,
+			meshlet_task: opaque_task,
 		})
 	}
 
@@ -120,7 +120,7 @@ impl<'a> RendererMainFrame<'a> {
 		let p = self.pipeline;
 		let c = self.frame_context;
 
-		p.opaque_task
+		p.meshlet_task
 			.record(c, &self.output_image, &r.depth_image, future_await)
 	}
 }

@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # my projects
+space-asset = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
@@ -30,6 +31,9 @@ bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
 num-traits = { workspace = true }
 num-derive = { workspace = true }
+
+# profiling
+profiling = { workspace = true }
 
 # other
 static_assertions = { workspace = true }
