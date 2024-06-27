@@ -67,7 +67,13 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			&vec,
 			SpaceQueueAllocator::new(),
 			stages,
-			DescriptorCounts::reasonable_defaults,
+			|phy| {
+				DescriptorCounts {
+					buffers: 100_000,
+					..DescriptorCounts::reasonable_defaults(phy)
+				}
+				.min(DescriptorCounts::limits(phy))
+			},
 		)
 		.await;
 	}
