@@ -1,5 +1,5 @@
 use crate::meshlet::error::{Error, MeshletError, Result};
-use glam::{Affine3A, Quat, Vec3};
+use glam::{Affine3A, Mat3, Quat, Vec3};
 use gltf::buffer::Data;
 use gltf::mesh::Mode;
 use gltf::{Buffer, Document, Node, Primitive, Scene};
@@ -87,7 +87,13 @@ impl Gltf {
 		let mesh2instance = {
 			profiling::scope!("instance transformations");
 			let scene = self.default_scene().ok_or(Error::from(MeshletError::NoDefaultScene))?;
-			let node_transforms = self.compute_transformations(&scene);
+			let node_transforms = self.compute_transformations(
+				&scene,
+				Affine3A::from_mat3(Mat3 {
+					y_axis: Vec3::new(0., -1., 0.),
+					..Mat3::default()
+				}),
+			);
 			let mut mesh2instance = (0..self.meshes().len()).map(|_| Vec::new()).collect::<Vec<_>>();
 			for node in self.nodes() {
 				if let Some(mesh) = node.mesh() {
@@ -113,7 +119,7 @@ impl Gltf {
 		})
 	}
 
-	fn compute_transformations(&self, scene: &Scene) -> Vec<Affine3A> {
+	fn compute_transformations(&self, scene: &Scene, base: Affine3A) -> Vec<Affine3A> {
 		fn walk(out: &mut Vec<Affine3A>, node: Node, parent: Affine3A) {
 			let (translation, rotation, scale) = node.transform().decomposed();
 			let node_absolute = parent
@@ -130,7 +136,7 @@ impl Gltf {
 
 		let mut out = vec![Affine3A::IDENTITY; self.nodes().len()];
 		for node in scene.nodes() {
-			walk(&mut out, node, Affine3A::IDENTITY);
+			walk(&mut out, node, base);
 		}
 		out
 	}
