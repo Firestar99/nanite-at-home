@@ -41,4 +41,6 @@ parking_lot = { workspace = true }
 smallvec = { workspace = true }
 
 [build-dependencies]
-space-engine-shader-builder = { path = "../space-engine-shader-builder" }
+space-asset = { workspace = true }
+space-asset-pipeline = { workspace = true }
+futures = { workspace = true }
