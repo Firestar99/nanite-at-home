@@ -100,7 +100,7 @@ impl Uploader {
 	where
 		T::Transfer: BufferContents,
 	{
-		let perm_buffer = VBuffer::new_unsized(
+		let perm_buffer = VBuffer::new_slice::<u8>(
 			self.memory_allocator.clone(),
 			BufferCreateInfo {
 				usage: BufferUsage::TRANSFER_DST | BufferUsage::STORAGE_BUFFER,
@@ -136,7 +136,10 @@ impl Uploader {
 			.await
 			.map_err(UploadError::from_validated)?;
 
-		Ok(self.bindless.buffer().alloc_slot(perm_buffer, backing_refs))
+		Ok(self
+			.bindless
+			.buffer()
+			.alloc_slot(perm_buffer.reinterpret(), backing_refs))
 	}
 }
 
