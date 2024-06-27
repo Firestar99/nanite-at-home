@@ -24,7 +24,7 @@ use vulkano::pipeline::{
 	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
 };
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescStruct;
+use vulkano_bindless_shaders::buffer_content::BufferStruct;
 use vulkano_bindless_shaders::shader_type::{
 	FragmentShader, GeometryShader, TesselationControlShader, TesselationEvaluationShader, VertexShader,
 };
@@ -96,7 +96,7 @@ pub struct TraditionalGraphicsPipelineCreateInfo {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl<T: DescStruct> BindlessTraditionalGraphicsPipeline<T> {
+impl<T: BufferStruct> BindlessTraditionalGraphicsPipeline<T> {
 	fn new(
 		stages: SmallVec<[PipelineShaderStageCreateInfo; 5]>,
 		create_info: TraditionalGraphicsPipelineCreateInfo,

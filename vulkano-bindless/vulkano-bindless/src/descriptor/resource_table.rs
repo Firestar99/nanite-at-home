@@ -1,6 +1,7 @@
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
-use crate::descriptor::rc_reference::{AnyRCDesc, RCDesc};
-use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotIndex};
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
+use crate::descriptor::rc_reference::{AnyRCDescExt, RCDesc};
+use crate::descriptor::{AnyRCDesc, RCDescExt};
+use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotAllocationError, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
@@ -14,25 +15,42 @@ pub struct ResourceTable<T: DescTable> {
 }
 
 impl<T: DescTable> ResourceTable<T> {
-	pub fn new(count: u32, interface: T::RCSlotsInterface) -> Self {
+	pub fn new(capacity: u32, interface: T::RCSlotsInterface) -> Self {
 		Self {
-			slots: RCSlotArray::new_with_interface(count as usize, interface),
+			slots: RCSlotArray::new_with_interface(capacity as usize, interface),
 			flush_queue: Mutex::new(RangeSet::new()),
 		}
 	}
 
-	pub fn alloc_slot<D: DescTypeCpu<DescTable = T>>(&self, cpu_type: <D::DescTable as DescTable>::Slot) -> RCDesc<D> {
-		let slot = self.slots.allocate(cpu_type);
+	pub fn alloc_slot<C: DescContentCpu<DescTable = T>>(
+		&self,
+		cpu_type: <C::DescTable as DescTable>::Slot,
+	) -> Result<RCDesc<C>, SlotAllocationError> {
+		let slot = self.slots.allocate(cpu_type)?;
 		// Safety: we'll pull from the queue later and destroy the slots
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);
-		RCDesc::<D>::new(slot)
+		// Safety: C matches slot
+		Ok(unsafe { RCDesc::<C>::new(slot) })
 	}
 
-	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<AnyRCDesc<T>> {
+	/// The amount of slots that have been allocated until now. Should immediately be considered
+	/// outdated, but is guaranteed to only ever monotonically increase.
+	pub fn slots_allocated(&self) -> u32 {
+		self.slots.slots_allocated() as u32
+	}
+
+	/// The amount of slots Self can hold, before failing to allocate.
+	pub fn slots_capacity(&self) -> u32 {
+		self.slots.slots_capacity() as u32
+	}
+}
+
+impl<T: DescTable> ResourceTable<T> {
+	pub fn try_get_rc(&self, id: u32, version: u32) -> Option<AnyRCDesc> {
 		self.slots
 			.try_get_alive_slot(SlotIndex(id as usize), version)
-			.map(AnyRCDesc::new)
+			.map(|slot| AnyRCDesc::new::<T>(slot))
 	}
 }
 

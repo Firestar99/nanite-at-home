@@ -1,9 +1,9 @@
 use crate::space::renderer::lod_obj::opaque_draw::OpaqueDrawPipeline;
-use crate::space::renderer::model::model::OpaqueModel;
+use crate::space::renderer::model::opaque::OpaqueModelCpu;
 use crate::space::renderer::render_graph::context::FrameContext;
 use crate::space::Init;
 use parking_lot::Mutex;
-use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
+use space_engine_shader::space::renderer::lod_obj::opaque_model::OpaqueModel;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
@@ -16,11 +16,12 @@ use vulkano::image::view::ImageView;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::render_pass::{AttachmentLoadOp, AttachmentStoreOp};
 use vulkano::sync::GpuFuture;
+use vulkano_bindless::descriptor::RCDescExt;
 
 pub struct OpaqueRenderTask {
 	init: Arc<Init>,
 	pipeline_opaque: OpaqueDrawPipeline,
-	pub models: Mutex<Vec<OpaqueModel>>,
+	pub models: Mutex<Vec<OpaqueModelCpu>>,
 }
 
 impl OpaqueRenderTask {
@@ -57,7 +58,7 @@ impl OpaqueRenderTask {
 						memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 						..AllocationCreateInfo::default()
 					},
-					guard.iter().map(|model| OpaqueGpuModel {
+					guard.iter().map(|model| OpaqueModel {
 						vertex_buffer: model.vertex_buffer.to_strong(),
 						index_buffer: model.index_buffer.to_strong(),
 						triangle_count: (model.index_buffer.len() / 3) as u32,

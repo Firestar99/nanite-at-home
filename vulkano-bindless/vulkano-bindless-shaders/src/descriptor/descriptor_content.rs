@@ -6,15 +6,15 @@ pub(crate) mod private {
 /// * [`crate::descriptor::buffer::Buffer`]
 /// * [`crate::descriptor::image::Image`]
 /// * [`crate::descriptor::sampler::Sampler`]
-pub trait DescType: private::SealedTrait + Send + Sync + 'static {
+pub trait DescContent: private::SealedTrait + Sized + Send + Sync + 'static {
 	type AccessType<'a>;
 
-	const DESC_ENUM: DescEnum;
+	const CONTENT_ENUM: DescContentEnum;
 }
 
-/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescType::DESC_ENUM`].
-#[derive(Copy, Clone, Debug)]
-pub enum DescEnum {
+/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_ENUM`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum DescContentEnum {
 	Buffer,
 	Image,
 	Sampler,

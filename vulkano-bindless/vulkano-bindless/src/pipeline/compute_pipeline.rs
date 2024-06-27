@@ -10,7 +10,7 @@ use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::ComputePipeline as VComputePipeline;
 use vulkano::pipeline::{PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::DescStruct;
+use vulkano_bindless_shaders::buffer_content::BufferStruct;
 use vulkano_bindless_shaders::shader_type::ComputeShader;
 
 pub type BindlessComputePipeline<T> = BindlessPipeline<ComputePipelineType, T>;
@@ -29,7 +29,7 @@ impl VulkanPipeline for ComputePipelineType {
 	}
 }
 
-impl<T: DescStruct> BindlessComputePipeline<T> {
+impl<T: BufferStruct> BindlessComputePipeline<T> {
 	pub fn new(
 		bindless: Arc<Bindless>,
 		stage: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,

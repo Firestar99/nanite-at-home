@@ -1,6 +1,6 @@
 use crate::space::Init;
 use image::DynamicImage;
-use space_engine_shader::space::renderer::model::model_vertex::ModelVertex;
+use space_engine_shader::space::renderer::lod_obj::opaque_model::OpaqueVertex;
 use std::sync::Arc;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
 use vulkano::command_buffer::CommandBufferLevel::Primary;
@@ -13,20 +13,20 @@ use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::DeviceSize;
-use vulkano_bindless::desc_buffer::DescStruct;
+use vulkano_bindless::buffer_content::BufferStruct;
 use vulkano_bindless::descriptor::buffer::Buffer;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
 use vulkano_bindless::spirv_std::image::Image2d;
 
-pub struct OpaqueModel {
-	pub vertex_buffer: RCDesc<Buffer<[ModelVertex]>>,
+pub struct OpaqueModelCpu {
+	pub vertex_buffer: RCDesc<Buffer<[OpaqueVertex]>>,
 	pub index_buffer: RCDesc<Buffer<[u32]>>,
 }
 
-impl OpaqueModel {
+impl OpaqueModelCpu {
 	pub fn direct<V>(init: &Arc<Init>, vertex_data: V) -> Self
 	where
-		V: IntoIterator<Item = ModelVertex>,
+		V: IntoIterator<Item = OpaqueVertex>,
 		V::IntoIter: ExactSizeIterator,
 	{
 		let vertex_iter = vertex_data.into_iter();
@@ -37,7 +37,7 @@ impl OpaqueModel {
 	where
 		I: IntoIterator<Item = u32>,
 		I::IntoIter: ExactSizeIterator,
-		V: IntoIterator<Item = ModelVertex>,
+		V: IntoIterator<Item = OpaqueVertex>,
 		V::IntoIter: ExactSizeIterator,
 	{
 		let vertex_buffer = Self::upload_buffer(
@@ -58,7 +58,7 @@ impl OpaqueModel {
 
 	fn upload_buffer<T, ITER>(init: &Arc<Init>, usage: BufferUsage, data: ITER) -> RCDesc<Buffer<[T]>>
 	where
-		T: DescStruct,
+		T: BufferStruct,
 		ITER: IntoIterator<Item = T>,
 		ITER::IntoIter: ExactSizeIterator,
 	{

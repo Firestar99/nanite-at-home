@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-asteroids-shader = { workspace = true }
+space-asset = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
@@ -32,10 +32,15 @@ bytemuck_derive = { workspace = true }
 num-traits = { workspace = true }
 num-derive = { workspace = true }
 
+# profiling
+profiling = { workspace = true }
+
 # other
 static_assertions = { workspace = true }
 parking_lot = { workspace = true }
 smallvec = { workspace = true }
 
 [build-dependencies]
-space-engine-shader-builder = { path = "../space-engine-shader-builder" }
+space-asset = { workspace = true }
+space-asset-pipeline = { workspace = true }
+futures = { workspace = true }

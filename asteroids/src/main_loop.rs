@@ -91,8 +91,8 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let models = load_scene(&init).await;
-	render_pipeline_main.opaque_task.models.lock().extend(models);
+	let scenes = load_scene(&init).await;
+	render_pipeline_main.meshlet_task.scenes.lock().extend(scenes);
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();

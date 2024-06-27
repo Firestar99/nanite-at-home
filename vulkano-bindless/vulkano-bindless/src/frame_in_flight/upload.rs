@@ -1,4 +1,5 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
+use crate::descriptor::rc_reference::RCDescExt;
 use crate::descriptor::{Bindless, RCDesc};
 use crate::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 use std::alloc::Layout;
@@ -10,16 +11,16 @@ use vulkano::device::DeviceOwned;
 use vulkano::memory::allocator::{AllocationCreateInfo, DeviceLayout, MemoryAllocator, MemoryTypeFilter};
 use vulkano::memory::{MappedMemoryRange, MemoryPropertyFlags};
 use vulkano::{Validated, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::{DescStruct, MetadataCpuInterface};
+use vulkano_bindless_shaders::buffer_content::{BufferStruct, MetadataCpuInterface};
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{Buffer, DescType, TransientDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, DescContent, TransientDesc};
 
-pub struct UploadInFlight<T: DescStruct + 'static> {
+pub struct UploadInFlight<T: BufferStruct + 'static> {
 	sub: ResourceInFlight<RCDesc<Buffer<T>>>,
 }
 
-impl<T: DescStruct> UploadInFlight<T> {
+impl<T: BufferStruct> UploadInFlight<T> {
 	pub fn new(
 		bindless: &Arc<Bindless>,
 		allocator: Arc<dyn MemoryAllocator>,
@@ -63,7 +64,7 @@ impl<T: DescStruct> UploadInFlight<T> {
 
 		unsafe {
 			{
-				let mapped = <T::TransferDescStruct as BufferContents>::ptr_from_slice(sub.mapped_slice().unwrap());
+				let mapped = <T::Transfer as BufferContents>::ptr_from_slice(sub.mapped_slice().unwrap());
 				*mapped = data.write_cpu(&mut UniformMetadataCpu(Metadata));
 			}
 
@@ -77,7 +78,7 @@ impl<T: DescStruct> UploadInFlight<T> {
 				.contains(MemoryPropertyFlags::HOST_COHERENT);
 			if !is_coherent {
 				let atom_size = sub.device().physical_device().properties().non_coherent_atom_size;
-				let layout = DeviceLayout::from_layout(Layout::new::<T::TransferDescStruct>()).unwrap();
+				let layout = DeviceLayout::from_layout(Layout::new::<T::Transfer>()).unwrap();
 				let size = layout.align_to(atom_size).unwrap().pad_to_alignment().size();
 				allocation.flush_range(MappedMemoryRange {
 					offset: sub.offset(),
@@ -94,7 +95,7 @@ impl<T: DescStruct> UploadInFlight<T> {
 	}
 }
 
-impl<T: DescStruct> From<&UploadInFlight<T>> for SeedInFlight {
+impl<T: BufferStruct> From<&UploadInFlight<T>> for SeedInFlight {
 	fn from(value: &UploadInFlight<T>) -> Self {
 		value.seed()
 	}
@@ -111,7 +112,7 @@ impl Deref for UniformMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for UniformMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<D>) {
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, _desc: StrongDesc<C>) {
 		// don't care, will be alive for this fif anyway
 	}
 }

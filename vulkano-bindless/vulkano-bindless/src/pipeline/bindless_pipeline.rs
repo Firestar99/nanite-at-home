@@ -5,10 +5,10 @@ use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless_shaders::desc_buffer::{DescStruct, MetadataCpuInterface};
+use vulkano_bindless_shaders::buffer_content::{BufferStruct, MetadataCpuInterface};
 use vulkano_bindless_shaders::descriptor::metadata::{Metadata, PushConstant};
 use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::DescType;
+use vulkano_bindless_shaders::descriptor::DescContent;
 
 pub trait VulkanPipeline {
 	type VulkanType: Pipeline;
@@ -21,13 +21,13 @@ pub trait VulkanPipeline {
 	) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>>;
 }
 
-pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: DescStruct> {
+pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: BufferStruct> {
 	pub bindless: Arc<Bindless>,
 	pub(crate) pipeline: Arc<Pipeline::VulkanType>,
 	_phantom: PhantomData<T>,
 }
 
-impl<Pipeline: VulkanPipeline, T: DescStruct> Clone for BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: BufferStruct> Clone for BindlessPipeline<Pipeline, T> {
 	fn clone(&self) -> Self {
 		Self {
 			bindless: self.bindless.clone(),
@@ -37,7 +37,7 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> Clone for BindlessPipeline<Pipelin
 	}
 }
 
-impl<Pipeline: VulkanPipeline, T: DescStruct> Deref for BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: BufferStruct> Deref for BindlessPipeline<Pipeline, T> {
 	type Target = Arc<Pipeline::VulkanType>;
 
 	fn deref(&self) -> &Self::Target {
@@ -45,7 +45,7 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> Deref for BindlessPipeline<Pipelin
 	}
 }
 
-impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
+impl<Pipeline: VulkanPipeline, T: BufferStruct> BindlessPipeline<Pipeline, T> {
 	/// unsafely create a BindlessPipeline from a Pipeline
 	///
 	/// # Safety
@@ -99,8 +99,8 @@ impl<Pipeline: VulkanPipeline, T: DescStruct> BindlessPipeline<Pipeline, T> {
 				self.bindless.descriptor_set.clone(),
 			)?
 			.push_constants(self.pipeline.layout().clone(), 0, unsafe {
-				PushConstant::<T::TransferDescStruct> {
-					t: <T as DescStruct>::write_cpu(param, &mut PushConstantMetadataCpu),
+				PushConstant::<T::Transfer> {
+					t: <T as BufferStruct>::write_cpu(param, &mut PushConstantMetadataCpu),
 					metadata: Metadata,
 				}
 			})
@@ -134,7 +134,7 @@ impl Deref for PushConstantMetadataCpu {
 }
 
 unsafe impl MetadataCpuInterface for PushConstantMetadataCpu {
-	fn visit_strong_descriptor<D: DescType + ?Sized>(&mut self, _desc: StrongDesc<D>) {
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, _desc: StrongDesc<C>) {
 		// ignore. The push constant is only valid during this frame, and the locking system guarantees the descriptor
 		// is valid for at least this frame as well.
 	}

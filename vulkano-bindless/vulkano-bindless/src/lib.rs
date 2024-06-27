@@ -24,6 +24,6 @@ pub mod rc_slot;
 pub mod required_features;
 pub mod sync;
 
-pub use vulkano_bindless_shaders::desc_buffer;
+pub use vulkano_bindless_shaders::buffer_content;
 pub use vulkano_bindless_shaders::shader_type;
 pub use vulkano_bindless_shaders::{spirv, spirv_std, Image};

@@ -1,12 +1,15 @@
 use crate::symbols::Symbols;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use std::collections::HashSet;
 use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
-use syn::{visit_mut, Fields, GenericParam, Generics, ItemStruct, Lifetime, Result, Token, TypeParam, TypeParamBound};
+use syn::{
+	visit_mut, Fields, GenericParam, Generics, ItemStruct, Lifetime, PathSegment, Result, Token, TypeParam,
+	TypeParamBound,
+};
 
-pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
+pub fn buffer_content(content: proc_macro::TokenStream) -> Result<TokenStream> {
 	let symbols = Symbols::new();
 	let item = syn::parse::<ItemStruct>(content)?;
 	let generics = item
@@ -31,87 +34,70 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 			for f in &named.named {
 				let name = f.ident.as_ref().unwrap();
 				let mut ty = f.ty.clone();
-				let mut visitor = GenericsVisitor::new(&generics);
+				let mut visitor = GenericsVisitor::new(&item.ident, &generics);
 				visit_mut::visit_type_mut(&mut visitor, &mut ty);
 				transfer.push(if visitor.found_generics {
 					gen_ref_tys.push(f.ty.clone());
 					let gen = gen_name_gen.next();
 					quote!(#name: #gen)
 				} else {
-					quote!(#name: <#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
+					quote!(#name: <#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer)
 				});
-				write_cpu.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::write_cpu(self.#name, meta)));
-				read.push(quote!(#name: #crate_shaders::desc_buffer::DescStruct::read(from.#name, meta)));
+				write_cpu
+					.push(quote!(#name: #crate_shaders::buffer_content::BufferStruct::write_cpu(self.#name, meta)));
+				read.push(quote!(#name: #crate_shaders::buffer_content::BufferStruct::read(from.#name, meta)));
 			}
 			(
 				quote!({#transfer}),
-				quote!(Self::TransferDescStruct {#write_cpu}),
+				quote!(Self::Transfer {#write_cpu}),
 				quote!(Self {#read}),
 			)
 		}
 		Fields::Unnamed(unnamed) => {
 			for (i, f) in unnamed.unnamed.iter().enumerate() {
 				let mut ty = f.ty.clone();
-				let mut visitor = GenericsVisitor::new(&generics);
+				let mut visitor = GenericsVisitor::new(&item.ident, &generics);
 				visit_mut::visit_type_mut(&mut visitor, &mut ty);
 				transfer.push(if visitor.found_generics {
 					gen_ref_tys.push(f.ty.clone());
 					gen_name_gen.next().into_token_stream()
 				} else {
-					quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct)
+					quote!(<#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer)
 				});
-				write_cpu.push(quote!(#crate_shaders::desc_buffer::DescStruct::write_cpu(self.#i, meta)));
-				read.push(quote!(#crate_shaders::desc_buffer::DescStruct::read(from.#i, meta)));
+				let index = syn::Index::from(i);
+				write_cpu
+					.push(quote!(#index: #crate_shaders::buffer_content::BufferStruct::write_cpu(self.#index, meta)));
+				read.push(quote!(#crate_shaders::buffer_content::BufferStruct::read(from.#index, meta)));
 			}
 			(
-				quote!((#transfer)),
-				quote!(Self::TransferDescStruct(#write_cpu)),
+				quote!((#transfer);),
+				quote!(Self::Transfer { #write_cpu }),
 				quote!(Self(#read)),
 			)
 		}
 		Fields::Unit => (
 			quote!(;),
-			quote!(let _ = (self, meta); Self::TransferDescStruct),
+			quote!(let _ = (self, meta); Self::Transfer),
 			quote!(let _ = (from, meta); Self),
 		),
 	};
 
-	let generics_decl = Generics {
-		params: item
-			.generics
-			.params
-			.iter()
-			.map(|param| match param {
-				GenericParam::Type(t) => GenericParam::Type(TypeParam {
-					bounds: t
-						.bounds
-						.iter()
-						.cloned()
-						.chain([TypeParamBound::Verbatim(quote! {
-							#crate_shaders::desc_buffer::DescStruct
-						})])
-						.collect(),
-					..t.clone()
-				}),
-				e => e.clone(),
-			})
-			.collect(),
-		..item.generics.clone()
-	};
+	let generics_decl = &item.generics;
 	let generics_ref = decl_to_ref(item.generics.params.iter());
+	let generics_where = gen_ref_tys
+		.iter()
+		.map(|ty| quote!(#ty: #crate_shaders::buffer_content::BufferStruct))
+		.collect::<Punctuated<TokenStream, Token![,]>>()
+		.into_token_stream();
 
 	let transfer_generics_decl = gen_name_gen.decl(quote! {
 		#crate_shaders::bytemuck::AnyBitPattern + Send + Sync
 	});
-	let transfer_generics_ref = if !gen_ref_tys.is_empty() {
-		let gen_ref_tys: Punctuated<TokenStream, Token![,]> = gen_ref_tys
-			.into_iter()
-			.map(|ty| quote!(<#ty as #crate_shaders::desc_buffer::DescStruct>::TransferDescStruct))
-			.collect();
-		quote!(<#gen_ref_tys>)
-	} else {
-		TokenStream::new()
-	};
+	let transfer_generics_ref = gen_ref_tys
+		.iter()
+		.map(|ty| quote!(<#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer))
+		.collect::<Punctuated<TokenStream, Token![,]>>()
+		.into_token_stream();
 
 	let vis = &item.vis;
 	let ident = &item.ident;
@@ -120,14 +106,18 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 		#[derive(Copy, Clone, #crate_shaders::bytemuck_derive::AnyBitPattern)]
 		#vis struct #transfer_ident #transfer_generics_decl #transfer
 
-		unsafe impl #generics_decl #crate_shaders::desc_buffer::DescStruct for #ident #generics_ref {
-			type TransferDescStruct = #transfer_ident #transfer_generics_ref;
+		unsafe impl #generics_decl #crate_shaders::buffer_content::BufferStruct for #ident #generics_ref
+		where
+			#ident #generics_ref: Copy,
+			#generics_where
+		{
+			type Transfer = #transfer_ident <#transfer_generics_ref>;
 
-			unsafe fn write_cpu(self, meta: &mut impl #crate_shaders::desc_buffer::MetadataCpuInterface) -> Self::TransferDescStruct {
+			unsafe fn write_cpu(self, meta: &mut impl #crate_shaders::buffer_content::MetadataCpuInterface) -> Self::Transfer {
 				#write_cpu
 			}
 
-			unsafe fn read(from: Self::TransferDescStruct, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
+			unsafe fn read(from: Self::Transfer, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
 				#read
 			}
 		}
@@ -135,13 +125,15 @@ pub fn desc_struct(content: proc_macro::TokenStream) -> Result<TokenStream> {
 }
 
 struct GenericsVisitor<'a> {
+	self_ident: &'a Ident,
 	generics: &'a HashSet<Ident>,
 	found_generics: bool,
 }
 
 impl<'a> GenericsVisitor<'a> {
-	pub fn new(generics: &'a HashSet<Ident>) -> Self {
+	pub fn new(self_ident: &'a Ident, generics: &'a HashSet<Ident>) -> Self {
 		Self {
+			self_ident,
 			generics,
 			found_generics: false,
 		}
@@ -159,6 +151,13 @@ impl<'a> VisitMut for GenericsVisitor<'a> {
 	fn visit_lifetime_mut(&mut self, i: &mut Lifetime) {
 		i.ident = Ident::new("static", i.ident.span());
 		visit_mut::visit_lifetime_mut(self, i);
+	}
+
+	fn visit_path_segment_mut(&mut self, i: &mut PathSegment) {
+		if i.ident == Ident::new("Self", Span::call_site()) {
+			i.ident = self.self_ident.clone();
+		}
+		visit_mut::visit_path_segment_mut(self, i);
 	}
 }
 
@@ -208,7 +207,7 @@ fn decl_to_ref<'a>(generics: impl Iterator<Item = &'a GenericParam>) -> TokenStr
 			GenericParam::Type(t) => t.ident.to_token_stream(),
 			GenericParam::Const(c) => c.ident.to_token_stream(),
 		})
-		.collect::<TokenStream>();
+		.collect::<Punctuated<TokenStream, Token![,]>>();
 	if out.is_empty() {
 		TokenStream::new()
 	} else {

@@ -1,10 +1,10 @@
-use crate::descriptor::descriptor_type::{private, DescEnum, DescType};
+use crate::descriptor::descriptor_content::{private, DescContent, DescContentEnum};
 
 pub use spirv_std::Sampler;
 
 impl private::SealedTrait for Sampler {}
 
-impl DescType for Sampler {
+impl DescContent for Sampler {
 	type AccessType<'a> = &'a Sampler;
-	const DESC_ENUM: DescEnum = DescEnum::Sampler;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Sampler;
 }

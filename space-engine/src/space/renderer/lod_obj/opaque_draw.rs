@@ -1,5 +1,5 @@
+use space_engine_shader::space::renderer::lod_obj::opaque_model::OpaqueModel;
 use space_engine_shader::space::renderer::lod_obj::opaque_shader::Params;
-use space_engine_shader::space::renderer::model::gpu_model::OpaqueGpuModel;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -15,7 +15,7 @@ use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, Pipeline
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::DynamicState;
 use vulkano_bindless::descriptor::rc_reference::RCDesc;
-use vulkano_bindless::descriptor::{Buffer, Sampler};
+use vulkano_bindless::descriptor::{Buffer, RCDescExt, Sampler};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
@@ -73,7 +73,7 @@ impl OpaqueDrawPipeline {
 				conservative_rasterization_state: None,
 			},
 			Some(init.pipeline_cache.deref().clone()),
-			Some(init.bindless.get_pipeline_layout::<Params<'static>>().unwrap().clone()),
+			None,
 		)
 		.unwrap();
 
@@ -90,7 +90,7 @@ impl OpaqueDrawPipeline {
 		&self,
 		frame_context: &FrameContext,
 		cmd: &mut RecordingCommandBuffer,
-		models: RCDesc<Buffer<[OpaqueGpuModel]>>,
+		models: RCDesc<Buffer<[OpaqueModel]>>,
 	) {
 		unsafe {
 			self.pipeline

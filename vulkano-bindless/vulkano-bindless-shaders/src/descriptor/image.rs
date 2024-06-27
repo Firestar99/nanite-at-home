@@ -1,4 +1,4 @@
-use crate::descriptor::descriptor_type::{private, DescEnum, DescType};
+use crate::descriptor::descriptor_content::{private, DescContent, DescContentEnum};
 
 pub use spirv_std::image::Image;
 pub use spirv_std::image::SampleType;
@@ -25,8 +25,8 @@ impl<
 		const SAMPLED: u32,
 		const FORMAT: u32,
 		const COMPONENTS: u32,
-	> DescType for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
+	> DescContent for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
 {
 	type AccessType<'a> = &'a Self;
-	const DESC_ENUM: DescEnum = DescEnum::Image;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Image;
 }

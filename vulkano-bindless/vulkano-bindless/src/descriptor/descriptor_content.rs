@@ -6,11 +6,12 @@ use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
-use vulkano_bindless_shaders::descriptor::DescType;
+
+use crate::descriptor::{BufferTable, ImageTable, SamplerTable};
+pub use vulkano_bindless_shaders::descriptor::descriptor_content::*;
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
-pub trait DescTypeCpu: DescType {
+pub trait DescContentCpu: DescContent {
 	/// Associated non-generic [`DescTable`]
 	type DescTable: DescTable;
 
@@ -23,7 +24,7 @@ pub trait DescTypeCpu: DescType {
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
 pub trait DescTable: Sized {
-	const DESC_ENUM: DescEnum;
+	const CONTENT_ENUM: DescContentEnum;
 	/// internal non-generic type used within the resource table
 	type Slot;
 	type RCSlotsInterface: RCSlotsInterface<Self::Slot>;
@@ -41,4 +42,41 @@ pub trait DescTable: Sized {
 	);
 
 	fn lock_table(&self) -> TableEpochGuard<Self>;
+
+	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A>;
+
+	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>>;
+
+	fn table_enum_try_into<A: DescTableEnumType>(
+		table_enum: DescTableEnum<A>,
+	) -> Result<A::Type<Self>, DescTableEnum<A>>;
+}
+
+/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_ENUM`].
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum DescTableEnum<A: DescTableEnumType> {
+	Buffer(A::Type<BufferTable>),
+	Image(A::Type<ImageTable>),
+	Sampler(A::Type<SamplerTable>),
+}
+
+pub trait DescTableEnumType {
+	type Type<T: DescTable>;
+}
+
+impl<A: DescTableEnumType> DescTableEnum<A> {
+	#[inline]
+	pub fn new<T: DescTable>(inner: A::Type<T>) -> Self {
+		T::table_enum_new(inner)
+	}
+
+	#[inline]
+	pub fn try_deref<T: DescTable>(&self) -> Option<&A::Type<T>> {
+		T::table_enum_try_deref(self)
+	}
+
+	#[inline]
+	pub fn try_into<T: DescTable>(self) -> Result<A::Type<T>, Self> {
+		T::table_enum_try_into(self)
+	}
 }

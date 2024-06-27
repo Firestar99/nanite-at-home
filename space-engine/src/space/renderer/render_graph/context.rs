@@ -122,8 +122,9 @@ impl<'a> FrameContext<'a> {
 
 	pub fn modify(
 		&self,
-	) -> impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>> + '_ {
-		|cmd| cmd.set_viewport(0, self.viewport_smallvec())
+	) -> impl FnOnce(&mut RecordingCommandBuffer) -> Result<&mut RecordingCommandBuffer, Box<ValidationError>> {
+		let viewport = self.viewport.clone();
+		move |cmd| cmd.set_viewport(0, smallvec![viewport.clone()])
 	}
 
 	#[inline]

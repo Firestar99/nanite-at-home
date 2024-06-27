@@ -1,5 +1,5 @@
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable, DescTableEnum, DescTableEnumType};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::{Bindless, Image};
@@ -15,7 +15,7 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::view::{ImageView, ImageViewType};
 use vulkano::image::ImageUsage;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
+use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::image::SampleType;
 use vulkano_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
 use vulkano_bindless_shaders::spirv_std::image::Image2d;
@@ -29,7 +29,7 @@ impl<
 		const SAMPLED: u32,
 		const FORMAT: u32,
 		const COMPONENTS: u32,
-	> DescTypeCpu for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
+	> DescContentCpu for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
 {
 	type DescTable = ImageTable;
 	type VulkanType = Arc<ImageView>;
@@ -40,7 +40,7 @@ impl<
 }
 
 impl DescTable for ImageTable {
-	const DESC_ENUM: DescEnum = DescEnum::Image;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Image;
 	type Slot = Arc<ImageView>;
 	type RCSlotsInterface = ImageInterface;
 
@@ -80,8 +80,34 @@ impl DescTable for ImageTable {
 		.unwrap_err();
 	}
 
+	#[inline]
 	fn lock_table(&self) -> TableEpochGuard<Self> {
 		self.resource_table.epoch_guard()
+	}
+
+	#[inline]
+	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A> {
+		DescTableEnum::Image(inner)
+	}
+
+	#[inline]
+	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>> {
+		if let DescTableEnum::Image(v) = table_enum {
+			Some(v)
+		} else {
+			None
+		}
+	}
+
+	#[inline]
+	fn table_enum_try_into<A: DescTableEnumType>(
+		table_enum: DescTableEnum<A>,
+	) -> Result<A::Type<Self>, DescTableEnum<A>> {
+		if let DescTableEnum::Image(v) = table_enum {
+			Ok(v)
+		} else {
+			Err(table_enum)
+		}
 	}
 }
 
@@ -104,6 +130,7 @@ pub struct ImageTableAccess<'a>(pub &'a Arc<Bindless>);
 impl<'a> Deref for ImageTableAccess<'a> {
 	type Target = ImageTable;
 
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0.image
 	}
@@ -113,7 +140,10 @@ impl<'a> ImageTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot_2d(&self, image_view: Arc<ImageView>) -> RCDesc<Image2d> {
 		assert_eq!(image_view.view_type(), ImageViewType::Dim2d);
-		self.resource_table.alloc_slot(image_view)
+		self.resource_table
+			.alloc_slot(image_view)
+			.map_err(|a| format!("ImageTable: {}", a))
+			.unwrap()
 	}
 }
 

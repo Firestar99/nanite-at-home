@@ -1,7 +1,8 @@
 [workspace]
 members = [
 	"asteroids",
-	"asteroids-shader",
+	"space-asset",
+	"space-asset-pipeline",
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
@@ -26,7 +27,8 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 [workspace.dependencies]
 # members
 asteroids = { path = "asteroids" }
-asteroids-shader = { path = "asteroids-shader" }
+space-asset = { path = "space-asset" }
+space-asset-pipeline = { path = "space-asset-pipeline" }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
@@ -43,12 +45,13 @@ vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "d2
 winit = { version = "0.29" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "796bd4090b2f97d97b4a10d0c9e8a515f845288c", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "796bd4090b2f97d97b4a10d0c9e8a515f845288c" }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "46dee4fdde9a40fa8da0dc83c598ccdf1bfd8c98", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "46dee4fdde9a40fa8da0dc83c598ccdf1bfd8c98" }
 
 # async
 futures = "0.3"
 smol = "1.3.0"
+rayon = "1.10"
 
 # codegen
 quote = "1.0"
@@ -65,10 +68,20 @@ bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 num-derive = "0.3"
+memoffset = "0.9.1"
+
+# serde
+rkyv = { version = "0.7" }
+zstd = { version = "0.13" }
 
 # model loader
 gltf = "1.4.0"
 image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
+meshopt = "0.2.1"
+
+# profiling
+profiling = "1.0"
+puffin_http = "0.16"
 
 # other
 once_cell = "1.18"
@@ -76,7 +89,7 @@ smallvec = { version = "1.11", features = ["const_generics", "const_new"] }
 static_assertions = "1.1.0"
 parking_lot = "0.12"
 parking_lot_core = "0.9"
-clap = { version = "3.2", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 loom = "0.7.1"
 rand = "0.8"
 ahash = "0.8"

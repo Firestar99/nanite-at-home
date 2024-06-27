@@ -1,166 +1,328 @@
-use crate::desc_buffer::{DescStruct, MetadataCpuInterface};
-use crate::descriptor::descriptor_type::DescType;
+use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
+use crate::descriptor::descriptor_content::DescContent;
 use crate::descriptor::descriptors::DescriptorsAccess;
 use crate::descriptor::metadata::Metadata;
 use crate::frame_in_flight::FrameInFlight;
-use bytemuck::{AnyBitPattern, Zeroable};
+use bytemuck_derive::AnyBitPattern;
+use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
+use core::mem;
+use core::ops::Deref;
+use static_assertions::const_assert_eq;
 
-pub trait ValidDesc<D: DescType + ?Sized>: Sized {
-	fn id(&self) -> u32;
+/// See [`Desc`].
+pub trait DescRef: Sized + Send + Sync {}
+
+/// A generic Descriptor.
+///
+/// The T generic describes the type of descriptor this is. Think of it as representing the type of smart pointer you
+/// want to use, implemented by types similar to [`Rc`] or [`Arc`]. But it may also control when you'll have access to
+/// it, as similar to a [`Weak`] pointer the backing object could have deallocated.
+///
+/// The C generic describes the Contents that this pointer is pointing to. This may plainly be a typed [`Buffer<R>`],
+/// but could also be a `UniformConstant` like an [`Image`], [`Sampler`] or others.
+#[repr(C)]
+pub struct Desc<R: DescRef, C: DescContent> {
+	pub r: R,
+	_phantom: PhantomData<&'static C>,
+}
+
+impl<R: DescRef, C: DescContent> Desc<R, C> {
+	/// Creates a new Desc from some [`DescRef`]
+	///
+	/// # Safety
+	/// The C generic must match the content that the [`DescRef`] points to
+	#[inline]
+	pub const unsafe fn new_inner(r: R) -> Self {
+		Self {
+			r,
+			_phantom: PhantomData,
+		}
+	}
 
 	#[inline]
-	fn access<'a>(&'a self, descriptors: &'a impl DescriptorsAccess<D>) -> D::AccessType<'a> {
+	pub fn into_any(self) -> AnyDesc<R> {
+		AnyDesc::new_inner(self.r)
+	}
+}
+
+impl<R: DescRef + Copy, C: DescContent> Copy for Desc<R, C> {}
+
+impl<R: DescRef + Clone, C: DescContent> Clone for Desc<R, C> {
+	#[inline]
+	fn clone(&self) -> Self {
+		Self {
+			r: self.r.clone(),
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<R: DescRef + Hash, C: DescContent> Hash for Desc<R, C> {
+	#[inline]
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.r.hash(state)
+	}
+}
+
+impl<R: DescRef + PartialEq, C: DescContent> PartialEq for Desc<R, C> {
+	#[inline]
+	fn eq(&self, other: &Self) -> bool {
+		self.r == other.r
+	}
+}
+
+impl<R: DescRef + Eq, C: DescContent> Eq for Desc<R, C> {}
+
+// desc extra traits
+pub trait DerefDescRef<C: DescContent>: DescRef {
+	type Target;
+
+	fn deref(desc: &Desc<Self, C>) -> &Self::Target;
+}
+
+impl<R: DerefDescRef<C>, C: DescContent> Deref for Desc<R, C> {
+	type Target = R::Target;
+
+	fn deref(&self) -> &Self::Target {
+		R::deref(self)
+	}
+}
+
+/// works just like [`BufferStruct`] but on [`Desc`] instead of Self
+///
+/// # Safety
+/// see [`BufferStruct`]
+#[allow(clippy::missing_safety_doc)]
+pub unsafe trait DescStructRef: DescRef + Copy {
+	type TransferDescStruct: bytemuck::AnyBitPattern + Send + Sync;
+
+	unsafe fn desc_write_cpu<C: DescContent>(
+		desc: Desc<Self, C>,
+		meta: &mut impl MetadataCpuInterface,
+	) -> Self::TransferDescStruct;
+
+	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, meta: Metadata) -> Desc<Self, C>;
+}
+
+unsafe impl<R: DescStructRef, C: DescContent> BufferStruct for Desc<R, C> {
+	type Transfer = R::TransferDescStruct;
+
+	#[inline]
+	unsafe fn write_cpu(self, meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+		// Safety: delegated
+		unsafe { R::desc_write_cpu(self, meta) }
+	}
+
+	#[inline]
+	unsafe fn read(from: Self::Transfer, meta: Metadata) -> Self {
+		// Safety: delegated
+		unsafe { R::desc_read(from, meta) }
+	}
+}
+
+unsafe impl<R: DescRef + bytemuck::AnyBitPattern> DescStructRef for R {
+	type TransferDescStruct = R;
+
+	unsafe fn desc_write_cpu<C: DescContent>(
+		desc: Desc<Self, C>,
+		meta: &mut impl MetadataCpuInterface,
+	) -> Self::TransferDescStruct {
+		// Safety: delegated
+		unsafe { R::write_cpu(desc.r, meta) }
+	}
+
+	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, meta: Metadata) -> Desc<Self, C> {
+		// Safety: delegated
+		unsafe { Desc::new_inner(R::read(from, meta)) }
+	}
+}
+
+/// AnyDesc is a [`Desc`] that does not care for the contents the reference is pointing to, only for the reference
+/// existing. This is particularly useful with RC (reference counted), to keep content alive without having to know what
+/// it is. Create using [`Desc::into_any`]
+#[repr(C)]
+pub struct AnyDesc<R: DescRef> {
+	pub r: R,
+}
+
+impl<R: DescRef> AnyDesc<R> {
+	/// Creates a new AnyDesc from some [`DescRef`]
+	#[inline]
+	pub const fn new_inner(r: R) -> Self {
+		Self { r }
+	}
+}
+
+impl<R: DescRef + Copy> Copy for AnyDesc<R> {}
+
+impl<R: DescRef + Clone> Clone for AnyDesc<R> {
+	#[inline]
+	fn clone(&self) -> Self {
+		Self { r: self.r.clone() }
+	}
+}
+
+impl<R: DescRef + Hash> Hash for AnyDesc<R> {
+	#[inline]
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.r.hash(state)
+	}
+}
+
+impl<R: DescRef + PartialEq> PartialEq for AnyDesc<R> {
+	#[inline]
+	fn eq(&self, other: &Self) -> bool {
+		self.r == other.r
+	}
+}
+
+impl<R: DescRef + Eq> Eq for AnyDesc<R> {}
+
+/// A [`DescRef`] that somehow ensures the content it's pointing to is always alive, allowing it to be accessed.
+pub trait AliveDescRef: DescRef {
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32;
+}
+
+impl<R: AliveDescRef, C: DescContent> Desc<R, C> {
+	pub fn id(&self) -> u32 {
+		R::id(self)
+	}
+
+	#[inline]
+	pub fn access<'a>(&self, descriptors: &'a impl DescriptorsAccess<C>) -> C::AccessType<'a> {
 		descriptors.access(self)
 	}
 }
 
-#[repr(C)]
-pub struct TransientDesc<'a, D: DescType + ?Sized> {
+// transient
+#[derive(Copy, Clone)]
+pub struct Transient<'a> {
 	id: u32,
-	_phantom: PhantomData<(&'a (), D)>,
+	_phantom: PhantomData<&'a ()>,
 }
+const_assert_eq!(mem::size_of::<Transient>(), 4);
 
-impl<'a, D: DescType + ?Sized> Copy for TransientDesc<'a, D> {}
+impl<'a> DescRef for Transient<'a> {}
 
-impl<'a, D: DescType + ?Sized> Clone for TransientDesc<'a, D> {
-	fn clone(&self) -> Self {
-		*self
+impl<'a> AliveDescRef for Transient<'a> {
+	#[inline]
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
+		desc.r.id
 	}
 }
 
-impl<'a, D: DescType + ?Sized> TransientDesc<'a, D> {
+pub type TransientDesc<'a, C> = Desc<Transient<'a>, C>;
+
+impl<'a, C: DescContent> TransientDesc<'a, C> {
 	/// Create a new TransientDesc
 	///
 	/// # Safety
-	/// id must be a valid descriptor id that stays valid for the remainder of the frame
+	/// * The C generic must match the content that the [`DescRef`] points to.
+	/// * id must be a valid descriptor id that stays valid for the remainder of the frame.
 	#[inline]
 	pub const unsafe fn new(id: u32) -> Self {
-		Self {
-			id,
-			_phantom: PhantomData {},
+		unsafe {
+			Self::new_inner(Transient {
+				id,
+				_phantom: PhantomData {},
+			})
 		}
 	}
 }
 
-impl<'a, D: DescType + ?Sized> ValidDesc<D> for TransientDesc<'a, D> {
-	#[inline]
-	fn id(&self) -> u32 {
-		self.id
-	}
-}
+unsafe impl<'a> DescStructRef for Transient<'a> {
+	type TransferDescStruct = TransferTransient;
 
-unsafe impl<'a, D: DescType + ?Sized> DescStruct for TransientDesc<'a, D> {
-	type TransferDescStruct = TransferTransientDesc<D>;
-
-	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
-		Self::TransferDescStruct {
-			id: self.id,
-			_phantom: PhantomData {},
-		}
+	unsafe fn desc_write_cpu<C: DescContent>(
+		desc: Desc<Self, C>,
+		_meta: &mut impl MetadataCpuInterface,
+	) -> Self::TransferDescStruct {
+		Self::TransferDescStruct { id: desc.r.id }
 	}
 
-	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
-		// Safety: whoever wrote the TransferDescStruct must have upheld the safety contract
+	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
 		unsafe { TransientDesc::new(from.id) }
 	}
 }
 
 #[repr(C)]
-pub struct TransferTransientDesc<D: DescType + ?Sized> {
+#[derive(Copy, Clone, AnyBitPattern)]
+pub struct TransferTransient {
 	id: u32,
-	_phantom: PhantomData<&'static D>,
 }
 
-impl<D: DescType + ?Sized> Copy for TransferTransientDesc<D> {}
-
-impl<D: DescType + ?Sized> Clone for TransferTransientDesc<D> {
-	fn clone(&self) -> Self {
-		*self
-	}
-}
-
-unsafe impl<D: DescType + ?Sized> Zeroable for TransferTransientDesc<D> {}
-
-unsafe impl<D: DescType + ?Sized> AnyBitPattern for TransferTransientDesc<D> {}
-
-#[repr(C)]
-pub struct WeakDesc<D: DescType + ?Sized> {
+// weak
+#[derive(Copy, Clone, AnyBitPattern)]
+pub struct Weak {
 	id: u32,
 	version: u32,
-	_phantom: PhantomData<D>,
 }
+const_assert_eq!(mem::size_of::<Weak>(), 8);
 
-impl<D: DescType + ?Sized> Copy for WeakDesc<D> {}
+impl DescRef for Weak {}
 
-impl<D: DescType + ?Sized> Clone for WeakDesc<D> {
-	fn clone(&self) -> Self {
-		*self
-	}
-}
+pub type WeakDesc<C> = Desc<Weak, C>;
 
-unsafe impl<D: DescType + ?Sized> Zeroable for WeakDesc<D> {}
-
-unsafe impl<D: DescType + ?Sized> AnyBitPattern for WeakDesc<D> {}
-
-impl<D: DescType + ?Sized> WeakDesc<D> {
+impl<C: DescContent> WeakDesc<C> {
+	/// Creates a new WeakDesc
+	///
+	/// # Safety
+	/// The C generic must match the content that the [`DescRef`] points to
 	#[inline]
-	pub const fn new(id: u32, version: u32) -> WeakDesc<D> {
-		Self {
-			id,
-			version,
-			_phantom: PhantomData {},
-		}
+	pub const unsafe fn new(id: u32, version: u32) -> WeakDesc<C> {
+		unsafe { Self::new_inner(Weak { id, version }) }
 	}
 
 	#[inline]
 	pub const fn id(&self) -> u32 {
-		self.id
+		self.r.id
 	}
 
 	#[inline]
 	pub const fn version(&self) -> u32 {
-		self.version
+		self.r.version
 	}
 
-	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor is still valid.
+	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor
+	/// pointed to is still valid.
 	///
 	/// # Safety
 	/// This unsafe variant assumes the descriptor is still alive, rather than checking whether it actually is.
 	#[inline]
-	pub unsafe fn upgrade_unchecked<'a>(&self) -> TransientDesc<'a, D> {
-		unsafe { TransientDesc::new(self.id) }
+	pub unsafe fn upgrade_unchecked<'a>(&self) -> TransientDesc<'a, C> {
+		unsafe { TransientDesc::new(self.r.id) }
 	}
 }
 
-#[repr(C)]
-pub struct StrongDesc<D: DescType + ?Sized> {
+// strong
+#[derive(Copy, Clone)]
+pub struct Strong {
 	id: u32,
 	/// internal value only used on the CPU to validate that slot wasn't reused
-	version: u32,
-	_phantom: PhantomData<D>,
+	_version: u32,
 }
+const_assert_eq!(mem::size_of::<Strong>(), 8);
 
-impl<D: DescType + ?Sized> Copy for StrongDesc<D> {}
+impl DescRef for Strong {}
 
-impl<D: DescType + ?Sized> Clone for StrongDesc<D> {
-	fn clone(&self) -> Self {
-		*self
+impl AliveDescRef for Strong {
+	#[inline]
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
+		desc.r.id
 	}
 }
 
-impl<D: DescType + ?Sized> StrongDesc<D> {
+pub type StrongDesc<C> = Desc<Strong, C>;
+
+impl<C: DescContent> StrongDesc<C> {
 	/// Create a new StrongDesc
 	///
 	/// # Safety
 	/// id must be a valid descriptor id that is somehow ensured to stay valid for as long as this StrongDesc exists
 	#[inline]
 	pub const unsafe fn new(id: u32, version: u32) -> Self {
-		Self {
-			id,
-			version,
-			_phantom: PhantomData {},
-		}
+		unsafe { Self::new_inner(Strong { id, _version: version }) }
 	}
 
 	/// Get the version
@@ -169,54 +331,35 @@ impl<D: DescType + ?Sized> StrongDesc<D> {
 	/// only available on the cpu
 	#[cfg(not(target_arch = "spirv"))]
 	pub unsafe fn version_cpu(&self) -> u32 {
-		self.version
+		self.r._version
 	}
 
 	#[inline]
-	pub fn to_transient<'b>(&self, frame: FrameInFlight<'b>) -> TransientDesc<'b, D> {
+	pub fn to_transient<'a>(&self, frame: FrameInFlight<'a>) -> TransientDesc<'a, C> {
 		let _ = frame;
 		// Safety: this StrongDesc existing ensures the descriptor will stay alive for this frame
 		unsafe { TransientDesc::new(self.id()) }
 	}
 }
 
-impl<D: DescType + ?Sized> ValidDesc<D> for StrongDesc<D> {
-	#[inline]
-	fn id(&self) -> u32 {
-		self.id
-	}
-}
+unsafe impl DescStructRef for Strong {
+	type TransferDescStruct = TransferStrong;
 
-unsafe impl<D: DescType + ?Sized> DescStruct for StrongDesc<D> {
-	type TransferDescStruct = TransferStrongDesc<D>;
-
-	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
-		_meta.visit_strong_descriptor(self);
-		Self::TransferDescStruct {
-			id: self.id,
-			_phantom: PhantomData {},
-		}
+	unsafe fn desc_write_cpu<C: DescContent>(
+		desc: Desc<Self, C>,
+		meta: &mut impl MetadataCpuInterface,
+	) -> Self::TransferDescStruct {
+		meta.visit_strong_descriptor(desc);
+		Self::TransferDescStruct { id: desc.r.id }
 	}
 
-	unsafe fn read(from: Self::TransferDescStruct, _meta: Metadata) -> Self {
+	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
 		unsafe { StrongDesc::new(from.id, 0) }
 	}
 }
 
 #[repr(C)]
-pub struct TransferStrongDesc<D: DescType + ?Sized> {
+#[derive(Copy, Clone, AnyBitPattern)]
+pub struct TransferStrong {
 	id: u32,
-	_phantom: PhantomData<&'static D>,
 }
-
-impl<D: DescType + ?Sized> Copy for TransferStrongDesc<D> {}
-
-impl<D: DescType + ?Sized> Clone for TransferStrongDesc<D> {
-	fn clone(&self) -> Self {
-		*self
-	}
-}
-
-unsafe impl<D: DescType + ?Sized> Zeroable for TransferStrongDesc<D> {}
-
-unsafe impl<D: DescType + ?Sized> AnyBitPattern for TransferStrongDesc<D> {}

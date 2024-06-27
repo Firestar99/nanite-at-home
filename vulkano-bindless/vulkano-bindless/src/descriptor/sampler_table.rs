@@ -1,5 +1,5 @@
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable, DescTableEnum, DescTableEnumType};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::descriptor_type_cpu::{DescTable, DescTypeCpu};
 use crate::descriptor::rc_reference::RCDesc;
 use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
 use crate::descriptor::Bindless;
@@ -14,11 +14,11 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::sampler::{Sampler as VSampler, SamplerCreateInfo};
 use vulkano::shader::ShaderStages;
 use vulkano::{Validated, VulkanError};
-use vulkano_bindless_shaders::descriptor::descriptor_type::DescEnum;
+use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
 use vulkano_bindless_shaders::descriptor::sampler::Sampler;
 use vulkano_bindless_shaders::descriptor::BINDING_SAMPLER;
 
-impl DescTypeCpu for Sampler {
+impl DescContentCpu for Sampler {
 	type DescTable = SamplerTable;
 	type VulkanType = Arc<VSampler>;
 
@@ -28,7 +28,7 @@ impl DescTypeCpu for Sampler {
 }
 
 impl DescTable for SamplerTable {
-	const DESC_ENUM: DescEnum = DescEnum::Sampler;
+	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Sampler;
 	type Slot = Arc<VSampler>;
 	type RCSlotsInterface = SamplerInterface;
 
@@ -57,8 +57,34 @@ impl DescTable for SamplerTable {
 		.unwrap_err();
 	}
 
+	#[inline]
 	fn lock_table(&self) -> TableEpochGuard<Self> {
 		self.resource_table.epoch_guard()
+	}
+
+	#[inline]
+	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A> {
+		DescTableEnum::Sampler(inner)
+	}
+
+	#[inline]
+	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>> {
+		if let DescTableEnum::Sampler(v) = table_enum {
+			Some(v)
+		} else {
+			None
+		}
+	}
+
+	#[inline]
+	fn table_enum_try_into<A: DescTableEnumType>(
+		table_enum: DescTableEnum<A>,
+	) -> Result<A::Type<Self>, DescTableEnum<A>> {
+		if let DescTableEnum::Sampler(v) = table_enum {
+			Ok(v)
+		} else {
+			Err(table_enum)
+		}
 	}
 }
 
@@ -81,6 +107,7 @@ pub struct SamplerTableAccess<'a>(pub &'a Arc<Bindless>);
 impl<'a> Deref for SamplerTableAccess<'a> {
 	type Target = SamplerTable;
 
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0.sampler
 	}
@@ -89,12 +116,15 @@ impl<'a> Deref for SamplerTableAccess<'a> {
 impl<'a> SamplerTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot(&self, sampler: Arc<VSampler>) -> RCDesc<Sampler> {
-		self.resource_table.alloc_slot(sampler)
+		self.resource_table
+			.alloc_slot(sampler)
+			.map_err(|a| format!("SamplerTable: {}", a))
+			.unwrap()
 	}
 
 	pub fn alloc(&self, sampler_create_info: SamplerCreateInfo) -> Result<RCDesc<Sampler>, Validated<VulkanError>> {
 		let sampler = VSampler::new(self.device.clone(), sampler_create_info)?;
-		Ok(self.resource_table.alloc_slot(sampler))
+		Ok(self.alloc_slot(sampler))
 	}
 }
 
