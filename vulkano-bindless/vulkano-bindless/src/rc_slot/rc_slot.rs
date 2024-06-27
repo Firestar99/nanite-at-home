@@ -10,7 +10,8 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
-use std::fmt::{Debug, Formatter};
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::mem::{ManuallyDrop, MaybeUninit};
@@ -336,6 +337,23 @@ impl<T, Interface: RCSlotsInterface<T>> Drop for EpochGuard<T, Interface> {
 	}
 }
 
+#[derive(Debug)]
+pub enum SlotAllocationError {
+	NoMoreCapacity(usize),
+}
+
+impl Error for SlotAllocationError {}
+
+impl Display for SlotAllocationError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			SlotAllocationError::NoMoreCapacity(cap) => {
+				write!(f, "Ran out of available slots with a capacity of {}!", *cap)
+			}
+		}
+	}
+}
+
 pub struct RCSlotArray<T, Interface: RCSlotsInterface<T> = DefaultRCSlotInterface> {
 	interface: Interface,
 	array: Box<[Slot<T>]>,
@@ -366,16 +384,19 @@ const UNLOCK_CONTROL_LOCKED: u32 = 0x1;
 const UNLOCK_CONTROL_MORE: u32 = 0x01;
 
 impl<T> RCSlotArray<T, DefaultRCSlotInterface> {
-	pub fn new(len: usize) -> Arc<Self> {
-		Self::new_with_interface(len, DefaultRCSlotInterface {})
+	pub fn new(capacity: usize) -> Arc<Self> {
+		Self::new_with_interface(capacity, DefaultRCSlotInterface {})
 	}
 }
 
 impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
-	pub fn new_with_interface(len: usize, interface: Interface) -> Arc<Self> {
+	pub fn new_with_interface(capacity: usize, interface: Interface) -> Arc<Self> {
 		Arc::new(Self {
 			interface,
-			array: (0..len).map(|_| Slot::default()).collect::<Vec<_>>().into_boxed_slice(),
+			array: (0..capacity)
+				.map(|_| Slot::default())
+				.collect::<Vec<_>>()
+				.into_boxed_slice(),
 			next_free: CachePadded::new(AtomicUsize::new(0)),
 			reaper_queue: SegQueue::new(),
 			reaper_peak: UnsafeCell::new(None),
@@ -387,12 +408,19 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
 		})
 	}
 
-	pub fn allocate(self: &Arc<Self>, t: T) -> RCSlot<T, Interface> {
-		let index = self
-			.dead_queue
-			.pop()
-			.unwrap_or_else(|| SlotIndex(self.next_free.fetch_add(1, Relaxed)));
+	pub fn allocate(self: &Arc<Self>, t: T) -> Result<RCSlot<T, Interface>, SlotAllocationError> {
+		let index = if let Some(index) = self.dead_queue.pop() {
+			index
+		} else {
+			let index = SlotIndex(self.next_free.fetch_add(1, Relaxed));
+			if index.0 < self.slots_capacity() {
+				index
+			} else {
+				return Err(SlotAllocationError::NoMoreCapacity(self.slots_capacity()));
+			}
+		};
 
+		// FIXME check that we are out of capacity
 		let slot = &self.array[index];
 		// Safety: we are the only ones who have access to this newly allocated key
 		unsafe {
@@ -406,7 +434,7 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
 		slot.version_swap(Dead, Alive, Release);
 
 		// Safety: transfer ownership of slot's ref inc done above and ref inc the slots collection for this slot once
-		unsafe { RCSlot::new(Arc::into_raw(self.clone()), index) }
+		Ok(unsafe { RCSlot::new(Arc::into_raw(self.clone()), index) })
 	}
 
 	/// Try and get a reference to an alive slot. The slot must be alive, must not be dead or in reaper state.
@@ -601,6 +629,12 @@ impl<T, Interface: RCSlotsInterface<T>> RCSlotArray<T, Interface> {
 		self.next_free.load(Relaxed)
 	}
 
+	/// The amount of slots Self can hold, before failing to allocate.
+	#[inline]
+	pub const fn slots_capacity(&self) -> usize {
+		self.array.len()
+	}
+
 	/// Iterates through all slots
 	///
 	/// # Safety
@@ -666,7 +700,7 @@ mod tests {
 	#[test]
 	fn test_ref_counting() {
 		let slots = RCSlotArray::new(32);
-		let slot = slots.allocate(42);
+		let slot = slots.allocate(42).unwrap();
 		assert_eq!(slot.deref_copy(), 42);
 		assert_eq!(slot.ref_count(), 1);
 
@@ -686,7 +720,7 @@ mod tests {
 	#[should_panic(expected = "(state: Dead) differed from expected state Alive!")]
 	fn test_ref_counting_underflow() {
 		let slots = RCSlotArray::new(32);
-		let slot = slots.allocate(42);
+		let slot = slots.allocate(42).unwrap();
 		let slot2 = slot.clone();
 
 		// Safety: this is not safe, and should cause a panic later
@@ -701,7 +735,7 @@ mod tests {
 		let slots = RCSlotArray::new(32);
 
 		let count: u32 = 5;
-		let vec = (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
+		let vec = (0..count).map(|i| slots.allocate(i).unwrap()).collect::<Vec<_>>();
 		for (i, slot) in vec.iter().enumerate() {
 			assert_eq!(slot.deref_copy(), i as u32);
 			assert_eq!(slot.index.0, i);
@@ -721,10 +755,10 @@ mod tests {
 		let mut lock_unlock = LockUnlock::new(&slots);
 
 		let arc1 = Arc::new(42);
-		let slot1 = slots.allocate(arc1.clone());
+		let slot1 = slots.allocate(arc1.clone()).unwrap();
 		assert_eq!(slot1.index.0, 0);
 		let arc2 = Arc::new(69);
-		let slot2 = slots.allocate(arc2.clone());
+		let slot2 = slots.allocate(arc2.clone()).unwrap();
 		assert_eq!(slot2.index.0, 1);
 
 		assert_eq!(slots.reaper_queue.len(), 0);
@@ -764,7 +798,7 @@ mod tests {
 		let mut lock_unlock = LockUnlock::new(&slots);
 
 		for i in 0..5 {
-			let slot = slots.allocate(());
+			let slot = slots.allocate(()).unwrap();
 			assert_eq!(slot.index.0, i);
 		}
 		assert_eq!(slots.reaper_queue.len(), 5);
@@ -776,7 +810,7 @@ mod tests {
 
 		// 5 reused
 		for i in 0..5 {
-			let slot = slots.allocate(());
+			let slot = slots.allocate(()).unwrap();
 			assert_eq!(slot.index.0, i);
 			assert_eq!(slots.reaper_queue.len(), i);
 			assert_eq!(slots.dead_queue.len(), 5 - i - 1);
@@ -784,7 +818,7 @@ mod tests {
 
 		// 2 newly allocated
 		for i in 0..2 {
-			let slot = slots.allocate(());
+			let slot = slots.allocate(()).unwrap();
 			assert_eq!(slot.index.0, i + 5);
 			assert_eq!(slots.reaper_queue.len(), 5 + i);
 			assert_eq!(slots.dead_queue.len(), 0);
@@ -798,7 +832,7 @@ mod tests {
 	#[test]
 	fn test_queues_mix_locked_and_unlocked() {
 		let slots = RCSlotArray::new(32);
-		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
+		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i).unwrap()).collect::<Vec<_>>();
 
 		// unlocked behaviour
 		// 5 new
@@ -839,7 +873,7 @@ mod tests {
 	#[test]
 	fn test_queues_drop_before_and_after_lock() {
 		let slots = RCSlotArray::new(32);
-		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i)).collect::<Vec<_>>();
+		let alloc = |count: u32| (0..count).map(|i| slots.allocate(i).unwrap()).collect::<Vec<_>>();
 
 		let before_lock_a = alloc(2);
 		let before_lock_b = alloc(3);
@@ -868,7 +902,7 @@ mod tests {
 		let slots = RCSlotArray::new(32);
 
 		let arc = Arc::new(42);
-		let slot = slots.allocate(arc.clone());
+		let slot = slots.allocate(arc.clone()).unwrap();
 		assert_eq!(Arc::strong_count(&arc), 2);
 
 		let lock1 = slots.epoch_guard();
@@ -909,10 +943,10 @@ mod tests {
 		let slots = RCSlotArray::new(32);
 		assert_eq!(iter_collect(&slots.epoch_guard()), []);
 
-		let slot1 = slots.allocate(42);
+		let slot1 = slots.allocate(42).unwrap();
 		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(42)]);
 
-		let slot2 = slots.allocate(69);
+		let slot2 = slots.allocate(69).unwrap();
 		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(42), Some(69)]);
 
 		drop(slot2);
@@ -927,9 +961,9 @@ mod tests {
 		let slots = RCSlotArray::new(32);
 		assert_eq!(iter_collect(&slots.epoch_guard()), []);
 
-		let slot1 = slots.allocate(1);
-		let slot2 = slots.allocate(2);
-		let slot3 = slots.allocate(3);
+		let slot1 = slots.allocate(1).unwrap();
+		let slot2 = slots.allocate(2).unwrap();
+		let slot3 = slots.allocate(3).unwrap();
 		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(1), Some(2), Some(3)]);
 
 		// 1 lock
@@ -964,7 +998,7 @@ mod tests {
 	#[should_panic(expected = "(state: Reaper) differed from expected state Alive!")]
 	fn test_iter_clone() {
 		let slots = RCSlotArray::new(32);
-		let slot1 = slots.allocate(42);
+		let slot1 = slots.allocate(42).unwrap();
 
 		let lock1 = slots.epoch_guard();
 		assert_eq!(iter_collect(&lock1), [Some(42)]);

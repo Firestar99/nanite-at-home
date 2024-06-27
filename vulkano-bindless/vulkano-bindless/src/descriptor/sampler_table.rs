@@ -116,12 +116,15 @@ impl<'a> Deref for SamplerTableAccess<'a> {
 impl<'a> SamplerTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot(&self, sampler: Arc<VSampler>) -> RCDesc<Sampler> {
-		self.resource_table.alloc_slot(sampler)
+		self.resource_table
+			.alloc_slot(sampler)
+			.map_err(|a| format!("SamplerTable: {}", a))
+			.unwrap()
 	}
 
 	pub fn alloc(&self, sampler_create_info: SamplerCreateInfo) -> Result<RCDesc<Sampler>, Validated<VulkanError>> {
 		let sampler = VSampler::new(self.device.clone(), sampler_create_info)?;
-		Ok(self.resource_table.alloc_slot(sampler))
+		Ok(self.alloc_slot(sampler))
 	}
 }
 

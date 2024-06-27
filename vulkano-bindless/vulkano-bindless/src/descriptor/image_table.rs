@@ -140,7 +140,10 @@ impl<'a> ImageTableAccess<'a> {
 	#[inline]
 	pub fn alloc_slot_2d(&self, image_view: Arc<ImageView>) -> RCDesc<Image2d> {
 		assert_eq!(image_view.view_type(), ImageViewType::Dim2d);
-		self.resource_table.alloc_slot(image_view)
+		self.resource_table
+			.alloc_slot(image_view)
+			.map_err(|a| format!("ImageTable: {}", a))
+			.unwrap()
 	}
 }
 

@@ -1,7 +1,7 @@
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::rc_reference::{AnyRCDescExt, RCDesc};
 use crate::descriptor::{AnyRCDesc, RCDescExt};
-use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotIndex};
+use crate::rc_slot::{EpochGuard as RCLock, EpochGuard, RCSlot, RCSlotArray, SlotAllocationError, SlotIndex};
 use crate::sync::Arc;
 use parking_lot::Mutex;
 use rangemap::RangeSet;
@@ -15,9 +15,9 @@ pub struct ResourceTable<T: DescTable> {
 }
 
 impl<T: DescTable> ResourceTable<T> {
-	pub fn new(count: u32, interface: T::RCSlotsInterface) -> Self {
+	pub fn new(capacity: u32, interface: T::RCSlotsInterface) -> Self {
 		Self {
-			slots: RCSlotArray::new_with_interface(count as usize, interface),
+			slots: RCSlotArray::new_with_interface(capacity as usize, interface),
 			flush_queue: Mutex::new(RangeSet::new()),
 		}
 	}
@@ -25,13 +25,24 @@ impl<T: DescTable> ResourceTable<T> {
 	pub fn alloc_slot<C: DescContentCpu<DescTable = T>>(
 		&self,
 		cpu_type: <C::DescTable as DescTable>::Slot,
-	) -> RCDesc<C> {
-		let slot = self.slots.allocate(cpu_type);
+	) -> Result<RCDesc<C>, SlotAllocationError> {
+		let slot = self.slots.allocate(cpu_type)?;
 		// Safety: we'll pull from the queue later and destroy the slots
 		let id = unsafe { slot.clone().into_raw_index().0 } as u32;
 		self.flush_queue.lock().insert(id..id + 1);
 		// Safety: C matches slot
-		unsafe { RCDesc::<C>::new(slot) }
+		Ok(unsafe { RCDesc::<C>::new(slot) })
+	}
+
+	/// The amount of slots that have been allocated until now. Should immediately be considered
+	/// outdated, but is guaranteed to only ever monotonically increase.
+	pub fn slots_allocated(&self) -> u32 {
+		self.slots.slots_allocated() as u32
+	}
+
+	/// The amount of slots Self can hold, before failing to allocate.
+	pub fn slots_capacity(&self) -> u32 {
+		self.slots.slots_capacity() as u32
 	}
 }
 

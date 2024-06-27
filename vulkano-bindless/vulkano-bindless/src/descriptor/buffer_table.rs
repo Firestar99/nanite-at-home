@@ -164,10 +164,13 @@ impl<'a> BufferTableAccess<'a> {
 	where
 		T::Transfer: VBufferContents,
 	{
-		self.resource_table.alloc_slot(BufferSlot {
-			buffer: buffer.into_bytes(),
-			_strong_refs: strong_refs,
-		})
+		self.resource_table
+			.alloc_slot(BufferSlot {
+				buffer: buffer.into_bytes(),
+				_strong_refs: strong_refs,
+			})
+			.map_err(|a| format!("BufferTable: {}", a))
+			.unwrap()
 	}
 
 	pub fn alloc_from_data<T: BufferStruct>(
