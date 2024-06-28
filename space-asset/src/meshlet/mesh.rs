@@ -179,7 +179,6 @@ mod runtime {
 
 	impl ArchivedMeshletMeshDisk {
 		pub async fn upload(&self, uploader: &Uploader) -> Result<MeshletMesh<RC>, Validated<UploadError>> {
-			profiling::scope!("ArchivedMeshletMeshDisk::upload");
 			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
 			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));
 			let triangles = uploader.upload_buffer_iter(self.triangles.iter().map(deserialize_infallible));

@@ -30,6 +30,7 @@ impl MeshletRenderTask {
 		}
 	}
 
+	#[profiling::function]
 	pub fn record(
 		&self,
 		frame_context: &FrameContext,
@@ -68,7 +69,8 @@ impl MeshletRenderTask {
 		})
 		.unwrap();
 		let scenes = self.scenes.lock().clone();
-		for scene in &scenes {
+		for (_id, scene) in scenes.iter().enumerate() {
+			profiling::scope!("draw scene", _id.to_string());
 			for mesh2instance in &scene.mesh2instances {
 				self.pipeline_mesh.draw(frame_context, &mut cmd, mesh2instance);
 			}

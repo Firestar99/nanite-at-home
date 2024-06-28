@@ -55,7 +55,6 @@ mod runtime {
 
 	impl ArchivedMeshletMesh2InstanceDisk {
 		pub async fn upload(&self, uploader: &Uploader) -> Result<MeshletMesh2InstanceCpu, Validated<UploadError>> {
-			profiling::scope!("ArchivedMeshletMesh2InstanceDisk::upload");
 			let mesh = self.mesh.upload(uploader);
 			let instances = uploader.upload_buffer_iter(self.instances.iter().map(deserialize_infallible));
 			let mesh = uploader.upload_buffer_data(mesh.await?.to_strong());

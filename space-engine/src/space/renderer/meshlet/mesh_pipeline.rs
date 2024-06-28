@@ -74,6 +74,7 @@ impl MeshDrawPipeline {
 		Self { pipeline }
 	}
 
+	#[profiling::function]
 	pub fn draw(
 		&self,
 		frame_context: &FrameContext,

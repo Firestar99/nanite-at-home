@@ -78,9 +78,15 @@ impl FrameManager {
 		//  CPU and GPU. But without cloning GpuFutures or at least splitting them into a GPU semaphore and CPU fence
 		//  there is nothing we can do to get this right.
 		if let Some(prev_frame) = self.prev_frame.index_mut(fif_prev).take() {
-			prev_frame.fence_rendered.wait(None).unwrap();
-			// unlock bindless lock
-			drop(prev_frame);
+			{
+				profiling::scope!("wait for GPU");
+				prev_frame.fence_rendered.wait(None).unwrap();
+			}
+			{
+				profiling::scope!("cleanup GPU resources");
+				// unlock bindless lock
+				drop(prev_frame);
+			}
 		}
 		let prev_frame_future = now(self.bindless.device.clone());
 
