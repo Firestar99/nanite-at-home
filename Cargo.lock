@@ -2986,7 +2986,7 @@ dependencies = [
 [[package]]
 name = "vulkano"
 version = "0.34.0"
-source = "git+https://github.com/vulkano-rs/vulkano.git?rev=d21de235edf6f2fa3fc18cb3603611fdf6d39e54#d21de235edf6f2fa3fc18cb3603611fdf6d39e54"
+source = "git+https://github.com/vulkano-rs/vulkano.git?rev=94a32f153508c050d0e3db69abd9404c812a3ef7#94a32f153508c050d0e3db69abd9404c812a3ef7"
 dependencies = [
  "ahash 0.8.11",
  "ash",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "vulkano-macros"
 version = "0.34.0"
-source = "git+https://github.com/vulkano-rs/vulkano.git?rev=d21de235edf6f2fa3fc18cb3603611fdf6d39e54#d21de235edf6f2fa3fc18cb3603611fdf6d39e54"
+source = "git+https://github.com/vulkano-rs/vulkano.git?rev=94a32f153508c050d0e3db69abd9404c812a3ef7#94a32f153508c050d0e3db69abd9404c812a3ef7"
 dependencies = [
  "proc-macro-crate 2.0.0",
  "proc-macro2",
@@ -3097,7 +3097,7 @@ dependencies = [
 [[package]]
 name = "vulkano-shaders"
 version = "0.34.0"
-source = "git+https://github.com/vulkano-rs/vulkano.git?rev=d21de235edf6f2fa3fc18cb3603611fdf6d39e54#d21de235edf6f2fa3fc18cb3603611fdf6d39e54"
+source = "git+https://github.com/vulkano-rs/vulkano.git?rev=94a32f153508c050d0e3db69abd9404c812a3ef7#94a32f153508c050d0e3db69abd9404c812a3ef7"
 dependencies = [
  "ahash 0.8.11",
  "heck 0.4.1",
