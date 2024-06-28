@@ -129,11 +129,9 @@ impl SeedInFlight {
 		((self.0 >> 4) & 0xF) as u32 + 1
 	}
 
-	/// for testing only, thus not pub
 	#[must_use]
-	#[allow(dead_code)]
 	#[inline]
-	pub fn seed_u8(&self) -> u8 {
+	fn seed_u8(&self) -> u8 {
 		((self.0 >> 8) & 0xFF) as u8
 	}
 }
