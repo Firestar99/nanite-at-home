@@ -219,6 +219,7 @@ assert_impl_all!(SwapchainController: Send);
 assert_not_impl_all!(SwapchainController: Sync);
 
 impl SwapchainController {
+	#[profiling::function]
 	pub async fn acquire_image(&mut self, timeout: Option<Duration>) -> (SwapchainAcquireFuture, AcquiredImage) {
 		const RECREATE_ATTEMPTS: u32 = 10;
 		for _ in 0..RECREATE_ATTEMPTS {
@@ -300,6 +301,7 @@ impl<'a> AcquiredImage<'a> {
 		&self.controller.images[self.image_index as usize]
 	}
 
+	#[profiling::function]
 	pub fn present(
 		self,
 		frame: &Frame,

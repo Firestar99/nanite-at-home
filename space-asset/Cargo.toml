@@ -37,3 +37,9 @@ static_assertions = { workspace = true }
 [features]
 disk = ["dep:rkyv", "dep:zstd"]
 runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon"]
+
+profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless?/profile-with-puffin"]
+profile-with-optick = ["profiling/profile-with-optick", "vulkano-bindless?/profile-with-optick"]
+profile-with-superluminal = ["profiling/profile-with-superluminal", "vulkano-bindless?/profile-with-superluminal"]
+profile-with-tracing = ["profiling/profile-with-tracing", "vulkano-bindless?/profile-with-tracing"]
+profile-with-tracy = ["profiling/profile-with-tracy", "vulkano-bindless?/profile-with-tracy"]

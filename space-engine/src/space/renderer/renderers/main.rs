@@ -115,6 +115,7 @@ pub struct RendererMainFrame<'a> {
 }
 
 impl<'a> RendererMainFrame<'a> {
+	#[profiling::function]
 	pub fn record(self, future_await: impl GpuFuture) -> impl GpuFuture {
 		let r = self.resources;
 		let p = self.pipeline;

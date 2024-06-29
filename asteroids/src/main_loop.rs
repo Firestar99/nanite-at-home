@@ -67,7 +67,13 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			&vec,
 			SpaceQueueAllocator::new(),
 			stages,
-			DescriptorCounts::reasonable_defaults,
+			|phy| {
+				DescriptorCounts {
+					buffers: 100_000,
+					..DescriptorCounts::reasonable_defaults(phy)
+				}
+				.min(DescriptorCounts::limits(phy))
+			},
 		)
 		.await;
 	}
@@ -98,6 +104,8 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut camera_controls = FpsCameraController::new();
 	let mut last_frame = DeltaTimeTimer::default();
 	'outer: loop {
+		profiling::finish_frame!();
+		profiling::scope!("frame");
 		// event handling
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
@@ -116,12 +124,14 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		if renderer_main.as_ref().map_or(true, |renderer| {
 			renderer.image_supported(acquired_image.image_view()).is_err()
 		}) {
+			profiling::scope!("recreate renderer");
 			// drop then recreate to better recycle memory
 			drop(renderer_main.take());
 			renderer_main = Some(render_pipeline_main.new_renderer(acquired_image.image_view().image().extent(), 2));
 		}
 
 		// frame data
+		profiling::scope!("render");
 		let delta_time = last_frame.next();
 		let image = UVec3::from_array(acquired_image.image_view().image().extent());
 		let frame_data = FrameData {

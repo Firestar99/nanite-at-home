@@ -34,6 +34,7 @@ num-derive = { workspace = true }
 
 # profiling
 profiling = { workspace = true }
+puffin_http = { workspace = true }
 
 # other
 static_assertions = { workspace = true }
@@ -44,3 +45,10 @@ smallvec = { workspace = true }
 space-asset = { workspace = true }
 space-asset-pipeline = { workspace = true }
 futures = { workspace = true }
+
+[features]
+profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless/profile-with-puffin", "vulkano/profile-with-puffin", "space-engine/profile-with-puffin", "space-asset/profile-with-puffin"]
+profile-with-optick = ["profiling/profile-with-optick", "vulkano-bindless/profile-with-optick", "vulkano/profile-with-optick", "space-engine/profile-with-optick", "space-asset/profile-with-optick"]
+profile-with-superluminal = ["profiling/profile-with-superluminal", "vulkano-bindless/profile-with-superluminal", "vulkano/profile-with-superluminal", "space-engine/profile-with-superluminal", "space-asset/profile-with-superluminal"]
+profile-with-tracing = ["profiling/profile-with-tracing", "vulkano-bindless/profile-with-tracing", "vulkano/profile-with-tracing", "space-engine/profile-with-tracing", "space-asset/profile-with-tracing"]
+profile-with-tracy = ["profiling/profile-with-tracy", "vulkano-bindless/profile-with-tracy", "vulkano/profile-with-tracy", "space-engine/profile-with-tracy", "space-asset/profile-with-tracy"]

@@ -36,6 +36,9 @@ num-derive = { workspace = true }
 gltf = { workspace = true }
 image = { workspace = true }
 
+# profiling
+profiling = { workspace = true }
+
 # other
 parking_lot = { workspace = true }
 clap = { workspace = true }
@@ -45,3 +48,10 @@ once_cell = { workspace = true }
 
 [build-dependencies]
 space-engine-shader-builder = { path = "../space-engine-shader-builder" }
+
+[features]
+profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless/profile-with-puffin"]
+profile-with-optick = ["profiling/profile-with-optick", "vulkano-bindless/profile-with-optick"]
+profile-with-superluminal = ["profiling/profile-with-superluminal", "vulkano-bindless/profile-with-superluminal"]
+profile-with-tracing = ["profiling/profile-with-tracing", "vulkano-bindless/profile-with-tracing"]
+profile-with-tracy = ["profiling/profile-with-tracy", "vulkano-bindless/profile-with-tracy"]

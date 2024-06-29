@@ -1,5 +1,3 @@
-#![allow(warnings)]
-
 use crate::space::renderer::frame_data::FrameData;
 use crate::space::utils::gpurng::GpuRng;
 use crate::space::utils::hsv::hsv2rgb_smooth;
