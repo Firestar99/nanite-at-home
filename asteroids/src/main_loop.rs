@@ -99,12 +99,12 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	// model loading
 	let scenes = load_scene(&init).await;
 	render_pipeline_main.meshlet_task.scenes.lock().extend(scenes);
-	profiling::finish_frame!();
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
 	let mut last_frame = DeltaTimeTimer::default();
 	'outer: loop {
+		profiling::finish_frame!();
 		profiling::scope!("frame");
 		// event handling
 		for event in inputs.try_iter() {
@@ -149,7 +149,6 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 				acquired_image.present(frame.frame, future)
 			},
 		);
-		profiling::finish_frame!();
 	}
 
 	init.pipeline_cache.write().await.ok();
