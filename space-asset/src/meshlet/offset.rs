@@ -1,8 +1,8 @@
 use crate::meshlet::{MESHLET_INDICES_BITS, MESHLET_TRIANGLES_BITS};
+use bytemuck_derive::AnyBitPattern;
 use core::fmt::{Debug, Formatter};
 use core::ops::{Index, Range};
 use static_assertions::const_assert;
-use vulkano_bindless_macros::BufferContent;
 
 const START_BITS: u32 = 24;
 const START_LIMIT: u32 = 1 << START_BITS;
@@ -17,7 +17,7 @@ const_assert!(LEN_BITS >= MESHLET_TRIANGLES_BITS);
 
 /// a "slice" into a vertex buffer, or rather the start index and len of the slice
 #[repr(transparent)]
-#[derive(Copy, Clone, BufferContent, Default)]
+#[derive(Copy, Clone, Default, AnyBitPattern)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MeshletOffset(u32);
 
