@@ -186,6 +186,8 @@ dependencies = [
  "parking_lot",
  "profiling",
  "puffin_http",
+ "quote",
+ "rayon",
  "smallvec",
  "smol",
  "space-asset",
