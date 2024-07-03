@@ -8,7 +8,6 @@ use space_asset::meshlet::scene::{LoadedMeshletSceneDisk, MeshletSceneCpu};
 use space_asset::meshlet::vertex::MeshletDrawVertex;
 use space_asset::uploader::Uploader;
 use space_engine::space::Init;
-use std::fs::File;
 use std::io;
 use std::iter::repeat;
 use std::sync::Arc;
@@ -28,11 +27,7 @@ pub async fn load_scene(init: &Arc<Init>) -> Vec<Arc<MeshletSceneCpu>> {
 
 #[profiling::function]
 async fn upload_test_scene(init: &Arc<Init>) -> io::Result<Arc<MeshletSceneCpu>> {
-	let disk = unsafe {
-		let path = env!("TestScenePath");
-		let file = File::open(path)?;
-		LoadedMeshletSceneDisk::deserialize_decompress(file)?
-	};
+	let disk = unsafe { LoadedMeshletSceneDisk::deserialize_decompress(crate::models::Sponza)? };
 	let uploader = Uploader {
 		bindless: init.bindless.clone(),
 		memory_allocator: init.memory_allocator.clone(),

@@ -1,6 +1,7 @@
 mod gpu {
 	use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
 	use crate::meshlet::offset::MeshletOffset;
+	use bytemuck_derive::AnyBitPattern;
 	use core::mem;
 	use core::ops::Deref;
 	use glam::UVec3;
@@ -12,7 +13,7 @@ mod gpu {
 	use crate::meshlet::vertex::MeshletDrawVertex;
 
 	#[repr(C)]
-	#[derive(Copy, Clone, Debug, BufferContent)]
+	#[derive(Copy, Clone, Debug, AnyBitPattern)]
 	#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 	pub struct MeshletData {
 		pub draw_vertex_offset: MeshletOffset,

@@ -67,7 +67,7 @@ impl Deref for Gltf {
 }
 
 impl Gltf {
-	pub async fn process(self: &Arc<Self>) -> Result<MeshletSceneDisk> {
+	pub fn process(self: &Arc<Self>) -> Result<MeshletSceneDisk> {
 		profiling::scope!("Gltf::process");
 
 		let meshes_primitives = {
