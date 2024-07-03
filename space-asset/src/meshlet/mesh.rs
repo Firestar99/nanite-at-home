@@ -1,6 +1,7 @@
 mod gpu {
 	use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
 	use crate::meshlet::offset::MeshletOffset;
+	use crate::meshlet::vertex::{DrawVertex, EncodedDrawVertex};
 	use bytemuck_derive::AnyBitPattern;
 	use core::mem;
 	use core::ops::Deref;
@@ -9,8 +10,6 @@ mod gpu {
 	use vulkano_bindless_macros::BufferContent;
 	use vulkano_bindless_shaders::descriptor::reference::{AliveDescRef, Desc, DescRef};
 	use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors};
-
-	use crate::meshlet::vertex::MeshletDrawVertex;
 
 	#[repr(C)]
 	#[derive(Copy, Clone, Debug, AnyBitPattern)]
@@ -57,7 +56,7 @@ mod gpu {
 	#[derive(Copy, Clone, BufferContent)]
 	pub struct MeshletMesh<R: DescRef> {
 		pub meshlets: Desc<R, Buffer<[MeshletData]>>,
-		pub draw_vertices: Desc<R, Buffer<[MeshletDrawVertex]>>,
+		pub draw_vertices: Desc<R, Buffer<[EncodedDrawVertex]>>,
 		pub triangles: Desc<R, Buffer<[CompressedIndices]>>,
 		pub num_meshlets: u32,
 	}
@@ -97,7 +96,7 @@ mod gpu {
 	}
 
 	impl<'a, R: AliveDescRef> Meshlet<'a, R> {
-		pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> MeshletDrawVertex {
+		pub fn load_vertex(&self, descriptors: &Descriptors, index: usize) -> DrawVertex {
 			let len = self.data.draw_vertex_offset.len();
 			assert!(
 				index < len,
@@ -109,9 +108,13 @@ mod gpu {
 		/// # Safety
 		/// index must be in bounds
 		#[inline]
-		pub unsafe fn load_vertex_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletDrawVertex {
+		pub unsafe fn load_vertex_unchecked(&self, descriptors: &Descriptors, index: usize) -> DrawVertex {
 			let global_index = self.data.draw_vertex_offset.start() + index;
-			self.mesh.draw_vertices.access(descriptors).load_unchecked(global_index)
+			self.mesh
+				.draw_vertices
+				.access(descriptors)
+				.load_unchecked(global_index)
+				.decode()
 		}
 
 		#[inline]
@@ -146,13 +149,13 @@ pub use gpu::*;
 mod disk {
 	use crate::meshlet::indices::CompressedIndices;
 	use crate::meshlet::mesh::MeshletData;
-	use crate::meshlet::vertex::MeshletDrawVertex;
+	use crate::meshlet::vertex::EncodedDrawVertex;
 	use rkyv::{Archive, Deserialize, Serialize};
 
 	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletMeshDisk {
 		pub meshlets: Vec<MeshletData>,
-		pub draw_vertices: Vec<MeshletDrawVertex>,
+		pub draw_vertices: Vec<EncodedDrawVertex>,
 		pub triangles: Vec<CompressedIndices>,
 	}
 }

@@ -5,7 +5,7 @@ use space_asset::meshlet::mesh::{MeshletData, MeshletMesh};
 use space_asset::meshlet::mesh2instance::{MeshletMesh2Instance, MeshletMesh2InstanceCpu};
 use space_asset::meshlet::offset::MeshletOffset;
 use space_asset::meshlet::scene::{LoadedMeshletSceneDisk, MeshletSceneCpu};
-use space_asset::meshlet::vertex::MeshletDrawVertex;
+use space_asset::meshlet::vertex::DrawVertex;
 use space_asset::uploader::Uploader;
 use space_engine::renderer::Init;
 use std::io;
@@ -65,11 +65,12 @@ fn upload_test_mesh(init: &Arc<Init>) -> Arc<MeshletSceneCpu> {
 				.copied()
 				.flat_map(|quad| {
 					[
-						MeshletDrawVertex::new(quad),
-						MeshletDrawVertex::new(quad + vec3(1., 0., 0.)),
-						MeshletDrawVertex::new(quad + vec3(0., 1., 0.)),
-						MeshletDrawVertex::new(quad + vec3(1., 1., 0.)),
+						quad,
+						quad + vec3(1., 0., 0.),
+						quad + vec3(0., 1., 0.),
+						quad + vec3(1., 1., 0.),
 					]
+					.map(|position| DrawVertex { position }.encode())
 				})
 				.collect::<Vec<_>>(),
 		)

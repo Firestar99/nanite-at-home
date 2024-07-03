@@ -5,7 +5,7 @@ use glam::{vec3, UVec3, Vec4};
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::MeshletMesh;
 use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_asset::meshlet::vertex::MeshletDrawVertex;
+use space_asset::meshlet::vertex::DrawVertex;
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_non_uniform_ballot,
@@ -166,9 +166,9 @@ pub fn meshlet_mesh(
 	}
 }
 
-fn transform_vertex(frame_data: FrameData, instance: MeshletInstance, vertex: MeshletDrawVertex) -> Vec4 {
+fn transform_vertex(frame_data: FrameData, instance: MeshletInstance, vertex: DrawVertex) -> Vec4 {
 	let camera = frame_data.camera;
-	let worldspace = instance.transform().transform_point3(vertex.position());
+	let worldspace = instance.transform().transform_point3(vertex.position);
 	let cameraspace = camera.transform.transform_point3(worldspace.into());
 	camera.perspective * Vec4::from((cameraspace, 1.))
 }

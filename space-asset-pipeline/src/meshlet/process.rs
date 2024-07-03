@@ -13,7 +13,7 @@ use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 use space_asset::meshlet::offset::MeshletOffset;
 use space_asset::meshlet::scene::MeshletSceneDisk;
-use space_asset::meshlet::vertex::MeshletDrawVertex;
+use space_asset::meshlet::vertex::DrawVertex;
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 use std::ops::Deref;
@@ -151,7 +151,9 @@ impl Gltf {
 		let vertices: Vec<_> = reader
 			.read_positions()
 			.ok_or(Error::from(MeshletError::NoVertexPositions))?
-			.map(|pos| MeshletDrawVertex::new(Vec3::from(pos)))
+			.map(|pos| DrawVertex {
+				position: Vec3::from(pos),
+			})
 			.collect();
 		let mut indices: Vec<_> = if let Some(indices) = reader.read_indices() {
 			indices.into_u32().collect()
@@ -167,8 +169,8 @@ impl Gltf {
 		let out = {
 			let adapter = VertexDataAdapter::new(
 				bytemuck::cast_slice(&*vertices),
-				mem::size_of::<MeshletDrawVertex>(),
-				offset_of!(MeshletDrawVertex, position),
+				mem::size_of::<DrawVertex>(),
+				offset_of!(DrawVertex, position),
 			)
 			.unwrap();
 			let mut out = {
@@ -200,7 +202,12 @@ impl Gltf {
 			.take(indices.len())
 			.collect::<Vec<_>>();
 		assert_eq!(indices, indices_read);
-		let draw_vertices = out.vertices.into_iter().map(|i| vertices[i as usize]).collect();
+		let draw_vertices = out
+			.vertices
+			.into_iter()
+			.map(|i| &vertices[i as usize])
+			.map(DrawVertex::encode)
+			.collect();
 
 		let mut i = 0;
 		let meshlets = out
