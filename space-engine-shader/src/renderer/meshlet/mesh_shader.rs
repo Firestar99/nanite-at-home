@@ -1,11 +1,9 @@
 use crate::renderer::frame_data::FrameData;
-use crate::utils::gpurng::GpuRng;
-use crate::utils::hsv::hsv2rgb_smooth;
-use glam::{vec3, UVec3, Vec4};
+use glam::{UVec3, Vec4};
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::MeshletMesh;
 use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_asset::meshlet::vertex::DrawVertex;
+use space_asset::meshlet::vertex::{DrawVertex, MaterialVertex};
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_non_uniform_ballot,
@@ -106,6 +104,11 @@ fn draw_meshlet(
 	// }
 }
 
+struct InterpolationVertex {
+	material: MaterialVertex,
+	// meshlet_id: u32,
+}
+
 pub const MESH_WG_SIZE: usize = 32;
 
 const_assert_eq!(MESH_WG_SIZE, 32);
@@ -119,8 +122,8 @@ pub fn meshlet_mesh(
 	#[spirv(local_invocation_id)] inv_id: UVec3,
 	#[spirv(task_payload_workgroup_ext)] payload: &Payload,
 	#[spirv(primitive_triangle_indices_ext)] prim_indices: &mut [UVec3; MESHLET_MAX_TRIANGLES as usize],
-	#[spirv(position)] vtx_positions: &mut [Vec4; MESHLET_MAX_VERTICES as usize],
-	vtx_meshlet_id: &mut [u32; MESHLET_MAX_TRIANGLES as usize],
+	#[spirv(position)] out_positions: &mut [Vec4; MESHLET_MAX_VERTICES as usize],
+	out_vertex: &mut [InterpolationVertex; MESHLET_MAX_TRIANGLES as usize],
 ) {
 	let instances = param.mesh2instance.instances.access(descriptors);
 	let instance = instances.load(payload.instance_id as usize);
@@ -143,10 +146,17 @@ pub fn meshlet_mesh(
 			let i = iter * MESH_WG_SIZE + inv_id;
 			let inbounds = i < vertex_count;
 			let i = if inbounds { i } else { vertex_count - 1 };
-			let position = transform_vertex(frame_data, instance, meshlet.load_vertex_unchecked(descriptors, i));
+
+			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
+			let position = transform_vertex(frame_data, instance, draw_vertex);
+			let vertex = InterpolationVertex {
+				material: meshlet.load_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
+				// meshlet_id,
+			};
+
 			if inbounds {
-				*vtx_positions.index_unchecked_mut(i) = position;
-				*vtx_meshlet_id.index_unchecked_mut(i) = meshlet_id;
+				*out_positions.index_unchecked_mut(i) = position;
+				*out_vertex.index_unchecked_mut(i) = vertex;
 			}
 		}
 	}
@@ -158,7 +168,9 @@ pub fn meshlet_mesh(
 			let i = iter * MESH_WG_SIZE + inv_id;
 			let inbounds = i < triangle_count;
 			let i = if inbounds { i } else { triangle_count - 1 };
-			let indices = meshlet.load_triangle_indices_unchecked(descriptors, i);
+
+			let indices = meshlet.load_triangle_unchecked(descriptors, i);
+
 			if i < triangle_count {
 				*prim_indices.index_unchecked_mut(i) = indices;
 			}
@@ -176,9 +188,11 @@ fn transform_vertex(frame_data: FrameData, instance: MeshletInstance, vertex: Dr
 #[bindless(fragment())]
 pub fn meshlet_frag_meshlet_id(
 	#[bindless(param_constants)] _param: &Params<'static>,
-	#[spirv(flat)] vtx_meshlet_id: u32,
+	out_vertex: InterpolationVertex,
 	frag_color: &mut Vec4,
 ) {
-	let random = GpuRng(vtx_meshlet_id).advance_f32();
-	*frag_color = Vec4::from((hsv2rgb_smooth(vec3(random, 1., 1.)), 1.));
+	// let random = GpuRng(out_vertex.meshlet_id).advance_f32();
+	// *frag_color = Vec4::from((hsv2rgb_smooth(vec3(random, 1., 1.)), 1.));
+	*frag_color = Vec4::from((out_vertex.material.normals, 1.));
+	// *frag_color = Vec4::from((out_vertex.material.tex_coords, 0., 1.));
 }

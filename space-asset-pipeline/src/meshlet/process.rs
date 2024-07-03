@@ -1,9 +1,8 @@
 use crate::meshlet::error::{Error, MeshletError, Result};
-use glam::{Affine3A, Mat3, Quat, Vec3};
+use glam::{Affine3A, Mat3, Quat, Vec2, Vec3};
 use gltf::buffer::Data;
 use gltf::mesh::Mode;
 use gltf::{Buffer, Document, Node, Primitive, Scene};
-use memoffset::offset_of;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
@@ -13,7 +12,7 @@ use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 use space_asset::meshlet::offset::MeshletOffset;
 use space_asset::meshlet::scene::MeshletSceneDisk;
-use space_asset::meshlet::vertex::DrawVertex;
+use space_asset::meshlet::vertex::{DrawVertex, MaterialVertex, MaterialVertexId};
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 use std::ops::Deref;
@@ -148,31 +147,26 @@ impl Gltf {
 		}
 
 		let reader = primitive.reader(|b| self.buffer(b));
-		let vertices: Vec<_> = reader
+		let vertex_positions: Vec<_> = reader
 			.read_positions()
 			.ok_or(Error::from(MeshletError::NoVertexPositions))?
-			.map(|pos| DrawVertex {
-				position: Vec3::from(pos),
-			})
+			.map(|pos| Vec3::from(pos))
 			.collect();
+
 		let mut indices: Vec<_> = if let Some(indices) = reader.read_indices() {
 			indices.into_u32().collect()
 		} else {
-			(0..vertices.len() as u32).collect()
+			(0..vertex_positions.len() as u32).collect()
 		};
 
 		{
 			profiling::scope!("meshopt::optimize_vertex_cache");
-			meshopt::optimize_vertex_cache_in_place(&mut indices, vertices.len());
+			meshopt::optimize_vertex_cache_in_place(&mut indices, vertex_positions.len());
 		}
 
 		let out = {
-			let adapter = VertexDataAdapter::new(
-				bytemuck::cast_slice(&*vertices),
-				mem::size_of::<DrawVertex>(),
-				offset_of!(DrawVertex, position),
-			)
-			.unwrap();
+			let adapter =
+				VertexDataAdapter::new(bytemuck::cast_slice(&*vertex_positions), mem::size_of::<Vec3>(), 0).unwrap();
 			let mut out = {
 				profiling::scope!("meshopt::build_meshlets");
 				meshopt::build_meshlets(
@@ -195,36 +189,50 @@ impl Gltf {
 
 		let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
 		let triangles = triangle_indices_write_vec(indices.iter().copied().map(u32::from));
-		let indices_read = triangles
-			.iter()
-			.flat_map(|c| c.to_values())
-			.map(|i| i as u8)
-			.take(indices.len())
-			.collect::<Vec<_>>();
-		assert_eq!(indices, indices_read);
+
 		let draw_vertices = out
 			.vertices
 			.into_iter()
-			.map(|i| &vertices[i as usize])
-			.map(DrawVertex::encode)
+			.map(|i| {
+				DrawVertex {
+					position: vertex_positions[i as usize],
+					material_vertex_id: MaterialVertexId(i),
+				}
+				.encode()
+			})
 			.collect();
 
-		let mut i = 0;
+		let material_vertices = reader
+			.read_tex_coords(0)
+			.ok_or(MeshletError::NoTextureCoords)?
+			.into_f32()
+			.zip(reader.read_normals().ok_or(MeshletError::NoNormals)?)
+			.map(|(tex_coords, normals)| {
+				MaterialVertex {
+					normals: Vec3::from(normals),
+					tex_coords: Vec2::from(tex_coords),
+				}
+				.encode()
+			})
+			.collect();
+
+		let mut triangle_start = 0;
 		let meshlets = out
 			.meshlets
 			.into_iter()
 			.map(|m| {
 				let data = MeshletData {
 					draw_vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
-					triangle_offset: MeshletOffset::new(i, m.triangle_count as usize),
+					triangle_offset: MeshletOffset::new(triangle_start, m.triangle_count as usize),
 				};
-				i += m.triangle_count as usize;
+				triangle_start += m.triangle_count as usize;
 				data
 			})
 			.collect();
 
 		Ok(MeshletMeshDisk {
 			draw_vertices,
+			material_vertices,
 			meshlets,
 			triangles,
 		})

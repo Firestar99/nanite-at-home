@@ -75,6 +75,7 @@ pub fn triangle_indices_load_cpu<T>(
 
 // optimal default
 #[cfg(target_arch = "spirv")]
+#[inline]
 pub fn triangle_indices_load<T>(
 	meshlet: impl AsRef<MeshletData>,
 	t: &T,
@@ -85,6 +86,7 @@ pub fn triangle_indices_load<T>(
 }
 
 #[cfg(not(target_arch = "spirv"))]
+#[inline]
 pub fn triangle_indices_load<T>(
 	meshlet: impl AsRef<MeshletData>,
 	t: &T,

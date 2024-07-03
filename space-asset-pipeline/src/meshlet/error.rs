@@ -44,6 +44,8 @@ impl From<MeshletError> for Error {
 pub enum MeshletError {
 	PrimitiveMustBeTriangleList,
 	NoVertexPositions,
+	NoTextureCoords,
+	NoNormals,
 	NoDefaultScene,
 }
 
@@ -52,6 +54,8 @@ impl Display for MeshletError {
 		match self {
 			MeshletError::PrimitiveMustBeTriangleList => f.write_str("All primitives must be triangle lists"),
 			MeshletError::NoVertexPositions => f.write_str("A mesh primitive exists with no vertex positions"),
+			MeshletError::NoTextureCoords => f.write_str("A mesh primitive exists with no texture coordinates"),
+			MeshletError::NoNormals => f.write_str("A mesh primitive exists with no normals"),
 			MeshletError::NoDefaultScene => f.write_str("No default scene exists"),
 		}
 	}
