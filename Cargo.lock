@@ -186,8 +186,6 @@ dependencies = [
  "parking_lot",
  "profiling",
  "puffin_http",
- "quote",
- "rayon",
  "smallvec",
  "smol",
  "space-asset",
@@ -198,7 +196,6 @@ dependencies = [
  "vulkano",
  "vulkano-bindless",
  "vulkano-shaders",
- "walkdir",
  "winit",
 ]
 
@@ -2492,6 +2489,7 @@ dependencies = [
 name = "space-asset-pipeline"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bytemuck",
  "bytemuck_derive",
  "clap",
@@ -2502,13 +2500,16 @@ dependencies = [
  "memoffset",
  "meshopt",
  "parking_lot",
+ "proc-macro2",
  "profiling",
  "puffin_http",
+ "quote",
  "rayon",
  "rkyv",
  "smallvec",
  "space-asset",
  "static_assertions",
+ "walkdir",
  "zstd",
 ]
 
