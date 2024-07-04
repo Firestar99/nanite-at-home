@@ -11,9 +11,9 @@ const LANTERN: &str = concat!(
 	env!("CARGO_MANIFEST_DIR"),
 	"/src/sample_scene/Lantern/glTF/Lantern.gltf"
 );
-const BISTRO: &str = "../../models/bistro/export/Bistro.gltf";
-const BALL: &str = "../../models/glTF-Sample-Assets/Models/CarbonFibre/glTF/CarbonFibre.gltf";
-const SPONZA: &str = "../../models/glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf";
+// const BISTRO: &str = "../../models/bistro/export/Bistro.gltf";
+// const BALL: &str = "../../models/glTF-Sample-Assets/Models/CarbonFibre/glTF/CarbonFibre.gltf";
+// const SPONZA: &str = "../../models/glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf";
 
 fn main() -> Result<(), Box<dyn Error>> {
 	#[cfg(feature = "profile-with-puffin")]
@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[profiling::function]
 fn build() -> Result<(), Box<dyn Error>> {
-	let models = [LANTERN, BISTRO, BALL, SPONZA];
+	let models = [LANTERN];
 
 	let out_dir = env::var("OUT_DIR").unwrap();
 	let out_dir = Path::new(&out_dir);

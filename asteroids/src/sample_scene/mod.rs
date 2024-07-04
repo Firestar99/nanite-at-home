@@ -27,7 +27,7 @@ pub async fn load_scene(init: &Arc<Init>) -> Vec<Arc<MeshletSceneCpu>> {
 
 #[profiling::function]
 async fn upload_test_scene(init: &Arc<Init>) -> io::Result<Arc<MeshletSceneCpu>> {
-	let disk = unsafe { LoadedMeshletSceneDisk::deserialize_decompress(crate::models::Sponza)? };
+	let disk = unsafe { LoadedMeshletSceneDisk::deserialize_decompress(crate::models::Lantern)? };
 	let uploader = Uploader {
 		bindless: init.bindless.clone(),
 		memory_allocator: init.memory_allocator.clone(),
