@@ -7,13 +7,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-const LANTERN: &str = concat!(
-	env!("CARGO_MANIFEST_DIR"),
-	"/src/sample_scene/Lantern/glTF/Lantern.gltf"
-);
-// const BISTRO: &str = "../../models/bistro/export/Bistro.gltf";
-// const BALL: &str = "../../models/glTF-Sample-Assets/Models/CarbonFibre/glTF/CarbonFibre.gltf";
-// const SPONZA: &str = "../../models/glTF-Sample-Assets/Models/Sponza/glTF/Sponza.gltf";
+const MODELS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../models");
 
 fn main() -> Result<(), Box<dyn Error>> {
 	#[cfg(feature = "profile-with-puffin")]
@@ -30,21 +24,35 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[profiling::function]
 fn build() -> Result<(), Box<dyn Error>> {
-	let models = [LANTERN];
+	println!("cargo:rerun-if-changed={}", MODELS_DIR);
 
 	let out_dir = env::var("OUT_DIR").unwrap();
 	let out_dir = Path::new(&out_dir);
-	let model_paths = models.map(|path| {
-		// Rerun build script if dir containing gltf has changed. That is technically not sufficient, as gltf may refer to
-		// files outside the parent directory, but that is heavily discouraged.
-		let src_path = PathBuf::from(path);
-		println!(
-			"cargo:rerun-if-changed={}",
-			src_path.parent().unwrap().to_str().unwrap()
-		);
-		let out_path = out_dir.join(format!("{}.bin.zstd", src_path.file_stem().unwrap().to_str().unwrap()));
-		(src_path, out_path)
-	});
+	let model_paths = {
+		profiling::scope!("search models");
+		walkdir::WalkDir::new(fs::canonicalize(MODELS_DIR)?)
+			.follow_links(true)
+			.into_iter()
+			.filter_map(|e| e.ok())
+			.filter(|e| e.file_type().is_file())
+			.filter(|e| {
+				e.path()
+					.extension()
+					.map_or(false, |stem| stem == "gltf" || stem == "glb")
+			})
+			.map(|e| {
+				let src_path = PathBuf::from(e.path());
+				let out_path = out_dir.join(format!("{}.bin.zstd", src_path.file_stem().unwrap().to_str().unwrap()));
+				// Rerun build script if dir containing gltf has changed. That is technically not sufficient, as gltf may refer to
+				// files outside the parent directory, but that is heavily discouraged.
+				println!(
+					"cargo:rerun-if-changed={}",
+					src_path.parent().unwrap().to_str().unwrap()
+				);
+				(src_path, out_path)
+			})
+			.collect::<Vec<_>>()
+	};
 
 	{
 		profiling::scope!("processing all models");

@@ -96,6 +96,7 @@ ahash = "0.8"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 rangemap = "1.5.1"
+walkdir = "2.5.0"
 
 
 

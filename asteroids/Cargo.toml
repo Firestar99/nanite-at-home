@@ -49,6 +49,7 @@ rayon = { workspace = true }
 quote = { workspace = true }
 profiling = { workspace = true }
 puffin_http = { workspace = true }
+walkdir = { workspace = true }
 
 [features]
 profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless/profile-with-puffin", "vulkano/profile-with-puffin", "space-engine/profile-with-puffin", "space-asset/profile-with-puffin"]

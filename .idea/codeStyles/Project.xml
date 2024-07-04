@@ -5,6 +5,10 @@
         <option name="USE_TAB_CHARACTER" value="true" />
       </value>
     </option>
+    <Markdown>
+      <option name="WRAP_TEXT_IF_LONG" value="false" />
+      <option name="WRAP_TEXT_INSIDE_BLOCKQUOTES" value="false" />
+    </Markdown>
     <codeStyleSettings language="Bibtex">
       <indentOptions>
         <option name="USE_TAB_CHARACTER" value="true" />
