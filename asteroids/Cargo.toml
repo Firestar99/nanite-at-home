@@ -44,9 +44,6 @@ smallvec = { workspace = true }
 [build-dependencies]
 space-asset = { workspace = true }
 space-asset-pipeline = { workspace = true }
-futures = { workspace = true }
-rayon = { workspace = true }
-quote = { workspace = true }
 profiling = { workspace = true }
 puffin_http = { workspace = true }
 

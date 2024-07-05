@@ -186,8 +186,6 @@ dependencies = [
  "parking_lot",
  "profiling",
  "puffin_http",
- "quote",
- "rayon",
  "smallvec",
  "smol",
  "space-asset",
@@ -2491,6 +2489,7 @@ dependencies = [
 name = "space-asset-pipeline"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bytemuck",
  "bytemuck_derive",
  "clap",
@@ -2501,13 +2500,16 @@ dependencies = [
  "memoffset",
  "meshopt",
  "parking_lot",
+ "proc-macro2",
  "profiling",
  "puffin_http",
+ "quote",
  "rayon",
  "rkyv",
  "smallvec",
  "space-asset",
  "static_assertions",
+ "walkdir",
  "zstd",
 ]
 
@@ -3118,9 +3120,9 @@ checksum = "f3c4517f54858c779bbcbf228f4fca63d121bf85fbecb2dc578cdf4a39395690"
 
 [[package]]
 name = "walkdir"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71d857dc86794ca4c280d616f7da00d2dbfd8cd788846559a6813e6aa4b54ee"
+checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
