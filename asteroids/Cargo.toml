@@ -20,7 +20,6 @@ winit = { workspace = true }
 
 # async
 futures = { workspace = true }
-smol = { workspace = true }
 
 # model loader
 image = { workspace = true }

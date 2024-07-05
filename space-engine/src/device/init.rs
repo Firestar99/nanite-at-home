@@ -163,7 +163,7 @@ impl<Q: Clone> Init<Q> {
 			StandardDescriptorSetAllocatorCreateInfo::default(),
 		));
 		let cmd_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
-		let pipeline_cache = SpacePipelineCache::new(device.clone()).await;
+		let pipeline_cache = SpacePipelineCache::new(device.clone());
 
 		Arc::new(Self {
 			device,

@@ -151,5 +151,5 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		);
 	}
 
-	init.pipeline_cache.write().await.ok();
+	init.pipeline_cache.write().ok();
 }

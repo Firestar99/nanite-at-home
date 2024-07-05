@@ -1,7 +1,6 @@
-use smol::fs;
-use std::io;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::{fs, io};
 use vulkano::device::Device;
 use vulkano::pipeline::cache::{PipelineCache, PipelineCacheCreateInfo};
 
@@ -11,8 +10,8 @@ const PIPELINE_CACHE_FILE_PATH: &str = "pipeline_cache.bin";
 pub struct SpacePipelineCache(pub Arc<PipelineCache>);
 
 impl SpacePipelineCache {
-	pub async fn new(device: Arc<Device>) -> Self {
-		let initial_data = fs::read(PIPELINE_CACHE_FILE_PATH).await.unwrap_or_else(|_| Vec::new());
+	pub fn new(device: Arc<Device>) -> Self {
+		let initial_data = fs::read(PIPELINE_CACHE_FILE_PATH).unwrap_or_else(|_| Vec::new());
 
 		let pipeline_cache = unsafe {
 			PipelineCache::new(
@@ -27,9 +26,9 @@ impl SpacePipelineCache {
 		Self(pipeline_cache)
 	}
 
-	pub async fn write(&self) -> io::Result<()> {
+	pub fn write(&self) -> io::Result<()> {
 		let data = self.get_data().unwrap();
-		fs::write(PIPELINE_CACHE_FILE_PATH, data).await
+		fs::write(PIPELINE_CACHE_FILE_PATH, data)
 	}
 }
 
