@@ -12,7 +12,7 @@ pub struct ProcessedModel {
 	pub out_path: PathBuf,
 }
 
-// #[profiling::function]
+#[profiling::function]
 pub fn build(models_dir: &Path, out_dir: &Path, rerun_if_changed: bool) -> anyhow::Result<Vec<ProcessedModel>> {
 	let models_dir = fs::canonicalize(models_dir).map_err(Error::from)?;
 	if rerun_if_changed {
