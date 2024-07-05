@@ -149,7 +149,7 @@ impl Bindless {
 
 	/// Get a pipeline layout with just the bindless descriptor set and the correct push constant size  for your
 	/// `param_constant` `T`.
-	/// The push constant size must not exceed 4 words (of u32's), the minimum the vulkan spec requires.
+	/// The push constant size must not exceed 4 words (of u32's), the minimum the device spec requires.
 	pub fn get_pipeline_layout<T: BufferStruct>(&self) -> Result<&Arc<PipelineLayout>, PushConstantError> {
 		let words = Self::get_push_constant_words::<T>();
 		self.pipeline_layouts
@@ -158,7 +158,7 @@ impl Bindless {
 	}
 
 	/// Get a `Vec<PushConstantRange>` with the correct push constant size for your `param_constant` `T`.
-	/// The push constant size must not exceed 4 words (of u32's), the minimum the vulkan spec requires.
+	/// The push constant size must not exceed 4 words (of u32's), the minimum the device spec requires.
 	pub fn get_push_constant<T: BufferStruct>(&self) -> Vec<PushConstantRange> {
 		Self::get_push_constant_inner(self.stages, Self::get_push_constant_words::<T>())
 	}
@@ -192,7 +192,7 @@ impl Display for PushConstantError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
 			PushConstantError::TooLarge(words) => f.write_fmt(format_args!(
-				"Bindless param T of word size {} is too large for minimum vulkan spec of 4",
+				"Bindless param T of word size {} is too large for minimum device spec of 4",
 				words
 			)),
 		}

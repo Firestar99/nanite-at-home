@@ -13,7 +13,7 @@ space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
 
-# vulkan
+# device
 vulkano = { workspace = true }
 vulkano-shaders = { workspace = true }
 winit = { workspace = true }

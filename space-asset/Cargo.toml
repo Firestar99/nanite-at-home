@@ -12,7 +12,7 @@ vulkano-bindless = { workspace = true, optional = true }
 vulkano-bindless-macros = { workspace = true }
 vulkano-bindless-shaders = { workspace = true }
 
-# vulkan
+# device
 vulkano = { workspace = true, optional = true }
 
 # async

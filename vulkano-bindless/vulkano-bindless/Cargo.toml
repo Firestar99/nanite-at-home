@@ -10,7 +10,7 @@ repository.workspace = true
 # members
 vulkano-bindless-shaders = { workspace = true }
 
-# vulkan
+# device
 vulkano = { workspace = true }
 vulkano-shaders = { workspace = true }
 winit = { workspace = true }
