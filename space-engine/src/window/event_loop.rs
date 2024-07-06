@@ -284,7 +284,12 @@ where
 	// plain setup
 	let (exec_tx, exec_rx) = channel();
 	let (event_tx, event_rx) = channel();
-	let mut render_join_handle = Some(thread::spawn(|| launch(EventLoopExecutor::new(exec_tx), event_rx)));
+	let mut render_join_handle = Some(
+		thread::Builder::new()
+			.name("RenderThread".into())
+			.spawn(|| launch(EventLoopExecutor::new(exec_tx), event_rx))
+			.unwrap(),
+	);
 
 	// plain loop without EventLoop
 	let event_loop;

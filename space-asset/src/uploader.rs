@@ -43,6 +43,7 @@ impl Uploader {
 		let upload_buffer;
 		let backing_refs;
 		unsafe {
+			profiling::scope!("data upload to host buffer");
 			let mut meta = StrongMetadataCpu::new(&self.bindless, Metadata);
 			upload_buffer = VBuffer::from_data(
 				self.memory_allocator.clone(),
@@ -73,6 +74,7 @@ impl Uploader {
 		let upload_buffer;
 		let backing_refs;
 		unsafe {
+			profiling::scope!("iter upload to host buffer");
 			let mut meta = StrongMetadataCpu::new(&self.bindless, Metadata);
 			upload_buffer = VBuffer::from_iter(
 				self.memory_allocator.clone(),
@@ -100,41 +102,45 @@ impl Uploader {
 	where
 		T::Transfer: BufferContents,
 	{
-		let perm_buffer = VBuffer::new_slice::<u8>(
-			self.memory_allocator.clone(),
-			BufferCreateInfo {
-				usage: BufferUsage::TRANSFER_DST | BufferUsage::STORAGE_BUFFER,
-				..BufferCreateInfo::default()
-			},
-			AllocationCreateInfo {
-				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-				..AllocationCreateInfo::default()
-			},
-			upload_buffer.size(),
-		)
-		.map_err(UploadError::from_validated)?;
-
-		let cmd = {
-			let mut cmd = RecordingCommandBuffer::new(
-				self.cmd_allocator.clone(),
-				self.transfer_queue.queue_family_index(),
-				CommandBufferLevel::Primary,
-				CommandBufferBeginInfo {
-					usage: CommandBufferUsage::OneTimeSubmit,
-					..CommandBufferBeginInfo::default()
+		let perm_buffer;
+		{
+			profiling::scope!("copy cmd recording and submit");
+			perm_buffer = VBuffer::new_slice::<u8>(
+				self.memory_allocator.clone(),
+				BufferCreateInfo {
+					usage: BufferUsage::TRANSFER_DST | BufferUsage::STORAGE_BUFFER,
+					..BufferCreateInfo::default()
 				},
+				AllocationCreateInfo {
+					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+					..AllocationCreateInfo::default()
+				},
+				upload_buffer.size(),
 			)
 			.map_err(UploadError::from_validated)?;
-			cmd.copy_buffer(CopyBufferInfo::buffers(upload_buffer, perm_buffer.clone()))
+
+			let cmd = {
+				let mut cmd = RecordingCommandBuffer::new(
+					self.cmd_allocator.clone(),
+					self.transfer_queue.queue_family_index(),
+					CommandBufferLevel::Primary,
+					CommandBufferBeginInfo {
+						usage: CommandBufferUsage::OneTimeSubmit,
+						..CommandBufferBeginInfo::default()
+					},
+				)
 				.map_err(UploadError::from_validated)?;
-			cmd.end().map_err(UploadError::from_validated)?
-		};
-		cmd.execute(self.transfer_queue.clone())
-			.map_err(UploadError::from_validated)?
-			.then_signal_fence_and_flush()
-			.map_err(UploadError::from_validated)?
-			.await
-			.map_err(UploadError::from_validated)?;
+				cmd.copy_buffer(CopyBufferInfo::buffers(upload_buffer, perm_buffer.clone()))
+					.map_err(UploadError::from_validated)?;
+				cmd.end().map_err(UploadError::from_validated)?
+			};
+			cmd.execute(self.transfer_queue.clone())
+				.map_err(UploadError::from_validated)?
+				.then_signal_fence_and_flush()
+				.map_err(UploadError::from_validated)?
+		}
+		.await
+		.map_err(UploadError::from_validated)?;
 
 		Ok(self
 			.bindless
