@@ -191,8 +191,7 @@ pub fn meshlet_frag_meshlet_id(
 	out_vertex: InterpolationVertex,
 	frag_color: &mut Vec4,
 ) {
-	// let random = GpuRng(out_vertex.meshlet_id).advance_f32();
-	// *frag_color = Vec4::from((hsv2rgb_smooth(vec3(random, 1., 1.)), 1.));
+	// *frag_color = Vec4::from((GpuRng(out_vertex.meshlet_id).next_hue(), 1.));
 	*frag_color = Vec4::from((out_vertex.material.normals, 1.));
 	// *frag_color = Vec4::from((out_vertex.material.tex_coords, 0., 1.));
 }
