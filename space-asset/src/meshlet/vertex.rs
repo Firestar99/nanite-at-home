@@ -1,6 +1,6 @@
 use bytemuck_derive::{Pod, Zeroable};
 use core::mem;
-use glam::{Vec2, Vec3};
+use glam::Vec3;
 use static_assertions::const_assert_eq;
 
 #[cfg(not(target_arch = "spirv"))]
@@ -62,62 +62,5 @@ impl EncodedDrawVertex {
 impl Debug for EncodedDrawVertex {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
 		self.decode().debug_struct(f.debug_struct("EncodedDrawVertex"))
-	}
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Default)]
-#[cfg_attr(not(target_arch = "spirv"), derive(Zeroable, Pod))]
-pub struct MaterialVertex {
-	pub normals: Vec3,
-	pub tex_coords: Vec2,
-}
-
-impl MaterialVertex {
-	pub fn encode(&self) -> EncodedMaterialVertex {
-		EncodedMaterialVertex {
-			normals: self.normals.to_array(),
-			tex_coords: self.tex_coords.to_array(),
-		}
-	}
-
-	#[cfg(not(target_arch = "spirv"))]
-	fn debug_struct(&self, mut debug: DebugStruct) -> core::fmt::Result {
-		debug
-			.field("normals", &self.normals)
-			.field("tex_coords", &self.tex_coords)
-			.finish()
-	}
-}
-
-#[cfg(not(target_arch = "spirv"))]
-impl Debug for MaterialVertex {
-	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-		self.debug_struct(f.debug_struct("MaterialVertex"))
-	}
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Default, Zeroable, Pod)]
-#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
-pub struct EncodedMaterialVertex {
-	normals: [f32; 3],
-	tex_coords: [f32; 2],
-}
-const_assert_eq!(mem::size_of::<EncodedMaterialVertex>(), 5 * 4);
-
-impl EncodedMaterialVertex {
-	pub fn decode(&self) -> MaterialVertex {
-		MaterialVertex {
-			normals: Vec3::from(self.normals),
-			tex_coords: Vec2::from(self.tex_coords),
-		}
-	}
-}
-
-#[cfg(not(target_arch = "spirv"))]
-impl Debug for EncodedMaterialVertex {
-	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-		self.decode().debug_struct(f.debug_struct("EncodedMaterialVertex"))
 	}
 }

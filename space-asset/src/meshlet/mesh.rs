@@ -1,9 +1,8 @@
 mod gpu {
+	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
 	use crate::meshlet::offset::MeshletOffset;
-	use crate::meshlet::vertex::{
-		DrawVertex, EncodedDrawVertex, EncodedMaterialVertex, MaterialVertex, MaterialVertexId,
-	};
+	use crate::meshlet::vertex::{DrawVertex, EncodedDrawVertex};
 	use bytemuck_derive::AnyBitPattern;
 	use core::mem;
 	use core::ops::Deref;
@@ -59,8 +58,8 @@ mod gpu {
 	pub struct MeshletMesh<R: DescRef> {
 		pub meshlets: Desc<R, Buffer<[MeshletData]>>,
 		pub draw_vertices: Desc<R, Buffer<[EncodedDrawVertex]>>,
-		pub material_vertices: Desc<R, Buffer<[EncodedMaterialVertex]>>,
 		pub triangles: Desc<R, Buffer<[CompressedIndices]>>,
+		pub pbr_material: PbrMaterial<R>,
 		pub num_meshlets: u32,
 	}
 
@@ -122,30 +121,6 @@ mod gpu {
 			}
 		}
 
-		pub fn load_material_vertex(&self, descriptors: &Descriptors, index: MaterialVertexId) -> MaterialVertex {
-			self.mesh
-				.material_vertices
-				.access(descriptors)
-				.load(index.0 as usize)
-				.decode()
-		}
-
-		/// # Safety
-		/// index must be in bounds
-		pub unsafe fn load_material_vertex_unchecked(
-			&self,
-			descriptors: &Descriptors,
-			index: MaterialVertexId,
-		) -> MaterialVertex {
-			unsafe {
-				self.mesh
-					.material_vertices
-					.access(descriptors)
-					.load_unchecked(index.0 as usize)
-					.decode()
-			}
-		}
-
 		pub fn load_triangle(&self, descriptors: &'a Descriptors, triangle: usize) -> UVec3 {
 			let len = self.data.triangle_offset.len();
 			assert!(
@@ -174,17 +149,18 @@ pub use gpu::*;
 
 #[cfg(feature = "disk")]
 mod disk {
+	use crate::material::pbr::PbrMaterialDisk;
 	use crate::meshlet::indices::CompressedIndices;
 	use crate::meshlet::mesh::MeshletData;
-	use crate::meshlet::vertex::{EncodedDrawVertex, EncodedMaterialVertex};
+	use crate::meshlet::vertex::EncodedDrawVertex;
 	use rkyv::{Archive, Deserialize, Serialize};
 
 	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletMeshDisk {
 		pub meshlets: Vec<MeshletData>,
 		pub draw_vertices: Vec<EncodedDrawVertex>,
-		pub material_vertices: Vec<EncodedMaterialVertex>,
 		pub triangles: Vec<CompressedIndices>,
+		pub pbr_material: PbrMaterialDisk,
 	}
 }
 #[cfg(feature = "disk")]
@@ -203,8 +179,8 @@ mod runtime {
 			MeshletMesh {
 				meshlets: self.meshlets.to_strong(),
 				draw_vertices: self.draw_vertices.to_strong(),
-				material_vertices: self.material_vertices.to_strong(),
 				triangles: self.triangles.to_strong(),
+				pbr_material: self.pbr_material.to_strong(),
 				num_meshlets: self.num_meshlets,
 			}
 		}
@@ -214,13 +190,12 @@ mod runtime {
 		pub async fn upload(&self, uploader: &Uploader) -> Result<MeshletMesh<RC>, Validated<UploadError>> {
 			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
 			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));
-			let material_vertices =
-				uploader.upload_buffer_iter(self.material_vertices.iter().map(deserialize_infallible));
 			let triangles = uploader.upload_buffer_iter(self.triangles.iter().map(deserialize_infallible));
+			let pbr_material = self.pbr_material.upload(uploader);
 			Ok(MeshletMesh {
 				meshlets: meshlets.await?.into(),
 				draw_vertices: draw_vertices.await?.into(),
-				material_vertices: material_vertices.await?.into(),
+				pbr_material: pbr_material.await?,
 				triangles: triangles.await?.into(),
 				num_meshlets: self.meshlets.len() as u32,
 			})

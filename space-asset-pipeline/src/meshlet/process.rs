@@ -1,8 +1,11 @@
+use crate::material::pbr::process_pbr_material;
 use crate::meshlet::error::{Error, MeshletError, Result};
-use glam::{Affine3A, Mat3, Quat, Vec2, Vec3};
+use glam::{Affine3A, Mat3, Quat, Vec3};
 use gltf::buffer::Data;
+use gltf::image::Format;
 use gltf::mesh::Mode;
-use gltf::{Buffer, Document, Node, Primitive, Scene};
+use gltf::{Buffer, Document, Image, Node, Primitive, Scene};
+use image::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
@@ -12,7 +15,7 @@ use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 use space_asset::meshlet::offset::MeshletOffset;
 use space_asset::meshlet::scene::MeshletSceneDisk;
-use space_asset::meshlet::vertex::{DrawVertex, MaterialVertex, MaterialVertexId};
+use space_asset::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 use std::ops::Deref;
@@ -54,6 +57,26 @@ impl Gltf {
 
 	pub fn buffer(&self, buffer: Buffer) -> Option<&[u8]> {
 		self.buffers.get(buffer.index()).map(|b| &b.0[..])
+	}
+
+	pub fn image(&self, image: Image) -> gltf::Result<DynamicImage> {
+		let data =
+			gltf::image::Data::from_source(image.source(), self.base.as_ref().map(PathBuf::as_path), &self.buffers)?;
+
+		// gltf converts image to its own format, we convert it back
+		Ok(match data.format {
+			Format::R8 => DynamicImage::ImageLuma8(GrayImage::from_vec(data.width, data.height, data.pixels).unwrap()),
+			Format::R8G8 => {
+				DynamicImage::ImageLumaA8(GrayAlphaImage::from_vec(data.width, data.height, data.pixels).unwrap())
+			}
+			Format::R8G8B8 => {
+				DynamicImage::ImageRgb8(RgbImage::from_vec(data.width, data.height, data.pixels).unwrap())
+			}
+			Format::R8G8B8A8 => {
+				DynamicImage::ImageRgba8(RgbaImage::from_vec(data.width, data.height, data.pixels).unwrap())
+			}
+			_ => return Err(gltf::Error::UnsupportedImageEncoding),
+		})
 	}
 }
 
@@ -202,20 +225,6 @@ impl Gltf {
 			})
 			.collect();
 
-		let material_vertices = reader
-			.read_tex_coords(0)
-			.ok_or(MeshletError::NoTextureCoords)?
-			.into_f32()
-			.zip(reader.read_normals().ok_or(MeshletError::NoNormals)?)
-			.map(|(tex_coords, normals)| {
-				MaterialVertex {
-					normals: Vec3::from(normals),
-					tex_coords: Vec2::from(tex_coords),
-				}
-				.encode()
-			})
-			.collect();
-
 		let mut triangle_start = 0;
 		let meshlets = out
 			.meshlets
@@ -232,9 +241,9 @@ impl Gltf {
 
 		Ok(MeshletMeshDisk {
 			draw_vertices,
-			material_vertices,
 			meshlets,
 			triangles,
+			pbr_material: process_pbr_material(self, primitive)?,
 		})
 	}
 }

@@ -6,6 +6,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::format::Format;
+use vulkano::image::sampler::SamplerCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{
 	AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
 };
@@ -15,13 +16,15 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::DynamicState;
-use vulkano_bindless::descriptor::RCDescExt;
+use vulkano_bindless::descriptor::sampler::Sampler;
+use vulkano_bindless::descriptor::{RCDesc, RCDescExt};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
 
 pub struct MeshDrawPipeline {
 	pipeline: BindlessMeshGraphicsPipeline<Params<'static>>,
+	sampler: RCDesc<Sampler>,
 }
 
 impl MeshDrawPipeline {
@@ -71,7 +74,13 @@ impl MeshDrawPipeline {
 		)
 		.unwrap();
 
-		Self { pipeline }
+		let sampler = init
+			.bindless
+			.sampler()
+			.alloc(SamplerCreateInfo::simple_repeat_linear())
+			.unwrap();
+
+		Self { pipeline, sampler }
 	}
 
 	#[profiling::function]
@@ -94,6 +103,7 @@ impl MeshDrawPipeline {
 							mesh: mesh2instance.mesh.to_transient(frame_context.fif),
 							instances: mesh2instance.instances.to_transient(frame_context.fif),
 						},
+						sampler: self.sampler.to_transient(frame_context.fif),
 					},
 				)
 				.unwrap();

@@ -75,8 +75,9 @@ zstd = { version = "0.13" }
 
 # model loader
 gltf = "1.4.0"
-image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 meshopt = "0.2.1"
+intel_tex_2 = "0.4.0"
 
 # profiling
 profiling = "1.0"

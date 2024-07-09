@@ -1,9 +1,12 @@
 use crate::renderer::frame_data::FrameData;
-use glam::{UVec3, Vec4};
+use crate::utils::gpurng::GpuRng;
+use crate::utils::hsv::hsv2rgb_smooth;
+use glam::{vec3, UVec3, Vec3, Vec4, Vec4Swizzles};
+use space_asset::material::pbr::vertex::PbrVertex;
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::MeshletMesh;
 use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_asset::meshlet::vertex::{DrawVertex, MaterialVertex};
+use space_asset::meshlet::vertex::DrawVertex;
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_non_uniform_ballot,
@@ -11,6 +14,7 @@ use spirv_std::arch::{
 	GroupOperation, IndexUnchecked,
 };
 use spirv_std::memory::{Scope, Semantics};
+use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::{bindless, BufferContent};
 use vulkano_bindless_shaders::descriptor::reference::{Strong, Transient};
@@ -20,6 +24,7 @@ use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub mesh2instance: MeshletMesh2Instance<Transient<'a>, Strong>,
+	pub sampler: TransientDesc<'a, Sampler>,
 }
 
 #[derive(Copy, Clone, BufferContent)]
@@ -104,9 +109,10 @@ fn draw_meshlet(
 	// }
 }
 
+#[allow(dead_code)]
 struct InterpolationVertex {
-	material: MaterialVertex,
-	// meshlet_id: u32,
+	pbr_vertex: PbrVertex,
+	meshlet_debug_hue: f32,
 }
 
 pub const MESH_WG_SIZE: usize = 32;
@@ -150,8 +156,11 @@ pub fn meshlet_mesh(
 			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
 			let position = transform_vertex(frame_data, instance, draw_vertex);
 			let vertex = InterpolationVertex {
-				material: meshlet.load_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
-				// meshlet_id,
+				pbr_vertex: meshlet
+					.mesh
+					.pbr_material
+					.load_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
+				meshlet_debug_hue: GpuRng(meshlet_id).next_f32(),
 			};
 
 			if inbounds {
@@ -187,11 +196,23 @@ fn transform_vertex(frame_data: FrameData, instance: MeshletInstance, vertex: Dr
 
 #[bindless(fragment())]
 pub fn meshlet_frag_meshlet_id(
-	#[bindless(param_constants)] _param: &Params<'static>,
+	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(param_constants)] param: &Params<'static>,
 	out_vertex: InterpolationVertex,
 	frag_color: &mut Vec4,
 ) {
-	// *frag_color = Vec4::from((GpuRng(out_vertex.meshlet_id).next_hue(), 1.));
-	*frag_color = Vec4::from((out_vertex.material.normals, 1.));
+	let meshlet_debug = hsv2rgb_smooth(vec3(out_vertex.meshlet_debug_hue, 1., 1.));
+	// *frag_color = Vec4::from((out_vertex.material.normals, 1.));
 	// *frag_color = Vec4::from((out_vertex.material.tex_coords, 0., 1.));
+
+	let mesh = param.mesh2instance.mesh.access(descriptors).load();
+	let sampler = param.sampler.access(descriptors);
+	let base_color: Vec4 = mesh
+		.pbr_material
+		.base_color
+		.access(descriptors)
+		.sample(*sampler, out_vertex.pbr_vertex.tex_coords)
+		* Vec4::from(mesh.pbr_material.base_color_factor);
+
+	*frag_color = Vec4::from((Vec3::lerp(base_color.xyz(), meshlet_debug, 0.1), base_color.w));
 }
