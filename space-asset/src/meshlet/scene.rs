@@ -1,9 +1,14 @@
 #[cfg(feature = "disk")]
 mod disk {
 	use crate::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
-	use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
+	use rkyv::ser::serializers::{
+		AllocScratch, CompositeSerializer, CompositeSerializerError, FallbackScratch, HeapScratch, SharedSerializeMap,
+		WriteSerializer,
+	};
+	use rkyv::ser::Serializer;
+	use rkyv::{Archive, Deserialize, Serialize};
 	use std::io;
-	use std::io::{Read, Write};
+	use std::io::{BufWriter, Read, Write};
 
 	#[derive(Clone, Default, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletSceneDisk {
@@ -12,19 +17,21 @@ mod disk {
 
 	impl MeshletSceneDisk {
 		#[profiling::function]
-		pub fn serialize(&self) -> AlignedVec {
-			// only a very little scratch space is needed
-			rkyv::to_bytes::<_, 1024>(self).unwrap()
-		}
-
-		#[profiling::function]
 		pub fn serialize_compress_to(&self, write: impl Write) -> io::Result<()> {
-			self.compress_to(write, self.serialize())
-		}
-
-		#[profiling::function]
-		fn compress_to(&self, write: impl Write, vec: AlignedVec) -> io::Result<()> {
-			zstd::stream::copy_encode(vec.as_slice(), write, 0)
+			let mut serializer = CompositeSerializer::new(
+				WriteSerializer::new(BufWriter::with_capacity(
+					zstd::stream::Encoder::<Vec<u8>>::recommended_input_size(),
+					zstd::stream::Encoder::new(write, 0)?.auto_finish(),
+				)),
+				FallbackScratch::<HeapScratch<1024>, AllocScratch>::default(),
+				SharedSerializeMap::default(),
+			);
+			serializer.serialize_value(self).map_err(|err| match err {
+				CompositeSerializerError::SerializerError(e) => e,
+				CompositeSerializerError::ScratchSpaceError(e) => Err(e).unwrap(),
+				CompositeSerializerError::SharedError(e) => Err(e).unwrap(),
+			})?;
+			Ok(())
 		}
 	}
 
