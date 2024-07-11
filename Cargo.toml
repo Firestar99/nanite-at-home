@@ -45,8 +45,8 @@ vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "94
 winit = { version = "0.29" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "46dee4fdde9a40fa8da0dc83c598ccdf1bfd8c98", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "46dee4fdde9a40fa8da0dc83c598ccdf1bfd8c98" }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "663548172b733eea169181221de58118733147d0", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "663548172b733eea169181221de58118733147d0" }
 
 # async
 futures = "0.3"
