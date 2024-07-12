@@ -1,3 +1,4 @@
+use crate::image::encode::{Encode, EncodeSettings};
 use crate::meshlet::error::MeshletError;
 use crate::meshlet::process::Gltf;
 use glam::{Vec2, Vec3};
@@ -8,7 +9,11 @@ use space_asset::material::pbr::PbrMaterialDisk;
 use std::sync::Arc;
 
 #[profiling::function]
-pub fn process_pbr_material(gltf: &Arc<Gltf>, primitive: Primitive) -> crate::meshlet::error::Result<PbrMaterialDisk> {
+pub fn process_pbr_material(
+	gltf: &Arc<Gltf>,
+	primitive: Primitive,
+	settings: EncodeSettings,
+) -> crate::meshlet::error::Result<PbrMaterialDisk> {
 	let reader = primitive.reader(|b| gltf.buffer(b));
 	let vertices = reader
 		.read_tex_coords(0)
@@ -29,16 +34,25 @@ pub fn process_pbr_material(gltf: &Arc<Gltf>, primitive: Primitive) -> crate::me
 		.pbr_metallic_roughness()
 		.base_color_texture()
 		.map(|tex| gltf.image::<{ ImageType::RGBA_COLOR as u32 }>(tex.texture().source()))
-		.transpose()?;
+		.transpose()?
+		.map(|tex| tex.into_optimal_encode(settings))
+		.transpose()
+		.map_err(|(_, err)| err)?;
 	let normal = material
 		.normal_texture()
 		.map(|tex| gltf.image::<{ ImageType::RG_VALUES as u32 }>(tex.texture().source()))
-		.transpose()?;
+		.transpose()?
+		.map(|tex| tex.into_optimal_encode(settings))
+		.transpose()
+		.map_err(|(_, err)| err)?;
 	let omr = material
 		.pbr_metallic_roughness()
 		.metallic_roughness_texture()
 		.map(|tex| gltf.image::<{ ImageType::RGBA_LINEAR as u32 }>(tex.texture().source()))
-		.transpose()?;
+		.transpose()?
+		.map(|tex| tex.into_optimal_encode(settings))
+		.transpose()
+		.map_err(|(_, err)| err)?;
 
 	Ok(PbrMaterialDisk {
 		vertices,

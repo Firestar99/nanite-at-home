@@ -1,3 +1,4 @@
+use crate::image::encode::EncodeSettings;
 use crate::material::pbr::process_pbr_material;
 use crate::meshlet::error::{Error, MeshletError};
 use crate::uri::Scheme;
@@ -70,6 +71,8 @@ pub enum GltfImageError {
 	BufferViewOutOfBounds,
 	UnsupportedUri,
 	UnknownImageFormat,
+	EncodingFromBCn,
+	EncodingToBCnDisabled,
 	ImageErrors(ImageErrors),
 	IoError(io::Error),
 }
@@ -81,6 +84,10 @@ impl Display for GltfImageError {
 			GltfImageError::BufferViewOutOfBounds => f.write_str("Buffer view is out of bounds"),
 			GltfImageError::UnsupportedUri => f.write_str("Image URI is unsupported or invalid"),
 			GltfImageError::UnknownImageFormat => f.write_str("Image format is unknown"),
+			GltfImageError::EncodingFromBCn => f.write_str("Cannot encode BCn image into another format"),
+			GltfImageError::EncodingToBCnDisabled => {
+				f.write_str("Encoding into suitable BCn format disabled by settings")
+			}
 			GltfImageError::ImageErrors(err) => Display::fmt(err, f),
 			GltfImageError::IoError(err) => Display::fmt(err, f),
 		}
@@ -307,7 +314,7 @@ impl Gltf {
 			draw_vertices,
 			meshlets,
 			triangles,
-			pbr_material: process_pbr_material(self, primitive)?,
+			pbr_material: process_pbr_material(self, primitive, EncodeSettings::embedded())?,
 		})
 	}
 }
