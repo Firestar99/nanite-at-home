@@ -45,7 +45,7 @@ pub fn build(models_dir: &Path, out_dir: &Path, rerun_if_changed: bool) -> anyho
 					.chain([src_path.file_stem().unwrap()])
 					.map(|s| String::from(s.to_str().unwrap()))
 					.collect::<Vec<_>>();
-				let out_path = out_dir.join(format!("{}.bin.zstd", relative.join("/")));
+				let out_path = out_dir.join(format!("{}.bin", relative.join("/")));
 				ProcessedModel {
 					src_path,
 					relative,
@@ -70,7 +70,7 @@ pub fn build(models_dir: &Path, out_dir: &Path, rerun_if_changed: bool) -> anyho
 					.with_context(|| format!("failed creating output directories for file {:?}", model.out_path))?;
 				let out_file = File::create(&model.out_path)
 					.with_context(|| format!("failed creating output file {:?}", model.out_path))?;
-				disk.serialize_compress_to(out_file)
+				disk.serialize_to(out_file)
 					.with_context(|| format!("zstd stream failed writing {:?}", model.out_path))?;
 				Ok::<(), anyhow::Error>(())
 			})

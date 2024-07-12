@@ -8,7 +8,7 @@ mod disk {
 	use rkyv::ser::Serializer;
 	use rkyv::{Archive, Deserialize, Serialize};
 	use std::io;
-	use std::io::{BufWriter, Read, Write};
+	use std::io::{BufWriter, Write};
 
 	#[derive(Clone, Default, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletSceneDisk {
@@ -17,12 +17,9 @@ mod disk {
 
 	impl MeshletSceneDisk {
 		#[profiling::function]
-		pub fn serialize_compress_to(&self, write: impl Write) -> io::Result<()> {
+		pub fn serialize_to(&self, write: impl Write) -> io::Result<()> {
 			let mut serializer = CompositeSerializer::new(
-				WriteSerializer::new(BufWriter::with_capacity(
-					zstd::stream::Encoder::<Vec<u8>>::recommended_input_size(),
-					zstd::stream::Encoder::new(write, 0)?.auto_finish(),
-				)),
+				WriteSerializer::new(BufWriter::with_capacity(128 * 1024, write)),
 				FallbackScratch::<HeapScratch<1024>, AllocScratch>::default(),
 				SharedSerializeMap::default(),
 			);
@@ -35,24 +32,13 @@ mod disk {
 		}
 	}
 
-	pub struct LoadedMeshletSceneDisk {
-		archive: Vec<u8>,
-	}
-
-	impl LoadedMeshletSceneDisk {
-		pub fn deserialize(&self) -> &ArchivedMeshletSceneDisk {
-			unsafe { rkyv::archived_root::<MeshletSceneDisk>(&self.archive) }
-		}
-
-		/// Deserialize and decompress from a readable data stream, like a file.
+	impl ArchivedMeshletSceneDisk {
+		/// Deserialize from a byte slice
 		///
 		/// # Safety
-		/// Must be a valid datastream retrieved from [`MeshletSceneDisk::serialize_compress_to`]
-		#[profiling::function]
-		pub unsafe fn deserialize_decompress(read: impl Read) -> io::Result<Self> {
-			Ok(Self {
-				archive: zstd::stream::decode_all(read)?,
-			})
+		/// Must be a valid datastream retrieved from [`MeshletSceneDisk::serialize_to`]
+		pub unsafe fn deserialize(archive: &[u8]) -> &Self {
+			unsafe { rkyv::archived_root::<MeshletSceneDisk>(archive) }
 		}
 	}
 }
