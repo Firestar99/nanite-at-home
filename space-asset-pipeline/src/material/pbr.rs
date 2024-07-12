@@ -7,6 +7,7 @@ use space_asset::material::pbr::vertex::PbrVertex;
 use space_asset::material::pbr::PbrMaterialDisk;
 use std::sync::Arc;
 
+#[profiling::function]
 pub fn process_pbr_material(gltf: &Arc<Gltf>, primitive: Primitive) -> crate::meshlet::error::Result<PbrMaterialDisk> {
 	let reader = primitive.reader(|b| gltf.buffer(b));
 	let vertices = reader

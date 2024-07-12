@@ -32,6 +32,7 @@ impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
 		Ok(vec)
 	}
 
+	#[profiling::function]
 	fn decode_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
 		assert_eq!(dst.len(), self.decompressed_bytes());
 		match self.disk_compression {
@@ -42,17 +43,20 @@ impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
 		Ok(())
 	}
 
+	#[profiling::function]
 	fn decode_none_into(&self, src: &[u8], dst: &mut [u8]) {
 		assert_eq!(dst.len(), src.len());
 		dst.copy_from_slice(src);
 	}
 
+	#[profiling::function]
 	fn decode_bcn_zstd_into(&self, src: &[u8], dst: &mut [u8]) -> io::Result<()> {
 		let written = zstd::bulk::decompress_to_buffer(src, dst)?;
 		assert_eq!(written, dst.len());
 		Ok(())
 	}
 
+	#[profiling::function]
 	fn decode_embedded_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
 		let mut image = zune_image::image::Image::read(ZCursor::new(src), DecoderOptions::new_fast())?;
 		assert_eq!(image.frames_len(), 1);

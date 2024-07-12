@@ -1,5 +1,6 @@
 //! loosely based on gltf's Schema, which is unfortunately not exported
 
+use base64::Engine;
 use std::borrow::Cow;
 use std::fs::File;
 use std::io;
@@ -42,18 +43,18 @@ impl<'a> Scheme<'a> {
 		}
 	}
 
-	pub fn read(&self, base_path: &Path) -> io::Result<SchemeReader> {
+	pub fn read(&self, base_path: &Path) -> io::Result<Cow<'a, [u8]>> {
 		Ok(match self {
-			Scheme::Slice(slice) => SchemeReader::Slice(*slice),
-			Scheme::Base64(data) => {
-				let reader =
-					base64::read::DecoderReader::new(data.as_bytes(), &base64::engine::general_purpose::STANDARD);
-				SchemeReader::Base64(reader)
-			}
-			Scheme::AbsoluteFile(path) => SchemeReader::File(File::open(path)?),
+			Scheme::Slice(slice) => Cow::Borrowed(*slice),
+			Scheme::Base64(data) => Cow::Owned(
+				base64::prelude::BASE64_STANDARD
+					.decode(data.as_bytes())
+					.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
+			),
+			Scheme::AbsoluteFile(path) => Cow::Owned(std::fs::read(path)?),
 			Scheme::RelativeFile(path) => {
 				let absolute = PathBuf::from(base_path).join(path.as_ref());
-				SchemeReader::File(File::open(absolute)?)
+				Cow::Owned(std::fs::read(absolute)?)
 			}
 		})
 	}

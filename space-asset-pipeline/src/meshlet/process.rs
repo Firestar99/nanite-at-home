@@ -19,7 +19,6 @@ use space_asset::meshlet::scene::MeshletSceneDisk;
 use space_asset::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::fmt::{Display, Formatter};
-use std::io::Read;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -103,6 +102,7 @@ impl From<io::Error> for GltfImageError {
 }
 
 impl Gltf {
+	#[profiling::function]
 	pub fn image<const DATA_TYPE: u32>(&self, image: Image) -> Result<Image2DDisk<DATA_TYPE>, GltfImageError> {
 		let scheme = match image.source() {
 			Source::View { view, .. } => {
@@ -116,17 +116,19 @@ impl Gltf {
 			Source::Uri { uri, .. } => Scheme::parse(uri).ok_or(GltfImageError::UnsupportedUri)?,
 		};
 
-		let src = scheme
-			.read(self.base())?
-			.bytes()
-			.collect::<Result<Vec<_>, _>>()?
-			.into_boxed_slice();
+		let src = {
+			profiling::scope!("read into memory");
+			scheme.read(self.base())?
+		};
 		let (format, _) = ImageFormat::guess_format(ZCursor::new(&src)).ok_or(GltfImageError::UnknownImageFormat)?;
-		let metadata = format
-			.decoder_with_options(ZCursor::new(&src), DecoderOptions::new_fast())?
-			.read_headers()
-			.map_err(ImageErrors::from)?
-			.expect("Image decoder reads metadata");
+		let metadata = {
+			profiling::scope!("decode metadata");
+			format
+				.decoder_with_options(ZCursor::new(&src), DecoderOptions::new_fast())?
+				.read_headers()
+				.map_err(ImageErrors::from)?
+				.expect("Image decoder reads metadata")
+		};
 		let size = Size::new(metadata.dimensions().0 as u32, metadata.dimensions().1 as u32);
 
 		Ok(Image2DDisk {
@@ -134,7 +136,7 @@ impl Gltf {
 				size,
 				disk_compression: DiskImageCompression::Embedded,
 			},
-			bytes: src,
+			bytes: src.into(),
 		})
 	}
 }
