@@ -1,7 +1,10 @@
 #![cfg(feature = "runtime")]
 
+use crate::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
+use futures::executor::block_on;
 use rkyv::Deserialize;
 use std::fmt::{Debug, Display, Formatter};
+use std::future::Future;
 use std::sync::Arc;
 use vulkano::buffer::{AllocateBufferError, BufferContents, BufferCreateInfo, BufferUsage};
 use vulkano::buffer::{Buffer as VBuffer, Subbuffer};
@@ -16,10 +19,11 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTy
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, ValidationError, VulkanError};
 use vulkano_bindless::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
-use vulkano_bindless::descriptor::{Bindless, RCDesc, StrongBackingRefs};
+use vulkano_bindless::descriptor::{Bindless, RCDesc, StrongBackingRefs, RC};
+use vulkano_bindless::spirv_std::image::Image2d;
 use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
-use vulkano_bindless_shaders::descriptor::Buffer;
+use vulkano_bindless_shaders::descriptor::{Buffer, Desc};
 use zune_image::errors::ImageErrors;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T
@@ -35,9 +39,38 @@ pub struct Uploader {
 	pub memory_allocator: Arc<dyn MemoryAllocator>,
 	pub cmd_allocator: Arc<dyn CommandBufferAllocator>,
 	pub transfer_queue: Arc<Queue>,
+
+	white_texture: Option<Desc<RC, Image2d>>,
 }
 
 impl Uploader {
+	pub fn new(
+		bindless: Arc<Bindless>,
+		memory_allocator: Arc<dyn MemoryAllocator>,
+		cmd_allocator: Arc<dyn CommandBufferAllocator>,
+		transfer_queue: Arc<Queue>,
+	) -> Self {
+		let mut uploader = Self {
+			bindless,
+			memory_allocator,
+			cmd_allocator,
+			transfer_queue,
+			white_texture: None,
+		};
+		let white_texture = {
+			let disk = Image2DDisk::<{ ImageType::RGBA_LINEAR as u32 }> {
+				metadata: Image2DMetadata {
+					size: Size::new(1, 1),
+					disk_compression: DiskImageCompression::None,
+				},
+				bytes: Vec::from([255, 255, 255, 255]).into_boxed_slice(),
+			};
+			block_on(disk.upload(&uploader)).unwrap()
+		};
+		uploader.white_texture = Some(white_texture);
+		uploader
+	}
+
 	pub async fn upload_buffer_data<T: BufferStruct>(
 		&self,
 		data: T,
@@ -148,6 +181,21 @@ impl Uploader {
 			.bindless
 			.buffer()
 			.alloc_slot(perm_buffer.reinterpret(), backing_refs))
+	}
+
+	pub fn white_texture(&self) -> Desc<RC, Image2d> {
+		self.white_texture.as_ref().unwrap().clone()
+	}
+
+	pub async fn await_or_white_texture(
+		&self,
+		tex: Option<impl Future<Output = Result<Desc<RC, Image2d>, Validated<UploadError>>>>,
+	) -> Result<Desc<RC, Image2d>, Validated<UploadError>> {
+		if let Some(tex) = tex {
+			tex.await
+		} else {
+			Ok(self.white_texture())
+		}
 	}
 }
 

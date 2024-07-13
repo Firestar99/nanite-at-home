@@ -89,16 +89,16 @@ mod runtime {
 	impl ArchivedPbrMaterialDisk {
 		pub async fn upload(&self, uploader: &Uploader) -> Result<PbrMaterial<RC>, Validated<UploadError>> {
 			let vertices = uploader.upload_buffer_iter(self.vertices.iter().map(deserialize_infallible));
-			let base_color = self.base_color.as_ref().unwrap().upload(uploader);
-			let normal = self.normal.as_ref().unwrap().upload(uploader);
-			let omr = self.omr.as_ref().unwrap().upload(uploader);
+			let base_color = self.base_color.as_ref().map(|tex| tex.upload(uploader));
+			let normal = self.normal.as_ref().map(|tex| tex.upload(uploader));
+			let omr = self.omr.as_ref().map(|tex| tex.upload(uploader));
 			Ok(PbrMaterial {
 				vertices: vertices.await?.into(),
-				base_color: base_color.await?,
+				base_color: uploader.await_or_white_texture(base_color).await?,
 				base_color_factor: self.base_color_factor,
-				normal: normal.await?,
+				normal: uploader.await_or_white_texture(normal).await?,
 				normal_scale: self.normal_scale,
-				omr: omr.await?,
+				omr: uploader.await_or_white_texture(omr).await?,
 				occlusion_strength: self.occlusion_strength,
 				metallic_factor: self.metallic_factor,
 				roughness_factor: self.roughness_factor,

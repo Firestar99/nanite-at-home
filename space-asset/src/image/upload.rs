@@ -1,5 +1,5 @@
 #![cfg(feature = "runtime")]
-use crate::image::ArchivedImage2DDisk;
+use crate::image::{ArchivedImage2DDisk, Image2DDisk, Image2DMetadata};
 use crate::uploader::{UploadError, Uploader, ValidatedFrom};
 use vulkano::buffer::Buffer as VBuffer;
 use vulkano::buffer::{BufferCreateInfo, BufferUsage};
@@ -18,8 +18,21 @@ use vulkano_bindless_shaders::descriptor::Desc;
 
 impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
 	pub async fn upload(&self, uploader: &Uploader) -> Result<Desc<RC, Image2d>, Validated<UploadError>> {
-		let metadata = self.metadata.deserialize();
+		self.metadata.deserialize().upload(&self.bytes, uploader).await
+	}
+}
+impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
+	pub async fn upload(&self, uploader: &Uploader) -> Result<Desc<RC, Image2d>, Validated<UploadError>> {
+		self.metadata.upload(&self.bytes, uploader).await
+	}
+}
 
+impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
+	pub(super) async fn upload(
+		&self,
+		src: &[u8],
+		uploader: &Uploader,
+	) -> Result<Desc<RC, Image2d>, Validated<UploadError>> {
 		let upload_buffer = {
 			profiling::scope!("image decode to host buffer");
 			let upload_buffer = VBuffer::new_slice::<u8>(
@@ -32,10 +45,10 @@ impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
 					memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
 					..AllocationCreateInfo::default()
 				},
-				metadata.decompressed_bytes() as DeviceSize,
+				self.decompressed_bytes() as DeviceSize,
 			)
 			.map_err(UploadError::from_validated)?;
-			self.decode_into(&mut *upload_buffer.write().unwrap())
+			self.decode_into(src, &mut *upload_buffer.write().unwrap())
 				.map_err(UploadError::from_validated)?;
 			upload_buffer
 		};
@@ -47,8 +60,8 @@ impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
 				uploader.memory_allocator.clone(),
 				ImageCreateInfo {
 					image_type: ImageType::Dim2d,
-					format: metadata.vulkano_format(),
-					extent: [metadata.size.width, metadata.size.height, 1],
+					format: self.vulkano_format(),
+					extent: [self.size.width, self.size.height, 1],
 					usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
 					..ImageCreateInfo::default()
 				},
