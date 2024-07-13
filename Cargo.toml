@@ -49,6 +49,7 @@ spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "6635481
 spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "663548172b733eea169181221de58118733147d0" }
 
 # async
+async-std = "1.12.0"
 futures = "0.3"
 rayon = "1.10"
 

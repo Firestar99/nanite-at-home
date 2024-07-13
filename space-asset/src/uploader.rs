@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime")]
 
 use crate::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
-use futures::executor::block_on;
+use async_std::task::block_on;
 use rkyv::Deserialize;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;

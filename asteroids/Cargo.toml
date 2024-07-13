@@ -19,7 +19,7 @@ vulkano-shaders = { workspace = true }
 winit = { workspace = true }
 
 # async
-futures = { workspace = true }
+async-std = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
