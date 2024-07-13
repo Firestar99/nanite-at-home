@@ -1,6 +1,5 @@
 #![cfg(feature = "runtime")]
 
-use crate::image::{ArchivedImage2DDisk, Image2DMetadata, ImageValidationError};
 use rkyv::Deserialize;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -9,20 +8,19 @@ use vulkano::buffer::{Buffer as VBuffer, Subbuffer};
 use vulkano::command_buffer::allocator::CommandBufferAllocator;
 use vulkano::command_buffer::{
 	CommandBufferBeginInfo, CommandBufferExecError, CommandBufferLevel, CommandBufferUsage, CopyBufferInfo,
-	CopyBufferToImageInfo, RecordingCommandBuffer,
+	RecordingCommandBuffer,
 };
 use vulkano::device::Queue;
-use vulkano::image::view::ImageView;
-use vulkano::image::{AllocateImageError, Image as VImage, ImageCreateInfo, ImageType, ImageUsage};
+use vulkano::image::AllocateImageError;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 use vulkano::sync::GpuFuture;
-use vulkano::{DeviceSize, Validated, ValidationError, VulkanError};
+use vulkano::{Validated, ValidationError, VulkanError};
 use vulkano_bindless::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
 use vulkano_bindless::descriptor::{Bindless, RCDesc, StrongBackingRefs};
-use vulkano_bindless::spirv_std::image::Image2d;
 use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use vulkano_bindless_shaders::descriptor::metadata::Metadata;
 use vulkano_bindless_shaders::descriptor::Buffer;
+use zune_image::errors::ImageErrors;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T
 where
@@ -151,79 +149,6 @@ impl Uploader {
 			.buffer()
 			.alloc_slot(perm_buffer.reinterpret(), backing_refs))
 	}
-
-	pub async fn upload_image2d(&self, image: &ArchivedImage2DDisk) -> Result<RCDesc<Image2d>, Validated<UploadError>> {
-		let metadata = deserialize_infallible::<_, Image2DMetadata>(&image.metadata);
-		metadata
-			.validate(image.bytes.len())
-			.map_err(UploadError::from_validated)?;
-
-		let upload_buffer = {
-			profiling::scope!("image upload to host buffer");
-			let upload_buffer = VBuffer::new_slice::<u8>(
-				self.memory_allocator.clone(),
-				BufferCreateInfo {
-					usage: BufferUsage::TRANSFER_SRC,
-					..BufferCreateInfo::default()
-				},
-				AllocationCreateInfo {
-					memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-					..AllocationCreateInfo::default()
-				},
-				image.bytes.len() as DeviceSize,
-			)
-			.map_err(UploadError::from_validated)?;
-			upload_buffer.write().unwrap().copy_from_slice(&image.bytes);
-			upload_buffer
-		};
-
-		let perm_image;
-		{
-			profiling::scope!("image copy cmd");
-			perm_image = VImage::new(
-				self.memory_allocator.clone(),
-				ImageCreateInfo {
-					image_type: ImageType::Dim2d,
-					format: metadata.encoding.vulkano_format(),
-					extent: [metadata.size.width, metadata.size.height, 1],
-					usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-					..ImageCreateInfo::default()
-				},
-				AllocationCreateInfo {
-					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-					..AllocationCreateInfo::default()
-				},
-			)
-			.map_err(UploadError::from_validated)?;
-
-			let cmd = {
-				let mut cmd = RecordingCommandBuffer::new(
-					self.cmd_allocator.clone(),
-					self.transfer_queue.queue_family_index(),
-					CommandBufferLevel::Primary,
-					CommandBufferBeginInfo {
-						usage: CommandBufferUsage::OneTimeSubmit,
-						..CommandBufferBeginInfo::default()
-					},
-				)
-				.map_err(UploadError::from_validated)?;
-				cmd.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, perm_image.clone()))
-					.map_err(UploadError::from_validated)?;
-				cmd.end().map_err(UploadError::from_validated)?
-			};
-			cmd.execute(self.transfer_queue.clone())
-				.map_err(UploadError::from_validated)?
-				.then_signal_fence_and_flush()
-				.map_err(UploadError::from_validated)?
-		}
-		.await
-		.map_err(UploadError::from_validated)?;
-
-		Ok(self
-			.bindless
-			.image()
-			.alloc_slot_2d(ImageView::new_default(perm_image).map_err(UploadError::from_validated)?))
-	}
 }
 
 #[derive(Debug)]
@@ -233,7 +158,7 @@ pub enum UploadError {
 	VulkanError(VulkanError),
 	CommandBufferExecError(CommandBufferExecError),
 	BackingRefsError(BackingRefsError),
-	ImageValidationError(ImageValidationError),
+	ImageErrors(ImageErrors),
 }
 
 pub trait ValidatedFrom<T>: Sized {
@@ -291,9 +216,9 @@ impl ValidatedFrom<Box<ValidationError>> for UploadError {
 	}
 }
 
-impl ValidatedFrom<ImageValidationError> for UploadError {
-	fn from_validated(value: ImageValidationError) -> Validated<Self> {
-		Validated::Error(Self::ImageValidationError(value))
+impl ValidatedFrom<ImageErrors> for UploadError {
+	fn from_validated(value: ImageErrors) -> Validated<Self> {
+		Validated::Error(Self::ImageErrors(value))
 	}
 }
 
@@ -305,7 +230,7 @@ impl Display for UploadError {
 			UploadError::VulkanError(e) => Display::fmt(e, f),
 			UploadError::CommandBufferExecError(e) => Display::fmt(e, f),
 			UploadError::BackingRefsError(e) => Display::fmt(e, f),
-			UploadError::ImageValidationError(e) => Display::fmt(e, f),
+			UploadError::ImageErrors(e) => Display::fmt(e, f),
 		}
 	}
 }

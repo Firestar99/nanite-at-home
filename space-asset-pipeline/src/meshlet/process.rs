@@ -1,14 +1,15 @@
 use crate::material::pbr::process_pbr_material;
-use crate::meshlet::error::{Error, MeshletError, Result};
+use crate::meshlet::error::{Error, MeshletError};
+use crate::uri::Scheme;
 use glam::{Affine3A, Mat3, Quat, Vec3};
 use gltf::buffer::Data;
-use gltf::image::Format;
+use gltf::image::Source;
 use gltf::mesh::Mode;
 use gltf::{Buffer, Document, Image, Node, Primitive, Scene};
-use image::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use space_asset::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, Size};
 use space_asset::meshlet::indices::triangle_indices_write_vec;
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
@@ -17,33 +18,37 @@ use space_asset::meshlet::offset::MeshletOffset;
 use space_asset::meshlet::scene::MeshletSceneDisk;
 use space_asset::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
-use std::mem;
+use std::fmt::{Display, Formatter};
+use std::io::Read;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{io, mem};
+use zune_image::codecs::png::zune_core::bytestream::ZCursor;
+use zune_image::codecs::png::zune_core::options::DecoderOptions;
+use zune_image::codecs::ImageFormat;
+use zune_image::errors::ImageErrors;
 
 pub struct Gltf {
 	pub document: Document,
-	pub base: Option<PathBuf>,
+	pub base: PathBuf,
 	pub buffers: SmallVec<[Data; 1]>,
 }
 
 impl Gltf {
 	#[profiling::function]
-	pub fn open(path: PathBuf) -> Result<Arc<Self>> {
-		let base = Some(
-			path.parent()
-				.map(Path::to_path_buf)
-				.unwrap_or_else(|| PathBuf::from("./")),
-		);
+	pub fn open(path: &Path) -> crate::meshlet::error::Result<Arc<Self>> {
+		let base = path
+			.parent()
+			.map(Path::to_path_buf)
+			.unwrap_or_else(|| PathBuf::from("./"));
 		let gltf::Gltf { document, mut blob } = gltf::Gltf::open(&path).map_err(Error::from)?;
 		let buffers = document
 			.buffers()
 			.map(|buffer| {
-				Data::from_source_and_blob(buffer.source(), base.as_ref().map(PathBuf::as_path), &mut blob)
-					.map_err(Error::from)
+				Data::from_source_and_blob(buffer.source(), Some(base.as_path()), &mut blob).map_err(Error::from)
 			})
-			.collect::<Result<_>>()?;
+			.collect::<crate::meshlet::error::Result<_>>()?;
 		Ok(Arc::new(Self {
 			document,
 			base,
@@ -51,31 +56,85 @@ impl Gltf {
 		}))
 	}
 
-	pub fn base(&self) -> Option<&Path> {
-		self.base.as_ref().map(PathBuf::as_path)
+	pub fn base(&self) -> &Path {
+		self.base.as_path()
 	}
 
 	pub fn buffer(&self, buffer: Buffer) -> Option<&[u8]> {
 		self.buffers.get(buffer.index()).map(|b| &b.0[..])
 	}
+}
 
-	pub fn image(&self, image: Image) -> gltf::Result<DynamicImage> {
-		let data =
-			gltf::image::Data::from_source(image.source(), self.base.as_ref().map(PathBuf::as_path), &self.buffers)?;
+#[derive(Debug)]
+pub enum GltfImageError {
+	MissingBuffer,
+	BufferViewOutOfBounds,
+	UnsupportedUri,
+	UnknownImageFormat,
+	ImageErrors(ImageErrors),
+	IoError(io::Error),
+}
 
-		// gltf converts image to its own format, we convert it back
-		Ok(match data.format {
-			Format::R8 => DynamicImage::ImageLuma8(GrayImage::from_vec(data.width, data.height, data.pixels).unwrap()),
-			Format::R8G8 => {
-				DynamicImage::ImageLumaA8(GrayAlphaImage::from_vec(data.width, data.height, data.pixels).unwrap())
+impl Display for GltfImageError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			GltfImageError::MissingBuffer => f.write_str("Invalid buffer index"),
+			GltfImageError::BufferViewOutOfBounds => f.write_str("Buffer view is out of bounds"),
+			GltfImageError::UnsupportedUri => f.write_str("Image URI is unsupported or invalid"),
+			GltfImageError::UnknownImageFormat => f.write_str("Image format is unknown"),
+			GltfImageError::ImageErrors(err) => Display::fmt(err, f),
+			GltfImageError::IoError(err) => Display::fmt(err, f),
+		}
+	}
+}
+
+impl std::error::Error for GltfImageError {}
+
+impl From<ImageErrors> for GltfImageError {
+	fn from(value: ImageErrors) -> Self {
+		Self::ImageErrors(value)
+	}
+}
+
+impl From<io::Error> for GltfImageError {
+	fn from(value: io::Error) -> Self {
+		Self::IoError(value)
+	}
+}
+
+impl Gltf {
+	pub fn image<const DATA_TYPE: u32>(&self, image: Image) -> Result<Image2DDisk<DATA_TYPE>, GltfImageError> {
+		let scheme = match image.source() {
+			Source::View { view, .. } => {
+				let buffer = self.buffer(view.buffer()).ok_or(GltfImageError::MissingBuffer)?;
+				Scheme::Slice(
+					&buffer
+						.get(view.offset()..view.length())
+						.ok_or(GltfImageError::BufferViewOutOfBounds)?,
+				)
 			}
-			Format::R8G8B8 => {
-				DynamicImage::ImageRgb8(RgbImage::from_vec(data.width, data.height, data.pixels).unwrap())
-			}
-			Format::R8G8B8A8 => {
-				DynamicImage::ImageRgba8(RgbaImage::from_vec(data.width, data.height, data.pixels).unwrap())
-			}
-			_ => return Err(gltf::Error::UnsupportedImageEncoding),
+			Source::Uri { uri, .. } => Scheme::parse(uri).ok_or(GltfImageError::UnsupportedUri)?,
+		};
+
+		let src = scheme
+			.read(self.base())?
+			.bytes()
+			.collect::<Result<Vec<_>, _>>()?
+			.into_boxed_slice();
+		let (format, _) = ImageFormat::guess_format(ZCursor::new(&src)).ok_or(GltfImageError::UnknownImageFormat)?;
+		let metadata = format
+			.decoder_with_options(ZCursor::new(&src), DecoderOptions::new_fast())?
+			.read_headers()
+			.map_err(ImageErrors::from)?
+			.expect("Image decoder reads metadata");
+		let size = Size::new(metadata.dimensions().0 as u32, metadata.dimensions().1 as u32);
+
+		Ok(Image2DDisk {
+			metadata: Image2DMetadata {
+				size,
+				disk_compression: DiskImageCompression::Embedded,
+			},
+			bytes: src,
 		})
 	}
 }
@@ -89,7 +148,7 @@ impl Deref for Gltf {
 }
 
 impl Gltf {
-	pub fn process(self: &Arc<Self>) -> Result<MeshletSceneDisk> {
+	pub fn process(self: &Arc<Self>) -> crate::meshlet::error::Result<MeshletSceneDisk> {
 		profiling::scope!("Gltf::process");
 
 		let meshes_primitives = {
@@ -101,9 +160,9 @@ impl Gltf {
 					let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
 					vec.into_par_iter()
 						.map(|primitive| self.process_mesh_primitive(primitive.clone()))
-						.collect::<Result<Vec<_>>>()
+						.collect::<crate::meshlet::error::Result<Vec<_>>>()
 				})
-				.collect::<Result<Vec<_>>>()
+				.collect::<crate::meshlet::error::Result<Vec<_>>>()
 		}?;
 
 		let mesh2instance = {
@@ -164,7 +223,10 @@ impl Gltf {
 	}
 
 	#[profiling::function]
-	fn process_mesh_primitive(self: &Arc<Gltf>, primitive: Primitive) -> Result<MeshletMeshDisk> {
+	fn process_mesh_primitive(
+		self: &Arc<Gltf>,
+		primitive: Primitive,
+	) -> crate::meshlet::error::Result<MeshletMeshDisk> {
 		if primitive.mode() != Mode::Triangles {
 			return Err(MeshletError::PrimitiveMustBeTriangleList.into());
 		}

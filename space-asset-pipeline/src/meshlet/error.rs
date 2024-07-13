@@ -1,18 +1,21 @@
-use std::fmt::{Display, Formatter};
+use crate::meshlet::process::GltfImageError;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug)]
 pub enum Error {
 	Gltf(gltf::Error),
 	Io(std::io::Error),
+	Image(GltfImageError),
 	Meshlet(MeshletError),
 }
 
 impl Display for Error {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Error::Gltf(err) => err.fmt(f),
-			Error::Io(err) => err.fmt(f),
-			Error::Meshlet(err) => err.fmt(f),
+			Error::Gltf(err) => Display::fmt(err, f),
+			Error::Io(err) => Display::fmt(err, f),
+			Error::Image(err) => Display::fmt(err, f),
+			Error::Meshlet(err) => Display::fmt(err, f),
 		}
 	}
 }
@@ -31,6 +34,12 @@ impl From<gltf::Error> for Error {
 impl From<std::io::Error> for Error {
 	fn from(value: std::io::Error) -> Self {
 		Self::Io(value)
+	}
+}
+
+impl From<GltfImageError> for Error {
+	fn from(value: GltfImageError) -> Self {
+		Self::Image(value)
 	}
 }
 

@@ -62,7 +62,7 @@ prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
 
 # bytes and numbers
-glam = { version = "0.24", default-features = false, features = ["libm", "bytemuck"] }
+glam = { version = "0.25", default-features = false, features = ["libm", "bytemuck"] }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
@@ -70,12 +70,16 @@ num-derive = "0.3"
 memoffset = "0.9.1"
 
 # serde
-rkyv = { version = "0.7" }
+rkyv = { version = "0.7", default-features = false, features = ["std", "size_64"] }
 zstd = { version = "0.13" }
+
+# image
+zune-image = { version = "0.5.0-rc0", default-features = false, features = ["png", "jpeg", "simd"] }
 
 # model loader
 gltf = "1.4.0"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+base64 = "0.22"
+urlencoding = "2.1"
 meshopt = "0.2.1"
 intel_tex_2 = "0.4.0"
 
@@ -98,6 +102,17 @@ crossbeam-utils = "0.8"
 rangemap = "1.5.1"
 walkdir = "2.5.0"
 anyhow = "1.0"
+num_enum = { version = "0.7.2", default-features = false }
+
+
+
+[patch.crates-io]
+zune-core = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
+zune-image = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
+zune-inflate = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
+zune-jpeg = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
+zune-png = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
+
 
 
 
@@ -127,9 +142,13 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.gltf-json]
 opt-level = 3
-[profile.dev.package.image]
+[profile.dev.package.zune-core]
 opt-level = 3
-[profile.dev.package.png]
+[profile.dev.package.zune-image]
 opt-level = 3
-[profile.dev.package.jpeg-decoder]
+[profile.dev.package.zune-inflate]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.zune-png]
 opt-level = 3

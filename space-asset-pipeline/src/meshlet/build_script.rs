@@ -61,7 +61,7 @@ pub fn build(models_dir: &Path, out_dir: &Path, rerun_if_changed: bool) -> anyho
 			.par_iter()
 			.map(|model| {
 				profiling::scope!("processing model", model.src_path.to_str().unwrap());
-				let gltf = Gltf::open(model.src_path.clone())
+				let gltf = Gltf::open(&model.src_path)
 					.with_context(|| format!("opening gltf file failed {:?}", model.src_path))?;
 				let disk = gltf
 					.process()

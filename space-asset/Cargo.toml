@@ -12,8 +12,11 @@ vulkano-bindless = { workspace = true, optional = true }
 vulkano-bindless-macros = { workspace = true }
 vulkano-bindless-shaders = { workspace = true }
 
-# device
+# vulkan
 vulkano = { workspace = true, optional = true }
+
+# model loader
+zune-image = { workspace = true, optional = true }
 
 # async
 futures = { workspace = true, optional = true }
@@ -33,9 +36,10 @@ profiling = { workspace = true }
 
 # other
 static_assertions = { workspace = true }
+num_enum = { workspace = true }
 
 [features]
-disk = ["dep:rkyv", "dep:zstd"]
+disk = ["dep:rkyv", "dep:zstd", "dep:zune-image"]
 runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon"]
 
 profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless?/profile-with-puffin"]
