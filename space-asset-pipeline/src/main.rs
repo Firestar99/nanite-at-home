@@ -1,10 +1,10 @@
+use anyhow::Context;
 use clap::Parser;
-use futures::executor::block_on;
-use space_asset_pipeline::meshlet::process::Gltf;
-use std::error::Error;
+use space_asset_pipeline::gltf::Gltf;
+use space_asset_pipeline::meshlet::process::process_meshlets;
+use std::fs;
 use std::fs::File;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -14,7 +14,7 @@ struct Args {
 
 	/// The output path
 	#[arg(short, long)]
-	out: Option<PathBuf>,
+	out: PathBuf,
 
 	/// Whether to print the debug of the output structs
 	#[arg(long)]
@@ -25,7 +25,7 @@ struct Args {
 	threads: Option<usize>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> anyhow::Result<()> {
 	#[cfg(feature = "profile-with-puffin")]
 	let _puffin_server = {
 		profiling::puffin::set_scopes_on(true);
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[profiling::function]
-fn inner_main() -> Result<(), Box<dyn Error>> {
+fn inner_main() -> anyhow::Result<()> {
 	let args = Args::parse();
 	rayon::ThreadPoolBuilder::new()
 		.num_threads(args.threads.unwrap_or(0))
@@ -47,44 +47,17 @@ fn inner_main() -> Result<(), Box<dyn Error>> {
 		.build_global()
 		.unwrap();
 
-	let gltf = Gltf::open(PathBuf::from(args.path))?;
-	let scene = block_on(gltf.process())?;
+	let gltf = Gltf::open(&args.path).with_context(|| format!("opening gltf file failed {:?}", args.path))?;
+	let scene = process_meshlets(&gltf).with_context(|| format!("processing gltf failed {:?}", args.path))?;
 
-	if let Some(out) = args.out {
-		let vec = {
-			profiling::scope!("serializing");
-			rkyv::to_bytes::<_, 1024>(&scene)?
-		};
-
-		{
-			profiling::scope!("write uncompressed");
-			File::create(&out)?.write_all(&vec)?;
-		}
-
-		{
-			profiling::scope!("zstd stream to file");
-			let out_zstd = out
-				.parent()
-				.unwrap_or(Path::new("."))
-				.join(format!("{}.zstd", out.file_name().unwrap().to_str().unwrap()));
-			zstd::stream::write::Encoder::new(File::create(out_zstd)?, 0)?
-				.auto_finish()
-				.write_all(&vec)?;
-		}
-
-		let zstd = {
-			profiling::scope!("zstd bulk");
-			zstd::bulk::compress(&vec, 0).unwrap()
-		};
-
-		{
-			profiling::scope!("write zstd");
-			let out_zstd2 = out
-				.parent()
-				.unwrap_or(Path::new("."))
-				.join(format!("{}2.zstd", out.file_name().unwrap().to_str().unwrap()));
-			File::create(&out_zstd2)?.write_all(&zstd)?;
-		}
+	{
+		fs::create_dir_all(args.out.parent().unwrap())
+			.with_context(|| format!("failed creating output directories for file {:?}", args.out))?;
+		let out_file =
+			File::create(&args.out).with_context(|| format!("failed creating output file {:?}", args.out))?;
+		scene
+			.serialize_to(out_file)
+			.with_context(|| format!("zstd stream failed writing {:?}", args.out))?;
 	}
 
 	if args.debug_verbose {

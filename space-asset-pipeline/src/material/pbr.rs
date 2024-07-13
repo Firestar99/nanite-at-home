@@ -1,19 +1,18 @@
+use crate::gltf::Gltf;
 use crate::image::encode::{Encode, EncodeSettings};
 use crate::meshlet::error::MeshletError;
-use crate::meshlet::process::Gltf;
 use glam::{Vec2, Vec3};
 use gltf::Primitive;
 use space_asset::image::ImageType;
 use space_asset::material::pbr::vertex::PbrVertex;
 use space_asset::material::pbr::PbrMaterialDisk;
-use std::sync::Arc;
 
 #[profiling::function]
 pub fn process_pbr_material(
-	gltf: &Arc<Gltf>,
+	gltf: &Gltf,
 	primitive: Primitive,
 	settings: EncodeSettings,
-) -> crate::meshlet::error::Result<PbrMaterialDisk> {
+) -> anyhow::Result<PbrMaterialDisk> {
 	let reader = primitive.reader(|b| gltf.buffer(b));
 	let vertices = reader
 		.read_tex_coords(0)

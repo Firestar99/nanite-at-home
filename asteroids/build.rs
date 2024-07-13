@@ -1,8 +1,7 @@
-use space_asset_pipeline::meshlet::build_script::build;
-use space_asset_pipeline::meshlet::codegen::codegen;
+use space_asset_pipeline::meshlet::build_script::build_script;
+use std::env;
 use std::error::Error;
 use std::path::Path;
-use std::{env, fs};
 
 const MODELS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../models");
 
@@ -22,7 +21,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn inner_main() -> Result<(), Box<dyn Error>> {
 	let out_dir = env::var("OUT_DIR").unwrap();
 	let out_dir = Path::new(&out_dir);
-	let models = build(Path::new(MODELS_DIR), out_dir, true)?;
-	fs::write(out_dir.join("models.rs"), codegen(models.iter())?.to_string())?;
+	build_script(Path::new(MODELS_DIR), out_dir, &out_dir.join("models.rs"), true)?;
 	Ok(())
 }

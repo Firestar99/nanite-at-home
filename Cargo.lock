@@ -2154,7 +2154,6 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "clap",
- "futures",
  "glam",
  "gltf",
  "intel_tex_2",

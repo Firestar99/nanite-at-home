@@ -7,12 +7,12 @@ use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 
 /// ModNode is a helper for writing a mod hierarchy for various symbols
-pub enum ModNode<'a, T: ModNodeToTokens> {
+pub enum ModNode<'a, T> {
 	Children(HashMap<Cow<'a, str>, ModNode<'a, T>>),
 	Object(T),
 }
 
-impl<'a, T: ModNodeToTokens> ModNode<'a, T> {
+impl<'a, T> ModNode<'a, T> {
 	pub fn root() -> Self {
 		Self::Children(HashMap::new())
 	}
@@ -55,41 +55,41 @@ impl<'a, T: ModNodeToTokens> ModNode<'a, T> {
 		}
 	}
 
-	pub fn to_tokens(&self) -> TokenStream {
+	pub fn to_tokens(&self, f: impl Fn(Ident, &T) -> TokenStream) -> TokenStream {
 		match self {
-			ModNode::Children(children) => {
-				let mut content = quote!();
-				for (name, node) in children {
-					let append = node.to_tokens_with_ident(format_ident!("{}", name));
-					content = quote! {
-						#content
-						#append
-					};
-				}
-				content
-			}
+			ModNode::Children(children) => self.to_tokens_children(children, &f),
 			ModNode::Object(_) => unreachable!(),
 		}
 	}
-}
 
-pub trait ModNodeToTokens {
-	fn to_tokens_with_ident(&self, name: Ident) -> TokenStream;
-}
-
-impl<'a, T: ModNodeToTokens> ModNodeToTokens for ModNode<'a, T> {
-	fn to_tokens_with_ident(&self, name: Ident) -> TokenStream {
+	fn to_tokens_loop(&self, name: Ident, f: &impl Fn(Ident, &T) -> TokenStream) -> TokenStream {
 		match self {
-			ModNode::Children(_) => {
-				let content = self.to_tokens();
+			ModNode::Children(children) => {
+				let content = self.to_tokens_children(children, f);
 				quote! {
 					pub mod #name {
 						#content
 					}
 				}
 			}
-			ModNode::Object(t) => t.to_tokens_with_ident(name),
+			ModNode::Object(t) => f(name, t),
 		}
+	}
+
+	fn to_tokens_children(
+		&self,
+		children: &HashMap<Cow<'a, str>, ModNode<'a, T>>,
+		f: &impl Fn(Ident, &T) -> TokenStream,
+	) -> TokenStream {
+		let mut content = quote!();
+		for (name, node) in children {
+			let append = node.to_tokens_loop(format_ident!("{}", name), f);
+			content = quote! {
+				#content
+				#append
+			};
+		}
+		content
 	}
 }
 

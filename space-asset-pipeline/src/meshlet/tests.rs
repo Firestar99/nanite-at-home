@@ -1,14 +1,11 @@
-use crate::meshlet::process::Gltf;
-use futures::executor::block_on;
-use std::path::PathBuf;
+use crate::gltf::Gltf;
+use crate::meshlet::process::process_meshlets;
+use std::path::Path;
 
-const LANTERN_GLTF_PATH: &str = concat!(
-	env!("CARGO_MANIFEST_DIR"),
-	"/../asteroids/src/sample_scene/Lantern/glTF/Lantern.gltf"
-);
+const LANTERN_GLTF_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../models/Lantern/glTF/Lantern.gltf");
 
 #[test]
 fn test_lantern_gltf() {
-	let gltf = Gltf::open(PathBuf::from(LANTERN_GLTF_PATH)).unwrap();
-	let _scene = block_on(gltf.process()).unwrap();
+	let gltf = Gltf::open(Path::new(LANTERN_GLTF_PATH)).unwrap();
+	let _scene = process_meshlets(&gltf).unwrap();
 }
