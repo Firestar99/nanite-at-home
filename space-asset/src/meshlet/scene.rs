@@ -7,9 +7,10 @@ mod disk {
 		WriteSerializer,
 	};
 	use rkyv::ser::Serializer;
-	use rkyv::{Archive, Deserialize, Serialize};
-	use std::io;
-	use std::io::{BufWriter, Write};
+	use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
+	use std::io::{BufWriter, Read, Write};
+	use std::path::PathBuf;
+	use std::{fs, io};
 
 	#[derive(Clone, Default, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletSceneDisk {
@@ -34,13 +35,61 @@ mod disk {
 		}
 	}
 
-	impl ArchivedMeshletSceneDisk {
-		/// Deserialize from a byte slice
+	pub struct MeshletSceneFile<'a> {
+		path: &'a str,
+	}
+
+	pub struct LoadedMeshletScene {
+		archive: AlignedVec,
+	}
+
+	pub const EXPORT_FOLDER_NAME: &str = "assets";
+
+	impl<'a> MeshletSceneFile<'a> {
+		/// Create a new MeshletSceneFile with a path relative to the export directory.
 		///
 		/// # Safety
-		/// Must be a valid datastream retrieved from [`MeshletSceneDisk::serialize_to`]
-		pub unsafe fn deserialize(archive: &[u8]) -> &Self {
-			unsafe { rkyv::archived_root::<MeshletSceneDisk>(archive) }
+		/// File must contain a valid datastream retrieved from [`MeshletSceneDisk::serialize_to`]
+		pub const unsafe fn new(path: &'a str) -> Self {
+			Self { path }
+		}
+
+		pub fn absolute_path(&self) -> io::Result<PathBuf> {
+			let exe = std::env::current_exe()?.canonicalize()?;
+			let exe_dir = exe
+				.parent()
+				.ok_or(io::Error::new(io::ErrorKind::NotFound, "executable's dir not found"))?;
+			let mut file = PathBuf::from(exe_dir);
+			file.push(EXPORT_FOLDER_NAME);
+			file.push(self.path);
+			Ok(file)
+		}
+
+		pub fn load(&self) -> io::Result<LoadedMeshletScene> {
+			let path = self.absolute_path()?;
+			let mut file = fs::File::open(&path)?;
+
+			let capacity = path.metadata()?.len() as usize + 1;
+			let mut vec = AlignedVec::with_capacity(capacity);
+			vec.resize(capacity, 0);
+
+			loop {
+				match file.read(&mut vec) {
+					Ok(e) => {
+						vec.resize(e, 0);
+						break;
+					}
+					Err(err) if err.kind() == io::ErrorKind::Interrupted => (),
+					Err(err) => Err(err)?,
+				}
+			}
+			Ok(LoadedMeshletScene { archive: vec })
+		}
+	}
+
+	impl LoadedMeshletScene {
+		pub fn root(&self) -> &ArchivedMeshletSceneDisk {
+			unsafe { rkyv::archived_root::<MeshletSceneDisk>(&self.archive) }
 		}
 	}
 }

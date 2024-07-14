@@ -1,4 +1,4 @@
-use space_asset::meshlet::scene::{ArchivedMeshletSceneDisk, MeshletSceneCpu};
+use space_asset::meshlet::scene::MeshletSceneCpu;
 use space_asset::uploader::Uploader;
 use space_engine::renderer::Init;
 use std::io;
@@ -11,13 +11,13 @@ pub async fn load_scene(init: &Arc<Init>) -> Vec<Arc<MeshletSceneCpu>> {
 
 #[profiling::function]
 async fn upload_test_scene(init: &Arc<Init>) -> io::Result<Arc<MeshletSceneCpu>> {
-	let disk = unsafe { ArchivedMeshletSceneDisk::deserialize(crate::models::Lantern::glTF::Lantern) };
+	let scene = models::Lantern::glTF::Lantern.load()?;
 	let uploader = Uploader::new(
 		init.bindless.clone(),
 		init.memory_allocator.clone(),
 		init.cmd_buffer_allocator.clone(),
 		init.queues.client.transfer.clone(),
 	);
-	let cpu = disk.upload(&uploader).await.unwrap();
+	let cpu = scene.root().upload(&uploader).await.unwrap();
 	Ok(Arc::new(cpu))
 }

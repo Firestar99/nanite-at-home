@@ -30,6 +30,7 @@ memoffset = { workspace = true }
 # codegen
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
+proc-macro-crate = { workspace = true }
 
 # serde
 rkyv = { workspace = true }

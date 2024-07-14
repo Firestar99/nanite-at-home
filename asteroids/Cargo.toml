@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # my projects
+models = { workspace = true }
 space-asset = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }

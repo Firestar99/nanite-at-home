@@ -1,0 +1,23 @@
+[package]
+name = "models"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+space-asset = { workspace = true, features = ["disk"] }
+
+[build-dependencies]
+anyhow = { workspace = true }
+space-asset-pipeline = { workspace = true }
+profiling = { workspace = true }
+puffin_http = { workspace = true, optional = true }
+
+[features]
+profile-with-puffin = ["dep:puffin_http", "profiling/profile-with-puffin", "space-asset/profile-with-puffin", "space-asset-pipeline/profile-with-puffin"]
+profile-with-optick = ["profiling/profile-with-optick", "space-asset/profile-with-optick", "space-asset-pipeline/profile-with-optick"]
+profile-with-superluminal = ["profiling/profile-with-superluminal", "space-asset/profile-with-superluminal", "space-asset-pipeline/profile-with-superluminal"]
+profile-with-tracing = ["profiling/profile-with-tracing", "space-asset/profile-with-tracing", "space-asset-pipeline/profile-with-tracing"]
+profile-with-tracy = ["profiling/profile-with-tracy", "space-asset/profile-with-tracy", "space-asset-pipeline/profile-with-tracy"]

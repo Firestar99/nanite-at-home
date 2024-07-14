@@ -3,9 +3,17 @@ use crate::gltf::{to_mod_hierarchy, GltfFile};
 use crate::meshlet::process::process_meshlets;
 use anyhow::Context;
 use rayon::prelude::*;
-use std::fs;
+use space_asset::meshlet::scene::EXPORT_FOLDER_NAME;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
+
+pub fn out_and_export_dir() -> Option<(PathBuf, PathBuf)> {
+	let out_dir = PathBuf::from(&env::var("OUT_DIR").unwrap());
+	let mut export_dir = PathBuf::from(out_dir.parent()?.parent()?.parent()?);
+	export_dir.push(EXPORT_FOLDER_NAME);
+	Some((out_dir, export_dir))
+}
 
 #[profiling::function]
 pub fn build_script(

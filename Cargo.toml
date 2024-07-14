@@ -1,6 +1,7 @@
 [workspace]
 members = [
 	"asteroids",
+	"models",
 	"space-asset",
 	"space-asset-pipeline",
 	"space-engine",
@@ -27,6 +28,7 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 [workspace.dependencies]
 # members
 asteroids = { path = "asteroids" }
+models = { path = "models" }
 space-asset = { path = "space-asset" }
 space-asset-pipeline = { path = "space-asset-pipeline" }
 space-engine = { path = "space-engine" }

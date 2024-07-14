@@ -1,12 +1,14 @@
 use crate::modnode::{ModNode, ModNodeError};
 use proc_macro2::TokenStream;
-use quote::quote;
+use proc_macro_crate::{crate_name, FoundCrate};
+use quote::{format_ident, quote};
 use std::path::{Component, Path, PathBuf};
 use std::{fs, io};
 
 pub struct GltfFile {
 	pub src_path: PathBuf,
 	pub relative: Vec<String>,
+	pub out_relative: String,
 	pub out_path: PathBuf,
 }
 
@@ -38,10 +40,12 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 				.chain([src_path.file_stem().unwrap()])
 				.map(|s| String::from(s.to_str().unwrap()))
 				.collect::<Vec<_>>();
-			let out_path = out_dir.join(format!("{}.bin", relative.join("/")));
+			let out_relative = format!("{}.bin", relative.join("/"));
+			let out_path = out_dir.join(&out_relative);
 			GltfFile {
 				src_path,
 				relative,
+				out_relative,
 				out_path,
 			}
 		})
@@ -50,6 +54,13 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 
 #[profiling::function]
 pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> Result<TokenStream, ModNodeError> {
+	let found_crate = crate_name("space-asset").unwrap();
+	let crate_name = match &found_crate {
+		FoundCrate::Itself => "crate",
+		FoundCrate::Name(name) => name,
+	};
+	let crate_name = format_ident!("{}", crate_name);
+
 	let mut root = ModNode::root();
 	for model in model_paths {
 		root.insert(
@@ -57,13 +68,13 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 				.relative
 				.iter()
 				.map(|s| s.chars().map(filter_chars_for_typename).collect::<String>().into()),
-			&model.out_path,
+			model,
 		)?;
 	}
-	Ok(root.to_tokens(|name, out_path| {
-		let out_path = out_path.to_str().unwrap();
+	Ok(root.to_tokens(|name, model| {
+		let out_relative = &model.out_relative;
 		quote! {
-			pub const #name: &[u8] = include_bytes!(#out_path);
+			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#out_relative) };
 		}
 	}))
 }
