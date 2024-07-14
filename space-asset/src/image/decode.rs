@@ -50,9 +50,9 @@ impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
 	}
 
 	#[profiling::function]
-	fn decode_bcn_zstd_into(&self, src: &[u8], dst: &mut [u8]) -> io::Result<()> {
-		let written = zstd::bulk::decompress_to_buffer(src, dst)?;
-		assert_eq!(written, dst.len());
+	fn decode_bcn_zstd_into(&self, src: &[u8], mut dst: &mut [u8]) -> io::Result<()> {
+		zstd::stream::copy_decode(src, &mut dst)?;
+		assert_eq!(0, dst.len(), "all bytes written");
 		Ok(())
 	}
 

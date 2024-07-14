@@ -21,7 +21,7 @@ use std::mem;
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	profiling::scope!("Gltf::process");
 
-	let texture_encode_settings = EncodeSettings::embedded();
+	let texture_encode_settings = EncodeSettings::ultra_fast();
 	let pbr_materials = {
 		profiling::scope!("process materials");
 		gltf.materials()
