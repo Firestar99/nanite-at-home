@@ -15,6 +15,14 @@ impl CompressedIndices {
 		let f = |i| (self.0 >> (i * MESHLET_INDICES_BITS as usize)) & INDICES_MASK;
 		[f(0), f(1), f(2), f(3), f(4)]
 	}
+
+	pub fn from_values(values: [u32; INDICES_PER_WORD]) -> Self {
+		let mut out = 0;
+		for i in 0..INDICES_PER_WORD {
+			out |= (values[i] & INDICES_MASK) << (i * MESHLET_INDICES_BITS as usize);
+		}
+		Self(out)
+	}
 }
 
 impl Debug for CompressedIndices {
@@ -26,8 +34,8 @@ impl Debug for CompressedIndices {
 	}
 }
 
-const INDICES_PER_WORD: usize = 32 / MESHLET_INDICES_BITS as usize;
-const INDICES_MASK: u32 = (1 << MESHLET_INDICES_BITS) - 1;
+pub const INDICES_PER_WORD: usize = 32 / MESHLET_INDICES_BITS as usize;
+pub const INDICES_MASK: u32 = (1 << MESHLET_INDICES_BITS) - 1;
 
 // `t: T` is passed though to the function and its mainly used so BufferDescriptors can be passed though, as you can't
 // put them in a closure without rust-gpu compiling them as illegal function pointers
@@ -226,5 +234,19 @@ mod tests {
 			}
 			start += triangles;
 		}
+	}
+
+	#[test]
+	fn from_to_value() {
+		let test_array = |mul: u32, off: u32| {
+			let mut array = [0; INDICES_PER_WORD];
+			for i in 0..INDICES_PER_WORD {
+				array[i] = (i as u32 * mul + off) & INDICES_MASK;
+			}
+			assert_eq!(CompressedIndices::from_values(array).to_values(), array);
+		};
+		test_array(1, 0);
+		test_array(0, 42);
+		test_array(123, 90);
 	}
 }

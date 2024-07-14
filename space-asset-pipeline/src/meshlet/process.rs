@@ -19,7 +19,7 @@ use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
-	profiling::scope!("Gltf::process");
+	profiling::scope!("process");
 
 	let texture_encode_settings = EncodeSettings::ultra_fast();
 	let pbr_materials = {
@@ -83,8 +83,8 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	})
 }
 
-#[profiling::function]
 fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMeshDisk> {
+	profiling::scope!("process_mesh_primitive");
 	if primitive.mode() != Mode::Triangles {
 		Err(MeshletError::PrimitiveMustBeTriangleList)?;
 	}
