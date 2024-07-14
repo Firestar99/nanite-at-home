@@ -8,22 +8,19 @@ repository.workspace = true
 
 [dependencies]
 # my projects
+models = { workspace = true }
 space-asset = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
 
-# vulkan
+# device
 vulkano = { workspace = true }
 vulkano-shaders = { workspace = true }
 winit = { workspace = true }
 
 # async
-futures = { workspace = true }
-smol = { workspace = true }
-
-# model loader
-image = { workspace = true }
+async-std = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }

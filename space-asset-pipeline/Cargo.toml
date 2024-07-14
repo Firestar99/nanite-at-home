@@ -11,13 +11,15 @@ repository.workspace = true
 space-asset = { workspace = true, features = ["disk"] }
 
 # async
-futures = { workspace = true }
 rayon = { workspace = true }
 
 # model loader
 gltf = { workspace = true }
-image = { workspace = true }
+zune-image = { workspace = true }
 meshopt = { workspace = true }
+intel_tex_2 = { workspace = true }
+base64 = { workspace = true }
+urlencoding = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
@@ -28,6 +30,7 @@ memoffset = { workspace = true }
 # codegen
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
+proc-macro-crate = { workspace = true }
 
 # serde
 rkyv = { workspace = true }

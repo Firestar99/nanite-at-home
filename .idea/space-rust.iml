@@ -15,6 +15,7 @@
       <sourceFolder url="file://$MODULE_DIR$/space-asset-pipeline/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/models/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

@@ -10,18 +10,11 @@ repository.workspace = true
 # members
 vulkano-bindless-shaders = { workspace = true }
 
-# vulkan
+# device
 vulkano = { workspace = true }
-vulkano-shaders = { workspace = true }
-winit = { workspace = true }
 
 # async
 futures = { workspace = true }
-smol = { workspace = true }
-
-# codegen
-paste = { workspace = true }
-konst = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
@@ -35,7 +28,6 @@ profiling = { workspace = true }
 
 # other
 parking_lot = { workspace = true }
-parking_lot_core = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }

@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run asteroids" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package asteroids --bin asteroids" />
+    <option name="command" value="run --bin asteroids" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />

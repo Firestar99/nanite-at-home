@@ -15,8 +15,12 @@ vulkano-bindless-shaders = { workspace = true }
 # vulkan
 vulkano = { workspace = true, optional = true }
 
+# model loader
+zune-image = { workspace = true, optional = true }
+
 # async
 futures = { workspace = true, optional = true }
+async-std = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 
 # bytes and numbers
@@ -33,10 +37,11 @@ profiling = { workspace = true }
 
 # other
 static_assertions = { workspace = true }
+num_enum = { workspace = true }
 
 [features]
-disk = ["dep:rkyv", "dep:zstd"]
-runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon"]
+disk = ["dep:rkyv", "dep:zstd", "dep:zune-image"]
+runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon", "dep:async-std"]
 
 profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless?/profile-with-puffin"]
 profile-with-optick = ["profiling/profile-with-optick", "vulkano-bindless?/profile-with-optick"]

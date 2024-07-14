@@ -1,14 +1,17 @@
-use crate::meshlet::process::Gltf;
-use futures::executor::block_on;
-use std::path::PathBuf;
+use crate::gltf::Gltf;
+use crate::meshlet::merge::{merge_meshlets, MergeStrategy};
+use crate::meshlet::process::process_meshlets;
+use std::path::Path;
 
 const LANTERN_GLTF_PATH: &str = concat!(
 	env!("CARGO_MANIFEST_DIR"),
-	"/../asteroids/src/sample_scene/Lantern/glTF/Lantern.gltf"
+	"/../models/models/Lantern/glTF/Lantern.gltf"
 );
 
 #[test]
-fn test_lantern_gltf() {
-	let gltf = Gltf::open(PathBuf::from(LANTERN_GLTF_PATH)).unwrap();
-	let _scene = block_on(gltf.process()).unwrap();
+fn test_lantern_gltf() -> anyhow::Result<()> {
+	let gltf = Gltf::open(Path::new(LANTERN_GLTF_PATH))?;
+	let scene = process_meshlets(&gltf)?;
+	let _scene = merge_meshlets(scene, MergeStrategy::MergeSingleInstance)?;
+	Ok(())
 }
