@@ -1,8 +1,9 @@
 mod gpu {
+	use crate::material::pbr::vertex::{EncodedPbrVertex, PbrVertex};
 	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
 	use crate::meshlet::offset::MeshletOffset;
-	use crate::meshlet::vertex::{DrawVertex, EncodedDrawVertex};
+	use crate::meshlet::vertex::{DrawVertex, EncodedDrawVertex, MaterialVertexId};
 	use bytemuck_derive::AnyBitPattern;
 	use core::mem;
 	use core::ops::Deref;
@@ -59,8 +60,9 @@ mod gpu {
 		pub meshlets: Desc<R, Buffer<[MeshletData]>>,
 		pub draw_vertices: Desc<R, Buffer<[EncodedDrawVertex]>>,
 		pub triangles: Desc<R, Buffer<[CompressedIndices]>>,
-		pub pbr_material: PbrMaterial<R>,
 		pub num_meshlets: u32,
+		pub pbr_material: PbrMaterial<R>,
+		pub pbr_material_vertices: Desc<R, Buffer<[EncodedPbrVertex]>>,
 	}
 
 	impl<R: AliveDescRef> MeshletMesh<R> {
@@ -143,13 +145,37 @@ mod gpu {
 				})
 			}
 		}
+
+		pub fn load_pbr_material_vertex(&self, descriptors: &Descriptors, index: MaterialVertexId) -> PbrVertex {
+			self.mesh
+				.pbr_material_vertices
+				.access(descriptors)
+				.load(index.0 as usize)
+				.decode()
+		}
+
+		/// # Safety
+		/// index must be in bounds
+		pub unsafe fn load_pbr_material_vertex_unchecked(
+			&self,
+			descriptors: &Descriptors,
+			index: MaterialVertexId,
+		) -> PbrVertex {
+			unsafe {
+				self.mesh
+					.pbr_material_vertices
+					.access(descriptors)
+					.load_unchecked(index.0 as usize)
+					.decode()
+			}
+		}
 	}
 }
 pub use gpu::*;
 
 #[cfg(feature = "disk")]
 mod disk {
-	use crate::material::pbr::PbrMaterialDisk;
+	use crate::material::pbr::vertex::EncodedPbrVertex;
 	use crate::meshlet::indices::CompressedIndices;
 	use crate::meshlet::mesh::MeshletData;
 	use crate::meshlet::vertex::EncodedDrawVertex;
@@ -160,7 +186,8 @@ mod disk {
 		pub meshlets: Vec<MeshletData>,
 		pub draw_vertices: Vec<EncodedDrawVertex>,
 		pub triangles: Vec<CompressedIndices>,
-		pub pbr_material: PbrMaterialDisk,
+		pub pbr_material_vertices: Vec<EncodedPbrVertex>,
+		pub pbr_material_id: u32,
 	}
 }
 #[cfg(feature = "disk")]
@@ -168,6 +195,7 @@ pub use disk::*;
 
 #[cfg(feature = "runtime")]
 mod runtime {
+	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::mesh::{ArchivedMeshletMeshDisk, MeshletMesh};
 	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
 	use vulkano::Validated;
@@ -180,24 +208,31 @@ mod runtime {
 				meshlets: self.meshlets.to_strong(),
 				draw_vertices: self.draw_vertices.to_strong(),
 				triangles: self.triangles.to_strong(),
-				pbr_material: self.pbr_material.to_strong(),
 				num_meshlets: self.num_meshlets,
+				pbr_material: self.pbr_material.to_strong(),
+				pbr_material_vertices: self.pbr_material_vertices.to_strong(),
 			}
 		}
 	}
 
 	impl ArchivedMeshletMeshDisk {
-		pub async fn upload(&self, uploader: &Uploader) -> Result<MeshletMesh<RC>, Validated<UploadError>> {
+		pub async fn upload(
+			&self,
+			uploader: &Uploader,
+			pbr_materials: &Vec<PbrMaterial<RC>>,
+		) -> Result<MeshletMesh<RC>, Validated<UploadError>> {
 			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
 			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));
 			let triangles = uploader.upload_buffer_iter(self.triangles.iter().map(deserialize_infallible));
-			let pbr_material = self.pbr_material.upload(uploader);
+			let pbr_material_vertices =
+				uploader.upload_buffer_iter(self.pbr_material_vertices.iter().map(deserialize_infallible));
 			Ok(MeshletMesh {
 				meshlets: meshlets.await?.into(),
 				draw_vertices: draw_vertices.await?.into(),
-				pbr_material: pbr_material.await?,
 				triangles: triangles.await?.into(),
 				num_meshlets: self.meshlets.len() as u32,
+				pbr_material: pbr_materials.get(self.pbr_material_id as usize).unwrap().clone(),
+				pbr_material_vertices: pbr_material_vertices.await?.into(),
 			})
 		}
 	}

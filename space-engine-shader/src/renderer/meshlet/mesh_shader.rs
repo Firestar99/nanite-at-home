@@ -156,10 +156,7 @@ pub fn meshlet_mesh(
 			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
 			let position = transform_vertex(frame_data, instance, draw_vertex);
 			let vertex = InterpolationVertex {
-				pbr_vertex: meshlet
-					.mesh
-					.pbr_material
-					.load_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
+				pbr_vertex: meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
 				meshlet_debug_hue: GpuRng(meshlet_id).next_f32(),
 			};
 

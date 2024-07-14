@@ -2,17 +2,13 @@ use crate::gltf::Gltf;
 use crate::image::encode::{Encode, EncodeSettings};
 use crate::meshlet::error::MeshletError;
 use glam::{Vec2, Vec3};
-use gltf::Primitive;
+use gltf::{Material, Primitive};
 use space_asset::image::ImageType;
-use space_asset::material::pbr::vertex::PbrVertex;
+use space_asset::material::pbr::vertex::{EncodedPbrVertex, PbrVertex};
 use space_asset::material::pbr::PbrMaterialDisk;
 
 #[profiling::function]
-pub fn process_pbr_material(
-	gltf: &Gltf,
-	primitive: Primitive,
-	settings: EncodeSettings,
-) -> anyhow::Result<PbrMaterialDisk> {
+pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<Vec<EncodedPbrVertex>> {
 	let reader = primitive.reader(|b| gltf.buffer(b));
 	let vertices = reader
 		.read_tex_coords(0)
@@ -27,8 +23,15 @@ pub fn process_pbr_material(
 			.encode()
 		})
 		.collect();
+	Ok(vertices)
+}
 
-	let material = primitive.material();
+#[profiling::function]
+pub fn process_pbr_material(
+	gltf: &Gltf,
+	material: Material,
+	settings: EncodeSettings,
+) -> anyhow::Result<PbrMaterialDisk> {
 	let base_color = material
 		.pbr_metallic_roughness()
 		.base_color_texture()
@@ -54,7 +57,6 @@ pub fn process_pbr_material(
 		.map_err(|(_, err)| err)?;
 
 	Ok(PbrMaterialDisk {
-		vertices,
 		base_color,
 		base_color_factor: material.pbr_metallic_roughness().base_color_factor(),
 		normal,

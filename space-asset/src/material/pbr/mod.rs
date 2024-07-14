@@ -1,16 +1,13 @@
 pub mod vertex;
 
 mod gpu {
-	use crate::material::pbr::vertex::{EncodedPbrVertex, PbrVertex};
-	use crate::meshlet::vertex::MaterialVertexId;
 	use vulkano_bindless_macros::BufferContent;
-	use vulkano_bindless_shaders::descriptor::{AliveDescRef, Buffer, Desc, DescRef, Descriptors};
+	use vulkano_bindless_shaders::descriptor::{Desc, DescRef};
 	use vulkano_bindless_shaders::spirv_std::image::Image2d;
 
 	#[repr(C)]
 	#[derive(Copy, Clone, BufferContent)]
 	pub struct PbrMaterial<R: DescRef> {
-		pub vertices: Desc<R, Buffer<[EncodedPbrVertex]>>,
 		pub base_color: Desc<R, Image2d>,
 		pub base_color_factor: [f32; 4],
 		pub normal: Desc<R, Image2d>,
@@ -20,35 +17,16 @@ mod gpu {
 		pub metallic_factor: f32,
 		pub roughness_factor: f32,
 	}
-
-	impl<R: AliveDescRef> PbrMaterial<R> {
-		pub fn load_vertex(&self, descriptors: &Descriptors, index: MaterialVertexId) -> PbrVertex {
-			self.vertices.access(descriptors).load(index.0 as usize).decode()
-		}
-
-		/// # Safety
-		/// index must be in bounds
-		pub unsafe fn load_vertex_unchecked(&self, descriptors: &Descriptors, index: MaterialVertexId) -> PbrVertex {
-			unsafe {
-				self.vertices
-					.access(descriptors)
-					.load_unchecked(index.0 as usize)
-					.decode()
-			}
-		}
-	}
 }
 pub use gpu::*;
 
 #[cfg(feature = "disk")]
 mod disk {
 	use crate::image::{Image2DDisk, ImageType};
-	use crate::material::pbr::vertex::EncodedPbrVertex;
 	use rkyv::{Archive, Deserialize, Serialize};
 
 	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct PbrMaterialDisk {
-		pub vertices: Vec<EncodedPbrVertex>,
 		pub base_color: Option<Image2DDisk<{ ImageType::RGBA_COLOR as u32 }>>,
 		pub base_color_factor: [f32; 4],
 		pub normal: Option<Image2DDisk<{ ImageType::RG_VALUES as u32 }>>,
@@ -65,7 +43,7 @@ pub use disk::*;
 #[cfg(feature = "runtime")]
 mod runtime {
 	use crate::material::pbr::{ArchivedPbrMaterialDisk, PbrMaterial};
-	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
+	use crate::uploader::{UploadError, Uploader};
 	use vulkano::Validated;
 	use vulkano_bindless::descriptor::{RCDescExt, RC};
 	use vulkano_bindless_shaders::descriptor::reference::Strong;
@@ -73,7 +51,6 @@ mod runtime {
 	impl PbrMaterial<RC> {
 		pub fn to_strong(&self) -> PbrMaterial<Strong> {
 			PbrMaterial {
-				vertices: self.vertices.to_strong(),
 				base_color: self.base_color.to_strong(),
 				base_color_factor: self.base_color_factor,
 				normal: self.normal.to_strong(),
@@ -88,12 +65,10 @@ mod runtime {
 
 	impl ArchivedPbrMaterialDisk {
 		pub async fn upload(&self, uploader: &Uploader) -> Result<PbrMaterial<RC>, Validated<UploadError>> {
-			let vertices = uploader.upload_buffer_iter(self.vertices.iter().map(deserialize_infallible));
 			let base_color = self.base_color.as_ref().map(|tex| tex.upload(uploader));
 			let normal = self.normal.as_ref().map(|tex| tex.upload(uploader));
 			let omr = self.omr.as_ref().map(|tex| tex.upload(uploader));
 			Ok(PbrMaterial {
-				vertices: vertices.await?.into(),
 				base_color: uploader.await_or_white_texture(base_color).await?,
 				base_color_factor: self.base_color_factor,
 				normal: uploader.await_or_white_texture(normal).await?,

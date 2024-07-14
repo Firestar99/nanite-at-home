@@ -1,6 +1,6 @@
 use crate::gltf::Gltf;
 use crate::image::encode::EncodeSettings;
-use crate::material::pbr::process_pbr_material;
+use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
 use glam::{Affine3A, Mat3, Vec3};
 use gltf::mesh::Mode;
@@ -20,6 +20,16 @@ use std::mem;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	profiling::scope!("Gltf::process");
+
+	let texture_encode_settings = EncodeSettings::embedded();
+	let pbr_materials = {
+		profiling::scope!("process materials");
+		gltf.materials()
+			.collect::<Vec<_>>()
+			.into_par_iter()
+			.map(|mat| process_pbr_material(gltf, mat, texture_encode_settings))
+			.collect::<Result<Vec<_>, _>>()?
+	};
 
 	let meshes_primitives = {
 		profiling::scope!("process meshes");
@@ -54,19 +64,22 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 		mesh2instance
 	};
 
+	let mesh2instances = meshes_primitives
+		.into_iter()
+		.zip(mesh2instance.into_iter())
+		.flat_map(|(mesh_primitives, instances)| {
+			mesh_primitives
+				.into_iter()
+				.map(move |primitive| MeshletMesh2InstanceDisk {
+					mesh: primitive,
+					instances: instances.clone(),
+				})
+		})
+		.collect();
+
 	Ok(MeshletSceneDisk {
-		mesh2instances: meshes_primitives
-			.into_iter()
-			.zip(mesh2instance.into_iter())
-			.flat_map(|(mesh_primitives, instances)| {
-				mesh_primitives
-					.into_iter()
-					.map(move |primitive| MeshletMesh2InstanceDisk {
-						mesh: primitive,
-						instances: instances.clone(),
-					})
-			})
-			.collect(),
+		pbr_materials,
+		mesh2instances,
 	})
 }
 
@@ -150,6 +163,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 		draw_vertices,
 		meshlets,
 		triangles,
-		pbr_material: process_pbr_material(gltf, primitive, EncodeSettings::embedded())?,
+		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone())?,
+		pbr_material_id: primitive.material().index().unwrap() as u32,
 	})
 }

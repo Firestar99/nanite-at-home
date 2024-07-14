@@ -33,6 +33,7 @@ pub use disk::*;
 
 #[cfg(feature = "runtime")]
 mod runtime {
+	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::mesh2instance::{ArchivedMeshletMesh2InstanceDisk, MeshletMesh2Instance};
 	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
 	use std::ops::Deref;
@@ -54,8 +55,12 @@ mod runtime {
 	}
 
 	impl ArchivedMeshletMesh2InstanceDisk {
-		pub async fn upload(&self, uploader: &Uploader) -> Result<MeshletMesh2InstanceCpu, Validated<UploadError>> {
-			let mesh = self.mesh.upload(uploader);
+		pub async fn upload(
+			&self,
+			uploader: &Uploader,
+			pbr_materials: &Vec<PbrMaterial<RC>>,
+		) -> Result<MeshletMesh2InstanceCpu, Validated<UploadError>> {
+			let mesh = self.mesh.upload(uploader, pbr_materials);
 			let instances = uploader.upload_buffer_iter(self.instances.iter().map(deserialize_infallible));
 			let mesh = uploader.upload_buffer_data(mesh.await?.to_strong());
 			Ok(MeshletMesh2InstanceCpu {
