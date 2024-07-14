@@ -135,6 +135,16 @@ opt-level = 3
 incremental = true
 codegen-units = 256
 
+# my additions to make build scripts always run in release, even on dev
+[profile.dev]
+incremental = true
+codegen-units = 256
+
+[profile.dev.build-override]
+opt-level = 3
+incremental = true
+codegen-units = 256
+
 
 
 # Optimize certain crates even in dev mode:
