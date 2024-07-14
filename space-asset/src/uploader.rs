@@ -71,16 +71,14 @@ impl Uploader {
 		uploader
 	}
 
-	pub async fn upload_buffer_data<T: BufferStruct>(
+	pub fn upload_buffer_data<T: BufferStruct>(
 		&self,
 		data: T,
-	) -> Result<RCDesc<Buffer<T>>, Validated<UploadError>> {
-		let upload_buffer;
-		let backing_refs;
-		unsafe {
+	) -> impl Future<Output = Result<RCDesc<Buffer<T>>, Validated<UploadError>>> + '_ {
+		let result: Result<_, Validated<UploadError>> = (|| unsafe {
 			profiling::scope!("data upload to host buffer");
 			let mut meta = StrongMetadataCpu::new(&self.bindless, Metadata);
-			upload_buffer = VBuffer::from_data(
+			let upload_buffer = VBuffer::from_data(
 				self.memory_allocator.clone(),
 				BufferCreateInfo {
 					usage: BufferUsage::TRANSFER_SRC,
@@ -93,25 +91,24 @@ impl Uploader {
 				T::write_cpu(data, &mut meta),
 			)
 			.map_err(UploadError::from_validated)?;
-			backing_refs = meta.into_backing_refs().map_err(UploadError::from_validated)?;
-		}
-		self.upload_buffer(upload_buffer, backing_refs).await
+			let backing_refs = meta.into_backing_refs().map_err(UploadError::from_validated)?;
+			Ok(self.upload_buffer(upload_buffer, backing_refs))
+		})();
+		async { result?.await }
 	}
 
-	pub async fn upload_buffer_iter<T: BufferStruct, I>(
+	pub fn upload_buffer_iter<T: BufferStruct, I>(
 		&self,
 		iter: I,
-	) -> Result<RCDesc<Buffer<[T]>>, Validated<UploadError>>
+	) -> impl Future<Output = Result<RCDesc<Buffer<[T]>>, Validated<UploadError>>> + '_
 	where
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
 	{
-		let upload_buffer;
-		let backing_refs;
-		unsafe {
+		let result: Result<_, Validated<UploadError>> = (|| unsafe {
 			profiling::scope!("iter upload to host buffer");
 			let mut meta = StrongMetadataCpu::new(&self.bindless, Metadata);
-			upload_buffer = VBuffer::from_iter(
+			let upload_buffer = VBuffer::from_iter(
 				self.memory_allocator.clone(),
 				BufferCreateInfo {
 					usage: BufferUsage::TRANSFER_SRC,
@@ -124,37 +121,38 @@ impl Uploader {
 				iter.into_iter().map(|i| T::write_cpu(i, &mut meta)),
 			)
 			.map_err(UploadError::from_validated)?;
-			backing_refs = meta.into_backing_refs().map_err(UploadError::from_validated)?;
-		}
-		self.upload_buffer(upload_buffer, backing_refs).await
+			let backing_refs = meta.into_backing_refs().map_err(UploadError::from_validated)?;
+			Ok(self.upload_buffer(upload_buffer, backing_refs))
+		})();
+		async { result?.await }
 	}
 
-	async fn upload_buffer<T: BufferContent + ?Sized>(
+	fn upload_buffer<T: BufferContent + ?Sized>(
 		&self,
 		upload_buffer: Subbuffer<T::Transfer>,
 		backing_refs: StrongBackingRefs,
-	) -> Result<RCDesc<Buffer<T>>, Validated<UploadError>>
+	) -> impl Future<Output = Result<RCDesc<Buffer<T>>, Validated<UploadError>>> + '_
 	where
 		T::Transfer: BufferContents,
 	{
-		let perm_buffer;
-		{
-			profiling::scope!("buffer copy cmd");
-			perm_buffer = VBuffer::new_slice::<u8>(
-				self.memory_allocator.clone(),
-				BufferCreateInfo {
-					usage: BufferUsage::TRANSFER_DST | BufferUsage::STORAGE_BUFFER,
-					..BufferCreateInfo::default()
-				},
-				AllocationCreateInfo {
-					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-					..AllocationCreateInfo::default()
-				},
-				upload_buffer.size(),
-			)
-			.map_err(UploadError::from_validated)?;
-
+		let result: Result<_, Validated<UploadError>> = (|| {
+			let perm_buffer;
 			let cmd = {
+				profiling::scope!("buffer copy cmd record");
+				perm_buffer = VBuffer::new_slice::<u8>(
+					self.memory_allocator.clone(),
+					BufferCreateInfo {
+						usage: BufferUsage::TRANSFER_DST | BufferUsage::STORAGE_BUFFER,
+						..BufferCreateInfo::default()
+					},
+					AllocationCreateInfo {
+						memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+						..AllocationCreateInfo::default()
+					},
+					upload_buffer.size(),
+				)
+				.map_err(UploadError::from_validated)?;
+
 				let mut cmd = RecordingCommandBuffer::new(
 					self.cmd_allocator.clone(),
 					self.transfer_queue.queue_family_index(),
@@ -169,18 +167,23 @@ impl Uploader {
 					.map_err(UploadError::from_validated)?;
 				cmd.end().map_err(UploadError::from_validated)?
 			};
-			cmd.execute(self.transfer_queue.clone())
+			profiling::scope!("buffer copy cmd submit");
+			let fence = cmd
+				.execute(self.transfer_queue.clone())
 				.map_err(UploadError::from_validated)?
 				.then_signal_fence_and_flush()
-				.map_err(UploadError::from_validated)?
-		}
-		.await
-		.map_err(UploadError::from_validated)?;
+				.map_err(UploadError::from_validated)?;
+			Ok((perm_buffer, fence))
+		})();
 
-		Ok(self
-			.bindless
-			.buffer()
-			.alloc_slot(perm_buffer.reinterpret(), backing_refs))
+		async {
+			let (perm_buffer, fence) = result?;
+			fence.await.map_err(UploadError::from_validated)?;
+			Ok(self
+				.bindless
+				.buffer()
+				.alloc_slot(perm_buffer.reinterpret(), backing_refs))
+		}
 	}
 
 	pub fn white_texture(&self) -> Desc<RC, Image2d> {

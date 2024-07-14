@@ -198,6 +198,7 @@ mod runtime {
 	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::mesh::{ArchivedMeshletMeshDisk, MeshletMesh};
 	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
+	use std::future::Future;
 	use vulkano::Validated;
 	use vulkano_bindless::descriptor::{RCDescExt, RC};
 	use vulkano_bindless_shaders::descriptor::reference::Strong;
@@ -216,24 +217,26 @@ mod runtime {
 	}
 
 	impl ArchivedMeshletMeshDisk {
-		pub async fn upload(
-			&self,
-			uploader: &Uploader,
-			pbr_materials: &Vec<PbrMaterial<RC>>,
-		) -> Result<MeshletMesh<RC>, Validated<UploadError>> {
+		pub fn upload<'a>(
+			&'a self,
+			uploader: &'a Uploader,
+			pbr_materials: &'a Vec<PbrMaterial<RC>>,
+		) -> impl Future<Output = Result<MeshletMesh<RC>, Validated<UploadError>>> + 'a {
 			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
 			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));
 			let triangles = uploader.upload_buffer_iter(self.triangles.iter().map(deserialize_infallible));
 			let pbr_material_vertices =
 				uploader.upload_buffer_iter(self.pbr_material_vertices.iter().map(deserialize_infallible));
-			Ok(MeshletMesh {
-				meshlets: meshlets.await?.into(),
-				draw_vertices: draw_vertices.await?.into(),
-				triangles: triangles.await?.into(),
-				num_meshlets: self.meshlets.len() as u32,
-				pbr_material: pbr_materials.get(self.pbr_material_id as usize).unwrap().clone(),
-				pbr_material_vertices: pbr_material_vertices.await?.into(),
-			})
+			async {
+				Ok(MeshletMesh {
+					meshlets: meshlets.await?.into(),
+					draw_vertices: draw_vertices.await?.into(),
+					triangles: triangles.await?.into(),
+					num_meshlets: self.meshlets.len() as u32,
+					pbr_material: pbr_materials.get(self.pbr_material_id as usize).unwrap().clone(),
+					pbr_material_vertices: pbr_material_vertices.await?.into(),
+				})
+			}
 		}
 	}
 }

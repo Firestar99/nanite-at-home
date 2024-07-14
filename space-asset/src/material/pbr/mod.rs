@@ -44,6 +44,7 @@ pub use disk::*;
 mod runtime {
 	use crate::material::pbr::{ArchivedPbrMaterialDisk, PbrMaterial};
 	use crate::uploader::{UploadError, Uploader};
+	use std::future::Future;
 	use vulkano::Validated;
 	use vulkano_bindless::descriptor::{RCDescExt, RC};
 	use vulkano_bindless_shaders::descriptor::reference::Strong;
@@ -64,20 +65,25 @@ mod runtime {
 	}
 
 	impl ArchivedPbrMaterialDisk {
-		pub async fn upload(&self, uploader: &Uploader) -> Result<PbrMaterial<RC>, Validated<UploadError>> {
+		pub fn upload<'a>(
+			&'a self,
+			uploader: &'a Uploader,
+		) -> impl Future<Output = Result<PbrMaterial<RC>, Validated<UploadError>>> + 'a {
 			let base_color = self.base_color.as_ref().map(|tex| tex.upload(uploader));
 			let normal = self.normal.as_ref().map(|tex| tex.upload(uploader));
 			let omr = self.omr.as_ref().map(|tex| tex.upload(uploader));
-			Ok(PbrMaterial {
-				base_color: uploader.await_or_white_texture(base_color).await?,
-				base_color_factor: self.base_color_factor,
-				normal: uploader.await_or_white_texture(normal).await?,
-				normal_scale: self.normal_scale,
-				omr: uploader.await_or_white_texture(omr).await?,
-				occlusion_strength: self.occlusion_strength,
-				metallic_factor: self.metallic_factor,
-				roughness_factor: self.roughness_factor,
-			})
+			async {
+				Ok(PbrMaterial {
+					base_color: uploader.await_or_white_texture(base_color).await?,
+					base_color_factor: self.base_color_factor,
+					normal: uploader.await_or_white_texture(normal).await?,
+					normal_scale: self.normal_scale,
+					omr: uploader.await_or_white_texture(omr).await?,
+					occlusion_strength: self.occlusion_strength,
+					metallic_factor: self.metallic_factor,
+					roughness_factor: self.roughness_factor,
+				})
+			}
 		}
 	}
 }

@@ -36,6 +36,7 @@ mod runtime {
 	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::mesh2instance::{ArchivedMeshletMesh2InstanceDisk, MeshletMesh2Instance};
 	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
+	use std::future::Future;
 	use std::ops::Deref;
 	use vulkano::Validated;
 	use vulkano_bindless::descriptor::RC;
@@ -55,21 +56,23 @@ mod runtime {
 	}
 
 	impl ArchivedMeshletMesh2InstanceDisk {
-		pub async fn upload(
-			&self,
-			uploader: &Uploader,
-			pbr_materials: &Vec<PbrMaterial<RC>>,
-		) -> Result<MeshletMesh2InstanceCpu, Validated<UploadError>> {
+		pub fn upload<'a>(
+			&'a self,
+			uploader: &'a Uploader,
+			pbr_materials: &'a Vec<PbrMaterial<RC>>,
+		) -> impl Future<Output = Result<MeshletMesh2InstanceCpu, Validated<UploadError>>> + 'a {
 			let mesh = self.mesh.upload(uploader, pbr_materials);
 			let instances = uploader.upload_buffer_iter(self.instances.iter().map(deserialize_infallible));
-			let mesh = uploader.upload_buffer_data(mesh.await?.to_strong());
-			Ok(MeshletMesh2InstanceCpu {
-				mesh2instance: MeshletMesh2Instance {
-					mesh: mesh.await?.into(),
-					instances: instances.await?.into(),
-				},
-				num_meshlets: self.mesh.meshlets.len() as u32,
-			})
+			async {
+				let mesh = uploader.upload_buffer_data(mesh.await?.to_strong());
+				Ok(MeshletMesh2InstanceCpu {
+					mesh2instance: MeshletMesh2Instance {
+						mesh: mesh.await?.into(),
+						instances: instances.await?.into(),
+					},
+					num_meshlets: self.mesh.meshlets.len() as u32,
+				})
+			}
 		}
 	}
 }
