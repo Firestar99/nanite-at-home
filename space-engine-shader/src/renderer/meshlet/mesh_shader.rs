@@ -228,19 +228,25 @@ fn material_eval(
 	frame_data: FrameData,
 	out_vertex: InterpolationVertex,
 ) -> Vec4 {
-	let point_lights = [PointLight {
-		position: Vec3::new(1.8, -1., -2.7),
-		color: Vec3::new(1., 1., 1.) * 20.,
-	}];
-	// let directional_lights = [DirectionalLight {
-	// 	direction: Vec3::new(0.3, 1., 0.1).normalize(),
+	// let point_lights = [PointLight {
+	// 	position: Vec3::new(1.8, -2., -2.7),
 	// 	color: Vec3::new(1., 1., 1.) * 20.,
 	// }];
-	let directional_lights = [DirectionalLight {
-		direction: Vec3::new(0., 1., 0.).normalize(),
-		color: Vec3::new(0., 0., 0.),
+	// let directional_lights = [DirectionalLight {
+	// 	direction: Vec3::new(0., 1., 0.).normalize(),
+	// 	color: Vec3::new(0., 0., 0.),
+	// }];
+
+	let point_lights = [PointLight {
+		position: Vec3::new(0., -0., -0.),
+		color: Vec3::new(1., 1., 1.) * 0.,
 	}];
-	let ambient_light = Vec3::splat(0.1);
+	let directional_lights = [DirectionalLight {
+		direction: Vec3::new(-0.3, -1., -0.1).normalize(),
+		color: Vec3::new(1., 1., 1.) * 20.,
+	}];
+
+	let ambient_light = Vec3::splat(0.02);
 
 	let mesh = param.mesh2instance.mesh.access(descriptors).load();
 	let sampler = param.sampler.access(descriptors);
@@ -251,7 +257,7 @@ fn material_eval(
 		out_vertex.world_pos,
 		out_vertex.normals,
 		out_vertex.tex_coords,
-		frame_data.camera.transform.translation.into(),
+		Vec3::from(frame_data.camera.transform.translation),
 		point_lights,
 		directional_lights,
 		ambient_light,

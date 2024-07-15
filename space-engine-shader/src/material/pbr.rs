@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use crate::material::light::{DirectionalLight, PointLight};
 use core::f32::consts::PI;
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
@@ -18,7 +20,8 @@ pub fn pbr_material_eval<const D: usize, const P: usize>(
 	directional_lights: [DirectionalLight; D],
 	ambient_light: Vec3,
 ) -> Vec4 {
-	let n = normal;
+	let n = Vec3::new(normal.x, -normal.y, normal.z);
+	// let n = normal;
 	let v = (camera_pos - world_pos).normalize();
 
 	let base_color: Vec4 = pbr_material.base_color.access(descriptors).sample(sampler, tex_coords)
@@ -28,8 +31,10 @@ pub fn pbr_material_eval<const D: usize, const P: usize>(
 
 	let omr: Vec4 = pbr_material.omr.access(descriptors).sample(sampler, tex_coords);
 	// let ao = omr.x * pbr_material.occlusion_strength;
-	let metallic = omr.y * pbr_material.metallic_factor;
-	let roughness = omr.z * pbr_material.roughness_factor;
+	// let metallic = omr.y * pbr_material.metallic_factor;
+	// let roughness = omr.z * pbr_material.roughness_factor;
+	let metallic = 0.;
+	let roughness = 1.;
 
 	let mut lo = Vec3::ZERO;
 	for i in 0..point_lights.len() {
@@ -61,6 +66,7 @@ fn evaluate_light(albedo: Vec3, metallic: f32, roughness: f32, n: Vec3, v: Vec3,
 
 	let f0 = Vec3::lerp(Vec3::splat(0.04), albedo, metallic);
 	let f = fresnel_schlick(Vec3::dot(h, v).max(0.0), f0);
+	let f = Vec3::splat(0.);
 
 	let k_specular = f;
 	let k_diffuse = (Vec3::splat(1.0) - k_specular) * (1.0 - metallic);
