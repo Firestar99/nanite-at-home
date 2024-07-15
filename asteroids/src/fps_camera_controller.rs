@@ -3,6 +3,7 @@ use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
 use num_traits::clamp;
 use std::f32;
 use std::f32::consts::PI;
+use std::ops::{Deref, DerefMut};
 use winit::dpi::PhysicalPosition;
 use winit::event::ElementState::Pressed;
 use winit::event::{DeviceEvent, Event, KeyEvent, MouseScrollDelta, WindowEvent};
@@ -10,35 +11,48 @@ use winit::keyboard::PhysicalKey::Code;
 
 #[derive(Copy, Clone)]
 pub struct FpsCameraController {
+	pub state: State,
+	pub move_speed: Vec3,
+	pub mouse_speed: f32,
+}
+
+#[derive(Copy, Clone, Default)]
+pub struct State {
 	pub position: Vec3,
 	pub rotation_yaw: f32,
 	pub rotation_pitch: f32,
 	/// should not be pub: used for remembering key states
 	movement_keys: [[bool; 2]; 3],
-
-	pub move_speed: Vec3,
-	pub mouse_speed: f32,
-
 	pub move_speed_exponent: i32,
+}
+
+impl Deref for FpsCameraController {
+	type Target = State;
+
+	fn deref(&self) -> &Self::Target {
+		&self.state
+	}
+}
+
+impl DerefMut for FpsCameraController {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.state
+	}
 }
 
 impl Default for FpsCameraController {
 	fn default() -> Self {
-		Self::new()
+		Self {
+			state: State::default(),
+			move_speed: Vec3::splat(1.),
+			mouse_speed: 0.02,
+		}
 	}
 }
 
 impl FpsCameraController {
 	pub fn new() -> Self {
-		Self {
-			position: Vec3::default(),
-			rotation_yaw: 0.,
-			rotation_pitch: 0.,
-			movement_keys: Default::default(),
-			move_speed: Vec3::splat(1.),
-			mouse_speed: 0.03,
-			move_speed_exponent: 0,
-		}
+		Self::default()
 	}
 
 	pub fn handle_input(&mut self, event: &Event<()>) {
@@ -64,7 +78,7 @@ impl FpsCameraController {
 					ShiftLeft => self.movement_keys[1][1] = value,
 					KeyW => self.movement_keys[2][0] = value,
 					KeyS => self.movement_keys[2][1] = value,
-					Home => self.position = Vec3::default(),
+					Home => self.state = State::default(),
 					_ => {}
 				}
 			}
