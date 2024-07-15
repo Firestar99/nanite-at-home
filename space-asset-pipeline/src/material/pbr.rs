@@ -1,6 +1,7 @@
 use crate::gltf::Gltf;
 use crate::image::encode::{Encode, EncodeSettings};
 use crate::meshlet::error::MeshletError;
+use anyhow::Context;
 use glam::{Vec2, Vec3};
 use gltf::{Material, Primitive};
 use space_asset::image::ImageType;
@@ -36,25 +37,31 @@ pub fn process_pbr_material(
 		.pbr_metallic_roughness()
 		.base_color_texture()
 		.map(|tex| gltf.image::<{ ImageType::RGBA_COLOR as u32 }>(tex.texture().source()))
-		.transpose()?
+		.transpose()
+		.context("baseColor load")?
 		.map(|tex| tex.into_optimal_encode(settings))
 		.transpose()
-		.map_err(|(_, err)| err)?;
+		.map_err(|(_, err)| err)
+		.context("baseColor encode")?;
 	let normal = material
 		.normal_texture()
 		.map(|tex| gltf.image::<{ ImageType::RG_VALUES as u32 }>(tex.texture().source()))
-		.transpose()?
+		.transpose()
+		.context("normal load")?
 		.map(|tex| tex.into_optimal_encode(settings))
 		.transpose()
-		.map_err(|(_, err)| err)?;
+		.map_err(|(_, err)| err)
+		.context("normal encode")?;
 	let omr = material
 		.pbr_metallic_roughness()
 		.metallic_roughness_texture()
 		.map(|tex| gltf.image::<{ ImageType::RGBA_LINEAR as u32 }>(tex.texture().source()))
-		.transpose()?
+		.transpose()
+		.context("ocr load")?
 		.map(|tex| tex.into_optimal_encode(settings))
 		.transpose()
-		.map_err(|(_, err)| err)?;
+		.map_err(|(_, err)| err)
+		.context("ocr encode")?;
 
 	Ok(PbrMaterialDisk {
 		base_color,
