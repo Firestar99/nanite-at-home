@@ -1,3 +1,7 @@
+use crate::delta_time::DeltaTimeTimer;
+use crate::fps_camera_controller::FpsCameraController;
+use crate::sample_scenes::sample_scenes;
+use crate::scene_selector::SceneSelector;
 use glam::{Mat4, UVec3};
 use space_engine::device::init::Plugin;
 use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
@@ -21,10 +25,6 @@ use vulkano::sync::GpuFuture;
 use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
 use winit::event::{Event, WindowEvent};
 use winit::window::{CursorGrabMode, WindowBuilder};
-
-use crate::delta_time::DeltaTimeTimer;
-use crate::fps_camera_controller::FpsCameraController;
-use crate::sample_scene::load_scene;
 
 pub enum Debugger {
 	None,
@@ -89,8 +89,13 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let scenes = load_scene(&init).await;
-	render_pipeline_main.meshlet_task.scenes.lock().extend(scenes);
+	let mut scene_selector = SceneSelector::new(init.clone(), sample_scenes(), |scene| {
+		let mut guard = render_pipeline_main.meshlet_task.scenes.lock();
+		guard.clear();
+		guard.push(scene);
+	})
+	.await
+	.unwrap();
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
@@ -102,6 +107,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
+			scene_selector.handle_input(&event).await.unwrap();
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..

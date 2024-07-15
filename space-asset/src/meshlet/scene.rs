@@ -35,6 +35,7 @@ mod disk {
 		}
 	}
 
+	#[derive(Copy, Clone, Debug)]
 	pub struct MeshletSceneFile<'a> {
 		path: &'a str,
 	}
