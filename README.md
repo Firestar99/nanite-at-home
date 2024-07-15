@@ -1,42 +1,36 @@
 # Meshlet Renderer - not quite Nanite yet
 
-Requires a mesh shader capable GPU, which are all raytracing capable GPUs plus a few more. Specifically requires an Nvidia RTX 16XX or 20XX or greater. Unfortunately, it currently does not run on AMD Windows due to a recently introduced driver incompatibility I haven't had the time to fix.
+Requires a mesh shader capable GPU, which are all raytracing capable GPUs plus a few more. Specifically an Nvidia RTX 16XX or 20XX or greater. Unfortunately, it currently does not run on AMD Windows due to a recently introduced driver incompatibility I haven't had the time to fix.
+
+Once started, use the windows key to undock your mouse and maximize the window. Then use T/G to cycle through all available scenes.
+
+Lighting may look a little weird as there are no shadows and light calculations are a little broken as well.
 
 ## Controls
 
-* Tab / E - switch between cursor and camera movement
 * WASD - to move
 * Space / Shift - Up and down
 * Scrollwheel - adjust Speed
 * Home - reset camera
-* Settings panel has additional unimportant keybinds listed
+* E - cycle through rendering modes: With light, light mixed with meshlet coloring, just meshlet coloring, just color, normals, texture coordinates
+* T/G - cycle through all the available scenes
 
 ## Scenes
 
-Good-looking scenes:
+Showcase scenes:
+* Amazon Lumberyard Bistro, CC-BY 4.0, 2017 Amazon Lumberyard
+* Sponza: CRYENGINE Limited License Agreement
+* San Miguel: Outdoors Restaurant from Mexico, CC BY 3.0, Guillermo M. Leal Llaguno
 
-* conference: A conference room, "Credit required", Anat Grynberg and Greg Ward
-* salle de bain: A Bathroom, CC BY 3.0, Nacimus Ait Cherif
-* san miguel: Outdoors Restaurant from Mexico, CC BY 3.0, Guillermo M. Leal Llaguno
+Minecraft scenes:
+* Rungholt: CC BY 3.0, kescha
+* Lost Empire: CC BY 3.0, 2011 Morgan McGuire
+* Vokselia spawn: CC BY 3.0, 2011 Vokselia
 
-Technical and testing scenes:
+Object scenes:
+* Damaged Helmet: CC BY 4.0, ctxwing, theblueturtle_
+* Lantern: CC0 1.0 Universal, Microsoft, Frank Galligan
+* Head: CC BY 3.0, Lee Perry-Smith, www.triplegangers.com, Morgan McGuire
+* Sibenik: Marko Dabrovic, Kenzie Lamar, Morgan McGuire
 
-* Cornell Box: CC BY 3.0, 2009 Morgan McGuire. Original scene has an "area light", but accumulating light with an area light is hard. So we also have a simpler scene with a "point light" instead.
-* Testbox: A custom-made scene for testing.
-
-All downloaded scenes can be found on https://casual-effects.com/data/
-
-## Settings
-
-* Mode:
-    * Indirect trace direct trace: Uses path tracing for everything, result can be quite noisy.
-    * indirect ic direct trace (default): Uses an irradiance cache to accumulate indirect light, combined with path tracing for direct illumination for the best result.
-    * indirect ic: Shows only the indirect light accumulated via irradiance cache.
-    * direct trace: Shows only direct lighting via path tracing.
-    * direct ic: Direct lighting via the irradiance cache.
-    * debug pattern: A debug pattern to judge the size of individual accumulation cells.
-* Clear Irradiance Cache: clears the irradiance cache so that light accumulation has to start from scratch
-* Traces per Frame: how many traces should be sent out per frame and probe, higher values trade worse performance for faster accumulation
-* Accumulation Quality: adjusts accumulation factor to match traces per frame so the image quality remains mostly constant, higher values trade worse accumulation speed for better final image quality
-* Accumulation Factor: the percentage by which the newly sampled values should be mixed with the previous values, higher values trade accumulation speed for better final image quality
-* Normal Offset Factor: When sampling some geometry, the light will be sampled from the irradiance cache at the position the geometry was hit plus the normal of the geometry times this factor
+All downloaded scenes can be found either on https://casual-effects.com/data/ or https://github.com/KhronosGroup/glTF-Sample-Assets
