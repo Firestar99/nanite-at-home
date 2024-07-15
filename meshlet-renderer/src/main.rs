@@ -1,5 +1,5 @@
-use asteroids::main_loop::run;
 use async_std::task::block_on;
+use meshlet_renderer::main_loop::run;
 use space_engine::event_loop_init;
 
 fn main() {
