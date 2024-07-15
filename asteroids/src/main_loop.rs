@@ -92,7 +92,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let scenes = Vec::from([
 		models::local::gamescom::bistro::Bistro,
 		models::local::gamescom::Sponza::glTF::Sponza,
-		// models::local::gamescom::San_Miguel::san_miguel,
+		models::local::gamescom::San_Miguel::san_miguel,
 		models::local::gamescom::rungholt::rungholt,
 		models::local::gamescom::lost_empire::lost_empire,
 		models::local::gamescom::vokselia_spawn::vokselia_spawn,
