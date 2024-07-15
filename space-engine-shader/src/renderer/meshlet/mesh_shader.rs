@@ -215,6 +215,9 @@ pub fn meshlet_frag_meshlet_id(
 		DebugSettings::VertexNormals => Vec4::from((out_vertex.pbr_vertex.decode().normals, 1.)),
 		DebugSettings::VertexTexCoords => Vec4::from((out_vertex.pbr_vertex.decode().tex_coords, 0., 1.)),
 	};
+	if frag_color.w < 0.01 {
+		spirv_std::arch::kill();
+	}
 }
 
 fn material_eval(descriptors: &Descriptors, param: &Params<'static>, out_vertex: InterpolationVertex) -> Vec4 {
