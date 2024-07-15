@@ -89,7 +89,18 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let scenes = Vec::from([models::Lantern::glTF::Lantern]);
+	let scenes = Vec::from([
+		models::local::gamescom::bistro::Bistro,
+		models::local::gamescom::Sponza::glTF::Sponza,
+		// models::local::gamescom::San_Miguel::san_miguel,
+		models::local::gamescom::rungholt::rungholt,
+		models::local::gamescom::lost_empire::lost_empire,
+		models::local::gamescom::vokselia_spawn::vokselia_spawn,
+		models::local::gamescom::DamagedHelmet::glTF::DamagedHelmet,
+		models::Lantern::glTF::Lantern,
+		models::local::gamescom::lpshead::head,
+		models::local::gamescom::sibenik::sibenik,
+	]);
 	let mut scene_selector = SceneSelector::new(init.clone(), scenes, |scene| {
 		let mut guard = render_pipeline_main.meshlet_task.scenes.lock();
 		guard.clear();
