@@ -31,7 +31,7 @@ impl EncodeSettings {
 	pub fn very_fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_very_fast_settings()),
+			bc7: Some(bc7::alpha_very_fast_settings()),
 			zstd_level: 3,
 		}
 	}
@@ -39,7 +39,7 @@ impl EncodeSettings {
 	pub fn fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_fast_settings()),
+			bc7: Some(bc7::alpha_fast_settings()),
 			zstd_level: 3,
 		}
 	}
@@ -47,7 +47,7 @@ impl EncodeSettings {
 	pub fn basic() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_basic_settings()),
+			bc7: Some(bc7::alpha_basic_settings()),
 			zstd_level: 3,
 		}
 	}
@@ -55,7 +55,7 @@ impl EncodeSettings {
 	pub fn slow() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_slow_settings()),
+			bc7: Some(bc7::alpha_slow_settings()),
 			zstd_level: 5,
 		}
 	}
