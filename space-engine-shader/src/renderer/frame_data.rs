@@ -6,6 +6,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum DebugSettings {
 	None,
+	BaseColor,
 	MeshletIdOverlay,
 	MeshletId,
 	VertexNormals,

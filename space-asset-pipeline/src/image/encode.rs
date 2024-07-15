@@ -23,7 +23,7 @@ impl EncodeSettings {
 	pub fn ultra_fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::alpha_ultra_fast_settings()),
+			bc7: Some(bc7::opaque_ultra_fast_settings()),
 			zstd_level: 3,
 		}
 	}

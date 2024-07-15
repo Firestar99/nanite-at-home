@@ -2548,6 +2548,7 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "glam",
+ "libm",
  "num-derive",
  "num-traits",
  "num_enum",
