@@ -24,7 +24,7 @@ use winit::window::{CursorGrabMode, WindowBuilder};
 
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
-use crate::sample_scene::load_scene;
+use crate::sample_scene::SceneSelector;
 
 pub enum Debugger {
 	None,
@@ -89,8 +89,14 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let scenes = load_scene(&init).await;
-	render_pipeline_main.meshlet_task.scenes.lock().extend(scenes);
+	let scenes = Vec::from([models::Lantern::glTF::Lantern]);
+	let mut scene_selector = SceneSelector::new(init.clone(), scenes, |scene| {
+		let mut guard = render_pipeline_main.meshlet_task.scenes.lock();
+		guard.clear();
+		guard.push(scene);
+	})
+	.await
+	.unwrap();
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
@@ -102,6 +108,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
+			scene_selector.handle_input(&event).await.unwrap();
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
