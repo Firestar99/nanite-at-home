@@ -1,3 +1,4 @@
+use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scenes::sample_scenes;
@@ -99,6 +100,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
+	let mut debug_settings_selector = DebugSettingsSelector::new();
 	let mut last_frame = DeltaTimeTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
@@ -107,6 +109,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
+			debug_settings_selector.handle_input(&event);
 			scene_selector.handle_input(&event).await.unwrap();
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
@@ -137,6 +140,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 				Mat4::perspective_rh(90. / 360. * 2. * PI, image.x as f32 / image.y as f32, 0.1, 1000.),
 				camera_controls.update(delta_time),
 			),
+			debug_settings: debug_settings_selector.get().into(),
 		};
 
 		renderer_main.as_mut().unwrap().new_frame(

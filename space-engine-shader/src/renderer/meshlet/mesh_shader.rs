@@ -1,8 +1,8 @@
-use crate::renderer::frame_data::FrameData;
+use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
 use crate::utils::hsv::hsv2rgb_smooth;
 use glam::{vec3, UVec3, Vec3, Vec4, Vec4Swizzles};
-use space_asset::material::pbr::vertex::PbrVertex;
+use space_asset::material::pbr::vertex::EncodedPbrVertex;
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::MeshletMesh;
 use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
@@ -110,8 +110,9 @@ fn draw_meshlet(
 }
 
 #[allow(dead_code)]
+#[derive(Copy, Clone)]
 struct InterpolationVertex {
-	pbr_vertex: PbrVertex,
+	pbr_vertex: EncodedPbrVertex,
 	meshlet_debug_hue: f32,
 }
 
@@ -156,7 +157,9 @@ pub fn meshlet_mesh(
 			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
 			let position = transform_vertex(frame_data, instance, draw_vertex);
 			let vertex = InterpolationVertex {
-				pbr_vertex: meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
+				pbr_vertex: meshlet
+					.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id)
+					.encode(),
 				meshlet_debug_hue: GpuRng(meshlet_id).next_f32(),
 			};
 
@@ -198,18 +201,35 @@ pub fn meshlet_frag_meshlet_id(
 	out_vertex: InterpolationVertex,
 	frag_color: &mut Vec4,
 ) {
-	let meshlet_debug = hsv2rgb_smooth(vec3(out_vertex.meshlet_debug_hue, 1., 1.));
-	// *frag_color = Vec4::from((out_vertex.material.normals, 1.));
-	// *frag_color = Vec4::from((out_vertex.material.tex_coords, 0., 1.));
+	let debug_settings = param.frame_data.access(descriptors).load().debug_settings();
+	*frag_color = match debug_settings {
+		DebugSettings::None => material_eval(descriptors, param, out_vertex),
+		DebugSettings::MeshletIdOverlay => {
+			let base_color = material_eval(descriptors, param, out_vertex);
+			Vec4::from((
+				Vec3::lerp(base_color.xyz(), meshlet_debug_color(out_vertex), 0.1),
+				base_color.w,
+			))
+		}
+		DebugSettings::MeshletId => Vec4::from((meshlet_debug_color(out_vertex), 1.)),
+		DebugSettings::VertexNormals => Vec4::from((out_vertex.pbr_vertex.decode().normals, 1.)),
+		DebugSettings::VertexTexCoords => Vec4::from((out_vertex.pbr_vertex.decode().tex_coords, 0., 1.)),
+	};
+}
 
+fn material_eval(descriptors: &Descriptors, param: &Params<'static>, out_vertex: InterpolationVertex) -> Vec4 {
 	let mesh = param.mesh2instance.mesh.access(descriptors).load();
 	let sampler = param.sampler.access(descriptors);
+	let pbr_vertex = out_vertex.pbr_vertex.decode();
 	let base_color: Vec4 = mesh
 		.pbr_material
 		.base_color
 		.access(descriptors)
-		.sample(*sampler, out_vertex.pbr_vertex.tex_coords)
+		.sample(*sampler, pbr_vertex.tex_coords)
 		* Vec4::from(mesh.pbr_material.base_color_factor);
+	base_color
+}
 
-	*frag_color = Vec4::from((Vec3::lerp(base_color.xyz(), meshlet_debug, 0.1), base_color.w));
+fn meshlet_debug_color(out_vertex: InterpolationVertex) -> Vec3 {
+	hsv2rgb_smooth(vec3(out_vertex.meshlet_debug_hue, 1., 1.))
 }

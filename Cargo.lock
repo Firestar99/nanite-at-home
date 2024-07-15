@@ -2550,6 +2550,7 @@ dependencies = [
  "glam",
  "num-derive",
  "num-traits",
+ "num_enum",
  "space-asset",
  "spirv-std",
  "static_assertions",
