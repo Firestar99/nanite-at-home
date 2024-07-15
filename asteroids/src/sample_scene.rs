@@ -3,8 +3,7 @@ use space_asset::uploader::Uploader;
 use space_engine::renderer::Init;
 use std::io;
 use std::sync::Arc;
-use winit::event::ElementState::Pressed;
-use winit::event::{Event, KeyEvent, WindowEvent};
+use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
 use winit::keyboard::PhysicalKey::Code;
 
 pub struct SceneSelector<'a, F>
@@ -52,7 +51,7 @@ where
 					WindowEvent::KeyboardInput {
 						event:
 							KeyEvent {
-								state: Pressed,
+								state: ElementState::Pressed,
 								physical_key: Code { 0: code },
 								..
 							},
