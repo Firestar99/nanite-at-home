@@ -1,6 +1,8 @@
 use crate::gltf::GltfImageError;
 use intel_tex_2::{bc4, bc5, bc7, RSurface, RgSurface, RgbaSurface};
-use space_asset::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression};
+use space_asset::image::{
+	DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression, Size,
+};
 
 #[derive(Copy, Clone)]
 pub struct EncodeSettings {
@@ -120,7 +122,9 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Err(GltfImageError::EncodingFromBCn);
 		}
-		let size = self.metadata.size;
+		let src_size = self.metadata.size;
+		let size = Size::new(src_size.width & !3, src_size.height & !3);
+		let stride = src_size.width * self.metadata.image_type().channels();
 		let bcn = match self.metadata.image_type() {
 			ImageType::R_VALUES => {
 				if settings.bc4_bc5 {
@@ -128,7 +132,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 					bc4::compress_blocks(&RSurface {
 						height: size.height,
 						width: size.width,
-						stride: size.width * 1,
+						stride,
 						data: &self.decode()?,
 					})
 				} else {
@@ -141,7 +145,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 					bc5::compress_blocks(&RgSurface {
 						height: size.height,
 						width: size.width,
-						stride: size.width * 2,
+						stride,
 						data: &self.decode()?,
 					})
 				} else {
@@ -156,7 +160,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 						&RgbaSurface {
 							height: size.height,
 							width: size.width,
-							stride: size.width * 4,
+							stride,
 							data: &self.decode()?,
 						},
 					)
