@@ -74,8 +74,8 @@ impl FpsCameraController {
 				match code {
 					KeyA => self.movement_keys[0][0] = value,
 					KeyD => self.movement_keys[0][1] = value,
-					Space => self.movement_keys[1][0] = value,
-					ShiftLeft => self.movement_keys[1][1] = value,
+					ShiftLeft => self.movement_keys[1][0] = value,
+					Space => self.movement_keys[1][1] = value,
 					KeyW => self.movement_keys[2][0] = value,
 					KeyS => self.movement_keys[2][1] = value,
 					Home => self.state = State::default(),
@@ -87,8 +87,8 @@ impl FpsCameraController {
 				..
 			} => {
 				const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
-				let delta = DVec2::from(*delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST;
-				self.rotation_yaw -= delta.x;
+				let delta = DVec2::from(*delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST * -1.;
+				self.rotation_yaw = (self.rotation_yaw + delta.x) % (2. * PI);
 				self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
 			}
 			Event::WindowEvent {
