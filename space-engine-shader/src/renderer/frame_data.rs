@@ -8,6 +8,7 @@ pub enum DebugSettings {
 	None,
 	MeshletIdOverlay,
 	MeshletId,
+	BaseColor,
 	VertexNormals,
 	VertexTexCoords,
 }

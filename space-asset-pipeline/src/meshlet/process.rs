@@ -2,7 +2,7 @@ use crate::gltf::Gltf;
 use crate::image::encode::EncodeSettings;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
-use glam::{Affine3A, Mat3, Vec3};
+use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
 use meshopt::VertexDataAdapter;
@@ -48,13 +48,7 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	let mesh2instance = {
 		profiling::scope!("instance transformations");
 		let scene = gltf.default_scene().ok_or(MeshletError::NoDefaultScene)?;
-		let node_transforms = gltf.absolute_node_transformations(
-			&scene,
-			Affine3A::from_mat3(Mat3 {
-				y_axis: Vec3::new(0., -1., 0.),
-				..Mat3::default()
-			}),
-		);
+		let node_transforms = gltf.absolute_node_transformations(&scene, Affine3A::default());
 		let mut mesh2instance = (0..gltf.meshes().len()).map(|_| Vec::new()).collect::<Vec<_>>();
 		for node in gltf.nodes() {
 			if let Some(mesh) = node.mesh() {
