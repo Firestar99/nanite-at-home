@@ -1,6 +1,5 @@
 use crate::material::light::{DirectionalLight, PointLight};
 use crate::renderer::frame_data::{DebugSettings, FrameData};
-use crate::utils::affine::AffineTranspose;
 use crate::utils::gpurng::GpuRng;
 use crate::utils::hsv::hsv2rgb_smooth;
 use glam::{vec3, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles};
@@ -159,11 +158,11 @@ pub fn meshlet_mesh(
 			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
 			let position = frame_data
 				.camera
-				.transform_vertex(instance.transform(), draw_vertex.position);
+				.transform_vertex(instance.transform, draw_vertex.position);
 			let pbr_vertex = meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id);
 			let normals = frame_data
 				.camera
-				.transform_normal(instance.transform(), pbr_vertex.normals);
+				.transform_normal(instance.transform, pbr_vertex.normals);
 			let vertex = InterpolationVertex {
 				world_pos: position.world_space,
 				normals: normals.world_space,
@@ -258,7 +257,7 @@ fn material_eval(
 		out_vertex.world_pos,
 		out_vertex.normals,
 		out_vertex.tex_coords,
-		Vec3::from(frame_data.camera.transform.transpose().translation),
+		frame_data.camera.transform.translation(),
 		point_lights,
 		directional_lights,
 		ambient_light,

@@ -9,6 +9,7 @@ use gltf::Primitive;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use space_asset::affine_transform::AffineTransform;
 use space_asset::meshlet::indices::triangle_indices_write_vec;
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
@@ -65,7 +66,9 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 		let mut mesh2instance = (0..gltf.meshes().len()).map(|_| Vec::new()).collect::<Vec<_>>();
 		for node in gltf.nodes() {
 			if let Some(mesh) = node.mesh() {
-				mesh2instance[mesh.index()].push(MeshletInstance::new(node_transforms[node.index()]));
+				mesh2instance[mesh.index()].push(MeshletInstance::new(AffineTransform::new(
+					node_transforms[node.index()],
+				)));
 			}
 		}
 		mesh2instance

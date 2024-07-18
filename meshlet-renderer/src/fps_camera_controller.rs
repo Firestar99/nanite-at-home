@@ -119,7 +119,6 @@ impl FpsCameraController {
 		let quat_yaw = Quat::from_axis_angle(vec3(0., 1., 0.), self.rotation_yaw);
 		self.position += quat_yaw * movement;
 		let quat = quat_yaw * Quat::from_axis_angle(vec3(1., 0., 0.), self.rotation_pitch);
-		// Affine3A::from_translation(self.position) * Affine3A::from_quat(quat)
-		Affine3A::from_quat(quat.conjugate()) * Affine3A::from_translation(-self.position)
+		Affine3A::from_translation(self.position) * Affine3A::from_quat(quat)
 	}
 }

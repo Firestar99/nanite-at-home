@@ -39,6 +39,9 @@ profiling = { workspace = true }
 static_assertions = { workspace = true }
 num_enum = { workspace = true }
 
+[target.'cfg(not(target_arch = "spirv"))'.dependencies]
+glam = { workspace = true, features = ["rkyv"] }
+
 [features]
 disk = ["dep:rkyv", "dep:zstd", "dep:zune-image"]
 runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon", "dep:async-std"]

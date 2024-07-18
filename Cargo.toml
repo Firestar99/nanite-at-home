@@ -47,8 +47,8 @@ vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "94
 winit = { version = "0.29" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "663548172b733eea169181221de58118733147d0", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "663548172b733eea169181221de58118733147d0" }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "0324852d4c2fc220adaf8b35bc0d000cc2f02f73", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "0324852d4c2fc220adaf8b35bc0d000cc2f02f73" }
 
 # async
 async-std = "1.12.0"
@@ -65,7 +65,7 @@ prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
 
 # bytes and numbers
-glam = { version = "0.25", default-features = false, features = ["libm", "bytemuck"] }
+glam = { version = "0.28", default-features = false, features = ["libm", "bytemuck"] }
 libm = { version = "0.2", default-features = false }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
@@ -74,7 +74,7 @@ num-derive = "0.3"
 memoffset = "0.9.1"
 
 # serde
-rkyv = { version = "0.7", default-features = false, features = ["std", "size_64"] }
+rkyv = { version = "0.7", default-features = false, features = ["std", "size_32"] }
 zstd = { version = "0.13" }
 
 # image

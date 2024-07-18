@@ -1,6 +1,6 @@
 use crate::renderer::camera::Camera;
-use bytemuck_derive::AnyBitPattern;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use vulkano_bindless_macros::BufferContent;
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -18,7 +18,7 @@ impl DebugSettings {
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 
-#[derive(Copy, Clone, AnyBitPattern)]
+#[derive(Copy, Clone, BufferContent)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
 pub struct FrameData {

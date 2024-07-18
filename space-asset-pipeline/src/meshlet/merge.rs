@@ -1,4 +1,3 @@
-use glam::Affine3A;
 use space_asset::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
@@ -42,7 +41,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 		);
 		mesh2instances.push(MeshletMesh2InstanceDisk {
 			mesh: merged_mesh,
-			instances: Vec::from([MeshletInstance::new(Affine3A::IDENTITY)]),
+			instances: Vec::from([MeshletInstance::default()]),
 		});
 	}
 
@@ -71,7 +70,7 @@ fn merge<'a>(
 		out.pbr_material_vertices.extend(mesh.pbr_material_vertices.iter());
 
 		let draw_start = out.draw_vertices.len();
-		let transform = instance.transform();
+		let transform = instance.transform.affine;
 		out.draw_vertices.extend(mesh.draw_vertices.iter().map(|v| {
 			let v = v.decode();
 			DrawVertex {
