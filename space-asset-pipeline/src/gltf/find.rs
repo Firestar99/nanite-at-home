@@ -49,6 +49,7 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 				out_path,
 			}
 		})
+		.filter(|s| !s.relative.iter().any(|c| c.starts_with(".") && c != "." && c != ".."))
 		.collect::<Vec<_>>())
 }
 
