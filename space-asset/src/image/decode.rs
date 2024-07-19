@@ -5,7 +5,7 @@ use zune_image::codecs::png::zune_core::colorspace::ColorSpace;
 use zune_image::codecs::png::zune_core::options::DecoderOptions;
 use zune_image::errors::ImageErrors;
 
-impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Image2DDisk<IMAGE_TYPE> {
 	pub fn decode(&self) -> Result<Vec<u8>, ImageErrors> {
 		self.metadata.decode(&self.bytes)
 	}
@@ -15,7 +15,7 @@ impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
 	}
 }
 
-impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> ArchivedImage2DDisk<IMAGE_TYPE> {
 	pub fn decode(&self) -> Result<Vec<u8>, ImageErrors> {
 		self.metadata.deserialize().decode(&self.bytes)
 	}
@@ -25,7 +25,7 @@ impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
 	}
 }
 
-impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 	pub(super) fn decode(&self, src: &[u8]) -> Result<Vec<u8>, ImageErrors> {
 		let mut vec = vec![0; self.decompressed_bytes()];
 		self.decode_into(src, &mut *vec)?;

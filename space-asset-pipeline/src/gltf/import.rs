@@ -101,7 +101,7 @@ impl From<io::Error> for GltfImageError {
 
 impl Gltf {
 	#[profiling::function]
-	pub fn image<const DATA_TYPE: u32>(&self, image: Image) -> Result<Image2DDisk<DATA_TYPE>, GltfImageError> {
+	pub fn image<const IMAGE_TYPE: u32>(&self, image: Image) -> Result<Image2DDisk<IMAGE_TYPE>, GltfImageError> {
 		let scheme = match image.source() {
 			Source::View { view, .. } => {
 				let buffer = self.buffer(view.buffer()).ok_or(GltfImageError::MissingBuffer)?;

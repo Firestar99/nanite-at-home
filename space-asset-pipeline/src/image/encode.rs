@@ -83,7 +83,7 @@ pub trait Encode: Sized {
 	fn to_bc_encode(&self, settings: EncodeSettings) -> Result<Self, GltfImageError>;
 }
 
-impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 	#[profiling::function]
 	fn to_optimal_encode(&self, settings: EncodeSettings) -> Result<Option<Self>, GltfImageError> {
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
