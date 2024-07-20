@@ -58,10 +58,25 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 
 	#[profiling::function]
 	fn decode_embedded_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
+		let req_channels = self.image_type().channels() as usize;
+
 		let mut image = zune_image::image::Image::read(ZCursor::new(src), DecoderOptions::new_fast())?;
 		assert_eq!(image.frames_len(), 1);
-		image.convert_color(ColorSpace::RGBA)?;
-		image.frames_ref()[0].flatten_into(dst)?;
+		image.convert_color(if req_channels == 4 {
+			ColorSpace::RGBA
+		} else if req_channels <= 3 {
+			ColorSpace::RGB
+		} else {
+			unreachable!("Unsupported channel count {}", req_channels)
+		})?;
+
+		let frame = &mut image.frames_mut()[0];
+		assert!(frame.channels_vec().len() >= req_channels);
+		for _ in 0..(frame.channels_vec().len() - req_channels) {
+			frame.channels_vec().pop();
+		}
+		assert_eq!(frame.channels_vec().len(), req_channels);
+		frame.flatten_into(dst)?;
 		Ok(())
 	}
 }
