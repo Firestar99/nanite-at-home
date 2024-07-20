@@ -4,7 +4,7 @@ use space_asset::image::{
 	DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression, Size,
 };
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct EncodeSettings {
 	bc4_bc5: bool,
 	bc7: Option<bc7::EncodeSettings>,
@@ -68,11 +68,11 @@ impl Default for EncodeSettings {
 }
 
 pub trait Encode: Sized {
-	fn into_optimal_encode(self, settings: EncodeSettings) -> Result<Self, (Self, GltfImageError)> {
+	fn into_optimal_encode(self, settings: EncodeSettings) -> Result<Self, GltfImageError> {
 		match self.to_optimal_encode(settings) {
 			Ok(Some(e)) => Ok(e),
 			Ok(None) => Ok(self),
-			Err(err) => Err((self, err)),
+			Err(err) => Err(err),
 		}
 	}
 
@@ -113,7 +113,7 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 				size: self.metadata.size,
 				disk_compression: DiskImageCompression::None,
 			},
-			bytes: self.decode()?.into_boxed_slice(),
+			bytes: self.decode()?.into(),
 		})
 	}
 
@@ -169,7 +169,7 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 				}
 			}
 		};
-		let bytes = zstd::bulk::compress(&bcn, settings.zstd_level)?.into_boxed_slice();
+		let bytes = zstd::bulk::compress(&bcn, settings.zstd_level)?.into();
 		Ok(Image2DDisk {
 			metadata: Image2DMetadata {
 				size,

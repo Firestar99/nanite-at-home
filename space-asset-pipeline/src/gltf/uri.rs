@@ -2,12 +2,11 @@
 
 use base64::Engine;
 use std::borrow::Cow;
-use std::fs::File;
+use std::fmt::{Debug, Formatter};
 use std::io;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub enum Scheme<'a> {
 	/// simple slice
 	Slice(&'a [u8]),
@@ -60,18 +59,13 @@ impl<'a> Scheme<'a> {
 	}
 }
 
-pub enum SchemeReader<'a> {
-	Slice(&'a [u8]),
-	Base64(base64::read::DecoderReader<'static, base64::engine::GeneralPurpose, &'a [u8]>),
-	File(File),
-}
-
-impl<'a> Read for SchemeReader<'a> {
-	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+impl<'a> Debug for Scheme<'a> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
-			SchemeReader::Slice(slice) => slice.read(buf),
-			SchemeReader::Base64(read) => read.read(buf),
-			SchemeReader::File(read) => read.read(buf),
+			Scheme::Slice(slice) => write!(f, "Scheme(slice len: {})", slice.len()),
+			Scheme::Base64(slice) => write!(f, "Scheme(base64 len: ~{})", base64::decoded_len_estimate(slice.len())),
+			Scheme::AbsoluteFile(path) => write!(f, "Scheme(file://{})", path),
+			Scheme::RelativeFile(path) => write!(f, "Scheme(./{})", path),
 		}
 	}
 }

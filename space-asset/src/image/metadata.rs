@@ -23,6 +23,8 @@ pub enum ImageType {
 }
 
 impl ImageType {
+	pub const IMAGE_TYPE_COUNT: u32 = 4;
+
 	pub const fn try_from_const(value: u32) -> ImageType {
 		[
 			ImageType::R_VALUES,

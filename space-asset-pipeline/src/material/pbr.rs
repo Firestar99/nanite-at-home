@@ -1,7 +1,6 @@
 use crate::gltf::Gltf;
-use crate::image::encode::{Encode, EncodeSettings};
+use crate::image::image_processor::{ImageAccessor, ImageProcessor, RequestedImage};
 use crate::meshlet::error::MeshletError;
-use anyhow::Context;
 use glam::{Vec2, Vec3};
 use gltf::{Material, Primitive};
 use space_asset::image::ImageType;
@@ -27,50 +26,46 @@ pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result
 	Ok(vertices)
 }
 
-#[profiling::function]
-pub fn process_pbr_material(
-	gltf: &Gltf,
-	material: Material,
-	settings: EncodeSettings,
-) -> anyhow::Result<PbrMaterialDisk> {
-	let base_color = material
-		.pbr_metallic_roughness()
-		.base_color_texture()
-		.map(|tex| gltf.image::<{ ImageType::RGBA_COLOR as u32 }>(tex.texture().source()))
-		.transpose()
-		.context("baseColor load")?
-		.map(|tex| tex.into_optimal_encode(settings))
-		.transpose()
-		.map_err(|(_, err)| err)
-		.context("baseColor encode")?;
-	let normal = material
-		.normal_texture()
-		.map(|tex| gltf.image::<{ ImageType::RG_VALUES as u32 }>(tex.texture().source()))
-		.transpose()
-		.context("normal load")?
-		.map(|tex| tex.into_optimal_encode(settings))
-		.transpose()
-		.map_err(|(_, err)| err)
-		.context("normal encode")?;
-	let omr = material
-		.pbr_metallic_roughness()
-		.metallic_roughness_texture()
-		.map(|tex| gltf.image::<{ ImageType::RGBA_LINEAR as u32 }>(tex.texture().source()))
-		.transpose()
-		.context("ocr load")?
-		.map(|tex| tex.into_optimal_encode(settings))
-		.transpose()
-		.map_err(|(_, err)| err)
-		.context("ocr encode")?;
+pub struct ProcessedPbrMaterial<'a> {
+	material: Material<'a>,
+	base_color: Option<RequestedImage<{ ImageType::RGBA_COLOR as u32 }>>,
+	normal: Option<RequestedImage<{ ImageType::RG_VALUES as u32 }>>,
+	omr: Option<RequestedImage<{ ImageType::RGBA_LINEAR as u32 }>>,
+}
 
-	Ok(PbrMaterialDisk {
-		base_color,
-		base_color_factor: material.pbr_metallic_roughness().base_color_factor(),
-		normal,
-		normal_scale: material.normal_texture().map_or(1., |n| n.scale()),
-		omr,
-		occlusion_strength: 0.,
-		roughness_factor: material.pbr_metallic_roughness().roughness_factor(),
-		metallic_factor: material.pbr_metallic_roughness().metallic_factor(),
+#[profiling::function]
+pub fn process_pbr_material<'a>(
+	_gltf: &Gltf,
+	image_processor: &ImageProcessor<'_>,
+	material: Material<'a>,
+) -> anyhow::Result<ProcessedPbrMaterial<'a>> {
+	Ok(ProcessedPbrMaterial {
+		base_color: material
+			.pbr_metallic_roughness()
+			.base_color_texture()
+			.map(|tex| image_processor.image::<{ ImageType::RGBA_COLOR as u32 }>(tex.texture().source())),
+		normal: material
+			.normal_texture()
+			.map(|tex| image_processor.image::<{ ImageType::RG_VALUES as u32 }>(tex.texture().source())),
+		omr: material
+			.pbr_metallic_roughness()
+			.metallic_roughness_texture()
+			.map(|tex| image_processor.image::<{ ImageType::RGBA_LINEAR as u32 }>(tex.texture().source())),
+		material,
 	})
+}
+
+impl<'a> ProcessedPbrMaterial<'a> {
+	pub fn finish(self, image_accessor: &ImageAccessor) -> anyhow::Result<PbrMaterialDisk> {
+		Ok(PbrMaterialDisk {
+			base_color: self.base_color.map(|tex| tex.get(image_accessor)),
+			base_color_factor: self.material.pbr_metallic_roughness().base_color_factor(),
+			normal: self.normal.map(|tex| tex.get(image_accessor)),
+			normal_scale: self.material.normal_texture().map_or(1., |n| n.scale()),
+			omr: self.omr.map(|tex| tex.get(image_accessor)),
+			occlusion_strength: 0.,
+			roughness_factor: self.material.pbr_metallic_roughness().roughness_factor(),
+			metallic_factor: self.material.pbr_metallic_roughness().metallic_factor(),
+		})
+	}
 }
