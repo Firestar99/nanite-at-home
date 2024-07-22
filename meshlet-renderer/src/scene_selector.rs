@@ -1,5 +1,5 @@
-use space_asset::meshlet::scene::{MeshletSceneCpu, MeshletSceneFile};
-use space_asset::uploader::Uploader;
+use space_asset_disk::meshlet::scene::{MeshletSceneCpu, MeshletSceneFile};
+use space_asset_disk::uploader::Uploader;
 use space_engine::renderer::Init;
 use std::io;
 use std::sync::Arc;

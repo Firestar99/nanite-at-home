@@ -4,7 +4,7 @@ use crate::meshlet::merge::{merge_meshlets, MergeStrategy};
 use crate::meshlet::process::process_meshlets;
 use anyhow::Context;
 use rayon::prelude::*;
-use space_asset::meshlet::scene::EXPORT_FOLDER_NAME;
+use space_asset_disk::meshlet::scene::EXPORT_FOLDER_NAME;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::{env, fs};

@@ -1,5 +1,5 @@
 [package]
-name = "space-asset-pipeline"
+name = "space-asset-preprocess"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-space-asset = { workspace = true, features = ["disk"] }
+space-asset-disk = { workspace = true, features = ["disk"] }
 
 # async
 rayon = { workspace = true }

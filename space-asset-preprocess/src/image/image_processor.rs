@@ -4,7 +4,7 @@ use anyhow::Context;
 use gltf::image::Source;
 use gltf::Image;
 use rayon::prelude::*;
-use space_asset::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
+use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
 use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;

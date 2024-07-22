@@ -1,5 +1,5 @@
 [package]
-name = "space-asset"
+name = "space-asset-disk"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -40,5 +40,6 @@ static_assertions = { workspace = true }
 num_enum = { workspace = true }
 
 [features]
+default = ["disk"]
 disk = ["dep:rkyv", "glam/rkyv", "dep:zstd", "dep:zune-image"]
 runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon", "dep:async-std"]

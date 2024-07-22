@@ -2,7 +2,7 @@ use crate::renderer::meshlet::mesh_pipeline::MeshDrawPipeline;
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
 use parking_lot::Mutex;
-use space_asset::meshlet::scene::MeshletSceneCpu;
+use space_asset_disk::meshlet::scene::MeshletSceneCpu;
 use std::sync::Arc;
 use vulkano::command_buffer::{
 	CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsage, RecordingCommandBuffer, RenderingAttachmentInfo,

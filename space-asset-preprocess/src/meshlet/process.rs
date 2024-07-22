@@ -9,15 +9,15 @@ use gltf::Primitive;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
-use space_asset::affine_transform::AffineTransform;
-use space_asset::meshlet::indices::triangle_indices_write_vec;
-use space_asset::meshlet::instance::MeshletInstance;
-use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
-use space_asset::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
-use space_asset::meshlet::offset::MeshletOffset;
-use space_asset::meshlet::scene::MeshletSceneDisk;
-use space_asset::meshlet::vertex::{DrawVertex, MaterialVertexId};
-use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use space_asset_disk::affine_transform::AffineTransform;
+use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
+use space_asset_disk::meshlet::instance::MeshletInstance;
+use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
+use space_asset_disk::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
+use space_asset_disk::meshlet::offset::MeshletOffset;
+use space_asset_disk::meshlet::scene::MeshletSceneDisk;
+use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
+use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {

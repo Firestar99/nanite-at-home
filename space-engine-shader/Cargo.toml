@@ -11,7 +11,7 @@ crate-type = ["lib", "dylib"]
 
 [dependencies]
 # members
-space-asset = { workspace = true }
+space-asset-disk = { workspace = true }
 vulkano-bindless-macros = { workspace = true }
 vulkano-bindless-shaders = { workspace = true }
 

@@ -1031,7 +1031,7 @@ dependencies = [
 [[package]]
 name = "glam"
 version = "0.29.0"
-source = "git+https://github.com/Firestar99/glam-rs.git?rev=9e4bb5da04b0c294a1a0faca1d365a224b65f5bd#9e4bb5da04b0c294a1a0faca1d365a224b65f5bd"
+source = "git+https://github.com/Firestar99/glam-rs.git?rev=27649a451790a3fc8a34f021937ea3fcb45b5ff5#27649a451790a3fc8a34f021937ea3fcb45b5ff5"
 dependencies = [
  "bytemuck",
  "libm",
@@ -1499,8 +1499,7 @@ dependencies = [
  "profiling",
  "puffin_http",
  "smallvec",
- "space-asset",
- "space-asset-pipeline",
+ "space-asset-disk",
  "space-engine",
  "space-engine-shader",
  "static_assertions",
@@ -1544,8 +1543,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "profiling",
- "space-asset",
- "space-asset-pipeline",
+ "space-asset-disk",
+ "space-asset-preprocess",
 ]
 
 [[package]]
@@ -2461,7 +2460,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "space-asset"
+name = "space-asset-disk"
 version = "0.1.0"
 dependencies = [
  "async-std",
@@ -2483,7 +2482,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "space-asset-pipeline"
+name = "space-asset-preprocess"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2504,7 +2503,7 @@ dependencies = [
  "rayon",
  "rkyv",
  "smallvec",
- "space-asset",
+ "space-asset-disk",
  "static_assertions",
  "urlencoding",
  "walkdir",
@@ -2528,7 +2527,7 @@ dependencies = [
  "paste",
  "profiling",
  "smallvec",
- "space-asset",
+ "space-asset-disk",
  "space-engine-shader",
  "space-engine-shader-builder",
  "static_assertions",
@@ -2549,7 +2548,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "space-asset",
+ "space-asset-disk",
  "spirv-std",
  "static_assertions",
  "vulkano-bindless-macros",

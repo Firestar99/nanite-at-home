@@ -1,10 +1,10 @@
-use space_asset::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
-use space_asset::meshlet::instance::MeshletInstance;
-use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
-use space_asset::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
-use space_asset::meshlet::offset::MeshletOffset;
-use space_asset::meshlet::scene::MeshletSceneDisk;
-use space_asset::meshlet::vertex::{DrawVertex, MaterialVertexId};
+use space_asset_disk::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
+use space_asset_disk::meshlet::instance::MeshletInstance;
+use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
+use space_asset_disk::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
+use space_asset_disk::meshlet::offset::MeshletOffset;
+use space_asset_disk::meshlet::scene::MeshletSceneDisk;
+use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use std::collections::HashMap;
 
 pub enum MergeStrategy {

@@ -3,9 +3,9 @@ use crate::image::image_processor::{ImageAccessor, ImageProcessor, RequestedImag
 use crate::meshlet::error::MeshletError;
 use glam::{Vec2, Vec3};
 use gltf::{Material, Primitive};
-use space_asset::image::ImageType;
-use space_asset::material::pbr::vertex::PbrVertex;
-use space_asset::material::pbr::PbrMaterialDisk;
+use space_asset_disk::image::ImageType;
+use space_asset_disk::material::pbr::vertex::PbrVertex;
+use space_asset_disk::material::pbr::PbrMaterialDisk;
 
 #[profiling::function]
 pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<Vec<PbrVertex>> {

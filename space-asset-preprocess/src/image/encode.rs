@@ -1,6 +1,6 @@
 use crate::gltf::GltfImageError;
 use intel_tex_2::{bc4, bc5, bc7, RSurface, RgSurface, RgbaSurface};
-use space_asset::image::{
+use space_asset_disk::image::{
 	DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression, Size,
 };
 

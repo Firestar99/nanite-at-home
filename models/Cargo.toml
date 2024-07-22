@@ -7,9 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-space-asset = { workspace = true, features = ["disk"] }
+space-asset-disk = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
-space-asset-pipeline = { workspace = true }
+space-asset-preprocess = { workspace = true }
 profiling = { workspace = true }

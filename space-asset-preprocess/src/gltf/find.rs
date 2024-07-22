@@ -55,7 +55,7 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 
 #[profiling::function]
 pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> Result<TokenStream, ModNodeError> {
-	let found_crate = crate_name("space-asset").unwrap();
+	let found_crate = crate_name("space-asset-disk").unwrap();
 	let crate_name = match &found_crate {
 		FoundCrate::Itself => "crate",
 		FoundCrate::Name(name) => name,
