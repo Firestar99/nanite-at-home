@@ -6,6 +6,8 @@
       </value>
     </option>
     <Markdown>
+      <option name="MAX_LINES_AROUND_BLOCK_ELEMENTS" value="0" />
+      <option name="MAX_LINES_BETWEEN_PARAGRAPHS" value="0" />
       <option name="WRAP_TEXT_IF_LONG" value="false" />
       <option name="WRAP_TEXT_INSIDE_BLOCKQUOTES" value="false" />
     </Markdown>
