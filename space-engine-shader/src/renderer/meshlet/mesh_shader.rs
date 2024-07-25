@@ -1,12 +1,11 @@
-use crate::renderer::frame_data::FrameData;
+use crate::material::light::{DirectionalLight, PointLight};
+use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
 use crate::utils::hsv::hsv2rgb_smooth;
-use glam::{vec3, UVec3, Vec3, Vec4, Vec4Swizzles};
-use space_asset::material::pbr::vertex::PbrVertex;
+use glam::{vec3, UVec3, Vec2, Vec3, Vec4, Vec4Swizzles};
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::MeshletMesh;
 use space_asset::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_asset::meshlet::vertex::DrawVertex;
 use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_non_uniform_ballot,
@@ -110,8 +109,11 @@ fn draw_meshlet(
 }
 
 #[allow(dead_code)]
+#[derive(Copy, Clone)]
 struct InterpolationVertex {
-	pbr_vertex: PbrVertex,
+	world_pos: Vec3,
+	normals: Vec3,
+	tex_coords: Vec2,
 	meshlet_debug_hue: f32,
 }
 
@@ -154,14 +156,22 @@ pub fn meshlet_mesh(
 			let i = if inbounds { i } else { vertex_count - 1 };
 
 			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
-			let position = transform_vertex(frame_data, instance, draw_vertex);
+			let position = frame_data
+				.camera
+				.transform_vertex(instance.transform, draw_vertex.position);
+			let pbr_vertex = meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id);
+			let normals = frame_data
+				.camera
+				.transform_normal(instance.transform, pbr_vertex.normals);
 			let vertex = InterpolationVertex {
-				pbr_vertex: meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id),
+				world_pos: position.world_space,
+				normals: normals.world_space,
+				tex_coords: pbr_vertex.tex_coords,
 				meshlet_debug_hue: GpuRng(meshlet_id).next_f32(),
 			};
 
 			if inbounds {
-				*out_positions.index_unchecked_mut(i) = position;
+				*out_positions.index_unchecked_mut(i) = position.clip_space;
 				*out_vertex.index_unchecked_mut(i) = vertex;
 			}
 		}
@@ -184,13 +194,6 @@ pub fn meshlet_mesh(
 	}
 }
 
-fn transform_vertex(frame_data: FrameData, instance: MeshletInstance, vertex: DrawVertex) -> Vec4 {
-	let camera = frame_data.camera;
-	let worldspace = instance.transform().transform_point3(vertex.position);
-	let cameraspace = camera.transform.transform_point3(worldspace.into());
-	camera.perspective * Vec4::from((cameraspace, 1.))
-}
-
 #[bindless(fragment())]
 pub fn meshlet_frag_meshlet_id(
 	#[bindless(descriptors)] descriptors: &Descriptors,
@@ -198,18 +201,81 @@ pub fn meshlet_frag_meshlet_id(
 	out_vertex: InterpolationVertex,
 	frag_color: &mut Vec4,
 ) {
-	let meshlet_debug = hsv2rgb_smooth(vec3(out_vertex.meshlet_debug_hue, 1., 1.));
-	// *frag_color = Vec4::from((out_vertex.material.normals, 1.));
-	// *frag_color = Vec4::from((out_vertex.material.tex_coords, 0., 1.));
+	let frame_data = param.frame_data.access(descriptors).load();
+	let debug_settings = frame_data.debug_settings();
+	*frag_color = match debug_settings {
+		DebugSettings::None => material_eval(descriptors, param, frame_data, out_vertex),
+		DebugSettings::BaseColor => base_color(descriptors, param, out_vertex),
+		DebugSettings::MeshletIdOverlay => {
+			let base_color = material_eval(descriptors, param, frame_data, out_vertex);
+			Vec4::from((
+				Vec3::lerp(base_color.xyz(), meshlet_debug_color(out_vertex), 0.1),
+				base_color.w,
+			))
+		}
+		DebugSettings::MeshletId => Vec4::from((meshlet_debug_color(out_vertex), 1.)),
+		DebugSettings::VertexNormals => Vec4::from((out_vertex.normals, 1.)),
+		DebugSettings::VertexTexCoords => Vec4::from((out_vertex.tex_coords, 0., 1.)),
+	};
+	if frag_color.w < 0.01 {
+		spirv_std::arch::kill();
+	}
+}
 
+fn material_eval(
+	descriptors: &Descriptors,
+	param: &Params<'static>,
+	frame_data: FrameData,
+	out_vertex: InterpolationVertex,
+) -> Vec4 {
+	// let point_lights = [PointLight {
+	// 	position: Vec3::new(1.8, -2., -2.7),
+	// 	color: Vec3::new(1., 1., 1.) * 20.,
+	// }];
+	// let directional_lights = [DirectionalLight {
+	// 	direction: Vec3::new(0., 1., 0.).normalize(),
+	// 	color: Vec3::new(0., 0., 0.),
+	// }];
+
+	let point_lights = [PointLight {
+		position: Vec3::new(0., -0., -0.),
+		color: Vec3::new(1., 1., 1.) * 0.,
+	}];
+	let directional_lights = [DirectionalLight {
+		direction: Vec3::new(-0.3, 1., -0.1).normalize(),
+		color: Vec3::new(1., 1., 1.) * 20.,
+	}];
+
+	let ambient_light = Vec3::splat(0.02);
+
+	let mesh = param.mesh2instance.mesh.access(descriptors).load();
+	let sampler = param.sampler.access(descriptors);
+	crate::material::pbr::pbr_material_eval(
+		descriptors,
+		mesh.pbr_material,
+		*sampler,
+		out_vertex.world_pos,
+		out_vertex.normals,
+		out_vertex.tex_coords,
+		frame_data.camera.transform.translation(),
+		point_lights,
+		directional_lights,
+		ambient_light,
+	)
+}
+
+fn base_color(descriptors: &Descriptors, param: &Params<'static>, out_vertex: InterpolationVertex) -> Vec4 {
 	let mesh = param.mesh2instance.mesh.access(descriptors).load();
 	let sampler = param.sampler.access(descriptors);
 	let base_color: Vec4 = mesh
 		.pbr_material
 		.base_color
 		.access(descriptors)
-		.sample(*sampler, out_vertex.pbr_vertex.tex_coords)
+		.sample(*sampler, out_vertex.tex_coords)
 		* Vec4::from(mesh.pbr_material.base_color_factor);
+	base_color
+}
 
-	*frag_color = Vec4::from((Vec3::lerp(base_color.xyz(), meshlet_debug, 0.1), base_color.w));
+fn meshlet_debug_color(out_vertex: InterpolationVertex) -> Vec3 {
+	hsv2rgb_smooth(vec3(out_vertex.meshlet_debug_hue, 1., 1.))
 }

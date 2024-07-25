@@ -941,7 +941,7 @@ mod tests {
 	#[test]
 	fn test_iter_smoke() {
 		let slots = RCSlotArray::new(32);
-		assert_eq!(iter_collect(&slots.epoch_guard()), []);
+		assert_eq!(iter_collect(&slots.epoch_guard()), Vec::<Option<i32>>::new());
 
 		let slot1 = slots.allocate(42).unwrap();
 		assert_eq!(iter_collect(&slots.epoch_guard()), [Some(42)]);
@@ -959,7 +959,7 @@ mod tests {
 	#[test]
 	fn test_iter_locked() {
 		let slots = RCSlotArray::new(32);
-		assert_eq!(iter_collect(&slots.epoch_guard()), []);
+		assert_eq!(iter_collect(&slots.epoch_guard()), Vec::<Option<i32>>::new());
 
 		let slot1 = slots.allocate(1).unwrap();
 		let slot2 = slots.allocate(2).unwrap();

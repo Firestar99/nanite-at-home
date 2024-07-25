@@ -18,7 +18,7 @@ use vulkano_bindless::descriptor::RC;
 use vulkano_bindless::spirv_std::image::Image2d;
 use vulkano_bindless_shaders::descriptor::Desc;
 
-impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> ArchivedImage2DDisk<IMAGE_TYPE> {
 	pub fn upload<'a>(
 		&'a self,
 		uploader: &'a Uploader,
@@ -26,7 +26,7 @@ impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
 		self.metadata.deserialize().upload(&self.bytes, uploader)
 	}
 }
-impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Image2DDisk<IMAGE_TYPE> {
 	pub fn upload<'a>(
 		&'a self,
 		uploader: &'a Uploader,
@@ -35,7 +35,7 @@ impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
 	}
 }
 
-impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 	pub(super) fn upload<'a>(
 		self,
 		src: &'a [u8],

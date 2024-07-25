@@ -1,8 +1,10 @@
 use crate::gltf::GltfImageError;
 use intel_tex_2::{bc4, bc5, bc7, RSurface, RgSurface, RgbaSurface};
-use space_asset::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression};
+use space_asset::image::{
+	DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression, Size,
+};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct EncodeSettings {
 	bc4_bc5: bool,
 	bc7: Option<bc7::EncodeSettings>,
@@ -29,7 +31,7 @@ impl EncodeSettings {
 	pub fn very_fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_very_fast_settings()),
+			bc7: Some(bc7::alpha_very_fast_settings()),
 			zstd_level: 3,
 		}
 	}
@@ -37,7 +39,7 @@ impl EncodeSettings {
 	pub fn fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_fast_settings()),
+			bc7: Some(bc7::alpha_fast_settings()),
 			zstd_level: 3,
 		}
 	}
@@ -45,7 +47,7 @@ impl EncodeSettings {
 	pub fn basic() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_basic_settings()),
+			bc7: Some(bc7::alpha_basic_settings()),
 			zstd_level: 3,
 		}
 	}
@@ -53,7 +55,7 @@ impl EncodeSettings {
 	pub fn slow() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_slow_settings()),
+			bc7: Some(bc7::alpha_slow_settings()),
 			zstd_level: 5,
 		}
 	}
@@ -66,11 +68,11 @@ impl Default for EncodeSettings {
 }
 
 pub trait Encode: Sized {
-	fn into_optimal_encode(self, settings: EncodeSettings) -> Result<Self, (Self, GltfImageError)> {
+	fn into_optimal_encode(self, settings: EncodeSettings) -> Result<Self, GltfImageError> {
 		match self.to_optimal_encode(settings) {
 			Ok(Some(e)) => Ok(e),
 			Ok(None) => Ok(self),
-			Err(err) => Err((self, err)),
+			Err(err) => Err(err),
 		}
 	}
 
@@ -81,7 +83,7 @@ pub trait Encode: Sized {
 	fn to_bc_encode(&self, settings: EncodeSettings) -> Result<Self, GltfImageError>;
 }
 
-impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 	#[profiling::function]
 	fn to_optimal_encode(&self, settings: EncodeSettings) -> Result<Option<Self>, GltfImageError> {
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
@@ -111,7 +113,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 				size: self.metadata.size,
 				disk_compression: DiskImageCompression::None,
 			},
-			bytes: self.decode()?.into_boxed_slice(),
+			bytes: self.decode()?.into(),
 		})
 	}
 
@@ -120,7 +122,9 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Err(GltfImageError::EncodingFromBCn);
 		}
-		let size = self.metadata.size;
+		let src_size = self.metadata.size;
+		let size = Size::new(src_size.width & !3, src_size.height & !3);
+		let stride = src_size.width * self.metadata.image_type().channels();
 		let bcn = match self.metadata.image_type() {
 			ImageType::R_VALUES => {
 				if settings.bc4_bc5 {
@@ -128,7 +132,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 					bc4::compress_blocks(&RSurface {
 						height: size.height,
 						width: size.width,
-						stride: size.width * 1,
+						stride,
 						data: &self.decode()?,
 					})
 				} else {
@@ -141,7 +145,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 					bc5::compress_blocks(&RgSurface {
 						height: size.height,
 						width: size.width,
-						stride: size.width * 2,
+						stride,
 						data: &self.decode()?,
 					})
 				} else {
@@ -156,7 +160,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 						&RgbaSurface {
 							height: size.height,
 							width: size.width,
-							stride: size.width * 4,
+							stride,
 							data: &self.decode()?,
 						},
 					)
@@ -165,7 +169,7 @@ impl<const DATA_TYPE: u32> Encode for Image2DDisk<DATA_TYPE> {
 				}
 			}
 		};
-		let bytes = zstd::bulk::compress(&bcn, settings.zstd_level)?.into_boxed_slice();
+		let bytes = zstd::bulk::compress(&bcn, settings.zstd_level)?.into();
 		Ok(Image2DDisk {
 			metadata: Image2DMetadata {
 				size,

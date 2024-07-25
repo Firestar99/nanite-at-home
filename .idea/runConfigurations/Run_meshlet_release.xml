@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run asteroids release puffin" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin asteroids --release --features profile-with-puffin" />
+  <configuration default="false" name="Run meshlet release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --bin meshlet-renderer --release" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />

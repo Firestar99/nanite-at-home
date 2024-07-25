@@ -4,8 +4,9 @@ use zune_image::codecs::png::zune_core::bytestream::ZCursor;
 use zune_image::codecs::png::zune_core::colorspace::ColorSpace;
 use zune_image::codecs::png::zune_core::options::DecoderOptions;
 use zune_image::errors::ImageErrors;
+use zune_image::utils::swizzle_channels;
 
-impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Image2DDisk<IMAGE_TYPE> {
 	pub fn decode(&self) -> Result<Vec<u8>, ImageErrors> {
 		self.metadata.decode(&self.bytes)
 	}
@@ -15,7 +16,7 @@ impl<const DATA_TYPE: u32> Image2DDisk<DATA_TYPE> {
 	}
 }
 
-impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> ArchivedImage2DDisk<IMAGE_TYPE> {
 	pub fn decode(&self) -> Result<Vec<u8>, ImageErrors> {
 		self.metadata.deserialize().decode(&self.bytes)
 	}
@@ -25,7 +26,7 @@ impl<const DATA_TYPE: u32> ArchivedImage2DDisk<DATA_TYPE> {
 	}
 }
 
-impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
+impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 	pub(super) fn decode(&self, src: &[u8]) -> Result<Vec<u8>, ImageErrors> {
 		let mut vec = vec![0; self.decompressed_bytes()];
 		self.decode_into(src, &mut *vec)?;
@@ -58,10 +59,25 @@ impl<const DATA_TYPE: u32> Image2DMetadata<DATA_TYPE> {
 
 	#[profiling::function]
 	fn decode_embedded_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
+		let req_channels = self.image_type().channels() as usize;
+
 		let mut image = zune_image::image::Image::read(ZCursor::new(src), DecoderOptions::new_fast())?;
 		assert_eq!(image.frames_len(), 1);
-		image.convert_color(ColorSpace::RGBA)?;
-		image.frames_ref()[0].flatten_into(dst)?;
+		image.convert_color(if req_channels == 4 {
+			ColorSpace::RGBA
+		} else if req_channels <= 3 {
+			ColorSpace::RGB
+		} else {
+			unreachable!("Unsupported channel count {}", req_channels)
+		})?;
+
+		let frame = &mut image.frames_mut()[0];
+		assert!(frame.channels_vec().len() >= req_channels);
+		for _ in 0..(frame.channels_vec().len() - req_channels) {
+			frame.channels_vec().pop();
+		}
+		assert_eq!(frame.channels_vec().len(), req_channels);
+		swizzle_channels(frame.channels_vec(), dst)?;
 		Ok(())
 	}
 }

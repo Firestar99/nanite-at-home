@@ -6,5 +6,6 @@
 
 extern crate core;
 
+pub mod material;
 pub mod renderer;
 pub mod utils;

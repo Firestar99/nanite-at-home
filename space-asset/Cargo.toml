@@ -40,7 +40,7 @@ static_assertions = { workspace = true }
 num_enum = { workspace = true }
 
 [features]
-disk = ["dep:rkyv", "dep:zstd", "dep:zune-image"]
+disk = ["dep:rkyv", "glam/rkyv", "dep:zstd", "dep:zune-image"]
 runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon", "dep:async-std"]
 
 profile-with-puffin = ["profiling/profile-with-puffin", "vulkano-bindless?/profile-with-puffin"]

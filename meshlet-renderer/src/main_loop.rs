@@ -1,4 +1,10 @@
-use glam::{Mat4, UVec3};
+use crate::debug_settings_selector::DebugSettingsSelector;
+use crate::delta_time::DeltaTimeTimer;
+use crate::fps_camera_controller::FpsCameraController;
+use crate::sample_scenes::sample_scenes;
+use crate::scene_selector::SceneSelector;
+use glam::{vec4, Mat4, UVec3};
+use space_asset::affine_transform::AffineTransform;
 use space_engine::device::init::Plugin;
 use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use space_engine::device::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
@@ -21,10 +27,6 @@ use vulkano::sync::GpuFuture;
 use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
 use winit::event::{Event, WindowEvent};
 use winit::window::{CursorGrabMode, WindowBuilder};
-
-use crate::delta_time::DeltaTimeTimer;
-use crate::fps_camera_controller::FpsCameraController;
-use crate::sample_scene::load_scene;
 
 pub enum Debugger {
 	None,
@@ -89,11 +91,17 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	let mut renderer_main: Option<RendererMain> = None;
 
 	// model loading
-	let scenes = load_scene(&init).await;
-	render_pipeline_main.meshlet_task.scenes.lock().extend(scenes);
+	let mut scene_selector = SceneSelector::new(init.clone(), sample_scenes(), |scene| {
+		let mut guard = render_pipeline_main.meshlet_task.scenes.lock();
+		guard.clear();
+		guard.push(scene);
+	})
+	.await
+	.unwrap();
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
+	let mut debug_settings_selector = DebugSettingsSelector::new();
 	let mut last_frame = DeltaTimeTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
@@ -102,6 +110,8 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		for event in inputs.try_iter() {
 			swapchain_controller.handle_input(&event);
 			camera_controls.handle_input(&event);
+			debug_settings_selector.handle_input(&event);
+			scene_selector.handle_input(&event).await.unwrap();
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -125,12 +135,21 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		// frame data
 		profiling::scope!("render");
 		let delta_time = last_frame.next();
-		let image = UVec3::from_array(acquired_image.image_view().image().extent());
+		let out_extent = UVec3::from_array(acquired_image.image_view().image().extent());
+		let projection = Mat4::perspective_rh(
+			90. / 360. * 2. * PI,
+			out_extent.x as f32 / out_extent.y as f32,
+			0.1,
+			1000.,
+		) * Mat4::from_cols(
+			vec4(1., 0., 0., 0.),
+			vec4(0., -1., 0., 0.),
+			vec4(0., 0., 1., 0.),
+			vec4(0., 0., 0., 1.),
+		);
 		let frame_data = FrameData {
-			camera: Camera::new(
-				Mat4::perspective_rh(90. / 360. * 2. * PI, image.x as f32 / image.y as f32, 0.1, 1000.),
-				camera_controls.update(delta_time),
-			),
+			camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
+			debug_settings: debug_settings_selector.get().into(),
 		};
 
 		renderer_main.as_mut().unwrap().new_frame(

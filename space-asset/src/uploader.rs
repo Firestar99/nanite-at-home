@@ -63,7 +63,7 @@ impl Uploader {
 					size: Size::new(1, 1),
 					disk_compression: DiskImageCompression::None,
 				},
-				bytes: Vec::from([255, 255, 255, 255]).into_boxed_slice(),
+				bytes: Vec::from([255, 255, 255, 255]).into(),
 			};
 			block_on(disk.upload(&uploader)).unwrap()
 		};

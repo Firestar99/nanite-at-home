@@ -1,6 +1,7 @@
 use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_obj::opaque_model::OpaqueModel;
 use glam::{UVec3, Vec2, Vec4};
+use space_asset::affine_transform::AffineTransform;
 use spirv_std::arch::{emit_mesh_tasks_ext_payload, set_mesh_outputs_ext};
 use spirv_std::image::Image2d;
 use spirv_std::Sampler;
@@ -65,8 +66,8 @@ pub fn opaque_mesh(
 		for i in 0..OUTPUT_VERTICES {
 			let vertex_id = index_buffer.load_unchecked(global_invocation_id.x as usize * 3 + i);
 			let vertex_input = vertex_buffer.load_unchecked(vertex_id as usize);
-			let position_world = camera.transform.transform_point3(vertex_input.position.into());
-			positions[i] = camera.perspective * Vec4::from((position_world, 1.));
+			let transformed_vertex = camera.transform_vertex(AffineTransform::default(), vertex_input.position.into());
+			positions[i] = transformed_vertex.clip_space;
 			vert_tex_coords[i] = vertex_input.tex_coord;
 			vert_texture[i].0 = vertex_input.tex_id;
 		}

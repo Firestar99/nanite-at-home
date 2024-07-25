@@ -1,17 +1,11 @@
-use crate::gltf::uri::Scheme;
 use glam::{Affine3A, Quat, Vec3};
 use gltf::buffer::Data;
-use gltf::image::Source;
-use gltf::{Buffer, Document, Image, Node, Scene};
+use gltf::{Buffer, Document, Node, Scene};
 use smallvec::SmallVec;
-use space_asset::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, Size};
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use zune_image::codecs::png::zune_core::bytestream::ZCursor;
-use zune_image::codecs::png::zune_core::options::DecoderOptions;
-use zune_image::codecs::ImageFormat;
 use zune_image::errors::ImageErrors;
 
 pub struct Gltf {
@@ -96,46 +90,6 @@ impl From<ImageErrors> for GltfImageError {
 impl From<io::Error> for GltfImageError {
 	fn from(value: io::Error) -> Self {
 		Self::IoError(value)
-	}
-}
-
-impl Gltf {
-	#[profiling::function]
-	pub fn image<const DATA_TYPE: u32>(&self, image: Image) -> Result<Image2DDisk<DATA_TYPE>, GltfImageError> {
-		let scheme = match image.source() {
-			Source::View { view, .. } => {
-				let buffer = self.buffer(view.buffer()).ok_or(GltfImageError::MissingBuffer)?;
-				Scheme::Slice(
-					&buffer
-						.get(view.offset()..view.length())
-						.ok_or(GltfImageError::BufferViewOutOfBounds)?,
-				)
-			}
-			Source::Uri { uri, .. } => Scheme::parse(uri).ok_or(GltfImageError::UnsupportedUri)?,
-		};
-
-		let src = {
-			profiling::scope!("read into memory");
-			scheme.read(self.base())?
-		};
-		let (format, _) = ImageFormat::guess_format(ZCursor::new(&src)).ok_or(GltfImageError::UnknownImageFormat)?;
-		let metadata = {
-			profiling::scope!("decode metadata");
-			format
-				.decoder_with_options(ZCursor::new(&src), DecoderOptions::new_fast())?
-				.read_headers()
-				.map_err(ImageErrors::from)?
-				.expect("Image decoder reads metadata")
-		};
-		let size = Size::new(metadata.dimensions().0 as u32, metadata.dimensions().1 as u32);
-
-		Ok(Image2DDisk {
-			metadata: Image2DMetadata {
-				size,
-				disk_compression: DiskImageCompression::Embedded,
-			},
-			bytes: src.into(),
-		})
 	}
 }
 

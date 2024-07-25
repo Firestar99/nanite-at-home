@@ -1,13 +1,15 @@
 use crate::gltf::Gltf;
 use crate::image::encode::EncodeSettings;
+use crate::image::image_processor::ImageProcessor;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
-use glam::{Affine3A, Mat3, Vec3};
+use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use space_asset::affine_transform::AffineTransform;
 use space_asset::meshlet::indices::triangle_indices_write_vec;
 use space_asset::meshlet::instance::MeshletInstance;
 use space_asset::meshlet::mesh::{MeshletData, MeshletMeshDisk};
@@ -19,20 +21,32 @@ use space_asset::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use std::mem;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
-	profiling::scope!("process");
+	profiling::scope!("process_meshlets");
 
-	let texture_encode_settings = EncodeSettings::ultra_fast();
+	let image_processor = ImageProcessor::new(gltf);
 	let pbr_materials = {
-		profiling::scope!("process materials");
+		profiling::scope!("materials 1");
 		gltf.materials()
-			.collect::<Vec<_>>()
-			.into_par_iter()
-			.map(|mat| process_pbr_material(gltf, mat, texture_encode_settings))
+			.map(|mat| process_pbr_material(gltf, &image_processor, mat))
+			.collect::<Result<Vec<_>, _>>()?
+	};
+
+	let image_accessor = {
+		profiling::scope!("images");
+		let encode_settings = EncodeSettings::ultra_fast();
+		image_processor.process(encode_settings)?
+	};
+
+	let pbr_materials = {
+		profiling::scope!("materials 2");
+		pbr_materials
+			.into_iter()
+			.map(|mat| mat.finish(&image_accessor))
 			.collect::<Result<Vec<_>, _>>()?
 	};
 
 	let meshes_primitives = {
-		profiling::scope!("process meshes");
+		profiling::scope!("meshes");
 		gltf.meshes()
 			.collect::<Vec<_>>()
 			.into_par_iter()
@@ -48,17 +62,13 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	let mesh2instance = {
 		profiling::scope!("instance transformations");
 		let scene = gltf.default_scene().ok_or(MeshletError::NoDefaultScene)?;
-		let node_transforms = gltf.absolute_node_transformations(
-			&scene,
-			Affine3A::from_mat3(Mat3 {
-				y_axis: Vec3::new(0., -1., 0.),
-				..Mat3::default()
-			}),
-		);
+		let node_transforms = gltf.absolute_node_transformations(&scene, Affine3A::default());
 		let mut mesh2instance = (0..gltf.meshes().len()).map(|_| Vec::new()).collect::<Vec<_>>();
 		for node in gltf.nodes() {
 			if let Some(mesh) = node.mesh() {
-				mesh2instance[mesh.index()].push(MeshletInstance::new(node_transforms[node.index()]));
+				mesh2instance[mesh.index()].push(MeshletInstance::new(AffineTransform::new(
+					node_transforms[node.index()],
+				)));
 			}
 		}
 		mesh2instance

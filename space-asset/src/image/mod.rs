@@ -9,10 +9,11 @@ pub use metadata::*;
 pub use size::*;
 
 use rkyv::{Archive, Deserialize, Serialize};
+use std::sync::Arc;
 
 #[repr(C)]
 #[derive(Clone, Debug, Archive, Serialize, Deserialize)]
-pub struct Image2DDisk<const DATA_TYPE: u32> {
-	pub bytes: Box<[u8]>,
-	pub metadata: Image2DMetadata<{ DATA_TYPE }>,
+pub struct Image2DDisk<const IMAGE_TYPE: u32> {
+	pub bytes: Arc<[u8]>,
+	pub metadata: Image2DMetadata<{ IMAGE_TYPE }>,
 }

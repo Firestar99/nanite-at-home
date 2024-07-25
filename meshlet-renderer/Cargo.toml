@@ -1,5 +1,5 @@
 [package]
-name = "asteroids"
+name = "meshlet-renderer"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
