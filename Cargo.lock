@@ -3784,25 +3784,28 @@ checksum = "3f423a2c17029964870cfaabb1f13dfab7d092a62a29a89264f4d36990ca414a"
 
 [[package]]
 name = "zune-core"
-version = "0.5.0-rc1"
-source = "git+https://github.com/Firestar99/zune-image?rev=260f8a1195723c6c522f6adfcf9737c43a9f9647#260f8a1195723c6c522f6adfcf9737c43a9f9647"
+version = "0.5.0-rc2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fa5491574238487afaf76a17d1907b47eaace69e97720b8486d584dfca013dc"
 
 [[package]]
 name = "zune-image"
 version = "0.5.0-rc0"
-source = "git+https://github.com/Firestar99/zune-image?rev=260f8a1195723c6c522f6adfcf9737c43a9f9647#260f8a1195723c6c522f6adfcf9737c43a9f9647"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c29cd015d9786939132d9ffc1400f5fc4000dae1b6865c916376f22899e0421c"
 dependencies = [
  "bytemuck",
  "jpeg-encoder",
- "zune-core 0.5.0-rc1",
- "zune-jpeg 0.5.0-rc1",
+ "zune-core 0.5.0-rc2",
+ "zune-jpeg 0.5.0-rc2",
  "zune-png",
 ]
 
 [[package]]
 name = "zune-inflate"
-version = "0.2.0"
-source = "git+https://github.com/Firestar99/zune-image?rev=260f8a1195723c6c522f6adfcf9737c43a9f9647#260f8a1195723c6c522f6adfcf9737c43a9f9647"
+version = "0.2.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73ab332fe2f6680068f3582b16a24f90ad7096d5d39b974d1c0aff0125116f02"
 dependencies = [
  "simd-adler32",
 ]
@@ -3818,17 +3821,19 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.5.0-rc1"
-source = "git+https://github.com/Firestar99/zune-image?rev=260f8a1195723c6c522f6adfcf9737c43a9f9647#260f8a1195723c6c522f6adfcf9737c43a9f9647"
+version = "0.5.0-rc2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6e1b91c3b508b590945d61560be96449641b504a94f42f1a5594161b2d328ea"
 dependencies = [
- "zune-core 0.5.0-rc1",
+ "zune-core 0.5.0-rc2",
 ]
 
 [[package]]
 name = "zune-png"
 version = "0.5.0-rc1"
-source = "git+https://github.com/Firestar99/zune-image?rev=260f8a1195723c6c522f6adfcf9737c43a9f9647#260f8a1195723c6c522f6adfcf9737c43a9f9647"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ea7c0417bae97900becb562db25de02ff87847e11a0a2585ce863b896e7bcee"
 dependencies = [
- "zune-core 0.5.0-rc1",
+ "zune-core 0.5.0-rc2",
  "zune-inflate",
 ]

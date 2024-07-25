@@ -4,6 +4,7 @@ use zune_image::codecs::png::zune_core::bytestream::ZCursor;
 use zune_image::codecs::png::zune_core::colorspace::ColorSpace;
 use zune_image::codecs::png::zune_core::options::DecoderOptions;
 use zune_image::errors::ImageErrors;
+use zune_image::utils::swizzle_channels;
 
 impl<const IMAGE_TYPE: u32> Image2DDisk<IMAGE_TYPE> {
 	pub fn decode(&self) -> Result<Vec<u8>, ImageErrors> {
@@ -76,7 +77,7 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 			frame.channels_vec().pop();
 		}
 		assert_eq!(frame.channels_vec().len(), req_channels);
-		frame.flatten_into(dst)?;
+		swizzle_channels(frame.channels_vec(), dst)?;
 		Ok(())
 	}
 }

@@ -110,15 +110,6 @@ num_enum = { version = "0.7.2", default-features = false }
 
 
 
-[patch.crates-io]
-zune-core = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
-zune-image = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
-zune-inflate = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
-zune-jpeg = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
-zune-png = { git = "https://github.com/Firestar99/zune-image", rev = "260f8a1195723c6c522f6adfcf9737c43a9f9647" }
-
-
-
 
 # Following is copied from rust-gpu workspace cargo.toml
 # Enable incremental by default in release mode.
