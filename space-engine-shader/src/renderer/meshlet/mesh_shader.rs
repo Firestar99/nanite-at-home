@@ -1,4 +1,6 @@
 use crate::material::light::{DirectionalLight, PointLight};
+use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
+use crate::material::radiance::Radiance;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
 use crate::utils::hsv::hsv2rgb_smooth;
@@ -239,29 +241,33 @@ fn material_eval(
 
 	let point_lights = [PointLight {
 		position: Vec3::new(0., -0., -0.),
-		color: Vec3::new(1., 1., 1.) * 0.,
+		color: Radiance(Vec3::new(1., 1., 1.)) * 0.,
 	}];
 	let directional_lights = [DirectionalLight {
 		direction: Vec3::new(-0.3, 1., -0.1).normalize(),
-		color: Vec3::new(1., 1., 1.) * 20.,
+		color: Radiance(Vec3::new(1., 1., 1.)) * 20.,
 	}];
+	let ambient_light = Radiance(Vec3::splat(0.02));
 
-	let ambient_light = Vec3::splat(0.02);
-
-	let mesh = param.mesh2instance.mesh.access(descriptors).load();
-	let sampler = param.sampler.access(descriptors);
-	crate::material::pbr::pbr_material_eval(
-		descriptors,
-		mesh.pbr_material,
-		*sampler,
+	let surface_location = SurfaceLocation::new(
 		out_vertex.world_pos,
+		frame_data.camera.transform.translation(),
 		out_vertex.normals,
 		out_vertex.tex_coords,
-		frame_data.camera.transform.translation(),
-		point_lights,
-		directional_lights,
-		ambient_light,
-	)
+	);
+	let mesh = param.mesh2instance.mesh.access(descriptors).load();
+	let sampler = param.sampler.access(descriptors);
+	let sampled = mesh.pbr_material.sample(descriptors, *sampler, surface_location);
+
+	let mut lo = Radiance(Vec3::ZERO);
+	for i in 0..point_lights.len() {
+		lo += sampled.evaluate_point_light(point_lights[i]);
+	}
+	for i in 0..directional_lights.len() {
+		lo += sampled.evaluate_directional_light(directional_lights[i]);
+	}
+	lo += sampled.ambient_light(ambient_light);
+	Vec4::from((lo.tone_map_reinhard(), sampled.alpha))
 }
 
 fn base_color(descriptors: &Descriptors, param: &Params<'static>, out_vertex: InterpolationVertex) -> Vec4 {

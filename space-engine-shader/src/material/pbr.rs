@@ -1,78 +1,114 @@
-#![allow(warnings)]
-
 use crate::material::light::{DirectionalLight, PointLight};
+use crate::material::radiance::Radiance;
 use core::f32::consts::PI;
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
 use space_asset::material::pbr::PbrMaterial;
 use spirv_std::Sampler;
-use vulkano_bindless_shaders::descriptor::reference::Strong;
-use vulkano_bindless_shaders::descriptor::Descriptors;
+use vulkano_bindless_shaders::descriptor::{AliveDescRef, Descriptors};
 
-pub fn pbr_material_eval<const D: usize, const P: usize>(
-	descriptors: &Descriptors,
-	pbr_material: PbrMaterial<Strong>,
-	sampler: Sampler,
-	world_pos: Vec3,
-	normal: Vec3,
-	tex_coords: Vec2,
-	camera_pos: Vec3,
-	point_lights: [PointLight; P],
-	directional_lights: [DirectionalLight; D],
-	ambient_light: Vec3,
-) -> Vec4 {
-	let n = normal;
-	let v = (camera_pos - world_pos).normalize();
-
-	let base_color: Vec4 = pbr_material.base_color.access(descriptors).sample(sampler, tex_coords)
-		* Vec4::from(pbr_material.base_color_factor);
-	let albedo = base_color.xyz();
-	let alpha = base_color.w;
-
-	let omr: Vec4 = pbr_material.omr.access(descriptors).sample(sampler, tex_coords);
-	// let ao = omr.x * pbr_material.occlusion_strength;
-	let metallic = omr.y * pbr_material.metallic_factor;
-	let roughness = omr.z * pbr_material.roughness_factor;
-
-	let mut lo = Vec3::ZERO;
-	for i in 0..point_lights.len() {
-		let light = point_lights[i];
-		let l = (light.position - world_pos).normalize();
-		let distance = (light.position - world_pos).length();
-		let attenuation = 1.0 / (distance * distance);
-		let radiance = light.color * attenuation;
-		lo += evaluate_light(albedo, metallic, roughness, n, v, l, radiance);
-	}
-
-	for i in 0..directional_lights.len() {
-		let light = directional_lights[i];
-		let l = light.direction;
-		let radiance = light.color;
-		lo += evaluate_light(albedo, metallic, roughness, n, v, l, radiance);
-	}
-
-	let ambient = ambient_light * albedo; //  * ao
-	let color = ambient + lo;
-	let color = color / (color + Vec3::splat(1.0));
-	Vec4::from((color, alpha))
+#[derive(Copy, Clone)]
+pub struct SurfaceLocation {
+	pub world_pos: Vec3,
+	pub tex_coords: Vec2,
+	/// surface normal
+	pub n: Vec3,
+	/// camera direction unit vector, relative to fragment position
+	pub v: Vec3,
 }
 
-fn evaluate_light(albedo: Vec3, metallic: f32, roughness: f32, n: Vec3, v: Vec3, l: Vec3, radiance: Vec3) -> Vec3 {
-	let h = (v + l).normalize();
-	let ndf = distribution_ggx(n, h, roughness);
-	let g = geometry_smith(n, v, l, roughness);
+impl SurfaceLocation {
+	pub fn new(world_pos: Vec3, camera_pos: Vec3, surface_normal: Vec3, tex_coords: Vec2) -> Self {
+		Self {
+			world_pos,
+			tex_coords,
+			n: surface_normal,
+			v: (camera_pos - world_pos).normalize(),
+		}
+	}
+}
 
-	let f0 = Vec3::lerp(Vec3::splat(0.04), albedo, metallic);
-	let f = fresnel_schlick(Vec3::dot(h, v).max(0.0), f0);
+#[derive(Copy, Clone)]
+pub struct SampledMaterial {
+	pub loc: SurfaceLocation,
+	pub albedo: Vec3,
+	pub alpha: f32,
+	pub metallic: f32,
+	pub roughness: f32,
+}
 
-	let k_specular = f;
-	let k_diffuse = (Vec3::splat(1.0) - k_specular) * (1.0 - metallic);
+pub trait PbrMaterialSample {
+	fn sample(&self, descriptors: &Descriptors, sampler: Sampler, loc: SurfaceLocation) -> SampledMaterial;
+}
 
-	let numerator = ndf * g * f;
-	let denominator = 4.0 * Vec3::dot(n, v).max(0.0) * Vec3::dot(n, l).max(0.0) + 0.0001;
-	let specular = numerator / denominator;
+impl<R: AliveDescRef> PbrMaterialSample for PbrMaterial<R> {
+	/// Sample the material's textures at some texture coordinates.
+	/// The sampled values can then be reused for multiple light evaluations.
+	fn sample(&self, descriptors: &Descriptors, sampler: Sampler, loc: SurfaceLocation) -> SampledMaterial {
+		let base_color: Vec4 =
+			self.base_color.access(descriptors).sample(sampler, loc.tex_coords) * Vec4::from(self.base_color_factor);
+		let albedo = base_color.xyz();
+		let alpha = base_color.w;
 
-	let n_dot_l = Vec3::dot(n, l).max(0.0);
-	(k_diffuse * albedo / PI + specular) * radiance * n_dot_l
+		let omr: Vec4 = self.omr.access(descriptors).sample(sampler, loc.tex_coords);
+		// let ao = omr.x * pbr_material.occlusion_strength;
+		let metallic = omr.y * self.metallic_factor;
+		let roughness = omr.z * self.roughness_factor;
+
+		SampledMaterial {
+			loc,
+			albedo,
+			alpha,
+			metallic,
+			roughness,
+		}
+	}
+}
+
+impl SampledMaterial {
+	pub fn evaluate_directional_light(&self, light: DirectionalLight) -> Radiance {
+		let l = light.direction;
+		let radiance = light.color;
+		self.evaluate_light(l, radiance)
+	}
+
+	pub fn evaluate_point_light(&self, light: PointLight) -> Radiance {
+		let light_rel = light.position - self.loc.world_pos;
+		let l = light_rel.normalize();
+		let distance = light_rel.length();
+		let attenuation = 1.0 / (distance * distance);
+		let radiance = light.color * attenuation;
+		self.evaluate_light(l, radiance)
+	}
+
+	/// Evaluate the light contribution a light has, not considering visibility.
+	///
+	/// * `l`: light direction unit vector, relative to fragment position
+	/// * `radiance`: radiance the light source is emitting
+	pub fn evaluate_light(&self, l: Vec3, radiance: Radiance) -> Radiance {
+		let n = self.loc.n;
+		let v = self.loc.v;
+
+		let h = (v + l).normalize();
+		let ndf = distribution_ggx(n, h, self.roughness);
+		let g = geometry_smith(n, v, l, self.roughness);
+
+		let f0 = Vec3::lerp(Vec3::splat(0.04), self.albedo, self.metallic);
+		let f = fresnel_schlick(Vec3::dot(h, v).max(0.0), f0);
+
+		let k_specular = f;
+		let k_diffuse = (Vec3::splat(1.0) - k_specular) * (1.0 - self.metallic);
+
+		let numerator = ndf * g * f;
+		let denominator = 4.0 * Vec3::dot(n, v).max(0.0) * Vec3::dot(n, l).max(0.0) + 0.0001;
+		let specular = numerator / denominator;
+
+		let n_dot_l = Vec3::dot(n, l).max(0.0);
+		Radiance((k_diffuse * self.albedo / PI + specular) * radiance.0 * n_dot_l)
+	}
+
+	pub fn ambient_light(&self, radiance: Radiance) -> Radiance {
+		Radiance(self.albedo * radiance.0)
+	}
 }
 
 fn fresnel_schlick(cos_theta: f32, f0: Vec3) -> Vec3 {
