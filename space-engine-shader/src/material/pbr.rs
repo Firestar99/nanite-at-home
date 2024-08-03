@@ -1,37 +1,64 @@
 use crate::material::light::{DirectionalLight, PointLight};
 use crate::material::radiance::Radiance;
 use core::f32::consts::PI;
+use core::ops::{Deref, DerefMut};
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
 use space_asset::material::pbr::PbrMaterial;
 use spirv_std::Sampler;
 use vulkano_bindless_shaders::descriptor::{AliveDescRef, Descriptors};
 
+/// camera direction unit vector, relative to fragment position
+#[derive(Copy, Clone)]
+pub struct V(pub Vec3);
+
+impl V {
+	pub fn new(world_pos: Vec3, camera_pos: Vec3) -> Self {
+		Self((camera_pos - world_pos).normalize())
+	}
+}
+
+impl Deref for V {
+	type Target = Vec3;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for V {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
 #[derive(Copy, Clone)]
 pub struct SurfaceLocation {
 	pub world_pos: Vec3,
 	pub tex_coords: Vec2,
-	/// surface normal
-	pub n: Vec3,
+	/// vertex normal
+	pub normal: Vec3,
 	/// camera direction unit vector, relative to fragment position
-	pub v: Vec3,
+	pub v: V,
 }
 
 impl SurfaceLocation {
-	pub fn new(world_pos: Vec3, camera_pos: Vec3, surface_normal: Vec3, tex_coords: Vec2) -> Self {
+	pub fn new(world_pos: Vec3, camera_pos: Vec3, normal: Vec3, tex_coords: Vec2) -> Self {
 		Self {
 			world_pos,
 			tex_coords,
-			n: surface_normal,
-			v: (camera_pos - world_pos).normalize(),
+			normal,
+			v: V::new(world_pos, camera_pos),
 		}
 	}
 }
 
 #[derive(Copy, Clone)]
 pub struct SampledMaterial {
-	pub loc: SurfaceLocation,
+	pub world_pos: Vec3,
+	pub v: V,
 	pub albedo: Vec3,
 	pub alpha: f32,
+	pub normal: Vec3,
 	pub metallic: f32,
 	pub roughness: f32,
 }
@@ -49,15 +76,20 @@ impl<R: AliveDescRef> PbrMaterialSample for PbrMaterial<R> {
 		let albedo = base_color.xyz();
 		let alpha = base_color.w;
 
+		// not yet using normal map
+		let normal = loc.normal;
+
 		let omr: Vec4 = self.omr.access(descriptors).sample(sampler, loc.tex_coords);
 		// let ao = omr.x * pbr_material.occlusion_strength;
 		let metallic = omr.y * self.metallic_factor;
 		let roughness = omr.z * self.roughness_factor;
 
 		SampledMaterial {
-			loc,
+			world_pos: loc.world_pos,
+			v: loc.v,
 			albedo,
 			alpha,
+			normal,
 			metallic,
 			roughness,
 		}
@@ -72,7 +104,7 @@ impl SampledMaterial {
 	}
 
 	pub fn evaluate_point_light(&self, light: PointLight) -> Radiance {
-		let light_rel = light.position - self.loc.world_pos;
+		let light_rel = light.position - self.world_pos;
 		let l = light_rel.normalize();
 		let distance = light_rel.length();
 		let attenuation = 1.0 / (distance * distance);
@@ -85,8 +117,8 @@ impl SampledMaterial {
 	/// * `l`: light direction unit vector, relative to fragment position
 	/// * `radiance`: radiance the light source is emitting
 	pub fn evaluate_light(&self, l: Vec3, radiance: Radiance) -> Radiance {
-		let n = self.loc.n;
-		let v = self.loc.v;
+		let n = self.normal;
+		let v = *self.v;
 
 		let h = (v + l).normalize();
 		let ndf = distribution_ggx(n, h, self.roughness);
