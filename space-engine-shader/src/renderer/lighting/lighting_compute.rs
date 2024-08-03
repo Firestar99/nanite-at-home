@@ -4,6 +4,7 @@ use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::hsv::hsv2rgb_smooth;
+use crate::utils::srgb::linear_to_srgb_alpha;
 use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use spirv_std::image::{Image2d, StorageImage2d};
 use static_assertions::const_assert_eq;
@@ -74,7 +75,7 @@ fn lighting_inner(
 	};
 
 	unsafe {
-		output_image.write(pixel, Vec4::from((out_color, 1.)));
+		output_image.write(pixel, linear_to_srgb_alpha(Vec4::from((out_color, 1.))));
 	}
 }
 
