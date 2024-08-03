@@ -1,5 +1,5 @@
 use crate::material::light::{DirectionalLight, PointLight};
-use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
+use crate::material::pbr::{PbrMaterialSample, SampledMaterial, SurfaceLocation};
 use crate::material::radiance::Radiance;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
@@ -205,31 +205,30 @@ pub fn meshlet_frag_meshlet_id(
 ) {
 	let frame_data = param.frame_data.access(descriptors).load();
 	let debug_settings = frame_data.debug_settings();
+	let sample = sample_material(descriptors, param, frame_data, out_vertex);
 	*frag_color = match debug_settings {
-		DebugSettings::None => material_eval(descriptors, param, frame_data, out_vertex),
-		DebugSettings::BaseColor => base_color(descriptors, param, out_vertex),
+		DebugSettings::None => light_eval(sample),
 		DebugSettings::MeshletIdOverlay => {
-			let base_color = material_eval(descriptors, param, frame_data, out_vertex);
+			let base_color = light_eval(sample);
 			Vec4::from((
 				Vec3::lerp(base_color.xyz(), meshlet_debug_color(out_vertex), 0.1),
 				base_color.w,
 			))
 		}
 		DebugSettings::MeshletId => Vec4::from((meshlet_debug_color(out_vertex), 1.)),
-		DebugSettings::VertexNormals => Vec4::from((out_vertex.normals, 1.)),
-		DebugSettings::VertexTexCoords => Vec4::from((out_vertex.tex_coords, 0., 1.)),
+		DebugSettings::BaseColor => Vec4::from((sample.albedo, sample.alpha)),
+		DebugSettings::Normals => Vec4::from((out_vertex.normals, 1.)),
+		DebugSettings::Omr => {
+			let sample = sample;
+			Vec4::from((0., sample.metallic, sample.roughness, 1.))
+		}
 	};
 	if frag_color.w < 0.01 {
 		spirv_std::arch::kill();
 	}
 }
 
-fn material_eval(
-	descriptors: &Descriptors,
-	param: &Params<'static>,
-	frame_data: FrameData,
-	out_vertex: InterpolationVertex,
-) -> Vec4 {
+fn light_eval(sampled: SampledMaterial) -> Vec4 {
 	// let point_lights = [PointLight {
 	// 	position: Vec3::new(1.8, -2., -2.7),
 	// 	color: Vec3::new(1., 1., 1.) * 20.,
@@ -249,16 +248,6 @@ fn material_eval(
 	}];
 	let ambient_light = Radiance(Vec3::splat(0.02));
 
-	let surface_location = SurfaceLocation::new(
-		out_vertex.world_pos,
-		frame_data.camera.transform.translation(),
-		out_vertex.normals,
-		out_vertex.tex_coords,
-	);
-	let mesh = param.mesh2instance.mesh.access(descriptors).load();
-	let sampler = param.sampler.access(descriptors);
-	let sampled = mesh.pbr_material.sample(descriptors, *sampler, surface_location);
-
 	let mut lo = Radiance(Vec3::ZERO);
 	for i in 0..point_lights.len() {
 		lo += sampled.evaluate_point_light(point_lights[i]);
@@ -270,16 +259,22 @@ fn material_eval(
 	Vec4::from((lo.tone_map_reinhard(), sampled.alpha))
 }
 
-fn base_color(descriptors: &Descriptors, param: &Params<'static>, out_vertex: InterpolationVertex) -> Vec4 {
+fn sample_material(
+	descriptors: &Descriptors,
+	param: &Params<'static>,
+	frame_data: FrameData,
+	out_vertex: InterpolationVertex,
+) -> SampledMaterial {
+	let surface_location = SurfaceLocation::new(
+		out_vertex.world_pos,
+		frame_data.camera.transform.translation(),
+		out_vertex.normals,
+		out_vertex.tex_coords,
+	);
 	let mesh = param.mesh2instance.mesh.access(descriptors).load();
 	let sampler = param.sampler.access(descriptors);
-	let base_color: Vec4 = mesh
-		.pbr_material
-		.base_color
-		.access(descriptors)
-		.sample(*sampler, out_vertex.tex_coords)
-		* Vec4::from(mesh.pbr_material.base_color_factor);
-	base_color
+	let sampled = mesh.pbr_material.sample(descriptors, *sampler, surface_location);
+	sampled
 }
 
 fn meshlet_debug_color(out_vertex: InterpolationVertex) -> Vec3 {

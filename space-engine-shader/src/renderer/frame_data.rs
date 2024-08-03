@@ -9,12 +9,12 @@ pub enum DebugSettings {
 	MeshletIdOverlay,
 	MeshletId,
 	BaseColor,
-	VertexNormals,
-	VertexTexCoords,
+	Normals,
+	Omr,
 }
 
 impl DebugSettings {
-	pub const MAX_VALUE: DebugSettings = DebugSettings::VertexTexCoords;
+	pub const MAX_VALUE: DebugSettings = DebugSettings::Omr;
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 
