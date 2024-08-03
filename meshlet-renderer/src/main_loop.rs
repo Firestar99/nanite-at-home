@@ -3,7 +3,7 @@ use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
-use glam::{vec4, Mat4, UVec3};
+use glam::{vec4, Mat4, UVec3, Vec3Swizzles};
 use space_asset::affine_transform::AffineTransform;
 use space_engine::device::init::Plugin;
 use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
@@ -150,6 +150,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		let frame_data = FrameData {
 			camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
 			debug_settings: debug_settings_selector.get().into(),
+			viewport_size: out_extent.xy(),
 		};
 
 		renderer_main.as_mut().unwrap().new_frame(

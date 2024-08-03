@@ -20,8 +20,15 @@ pub struct MeshletRenderTask {
 }
 
 impl MeshletRenderTask {
-	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
-		let pipeline_mesh = MeshDrawPipeline::new(init, format_color, format_depth);
+	pub fn new(
+		init: &Arc<Init>,
+		g_albedo_format_srgb: Format,
+		g_normal_format: Format,
+		g_rm_format: Format,
+		depth_format: Format,
+	) -> Self {
+		let pipeline_mesh =
+			MeshDrawPipeline::new(init, g_albedo_format_srgb, g_normal_format, g_rm_format, depth_format);
 
 		Self {
 			init: init.clone(),
@@ -34,7 +41,9 @@ impl MeshletRenderTask {
 	pub fn record(
 		&self,
 		frame_context: &FrameContext,
-		output_image: &Arc<ImageView>,
+		g_albedo: &Arc<ImageView>,
+		g_normal: &Arc<ImageView>,
+		g_rm: &Arc<ImageView>,
 		depth_image: &Arc<ImageView>,
 		future: impl GpuFuture,
 	) -> impl GpuFuture {
@@ -52,12 +61,26 @@ impl MeshletRenderTask {
 		)
 		.unwrap();
 		cmd.begin_rendering(RenderingInfo {
-			color_attachments: vec![Some(RenderingAttachmentInfo {
-				load_op: AttachmentLoadOp::Clear,
-				store_op: AttachmentStoreOp::Store,
-				clear_value: Some(ClearValue::Float([0.0f32; 4])),
-				..RenderingAttachmentInfo::image_view(output_image.clone())
-			})],
+			color_attachments: vec![
+				Some(RenderingAttachmentInfo {
+					load_op: AttachmentLoadOp::Clear,
+					store_op: AttachmentStoreOp::Store,
+					clear_value: Some(ClearValue::Float([0.0f32; 4])),
+					..RenderingAttachmentInfo::image_view(g_albedo.clone())
+				}),
+				Some(RenderingAttachmentInfo {
+					load_op: AttachmentLoadOp::Clear,
+					store_op: AttachmentStoreOp::Store,
+					clear_value: Some(ClearValue::Float([0.0f32; 4])),
+					..RenderingAttachmentInfo::image_view(g_normal.clone())
+				}),
+				Some(RenderingAttachmentInfo {
+					load_op: AttachmentLoadOp::Clear,
+					store_op: AttachmentStoreOp::Store,
+					clear_value: Some(ClearValue::Float([0.0f32; 4])),
+					..RenderingAttachmentInfo::image_view(g_rm.clone())
+				}),
+			],
 			depth_attachment: Some(RenderingAttachmentInfo {
 				load_op: AttachmentLoadOp::Clear,
 				store_op: AttachmentStoreOp::Store,
