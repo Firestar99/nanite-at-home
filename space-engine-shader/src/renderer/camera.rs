@@ -35,7 +35,7 @@ impl Camera {
 	pub fn new(perspective: Mat4, transform: AffineTransform) -> Self {
 		Self {
 			perspective,
-			perspective_inverse: -perspective,
+			perspective_inverse: perspective.inverse(),
 			transform,
 		}
 	}
@@ -62,14 +62,14 @@ impl Camera {
 
 	/// Reconstruct positions from fragment position [0, 1] and depth value
 	pub fn reconstruct_from_depth(&self, fragment_pos: Vec2, depth: f32) -> TransformedPosition {
-		let clip_space = Vec4::from((fragment_pos, depth, 1.0));
+		let clip_space = Vec4::from((fragment_pos * 2. - 1., depth, 1.0));
 		let camera_space = self.perspective_inverse * clip_space;
 		let camera_space = camera_space.xyz() / camera_space.w;
 		let world_space = self.transform.affine.transform_point3(camera_space);
-		return TransformedPosition {
+		TransformedPosition {
 			world_space,
 			camera_space,
 			clip_space,
-		};
+		}
 	}
 }

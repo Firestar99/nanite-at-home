@@ -12,10 +12,11 @@ pub enum DebugSettings {
 	BaseColor,
 	Normals,
 	Omr,
+	ReconstructedPosition,
 }
 
 impl DebugSettings {
-	pub const MAX_VALUE: DebugSettings = DebugSettings::Omr;
+	pub const MAX_VALUE: DebugSettings = DebugSettings::ReconstructedPosition;
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 

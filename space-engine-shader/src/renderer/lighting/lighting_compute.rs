@@ -72,6 +72,23 @@ fn lighting_inner(
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals => sampled.normal,
 		DebugSettings::Omr => vec3(0., sampled.metallic, sampled.roughness),
+		DebugSettings::ReconstructedPosition => {
+			if sampled.alpha < 0.001 {
+				Vec3::ZERO
+			} else {
+				let depth = Vec4::from(depth_image.fetch(pixel)).x;
+				let position = frame_data
+					.camera
+					.reconstruct_from_depth(pixel.as_vec2() / size.as_vec2(), depth);
+
+				let ipos = (position.world_space.xyz() * 10.).as_ivec3();
+				if (ipos.x & 1 == 0) ^ (ipos.y & 1 == 0) ^ (ipos.z & 1 == 0) {
+					sampled.albedo
+				} else {
+					vec3(0., 0., 0.)
+				}
+			}
+		}
 	};
 
 	let out_color = Vec4::from((out_color, 1.));
