@@ -119,23 +119,26 @@ impl SampledMaterial {
 	pub fn evaluate_light(&self, l: Vec3, radiance: Radiance) -> Radiance {
 		let n = self.normal;
 		let v = *self.v;
+		let albedo = self.albedo;
+		let metallic = self.metallic;
+		let roughness = self.roughness;
 
 		let h = (v + l).normalize();
-		let ndf = distribution_ggx(n, h, self.roughness);
-		let g = geometry_smith(n, v, l, self.roughness);
+		let ndf = distribution_ggx(n, h, roughness);
+		let g = geometry_smith(n, v, l, roughness);
 
-		let f0 = Vec3::lerp(Vec3::splat(0.04), self.albedo, self.metallic);
+		let f0 = Vec3::lerp(Vec3::splat(0.04), albedo, metallic);
 		let f = fresnel_schlick(Vec3::dot(h, v).max(0.0), f0);
 
 		let k_specular = f;
-		let k_diffuse = (Vec3::splat(1.0) - k_specular) * (1.0 - self.metallic);
+		let k_diffuse = (Vec3::splat(1.0) - k_specular) * (1.0 - metallic);
 
 		let numerator = ndf * g * f;
 		let denominator = 4.0 * Vec3::dot(n, v).max(0.0) * Vec3::dot(n, l).max(0.0) + 0.0001;
 		let specular = numerator / denominator;
 
 		let n_dot_l = Vec3::dot(n, l).max(0.0);
-		Radiance((k_diffuse * self.albedo / PI + specular) * radiance.0 * n_dot_l)
+		Radiance((k_diffuse * albedo / PI + specular) * radiance.0 * n_dot_l)
 	}
 
 	pub fn ambient_light(&self, radiance: Radiance) -> Radiance {

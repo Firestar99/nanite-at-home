@@ -74,8 +74,10 @@ fn lighting_inner(
 		DebugSettings::Omr => vec3(0., sampled.metallic, sampled.roughness),
 	};
 
+	let out_color = Vec4::from((out_color, 1.));
+	let out_color = linear_to_srgb_alpha(out_color);
 	unsafe {
-		output_image.write(pixel, linear_to_srgb_alpha(Vec4::from((out_color, 1.))));
+		output_image.write(pixel, out_color);
 	}
 }
 
