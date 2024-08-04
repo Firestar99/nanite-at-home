@@ -1,3 +1,4 @@
+pub mod lighting;
 pub mod meshlet;
 pub mod queue_allocation;
 pub mod render_graph;

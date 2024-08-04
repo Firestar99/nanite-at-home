@@ -8,7 +8,7 @@ use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::format::Format;
 use vulkano::image::sampler::SamplerCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{
-	AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
+	AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState, ColorComponents,
 };
 use vulkano::pipeline::graphics::depth_stencil::{CompareOp, DepthState, DepthStencilState};
 use vulkano::pipeline::graphics::multisample::MultisampleState;
@@ -28,12 +28,18 @@ pub struct MeshDrawPipeline {
 }
 
 impl MeshDrawPipeline {
-	pub fn new(init: &Arc<Init>, format_color: Format, format_depth: Format) -> Self {
+	pub fn new(
+		init: &Arc<Init>,
+		g_albedo_format_srgb: Format,
+		g_normal_format: Format,
+		g_rm_format: Format,
+		depth_format: Format,
+	) -> Self {
 		let pipeline = BindlessMeshGraphicsPipeline::new_task(
 			init.bindless.clone(),
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_task::new(),
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_mesh::new(),
-			crate::shader::renderer::meshlet::mesh_shader::meshlet_frag_meshlet_id::new(),
+			crate::shader::renderer::meshlet::mesh_shader::meshlet_fragment_g_buffer::new(),
 			MeshGraphicsPipelineCreateInfo {
 				viewport_state: ViewportState::default(),
 				rasterization_state: RasterizationState::default(),
@@ -46,22 +52,30 @@ impl MeshDrawPipeline {
 					..DepthStencilState::default()
 				}),
 				color_blend_state: Some(ColorBlendState {
-					attachments: vec![ColorBlendAttachmentState {
-						blend: Some(AttachmentBlend {
-							src_color_blend_factor: BlendFactor::One,
-							dst_color_blend_factor: BlendFactor::Zero,
-							color_blend_op: BlendOp::Add,
-							src_alpha_blend_factor: BlendFactor::One,
-							dst_alpha_blend_factor: BlendFactor::Zero,
-							alpha_blend_op: BlendOp::Add,
-						}),
-						..ColorBlendAttachmentState::default()
-					}],
+					attachments: vec![
+						ColorBlendAttachmentState {
+							blend: Some(AttachmentBlend {
+								src_color_blend_factor: BlendFactor::One,
+								dst_color_blend_factor: BlendFactor::Zero,
+								color_blend_op: BlendOp::Add,
+								src_alpha_blend_factor: BlendFactor::One,
+								dst_alpha_blend_factor: BlendFactor::Zero,
+								alpha_blend_op: BlendOp::Add,
+							}),
+							color_write_enable: true,
+							color_write_mask: ColorComponents::all(),
+						};
+						3
+					],
 					..Default::default()
 				}),
 				subpass: PipelineSubpassType::BeginRendering(PipelineRenderingCreateInfo {
-					color_attachment_formats: vec![Some(format_color)],
-					depth_attachment_format: Some(format_depth),
+					color_attachment_formats: vec![
+						Some(g_albedo_format_srgb),
+						Some(g_normal_format),
+						Some(g_rm_format),
+					],
+					depth_attachment_format: Some(depth_format),
 					..PipelineRenderingCreateInfo::default()
 				})
 				.into(),

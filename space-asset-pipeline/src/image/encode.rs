@@ -5,9 +5,15 @@ use space_asset::image::{
 };
 
 #[derive(Copy, Clone, Debug)]
+pub struct Bc7Settings {
+	opaque: bc7::EncodeSettings,
+	alpha: bc7::EncodeSettings,
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct EncodeSettings {
 	bc4_bc5: bool,
-	bc7: Option<bc7::EncodeSettings>,
+	bc7: Option<Bc7Settings>,
 	zstd_level: i32,
 }
 
@@ -23,7 +29,10 @@ impl EncodeSettings {
 	pub fn ultra_fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::opaque_ultra_fast_settings()),
+			bc7: Some(Bc7Settings {
+				opaque: bc7::opaque_ultra_fast_settings(),
+				alpha: bc7::alpha_ultra_fast_settings(),
+			}),
 			zstd_level: 3,
 		}
 	}
@@ -31,7 +40,10 @@ impl EncodeSettings {
 	pub fn very_fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::alpha_very_fast_settings()),
+			bc7: Some(Bc7Settings {
+				opaque: bc7::opaque_very_fast_settings(),
+				alpha: bc7::alpha_very_fast_settings(),
+			}),
 			zstd_level: 3,
 		}
 	}
@@ -39,7 +51,10 @@ impl EncodeSettings {
 	pub fn fast() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::alpha_fast_settings()),
+			bc7: Some(Bc7Settings {
+				opaque: bc7::opaque_fast_settings(),
+				alpha: bc7::alpha_fast_settings(),
+			}),
 			zstd_level: 3,
 		}
 	}
@@ -47,7 +62,10 @@ impl EncodeSettings {
 	pub fn basic() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::alpha_basic_settings()),
+			bc7: Some(Bc7Settings {
+				opaque: bc7::opaque_basic_settings(),
+				alpha: bc7::alpha_basic_settings(),
+			}),
 			zstd_level: 3,
 		}
 	}
@@ -55,7 +73,10 @@ impl EncodeSettings {
 	pub fn slow() -> Self {
 		Self {
 			bc4_bc5: true,
-			bc7: Some(bc7::alpha_slow_settings()),
+			bc7: Some(Bc7Settings {
+				opaque: bc7::opaque_slow_settings(),
+				alpha: bc7::alpha_slow_settings(),
+			}),
 			zstd_level: 5,
 		}
 	}
@@ -153,15 +174,17 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 				}
 			}
 			ImageType::RGBA_LINEAR | ImageType::RGBA_COLOR => {
-				if let Some(setting) = &settings.bc7 {
+				if let Some(setting) = settings.bc7 {
 					profiling::scope!("bc7::compress_blocks");
+					let none = self.to_none_encode(settings)?;
+					let has_alpha = scan_for_alpha(&none);
 					bc7::compress_blocks(
-						setting,
+						if has_alpha { &setting.alpha } else { &setting.opaque },
 						&RgbaSurface {
 							height: size.height,
 							width: size.width,
 							stride,
-							data: &self.decode()?,
+							data: &none.bytes,
 						},
 					)
 				} else {
@@ -177,5 +200,23 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 			},
 			bytes,
 		})
+	}
+}
+
+#[profiling::function]
+fn scan_for_alpha<const IMAGE_TYPE: u32>(image: &Image2DDisk<IMAGE_TYPE>) -> bool {
+	assert_eq!(image.metadata.disk_compression, DiskImageCompression::None);
+	match image.metadata.image_type() {
+		ImageType::R_VALUES => false,
+		ImageType::RG_VALUES => false,
+		ImageType::RGBA_LINEAR | ImageType::RGBA_COLOR => {
+			assert_eq!(image.bytes.len() % 4, 0);
+			for x in image.bytes.chunks_exact(4) {
+				if x[3] != 255 {
+					return true;
+				}
+			}
+			false
+		}
 	}
 }

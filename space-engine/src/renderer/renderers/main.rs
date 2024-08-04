@@ -1,3 +1,4 @@
+use crate::renderer::lighting::lighting_render_task::LightingRenderTask;
 use crate::renderer::meshlet::meshlet_render_task::MeshletRenderTask;
 use crate::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
 use crate::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
@@ -6,7 +7,7 @@ use space_engine_shader::renderer::frame_data::FrameData;
 use std::sync::Arc;
 use vulkano::format::Format;
 use vulkano::image::view::ImageView;
-use vulkano::image::{Image, ImageCreateInfo, ImageUsage};
+use vulkano::image::{Image, ImageCreateFlags, ImageCreateInfo, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryTypeFilter};
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
@@ -15,22 +16,36 @@ use vulkano_bindless::frame_manager::PrevFrameFuture;
 
 pub struct RenderPipelineMain {
 	pub init: Arc<Init>,
+
 	pub output_format: Format,
+	pub g_albedo_format: Format,
+	pub g_normal_format: Format,
+	pub g_rm_format: Format,
 	pub depth_format: Format,
+
 	pub meshlet_task: MeshletRenderTask,
+	pub lighting_task: LightingRenderTask,
 }
 
 impl RenderPipelineMain {
 	pub fn new(init: &Arc<Init>, output_format: Format) -> Arc<Self> {
-		// always available
+		// all formats are always available
 		let depth_format = Format::D32_SFLOAT;
+		let g_albedo_format = Format::R8G8B8A8_SRGB;
+		let g_normal_format = Format::R16G16B16A16_SFLOAT;
+		let g_rm_format = Format::R16G16_SFLOAT;
 
-		let opaque_task = MeshletRenderTask::new(init, output_format, depth_format);
+		let meshlet_task = MeshletRenderTask::new(init, g_albedo_format, g_normal_format, g_rm_format, depth_format);
+		let lighting_task = LightingRenderTask::new(init);
 		Arc::new(Self {
 			init: init.clone(),
 			output_format,
+			g_albedo_format,
+			g_normal_format,
+			g_rm_format,
 			depth_format,
-			meshlet_task: opaque_task,
+			meshlet_task,
+			lighting_task,
 		})
 	}
 
@@ -46,6 +61,9 @@ pub struct RendererMain {
 }
 
 struct RendererMainResources {
+	g_albedo_image: Arc<ImageView>,
+	g_normal_image: Arc<ImageView>,
+	g_rm_image: Arc<ImageView>,
 	depth_image: Arc<ImageView>,
 	extent: [u32; 3],
 }
@@ -55,28 +73,60 @@ impl RendererMain {
 		let init = &pipeline.init;
 		let (_, render_context_new_frame) = RenderContext::new(init.clone(), frames_in_flight);
 
-		let depth_image = Image::new(
-			init.memory_allocator.clone(),
-			ImageCreateInfo {
-				format: pipeline.depth_format,
-				extent,
-				usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT,
-				..ImageCreateInfo::default()
-			},
-			AllocationCreateInfo {
-				memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-				allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
-				..AllocationCreateInfo::default()
-			},
-		)
-		.unwrap();
-		let depth_image = ImageView::new_default(depth_image).unwrap();
+		let create_image = |format: Format, usage: ImageUsage, flags: ImageCreateFlags| {
+			Image::new(
+				init.memory_allocator.clone(),
+				ImageCreateInfo {
+					flags,
+					format,
+					extent,
+					usage,
+					..ImageCreateInfo::default()
+				},
+				AllocationCreateInfo {
+					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+					allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
+					..AllocationCreateInfo::default()
+				},
+			)
+			.unwrap()
+		};
 
-		let resources = RendererMainResources { extent, depth_image };
+		let g_albedo_image = ImageView::new_default(create_image(
+			pipeline.g_albedo_format,
+			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
+			ImageCreateFlags::empty(),
+		))
+		.unwrap();
+		let g_normal_image = ImageView::new_default(create_image(
+			pipeline.g_normal_format,
+			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
+			ImageCreateFlags::empty(),
+		))
+		.unwrap();
+		let g_rm_image = ImageView::new_default(create_image(
+			pipeline.g_rm_format,
+			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
+			ImageCreateFlags::empty(),
+		))
+		.unwrap();
+		let depth_image = ImageView::new_default(create_image(
+			pipeline.depth_format,
+			ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED,
+			ImageCreateFlags::empty(),
+		))
+		.unwrap();
+
 		Self {
 			pipeline,
 			render_context_new_frame,
-			resources,
+			resources: RendererMainResources {
+				extent,
+				depth_image,
+				g_albedo_image,
+				g_normal_image,
+				g_rm_image,
+			},
 		}
 	}
 
@@ -116,13 +166,29 @@ pub struct RendererMainFrame<'a> {
 
 impl<'a> RendererMainFrame<'a> {
 	#[profiling::function]
-	pub fn record(self, future_await: impl GpuFuture) -> impl GpuFuture {
+	pub fn record(self, future: impl GpuFuture) -> impl GpuFuture {
 		let r = self.resources;
 		let p = self.pipeline;
 		let c = self.frame_context;
 
-		p.meshlet_task
-			.record(c, &self.output_image, &r.depth_image, future_await)
+		let future = p.meshlet_task.record(
+			c,
+			&r.g_albedo_image,
+			&r.g_normal_image,
+			&r.g_rm_image,
+			&r.depth_image,
+			future,
+		);
+		let future = p.lighting_task.record(
+			c,
+			&r.g_albedo_image,
+			&r.g_normal_image,
+			&r.g_rm_image,
+			&r.depth_image,
+			&self.output_image,
+			future,
+		);
+		future
 	}
 }
 

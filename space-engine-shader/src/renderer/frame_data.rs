@@ -1,4 +1,5 @@
 use crate::renderer::camera::Camera;
+use glam::UVec2;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use vulkano_bindless_macros::BufferContent;
 
@@ -9,12 +10,13 @@ pub enum DebugSettings {
 	MeshletIdOverlay,
 	MeshletId,
 	BaseColor,
-	VertexNormals,
-	VertexTexCoords,
+	Normals,
+	Omr,
+	ReconstructedPosition,
 }
 
 impl DebugSettings {
-	pub const MAX_VALUE: DebugSettings = DebugSettings::VertexTexCoords;
+	pub const MAX_VALUE: DebugSettings = DebugSettings::ReconstructedPosition;
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 
@@ -23,6 +25,7 @@ impl DebugSettings {
 #[repr(C)]
 pub struct FrameData {
 	pub camera: Camera,
+	pub viewport_size: UVec2,
 	pub debug_settings: u32,
 }
 

@@ -8,6 +8,9 @@ pub fn shader_symbols_builder_configured_for_space_engine(shader_crate: &str) ->
 		.capability(Capability::MeshShadingEXT)
 		.capability(Capability::GroupNonUniform)
 		.capability(Capability::GroupNonUniformBallot)
+		.capability(Capability::StorageImageExtendedFormats)
+		.capability(Capability::StorageImageReadWithoutFormat)
+		.capability(Capability::StorageImageWriteWithoutFormat)
 		.extension("SPV_EXT_mesh_shader")
 		.spirv_metadata(SpirvMetadata::Full)
 		.shader_panic_strategy(ShaderPanicStrategy::DebugPrintfThenExit {

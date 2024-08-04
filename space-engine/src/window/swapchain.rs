@@ -63,9 +63,7 @@ impl Swapchain {
 						.collect();
 					let f = *formats
 						.iter()
-						.find(|f| f.0 == Format::B8G8R8A8_SRGB)
-						.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_SRGB))
-						.or_else(|| formats.iter().find(|f| f.0 == Format::B8G8R8A8_UNORM))
+						.find(|f| f.0 == Format::B8G8R8A8_UNORM)
 						.or_else(|| formats.iter().find(|f| f.0 == Format::R8G8B8A8_UNORM))
 						.unwrap_or_else(|| &formats[0]);
 					format = f.0;
