@@ -218,6 +218,6 @@ pub fn meshlet_fragment_g_buffer(
 	}
 
 	*frag_albedo = Vec4::from((sampled.albedo, sampled.alpha));
-	*frag_normal = Vec4::from((sampled.normal, out_vertex.meshlet_debug_hue));
+	*frag_normal = Vec4::from((sampled.normal * 0.5 + 0.5, out_vertex.meshlet_debug_hue));
 	*frag_mr = Vec4::from((sampled.metallic, sampled.roughness, 1., 1.));
 }

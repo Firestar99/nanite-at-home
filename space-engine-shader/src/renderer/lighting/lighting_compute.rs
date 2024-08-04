@@ -110,7 +110,7 @@ fn sampled_material_from_g_buffer(
 	let albedo = Vec4::from(g_albedo.fetch(pixel)).xyz();
 	let normal = Vec4::from(g_normal.fetch(pixel));
 	let meshlet_debug_hue = normal.w;
-	let normal = normal.xyz();
+	let normal = normal.xyz() * 2. - 1.;
 	let [metallic, roughness] = Vec4::from(g_mr.fetch(pixel)).xy().to_array();
 	let depth = Vec4::from(depth_image.fetch(pixel)).x;
 
