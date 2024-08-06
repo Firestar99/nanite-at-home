@@ -53,7 +53,7 @@ impl Camera {
 
 	pub fn transform_normal(&self, instance: AffineTransform, normal: Vec3) -> TransformedNormal {
 		let world_space = instance.normals * normal;
-		let camera_space = self.transform.normals * world_space;
+		let camera_space = self.transform.normals.transpose() * world_space;
 		TransformedNormal {
 			world_space,
 			camera_space,
