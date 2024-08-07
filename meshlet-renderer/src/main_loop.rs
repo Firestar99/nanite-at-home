@@ -1,9 +1,9 @@
 use crate::debug_settings_selector::DebugSettingsSelector;
-use crate::delta_time::DeltaTimeTimer;
+use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
-use glam::{vec4, Mat4, UVec3, Vec3, Vec3Swizzles};
+use glam::{vec3, vec4, Mat3, Mat4, UVec3, Vec3, Vec3Swizzles};
 use space_asset::affine_transform::AffineTransform;
 use space_engine::device::init::Plugin;
 use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
@@ -36,7 +36,7 @@ pub enum Debugger {
 	RenderDoc,
 }
 
-const DEBUGGER: Debugger = Debugger::None;
+const DEBUGGER: Debugger = Debugger::RenderDoc;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	if matches!(DEBUGGER, Debugger::RenderDoc) {
@@ -104,7 +104,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
 	let mut debug_settings_selector = DebugSettingsSelector::new();
-	let mut last_frame = DeltaTimeTimer::default();
+	let mut last_frame = DeltaTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
 		profiling::scope!("frame");
@@ -134,30 +134,45 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			renderer_main = Some(render_pipeline_main.new_renderer(acquired_image.image_view().image().extent(), 2));
 		}
 
-		// frame data
 		profiling::scope!("render");
-		let delta_time = last_frame.next();
-		let out_extent = UVec3::from_array(acquired_image.image_view().image().extent());
-		let projection = Mat4::perspective_rh(
-			90. / 360. * 2. * PI,
-			out_extent.x as f32 / out_extent.y as f32,
-			0.1,
-			1000.,
-		) * Mat4::from_cols(
-			vec4(1., 0., 0., 0.),
-			vec4(0., -1., 0., 0.),
-			vec4(0., 0., 1., 0.),
-			vec4(0., 0., 0., 1.),
-		);
-		let frame_data = FrameData {
-			camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
-			debug_settings: debug_settings_selector.get().into(),
-			viewport_size: out_extent.xy(),
-			sun: DirectionalLight {
-				direction: Vec3::new(-0.3, 1., -0.1).normalize(),
-				color: Radiance(Vec3::new(1., 1., 1.)) * 20.,
-			},
-			ambient_light: Radiance(Vec3::splat(0.02)),
+		let frame_data = {
+			let delta_time = last_frame.next();
+			let out_extent = UVec3::from_array(acquired_image.image_view().image().extent());
+			let projection = Mat4::perspective_rh(
+				90. / 360. * 2. * PI,
+				out_extent.x as f32 / out_extent.y as f32,
+				0.1,
+				1000.,
+			) * Mat4::from_cols(
+				vec4(1., 0., 0., 0.),
+				vec4(0., -1., 0., 0.),
+				vec4(0., 0., 1., 0.),
+				vec4(0., 0., 0., 1.),
+			);
+
+			let sun = {
+				const SUN_MAX_ALTITUDE_DEGREE: f32 = 25.;
+				const SUN_INCLINATION_START: f32 = 0.;
+				const SUN_INCLINATION_SPEED: f32 = 0.05;
+
+				let sun_dir = vec3(0., 1., 0.);
+				let inclination = SUN_INCLINATION_START + SUN_INCLINATION_SPEED * delta_time.since_start;
+				let sun_dir = Mat3::from_axis_angle(vec3(1., 0., 0.), inclination * 2. * PI) * sun_dir;
+				let sun_dir =
+					Mat3::from_axis_angle(vec3(0., 0., 1.), f32::to_radians(SUN_MAX_ALTITUDE_DEGREE)) * sun_dir;
+				DirectionalLight {
+					direction: sun_dir.normalize(),
+					color: Radiance(Vec3::new(1., 1., 1.)) * 20.,
+				}
+			};
+
+			FrameData {
+				camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
+				debug_settings: debug_settings_selector.get().into(),
+				viewport_size: out_extent.xy(),
+				sun,
+				ambient_light: Radiance(Vec3::splat(0.1)),
+			}
 		};
 
 		renderer_main.as_mut().unwrap().new_frame(
