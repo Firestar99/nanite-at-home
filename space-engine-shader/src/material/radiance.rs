@@ -1,9 +1,28 @@
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
-use glam::Vec3;
-use vulkano_bindless_macros::BufferContent;
+use glam::{Vec3, Vec3A};
 
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 pub struct Radiance(pub Vec3);
+
+#[derive(Copy, Clone, bytemuck_derive::AnyBitPattern)]
+pub struct RadianceTransfer(Vec3A);
+
+unsafe impl vulkano_bindless_shaders::buffer_content::BufferStruct for Radiance
+where
+	Radiance: Copy,
+{
+	type Transfer = RadianceTransfer;
+	unsafe fn write_cpu(
+		self,
+		_: &mut impl vulkano_bindless_shaders::buffer_content::MetadataCpuInterface,
+	) -> Self::Transfer {
+		RadianceTransfer(Vec3A::from(self.0))
+	}
+	unsafe fn read(from: Self::Transfer, _: vulkano_bindless_shaders::descriptor::metadata::Metadata) -> Self {
+		Self(Vec3::from(from.0))
+	}
+}
 
 impl Radiance {
 	pub fn tone_map_reinhard(&self) -> Vec3 {
