@@ -3,7 +3,7 @@ use crate::delta_time::DeltaTimeTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
-use glam::{vec4, Mat4, UVec3, Vec3Swizzles};
+use glam::{vec4, Mat4, UVec3, Vec3, Vec3Swizzles};
 use space_asset::affine_transform::AffineTransform;
 use space_engine::device::init::Plugin;
 use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
@@ -18,6 +18,8 @@ use space_engine::window::event_loop::EventLoopExecutor;
 use space_engine::window::swapchain::Swapchain;
 use space_engine::window::window_plugin::WindowPlugin;
 use space_engine::window::window_ref::WindowRef;
+use space_engine_shader::material::light::DirectionalLight;
+use space_engine_shader::material::radiance::Radiance;
 use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
@@ -151,6 +153,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
 			debug_settings: debug_settings_selector.get().into(),
 			viewport_size: out_extent.xy(),
+			sun: DirectionalLight {
+				direction: Vec3::new(-0.3, 1., -0.1).normalize(),
+				color: Radiance(Vec3::new(1., 1., 1.)) * 20.,
+			},
+			ambient_light: Radiance(Vec3::splat(0.02)),
 		};
 
 		renderer_main.as_mut().unwrap().new_frame(

@@ -1,3 +1,5 @@
+use crate::material::light::DirectionalLight;
+use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
 use glam::UVec2;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -27,6 +29,8 @@ pub struct FrameData {
 	pub camera: Camera,
 	pub viewport_size: UVec2,
 	pub debug_settings: u32,
+	pub sun: DirectionalLight,
+	pub ambient_light: Radiance,
 }
 
 impl FrameData {

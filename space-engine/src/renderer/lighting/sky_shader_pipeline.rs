@@ -1,6 +1,6 @@
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
-use space_engine_shader::renderer::lighting::lighting_compute::{Params, LIGHTING_WG_SIZE};
+use space_engine_shader::renderer::lighting::sky_shader::Params;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -11,15 +11,15 @@ use vulkano::pipeline::PipelineBindPoint;
 use vulkano::pipeline::{Pipeline, PipelineLayout};
 use vulkano_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 
-pub struct LightingPipeline {
+pub struct SkyShaderPipeline {
 	pipeline: BindlessComputePipeline<Params<'static>>,
 }
 
-impl LightingPipeline {
+impl SkyShaderPipeline {
 	pub fn new(init: &Arc<Init>, image_descriptor_set_layout: &Arc<DescriptorSetLayout>) -> Self {
 		let pipeline = BindlessComputePipeline::new(
 			init.bindless.clone(),
-			crate::shader::renderer::lighting::lighting_compute::lighting_cs::new(),
+			crate::shader::renderer::lighting::sky_shader::sky_shader_cs::new(),
 			Some(init.pipeline_cache.deref().clone()),
 			Some(
 				PipelineLayout::new(
@@ -50,15 +50,10 @@ impl LightingPipeline {
 	) {
 		unsafe {
 			let image_size = frame_context.frame_data.viewport_size;
-			let groups = [
-				(image_size.x + LIGHTING_WG_SIZE - 1) / LIGHTING_WG_SIZE,
-				image_size.y,
-				1,
-			];
 			self.pipeline
 				.dispatch(
 					cmd,
-					groups,
+					[image_size.x, image_size.y, 1],
 					|cmd| {
 						cmd.bind_descriptor_sets(
 							PipelineBindPoint::Compute,
