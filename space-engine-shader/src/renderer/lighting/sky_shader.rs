@@ -89,7 +89,7 @@ fn sun_intensity(zenith_angle_cos: f32) -> f32 {
 		* 0.0f32.max(1.0 - (-((cutoff_angle - acos_approx(zenith_angle_cos)) / SUN_INTENSITY_FALLOFF_STEEPNESS)).exp())
 }
 
-fn preetham_sky(dir: Vec3, sun_position: Vec3) -> Vec3 {
+pub fn preetham_sky(dir: Vec3, sun_position: Vec3) -> Vec3 {
 	let up = vec3(0.0, 1.0, 0.0);
 	let sunfade = 1.0 - (1.0 - saturate(sun_position.y / 450000.0).exp());
 	let rayleigh_coefficient = RAYLEIGH - (1.0 * (1.0 - sunfade));

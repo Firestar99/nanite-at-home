@@ -22,6 +22,7 @@ use space_engine_shader::material::light::DirectionalLight;
 use space_engine_shader::material::radiance::Radiance;
 use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
+use space_engine_shader::renderer::lighting::sky_shader::preetham_sky;
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 use vulkano::shader::ShaderStages;
@@ -160,9 +161,14 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 				let sun_dir = Mat3::from_axis_angle(vec3(1., 0., 0.), inclination * 2. * PI) * sun_dir;
 				let sun_dir =
 					Mat3::from_axis_angle(vec3(0., 0., 1.), f32::to_radians(SUN_MAX_ALTITUDE_DEGREE)) * sun_dir;
+				// not strictly necessary, but why not correct some inaccuracy?
+				let sun_dir = sun_dir.normalize();
+
+				let color = preetham_sky(sun_dir, sun_dir) / 1_000_000.;
+				let color = color.clamp(Vec3::splat(0.), Vec3::splat(1.));
 				DirectionalLight {
-					direction: sun_dir.normalize(),
-					color: Radiance(Vec3::new(1., 1., 1.)) * 20.,
+					direction: sun_dir,
+					color: Radiance(color),
 				}
 			};
 
