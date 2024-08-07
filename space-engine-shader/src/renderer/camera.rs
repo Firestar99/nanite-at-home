@@ -53,7 +53,7 @@ impl Camera {
 
 	pub fn transform_normal(&self, instance: AffineTransform, normal: Vec3) -> TransformedNormal {
 		let world_space = instance.normals * normal;
-		let camera_space = self.transform.normals * world_space;
+		let camera_space = self.transform.normals.transpose() * world_space;
 		TransformedNormal {
 			world_space,
 			camera_space,
@@ -62,7 +62,7 @@ impl Camera {
 
 	/// Reconstruct positions from fragment position [0, 1] and depth value
 	pub fn reconstruct_from_depth(&self, fragment_pos: Vec2, depth: f32) -> TransformedPosition {
-		let clip_space = Vec4::from((fragment_pos * 2. - 1., depth, 1.0));
+		let clip_space = Vec4::from((fragment_pos * 2. - 1., depth, 1.));
 		let camera_space = self.perspective_inverse * clip_space;
 		let camera_space = camera_space.xyz() / camera_space.w;
 		let world_space = self.transform.affine.transform_point3(camera_space);
@@ -70,6 +70,17 @@ impl Camera {
 			world_space,
 			camera_space,
 			clip_space,
+		}
+	}
+
+	pub fn reconstruct_direction(&self, fragment_pos: Vec2) -> TransformedNormal {
+		let clip_pos = fragment_pos * 2. - 1.;
+		let clip_space = Vec4::from((clip_pos, (1. - clip_pos.length()).max(0.), 1.));
+		let camera_space = (self.perspective_inverse * clip_space).xyz().normalize();
+		let world_space = self.transform.normals * camera_space;
+		TransformedNormal {
+			world_space,
+			camera_space,
 		}
 	}
 }

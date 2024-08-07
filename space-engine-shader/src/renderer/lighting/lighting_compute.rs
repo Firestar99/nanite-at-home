@@ -1,8 +1,8 @@
-use crate::material::light::DirectionalLight;
 use crate::material::pbr::{SampledMaterial, V};
 use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
+use crate::renderer::lighting::is_skybox;
 use crate::utils::hsv::hsv2rgb_smooth;
 use crate::utils::srgb::linear_to_srgb_alpha;
 use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
@@ -20,7 +20,7 @@ pub const LIGHTING_WG_SIZE: u32 = 64;
 
 const_assert_eq!(LIGHTING_WG_SIZE, 64);
 #[bindless(compute(threads(64)))]
-pub fn lighting(
+pub fn lighting_cs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[bindless(param_constants)] param: &Params<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
@@ -62,12 +62,15 @@ fn lighting_inner(
 
 	let (sampled, meshlet_debug_hue) =
 		sampled_material_from_g_buffer(frame_data.camera, g_albedo, g_normal, g_mr, depth_image, pixel, size);
+	let skybox = is_skybox(sampled.alpha);
 
 	let out_color = match frame_data.debug_settings() {
-		DebugSettings::None => material_eval(sampled),
-		DebugSettings::MeshletIdOverlay => {
-			Vec3::lerp(material_eval(sampled), meshlet_debug_color(meshlet_debug_hue), 0.1)
-		}
+		DebugSettings::None => material_eval(frame_data, sampled),
+		DebugSettings::MeshletIdOverlay => Vec3::lerp(
+			material_eval(frame_data, sampled),
+			meshlet_debug_color(meshlet_debug_hue),
+			0.1,
+		),
 		DebugSettings::MeshletId => meshlet_debug_color(meshlet_debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals => sampled.normal,
@@ -93,8 +96,10 @@ fn lighting_inner(
 
 	let out_color = Vec4::from((out_color, 1.));
 	let out_color = linear_to_srgb_alpha(out_color);
-	unsafe {
-		output_image.write(pixel, out_color);
+	if !skybox {
+		unsafe {
+			output_image.write(pixel, out_color);
+		}
 	}
 }
 
@@ -107,7 +112,9 @@ fn sampled_material_from_g_buffer(
 	pixel: UVec2,
 	size: UVec2,
 ) -> (SampledMaterial, f32) {
-	let albedo = Vec4::from(g_albedo.fetch(pixel)).xyz();
+	let albedo = Vec4::from(g_albedo.fetch(pixel));
+	let alpha = albedo.w;
+	let albedo = albedo.xyz();
 	let normal = Vec4::from(g_normal.fetch(pixel));
 	let meshlet_debug_hue = normal.w;
 	let normal = normal.xyz() * 2. - 1.;
@@ -119,7 +126,7 @@ fn sampled_material_from_g_buffer(
 		world_pos: position.world_space,
 		v: V::new(position.world_space, camera.transform.translation()),
 		albedo,
-		alpha: 1.,
+		alpha,
 		normal,
 		metallic,
 		roughness,
@@ -127,16 +134,10 @@ fn sampled_material_from_g_buffer(
 	(sampled, meshlet_debug_hue)
 }
 
-fn material_eval(sampled: SampledMaterial) -> Vec3 {
-	let directional_light = DirectionalLight {
-		direction: Vec3::new(-0.3, 1., -0.1).normalize(),
-		color: Radiance(Vec3::new(1., 1., 1.)) * 20.,
-	};
-	let ambient_light = Radiance(Vec3::splat(0.02));
-
+fn material_eval(frame_data: FrameData, sampled: SampledMaterial) -> Vec3 {
 	let mut lo = Radiance(Vec3::ZERO);
-	lo += sampled.evaluate_directional_light(directional_light);
-	lo += sampled.ambient_light(ambient_light);
+	lo += sampled.evaluate_directional_light(frame_data.sun);
+	lo += sampled.ambient_light(frame_data.ambient_light);
 	lo.tone_map_reinhard()
 }
 
