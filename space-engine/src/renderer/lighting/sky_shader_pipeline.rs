@@ -1,6 +1,6 @@
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
-use space_engine_shader::renderer::lighting::sky_shader::Params;
+use space_engine_shader::renderer::lighting::sky_shader::{Params, SKY_SHADER_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -50,10 +50,15 @@ impl SkyShaderPipeline {
 	) {
 		unsafe {
 			let image_size = frame_context.frame_data.viewport_size;
+			let groups = [
+				(image_size.x + SKY_SHADER_WG_SIZE.x - 1) / SKY_SHADER_WG_SIZE.x,
+				(image_size.y + SKY_SHADER_WG_SIZE.y - 1) / SKY_SHADER_WG_SIZE.y,
+				1,
+			];
 			self.pipeline
 				.dispatch(
 					cmd,
-					[image_size.x, image_size.y, 1],
+					groups,
 					|cmd| {
 						cmd.bind_descriptor_sets(
 							PipelineBindPoint::Compute,

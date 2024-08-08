@@ -2,15 +2,15 @@
 //! Ported to Rust from <https://github.com/Tw1ddle/Sky-Shader/blob/master/src/shaders/glsl/sky.fragment>
 
 use crate::renderer::frame_data::FrameData;
+use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
 use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
 use spirv_std::image::{Image2d, StorageImage2d};
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
-
-use crate::renderer::lighting::is_skybox;
 #[cfg(target_arch = "spirv")]
 use spirv_std::num_traits::Float;
+use static_assertions::const_assert_eq;
+use vulkano_bindless_macros::{bindless, BufferContent};
+use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 pub fn saturate(x: f32) -> f32 {
 	x.clamp(0.0, 1.0)
@@ -137,7 +137,11 @@ pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }
 
-#[bindless(compute(threads(1)))]
+pub const SKY_SHADER_WG_SIZE: UVec2 = UVec2::new(8, 8);
+
+const_assert_eq!(SKY_SHADER_WG_SIZE.x, 8);
+const_assert_eq!(SKY_SHADER_WG_SIZE.y, 8);
+#[bindless(compute(threads(8, 8)))]
 pub fn sky_shader_cs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[bindless(param_constants)] param: &Params<'static>,
