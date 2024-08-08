@@ -38,7 +38,7 @@ pub enum Debugger {
 	RenderDoc,
 }
 
-const DEBUGGER: Debugger = Debugger::RenderDoc;
+const DEBUGGER: Debugger = Debugger::None;
 
 pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	if matches!(DEBUGGER, Debugger::RenderDoc) {
