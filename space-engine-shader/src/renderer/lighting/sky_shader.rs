@@ -150,8 +150,9 @@ pub fn sky_shader_cs(
 	#[spirv(global_invocation_id)] inv_id: UVec3,
 ) {
 	let frame_data = param.frame_data.access(descriptors).load();
-	let pixel = inv_id.xy();
 	let size: UVec2 = frame_data.viewport_size;
+	let pixel = inv_id.xy();
+	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
 	let albedo_alpha = Vec4::from(g_albedo.fetch(pixel)).w;
 	let skybox = is_skybox(albedo_alpha);
@@ -162,7 +163,7 @@ pub fn sky_shader_cs(
 
 	let color = preetham_sky(normal.world_space, frame_data.sun.direction);
 	let color = tonemap(color.clamp(Vec3::splat(0.0), Vec3::splat(1024.0)));
-	if skybox {
+	if pixel_inbounds && skybox {
 		unsafe {
 			output_image.write(pixel, color.extend(1.0));
 		}

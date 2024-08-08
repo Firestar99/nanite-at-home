@@ -59,6 +59,7 @@ fn lighting_inner(
 	let size: UVec2 = frame_data.viewport_size;
 	let pixel_wg_start = wg_id.xy() * uvec2(64, 1);
 	let pixel = pixel_wg_start + uvec2(inv_id.x, 0);
+	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
 	let (sampled, meshlet_debug_hue) =
 		sampled_material_from_g_buffer(frame_data.camera, g_albedo, g_normal, g_mr, depth_image, pixel, size);
@@ -96,7 +97,7 @@ fn lighting_inner(
 
 	let out_color = Vec4::from((out_color, 1.));
 	let out_color = linear_to_srgb_alpha(out_color);
-	if !skybox {
+	if pixel_inbounds && !skybox {
 		unsafe {
 			output_image.write(pixel, out_color);
 		}
