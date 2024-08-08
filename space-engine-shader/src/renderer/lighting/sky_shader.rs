@@ -2,15 +2,15 @@
 //! Ported to Rust from <https://github.com/Tw1ddle/Sky-Shader/blob/master/src/shaders/glsl/sky.fragment>
 
 use crate::renderer::frame_data::FrameData;
+use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
 use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
 use spirv_std::image::{Image2d, StorageImage2d};
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
-
-use crate::renderer::lighting::is_skybox;
 #[cfg(target_arch = "spirv")]
 use spirv_std::num_traits::Float;
+use static_assertions::const_assert_eq;
+use vulkano_bindless_macros::{bindless, BufferContent};
+use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 pub fn saturate(x: f32) -> f32 {
 	x.clamp(0.0, 1.0)
@@ -137,7 +137,11 @@ pub struct Params<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }
 
-#[bindless(compute(threads(1)))]
+pub const SKY_SHADER_WG_SIZE: UVec2 = UVec2::new(8, 8);
+
+const_assert_eq!(SKY_SHADER_WG_SIZE.x, 8);
+const_assert_eq!(SKY_SHADER_WG_SIZE.y, 8);
+#[bindless(compute(threads(8, 8)))]
 pub fn sky_shader_cs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[bindless(param_constants)] param: &Params<'static>,
@@ -146,8 +150,9 @@ pub fn sky_shader_cs(
 	#[spirv(global_invocation_id)] inv_id: UVec3,
 ) {
 	let frame_data = param.frame_data.access(descriptors).load();
-	let pixel = inv_id.xy();
 	let size: UVec2 = frame_data.viewport_size;
+	let pixel = inv_id.xy();
+	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
 	let albedo_alpha = Vec4::from(g_albedo.fetch(pixel)).w;
 	let skybox = is_skybox(albedo_alpha);
@@ -158,7 +163,7 @@ pub fn sky_shader_cs(
 
 	let color = preetham_sky(normal.world_space, frame_data.sun.direction);
 	let color = tonemap(color.clamp(Vec3::splat(0.0), Vec3::splat(1024.0)));
-	if skybox {
+	if pixel_inbounds && skybox {
 		unsafe {
 			output_image.write(pixel, color.extend(1.0));
 		}
