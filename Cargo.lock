@@ -1545,7 +1545,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "profiling",
- "puffin_http",
  "space-asset",
  "space-asset-pipeline",
 ]
@@ -2502,7 +2501,6 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "profiling",
- "puffin_http",
  "quote",
  "rayon",
  "rkyv",
