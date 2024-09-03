@@ -1,5 +1,5 @@
 use core::mem;
-use glam::{Affine3A, Mat3, Mat3A, Vec3, Vec3A};
+use glam::{Affine3A, Mat3, Vec3};
 use static_assertions::const_assert_eq;
 
 /// Affine transformation like [`Affine3A`] but also stores a matrix to transform normals.
@@ -53,37 +53,8 @@ where
 
 	unsafe fn read(from: Self::Transfer, _meta: vulkano_bindless_shaders::descriptor::metadata::Metadata) -> Self {
 		Self {
-			affine: affine3a_from_cols_array(from.transform),
+			affine: Affine3A::from_cols_array(&from.transform),
 			normals: Mat3::from_cols_array(&from.transform_normals),
 		}
-	}
-}
-
-/// same as `Affine3A::from_cols_array(&transform)` but doesn't use slices
-pub const fn affine3a_from_cols_array(transform: [f32; 12]) -> Affine3A {
-	Affine3A {
-		matrix3: Mat3A::from_cols_array(&[
-			transform[0],
-			transform[1],
-			transform[2],
-			transform[3],
-			transform[4],
-			transform[5],
-			transform[6],
-			transform[7],
-			transform[8],
-		]),
-		translation: Vec3A::from_array([transform[9], transform[10], transform[11]]),
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_affine3a_from_cols_array() {
-		let affine3a = Affine3A::from_cols_array(&[0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11.]);
-		assert_eq!(affine3a, affine3a_from_cols_array(affine3a.to_cols_array()));
 	}
 }
