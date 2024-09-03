@@ -3,6 +3,7 @@ use crate::descriptor::metadata::Metadata;
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use core::num::Wrapping;
+use spirv_std::arch::IndexUnchecked;
 
 macro_rules! identity {
 	($t:ty) => {
@@ -86,19 +87,23 @@ where
 
 	#[inline]
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
-		let mut ret = [T::Transfer::default(); N];
-		for i in 0..N {
-			ret[i] = T::write_cpu(self[i], _meta);
+		unsafe {
+			let mut ret = [T::Transfer::default(); N];
+			for i in 0..N {
+				*ret.index_unchecked_mut(i) = T::write_cpu(*self.index_unchecked(i), _meta);
+			}
+			ret
 		}
-		ret
 	}
 
 	#[inline]
 	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
-		let mut ret = [T::default(); N];
-		for i in 0..N {
-			ret[i] = T::read(from[i], _meta);
+		unsafe {
+			let mut ret = [T::default(); N];
+			for i in 0..N {
+				*ret.index_unchecked_mut(i) = T::read(*from.index_unchecked(i), _meta);
+			}
+			ret
 		}
-		ret
 	}
 }
