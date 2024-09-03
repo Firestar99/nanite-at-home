@@ -121,23 +121,6 @@ unsafe impl<R: DescStructRef, C: DescContent> BufferStruct for Desc<R, C> {
 	}
 }
 
-unsafe impl<R: DescRef + bytemuck::AnyBitPattern> DescStructRef for R {
-	type TransferDescStruct = R;
-
-	unsafe fn desc_write_cpu<C: DescContent>(
-		desc: Desc<Self, C>,
-		meta: &mut impl MetadataCpuInterface,
-	) -> Self::TransferDescStruct {
-		// Safety: delegated
-		unsafe { R::write_cpu(desc.r, meta) }
-	}
-
-	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, meta: Metadata) -> Desc<Self, C> {
-		// Safety: delegated
-		unsafe { Desc::new_inner(R::read(from, meta)) }
-	}
-}
-
 /// AnyDesc is a [`Desc`] that does not care for the contents the reference is pointing to, only for the reference
 /// existing. This is particularly useful with RC (reference counted), to keep content alive without having to know what
 /// it is. Create using [`Desc::into_any`]

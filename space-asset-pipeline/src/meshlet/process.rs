@@ -146,12 +146,9 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	let draw_vertices = out
 		.vertices
 		.into_iter()
-		.map(|i| {
-			DrawVertex {
-				position: vertex_positions[i as usize],
-				material_vertex_id: MaterialVertexId(i),
-			}
-			.encode()
+		.map(|i| DrawVertex {
+			position: vertex_positions[i as usize],
+			material_vertex_id: MaterialVertexId(i),
 		})
 		.collect();
 

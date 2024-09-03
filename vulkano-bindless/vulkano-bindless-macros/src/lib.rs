@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::Error;
 
+mod assert_transfer_size;
 mod bindless;
 mod buffer_content;
 mod symbols;
@@ -19,6 +20,13 @@ pub fn bindless(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(BufferContent)]
 pub fn buffer_content(content: TokenStream) -> TokenStream {
 	buffer_content::buffer_content(content)
+		.unwrap_or_else(Error::into_compile_error)
+		.into()
+}
+
+#[proc_macro]
+pub fn assert_transfer_size(content: TokenStream) -> TokenStream {
+	assert_transfer_size::assert_transfer_size(content)
 		.unwrap_or_else(Error::into_compile_error)
 		.into()
 }

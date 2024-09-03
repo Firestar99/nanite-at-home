@@ -4,23 +4,20 @@ use crate::meshlet::error::MeshletError;
 use glam::{Vec2, Vec3};
 use gltf::{Material, Primitive};
 use space_asset::image::ImageType;
-use space_asset::material::pbr::vertex::{EncodedPbrVertex, PbrVertex};
+use space_asset::material::pbr::vertex::PbrVertex;
 use space_asset::material::pbr::PbrMaterialDisk;
 
 #[profiling::function]
-pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<Vec<EncodedPbrVertex>> {
+pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<Vec<PbrVertex>> {
 	let reader = primitive.reader(|b| gltf.buffer(b));
 	let vertices = reader
 		.read_tex_coords(0)
 		.ok_or(MeshletError::NoTextureCoords)?
 		.into_f32()
 		.zip(reader.read_normals().ok_or(MeshletError::NoNormals)?)
-		.map(|(tex_coords, normals)| {
-			PbrVertex {
-				normals: Vec3::from(normals),
-				tex_coords: Vec2::from(tex_coords),
-			}
-			.encode()
+		.map(|(tex_coords, normals)| PbrVertex {
+			normals: Vec3::from(normals),
+			tex_coords: Vec2::from(tex_coords),
 		})
 		.collect();
 	Ok(vertices)

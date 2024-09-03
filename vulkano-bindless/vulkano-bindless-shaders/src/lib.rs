@@ -14,3 +14,4 @@ pub use bytemuck;
 pub use bytemuck_derive;
 pub use spirv_std;
 pub use spirv_std::{spirv, Image};
+pub use static_assertions;

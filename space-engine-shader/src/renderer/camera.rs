@@ -1,8 +1,7 @@
 use crate::utils::affine::AffineTranspose;
 use bytemuck_derive::AnyBitPattern;
-use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use space_asset::affine_transform::AffineTransform;
-use spirv_std::glam::Mat4;
 use vulkano_bindless_macros::BufferContent;
 
 #[derive(Copy, Clone, BufferContent)]
