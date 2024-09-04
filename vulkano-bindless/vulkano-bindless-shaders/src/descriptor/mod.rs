@@ -5,6 +5,9 @@ mod image;
 mod metadata;
 mod reference;
 mod sampler;
+mod strong;
+mod transient;
+mod weak;
 
 #[path = "../../../image_types.rs"]
 #[macro_use]
@@ -17,6 +20,9 @@ pub use image::*;
 pub use metadata::*;
 pub use reference::*;
 pub use sampler::*;
+pub use strong::*;
+pub use transient::*;
+pub use weak::*;
 
 pub const BINDING_BUFFER: u32 = 0;
 pub const BINDING_STORAGE_IMAGE: u32 = 1;
