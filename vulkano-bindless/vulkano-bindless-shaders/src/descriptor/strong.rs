@@ -47,9 +47,8 @@ impl<C: DescContent> StrongDesc<C> {
 
 	#[inline]
 	pub fn to_transient<'a>(&self, frame: FrameInFlight<'a>) -> TransientDesc<'a, C> {
-		let _ = frame;
 		// Safety: this StrongDesc existing ensures the descriptor will stay alive for this frame
-		unsafe { TransientDesc::new(self.id()) }
+		unsafe { TransientDesc::new(self.id(), frame) }
 	}
 }
 

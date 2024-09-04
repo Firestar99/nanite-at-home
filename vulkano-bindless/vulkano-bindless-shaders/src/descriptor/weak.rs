@@ -1,10 +1,10 @@
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{Desc, DescContent, DescRef};
-use bytemuck_derive::AnyBitPattern;
+use crate::descriptor::{Desc, DescContent, DescRef, Metadata};
 use core::mem;
 use static_assertions::const_assert_eq;
+use vulkano_bindless_macros::BufferContent;
 
-#[derive(Copy, Clone, AnyBitPattern)]
+#[derive(Copy, Clone, BufferContent)]
 pub struct Weak {
 	id: u32,
 	version: u32,
@@ -41,7 +41,7 @@ impl<C: DescContent> WeakDesc<C> {
 	/// # Safety
 	/// This unsafe variant assumes the descriptor is still alive, rather than checking whether it actually is.
 	#[inline]
-	pub unsafe fn upgrade_unchecked<'a>(&self) -> TransientDesc<'a, C> {
-		unsafe { TransientDesc::new(self.r.id) }
+	pub unsafe fn upgrade_unchecked<'a>(&self, meta: Metadata) -> TransientDesc<'a, C> {
+		unsafe { TransientDesc::new(self.r.id, meta.fake_fif()) }
 	}
 }

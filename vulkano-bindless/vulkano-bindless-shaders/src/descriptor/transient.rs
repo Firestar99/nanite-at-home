@@ -1,6 +1,7 @@
 use crate::buffer_content::MetadataCpuInterface;
 use crate::descriptor::metadata::Metadata;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
+use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
 use core::marker::PhantomData;
 use core::mem;
@@ -29,9 +30,13 @@ impl<'a, C: DescContent> TransientDesc<'a, C> {
 	///
 	/// # Safety
 	/// * The C generic must match the content that the [`DescRef`] points to.
-	/// * id must be a valid descriptor id that stays valid for the remainder of the frame.
+	/// * id must be a valid descriptor id that stays valid for the remainder of the frame `'a`.
 	#[inline]
-	pub const unsafe fn new(id: u32) -> Self {
+	pub const unsafe fn new(id: u32, frame_in_flight: FrameInFlight<'a>) -> Self {
+		// We just need the lifetime of the frame, no need to actually store the value.
+		// Apart from maybe future validation?
+		// If this value is ever used, weak's upgrade_unchecked() needs to be adjusted accordingly!
+		let _ = frame_in_flight;
 		unsafe {
 			Self::new_inner(Transient {
 				id,
@@ -52,7 +57,7 @@ unsafe impl<'a> DescStructRef for Transient<'a> {
 	}
 
 	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
-		unsafe { TransientDesc::new(from.id) }
+		unsafe { TransientDesc::new(from.id, _meta.fake_fif()) }
 	}
 }
 

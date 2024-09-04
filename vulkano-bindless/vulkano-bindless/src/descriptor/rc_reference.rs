@@ -48,9 +48,8 @@ pub trait RCDescExt<C: DescContentCpu>:
 
 	#[inline]
 	fn to_transient<'a>(&self, frame: FrameInFlight<'a>) -> TransientDesc<'a, C> {
-		let _ = frame;
 		// Safety: C does not change, this RCDesc existing ensures the descriptor will stay alive for this frame
-		unsafe { TransientDesc::new(self.id()) }
+		unsafe { TransientDesc::new(self.id(), frame) }
 	}
 
 	#[inline]
