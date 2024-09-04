@@ -109,7 +109,7 @@ anyhow = "1.0"
 num_enum = { version = "0.7.2", default-features = false }
 
 [patch.crates-io]
-glam = { git = "https://github.com/Firestar99/glam-rs.git", rev = "9e4bb5da04b0c294a1a0faca1d365a224b65f5bd" }
+glam = { git = "https://github.com/Firestar99/glam-rs.git", rev = "27649a451790a3fc8a34f021937ea3fcb45b5ff5" }
 
 
 
