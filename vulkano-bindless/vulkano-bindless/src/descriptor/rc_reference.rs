@@ -4,7 +4,7 @@ use crate::rc_slot::RCSlot;
 use static_assertions::assert_impl_all;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use vulkano_bindless_shaders::descriptor::reference::{AnyDesc, DerefDescRef, DescRef, StrongDesc};
+use vulkano_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescRef, StrongDesc};
 use vulkano_bindless_shaders::descriptor::{Desc, Sampler, TransientDesc, WeakDesc};
 
 /// Trait defining all common impl between `Desc<RC, C>` and `RCDesc<C>`

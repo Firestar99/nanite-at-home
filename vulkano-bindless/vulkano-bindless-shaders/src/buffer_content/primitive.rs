@@ -1,5 +1,5 @@
 use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
-use crate::descriptor::metadata::Metadata;
+use crate::descriptor::Metadata;
 use bytemuck::Pod;
 use core::marker::PhantomData;
 use core::num::Wrapping;

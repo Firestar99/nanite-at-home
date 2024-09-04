@@ -1,14 +1,13 @@
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::resource_table::TableEpochGuard;
+use crate::descriptor::{BufferTable, ImageTable, SamplerTable};
 use crate::rc_slot::RCSlotsInterface;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::shader::ShaderStages;
-
-use crate::descriptor::{BufferTable, ImageTable, SamplerTable};
-pub use vulkano_bindless_shaders::descriptor::descriptor_content::*;
+use vulkano_bindless_shaders::descriptor::{DescContent, DescContentEnum};
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
 pub trait DescContentCpu: DescContent {

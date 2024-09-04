@@ -22,8 +22,7 @@ use vulkano_bindless::descriptor::buffer_metadata_cpu::{BackingRefsError, Strong
 use vulkano_bindless::descriptor::{Bindless, RCDesc, StrongBackingRefs, RC};
 use vulkano_bindless::spirv_std::image::Image2d;
 use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
-use vulkano_bindless_shaders::descriptor::metadata::Metadata;
-use vulkano_bindless_shaders::descriptor::{Buffer, Desc};
+use vulkano_bindless_shaders::descriptor::{Buffer, Desc, Metadata};
 use zune_image::errors::ImageErrors;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T

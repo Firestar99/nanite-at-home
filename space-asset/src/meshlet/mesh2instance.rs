@@ -2,8 +2,7 @@ mod gpu {
 	use crate::meshlet::instance::MeshletInstance;
 	use crate::meshlet::mesh::MeshletMesh;
 	use vulkano_bindless_macros::BufferContent;
-	use vulkano_bindless_shaders::descriptor::reference::DescStructRef;
-	use vulkano_bindless_shaders::descriptor::{Buffer, Desc, DescRef};
+	use vulkano_bindless_shaders::descriptor::{Buffer, Desc, DescRef, DescStructRef};
 
 	#[repr(C)]
 	#[derive(Copy, Clone, BufferContent)]
@@ -39,8 +38,7 @@ mod runtime {
 	use std::future::Future;
 	use std::ops::Deref;
 	use vulkano::Validated;
-	use vulkano_bindless::descriptor::RC;
-	use vulkano_bindless_shaders::descriptor::reference::Strong;
+	use vulkano_bindless::descriptor::{Strong, RC};
 
 	pub struct MeshletMesh2InstanceCpu {
 		pub mesh2instance: MeshletMesh2Instance<RC, Strong>,

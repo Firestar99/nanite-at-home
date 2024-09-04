@@ -1,6 +1,6 @@
-use crate::descriptor::metadata::Metadata;
-use crate::descriptor::reference::StrongDesc;
 use crate::descriptor::DescContent;
+use crate::descriptor::Metadata;
+use crate::descriptor::StrongDesc;
 use bytemuck::AnyBitPattern;
 use core::ops::Deref;
 

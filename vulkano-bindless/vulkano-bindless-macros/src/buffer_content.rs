@@ -117,7 +117,7 @@ pub fn buffer_content(content: proc_macro::TokenStream) -> Result<TokenStream> {
 				#write_cpu
 			}
 
-			unsafe fn read(from: Self::Transfer, meta: #crate_shaders::descriptor::metadata::Metadata) -> Self {
+			unsafe fn read(from: Self::Transfer, meta: #crate_shaders::descriptor::Metadata) -> Self {
 				#read
 			}
 		}

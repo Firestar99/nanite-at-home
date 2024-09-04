@@ -7,9 +7,7 @@ use spirv_std::image::Image2d;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::descriptors::Descriptors;
-use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
-use vulkano_bindless_shaders::descriptor::{Buffer, TransientDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, StrongDesc, TransientDesc};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {

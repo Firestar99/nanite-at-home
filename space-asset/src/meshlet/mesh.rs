@@ -7,8 +7,7 @@ mod gpu {
 	use core::ops::Deref;
 	use glam::UVec3;
 	use vulkano_bindless_macros::{assert_transfer_size, BufferContent};
-	use vulkano_bindless_shaders::descriptor::reference::{AliveDescRef, Desc, DescRef};
-	use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors};
+	use vulkano_bindless_shaders::descriptor::{AliveDescRef, Buffer, Desc, DescRef, Descriptors};
 
 	#[repr(C)]
 	#[derive(Copy, Clone, Debug, BufferContent)]
@@ -191,8 +190,7 @@ mod runtime {
 	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
 	use std::future::Future;
 	use vulkano::Validated;
-	use vulkano_bindless::descriptor::{RCDescExt, RC};
-	use vulkano_bindless_shaders::descriptor::reference::Strong;
+	use vulkano_bindless::descriptor::{RCDescExt, Strong, RC};
 
 	impl MeshletMesh<RC> {
 		pub fn to_strong(&self) -> MeshletMesh<Strong> {

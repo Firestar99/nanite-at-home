@@ -7,7 +7,7 @@ use static_assertions::const_assert;
 pub struct Metadata;
 
 /// Reserve 32 bits of push constant for Metadata
-pub const METADATA_MAX_SIZE: usize = 32;
+pub const METADATA_MAX_SIZE: usize = 4;
 const_assert!(core::mem::size_of::<Metadata>() <= METADATA_MAX_SIZE);
 
 /// All bindless push constants are this particular struct, with T being the declared push_param.

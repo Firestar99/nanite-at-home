@@ -1,5 +1,5 @@
 use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
-use crate::descriptor::metadata::Metadata;
+use crate::descriptor::Metadata;
 
 macro_rules! glam_array {
 	($t:ty, $a:ty) => {

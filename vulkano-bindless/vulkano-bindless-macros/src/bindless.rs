@@ -191,7 +191,7 @@ fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> R
 
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 	context.entry_args.append_tokens(quote! {
-		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::metadata::PushConstant<<#param_ty as #crate_shaders::buffer_content::BufferStruct>::Transfer>,
+		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::PushConstant<<#param_ty as #crate_shaders::buffer_content::BufferStruct>::Transfer>,
 	});
 	context.inner_value.append_tokens(quote! {
 		unsafe { &<#param_ty as #crate_shaders::buffer_content::BufferStruct>::read(#push_constant.t, #push_constant.metadata) },

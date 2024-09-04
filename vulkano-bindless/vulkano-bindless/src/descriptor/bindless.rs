@@ -21,7 +21,7 @@ use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
 use vulkano::pipeline::PipelineLayout;
 use vulkano::shader::ShaderStages;
 use vulkano_bindless_shaders::buffer_content::BufferStruct;
-use vulkano_bindless_shaders::descriptor::metadata::PushConstant;
+use vulkano_bindless_shaders::descriptor::PushConstant;
 
 pub const BINDLESS_MAX_PUSH_CONSTANT_WORDS: usize = 4;
 

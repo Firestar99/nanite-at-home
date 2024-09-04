@@ -16,8 +16,7 @@ use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::DynamicState;
-use vulkano_bindless::descriptor::sampler::Sampler;
-use vulkano_bindless::descriptor::{RCDesc, RCDescExt};
+use vulkano_bindless::descriptor::{RCDesc, RCDescExt, Sampler};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
