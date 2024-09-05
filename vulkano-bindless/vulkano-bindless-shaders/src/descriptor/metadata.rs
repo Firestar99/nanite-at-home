@@ -17,7 +17,7 @@ impl Metadata {
 	/// # Safety
 	/// as long as TransientDesc discards the fif, we can just make up some garbage
 	pub(crate) unsafe fn fake_fif(&self) -> FrameInFlight<'static> {
-		unsafe { FrameInFlight::new(SeedInFlight::assemble(0xDE, 0xA), 0xD) }
+		unsafe { FrameInFlight::new_unchecked(SeedInFlight::assemble_unchecked(0xDE, 0xA), 0xD) }
 	}
 }
 

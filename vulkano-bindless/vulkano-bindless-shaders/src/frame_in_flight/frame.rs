@@ -1,17 +1,29 @@
+use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
+use crate::descriptor::Metadata;
 use crate::frame_in_flight::FRAMES_LIMIT;
+use bytemuck_derive::AnyBitPattern;
 use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
-use core::mem::size_of;
-use static_assertions::const_assert_eq;
+
+/// ValueType acts as if it always were u16, but on spirv using u16 requires additional capabilities, so we use u32
+/// instead. For transfering to the GPU, feel free to bitpack both seed and fif into 16 bits.
+#[cfg(not(target_arch = "spirv"))]
+type ValueType = u16;
+#[cfg(target_arch = "spirv")]
+type ValueType = u32;
+
+#[cfg(not(target_arch = "spirv"))]
+pub type SeedType = u8;
+#[cfg(target_arch = "spirv")]
+pub type SeedType = u32;
 
 /// The index of a frame that is in flight. See [mod](self) for docs.
-#[derive(Copy, Clone)]
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct FrameInFlight<'a> {
-	value: u16,
+	value: ValueType,
 	phantom: PhantomData<&'a ()>,
 }
-const_assert_eq!(size_of::<FrameInFlight>(), 2);
 
 impl<'a> FrameInFlight<'a> {
 	/// `FrameInFlight` should be handled carefully as it allows access to a resource that may be in flight. To prevent mis-use it is usually constrained
@@ -25,10 +37,16 @@ impl<'a> FrameInFlight<'a> {
 	/// One may not use the `FrameInFlight` to access a Resource that is currently in use.
 	#[inline]
 	pub unsafe fn new(seed: impl Into<SeedInFlight>, frame_index: u32) -> Self {
+		let seed = seed.into();
+		assert!(frame_index < seed.frames_in_flight());
+		unsafe { Self::new_unchecked(seed, frame_index) }
+	}
+
+	#[inline]
+	pub(crate) unsafe fn new_unchecked(seed: impl Into<SeedInFlight>, frame_index: u32) -> Self {
 		fn inner<'a>(seed: SeedInFlight, index: u32) -> FrameInFlight<'a> {
-			assert!(index < seed.frames_in_flight());
 			let mut value = seed.0;
-			value |= (index as u16) & 0xFF;
+			value |= (index as ValueType) & 0xFF;
 			FrameInFlight {
 				value,
 				phantom: Default::default(),
@@ -77,10 +95,33 @@ impl<'a> From<&FrameInFlight<'a>> for SeedInFlight {
 	}
 }
 
+unsafe impl<'a> BufferStruct for FrameInFlight<'a> {
+	type Transfer = FrameInFlightTransfer;
+
+	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+		FrameInFlightTransfer {
+			value: self.value as u32,
+		}
+	}
+
+	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+		FrameInFlight {
+			value: from.value as ValueType,
+			phantom: PhantomData {},
+		}
+	}
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, AnyBitPattern)]
+pub struct FrameInFlightTransfer {
+	value: u32,
+}
+
 /// The seed is the configuration of the Frame in flight system and ensures different seeds are not mixed or matched. See [mod](self) for docs.
 #[derive(Copy, Clone, Eq, PartialEq)]
 #[repr(C)]
-pub struct SeedInFlight(u16);
+pub struct SeedInFlight(ValueType);
 
 impl SeedInFlight {
 	#[cfg(not(target_arch = "spirv"))]
@@ -98,17 +139,22 @@ impl SeedInFlight {
 	/// # Safety
 	/// Only there for internal testing. The seed must never repeat, which `Self::new()` ensures.
 	#[must_use]
-	pub unsafe fn assemble(seed: u8, frames_in_flight: u32) -> Self {
-		assert_ne!(frames_in_flight, 0, "frames_in_flight must not be 0",);
+	pub unsafe fn assemble(seed: SeedType, frames_in_flight: u32) -> Self {
+		assert!(frames_in_flight != 0, "frames_in_flight must not be 0");
 		assert!(
 			frames_in_flight <= FRAMES_LIMIT,
 			"frames_in_flight of {} is over FRAMES_LIMIT {}",
 			frames_in_flight,
 			FRAMES_LIMIT
 		);
+		unsafe { Self::assemble_unchecked(seed, frames_in_flight) }
+	}
+
+	#[must_use]
+	pub(crate) unsafe fn assemble_unchecked(seed: SeedType, frames_in_flight: u32) -> Self {
 		let mut out = 0;
-		out |= (seed as u16) << 8;
-		out |= (((frames_in_flight - 1) as u16) & 0xF) << 4;
+		out |= ((seed as ValueType) & 0xFF) << 8;
+		out |= (((frames_in_flight - 1) as ValueType) & 0xF) << 4;
 		Self(out)
 	}
 
@@ -131,8 +177,8 @@ impl SeedInFlight {
 
 	#[must_use]
 	#[inline]
-	fn seed_u8(&self) -> u8 {
-		((self.0 >> 8) & 0xFF) as u8
+	fn seed_u8(&self) -> SeedType {
+		((self.0 >> 8) & 0xFF) as SeedType
 	}
 }
 
@@ -144,6 +190,22 @@ impl Debug for SeedInFlight {
 			.finish()
 	}
 }
+
+unsafe impl BufferStruct for SeedInFlight {
+	type Transfer = SeedInFlightTransfer;
+
+	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+		SeedInFlightTransfer(self.0 as u32)
+	}
+
+	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+		SeedInFlight(from.0 as ValueType)
+	}
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, AnyBitPattern)]
+pub struct SeedInFlightTransfer(u32);
 
 #[cfg(test)]
 mod tests {
