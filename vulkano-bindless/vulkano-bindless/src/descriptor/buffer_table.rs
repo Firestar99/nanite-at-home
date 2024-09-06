@@ -21,7 +21,7 @@ use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
 use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use vulkano_bindless_shaders::descriptor::Buffer;
-use vulkano_bindless_shaders::descriptor::DescContentEnum;
+use vulkano_bindless_shaders::descriptor::DescContentType;
 use vulkano_bindless_shaders::descriptor::Metadata;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
@@ -38,7 +38,7 @@ where
 }
 
 impl DescTable for BufferTable {
-	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Buffer;
+	const CONTENT_ENUM: DescContentType = DescContentType::Buffer;
 	type Slot = BufferSlot;
 	type RCSlotsInterface = BufferInterface;
 

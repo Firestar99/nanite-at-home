@@ -7,7 +7,7 @@ use std::sync::Arc;
 use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::shader::ShaderStages;
-use vulkano_bindless_shaders::descriptor::{DescContent, DescContentEnum};
+use vulkano_bindless_shaders::descriptor::{DescContent, DescContentType};
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
 pub trait DescContentCpu: DescContent {
@@ -23,7 +23,7 @@ pub trait DescContentCpu: DescContent {
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
 pub trait DescTable: Sized {
-	const CONTENT_ENUM: DescContentEnum;
+	const CONTENT_ENUM: DescContentType;
 	/// internal non-generic type used within the resource table
 	type Slot;
 	type RCSlotsInterface: RCSlotsInterface<Self::Slot>;
@@ -51,7 +51,7 @@ pub trait DescTable: Sized {
 	) -> Result<A::Type<Self>, DescTableEnum<A>>;
 }
 
-/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_ENUM`].
+/// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_TYPE`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum DescTableEnum<A: DescTableEnumType> {
 	Buffer(A::Type<BufferTable>),

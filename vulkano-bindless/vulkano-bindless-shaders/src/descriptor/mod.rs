@@ -14,7 +14,7 @@ mod weak;
 mod image_types;
 
 pub use buffer::*;
-pub use descriptor_content::{DescContent, DescContentEnum};
+pub use descriptor_content::{DescContent, DescContentType};
 pub use descriptors::*;
 pub use image::*;
 pub use metadata::*;
