@@ -28,6 +28,6 @@ pub fn assert_transfer_size(content: proc_macro::TokenStream) -> syn::Result<Tok
 	let ty = input.ty;
 	let size = input.size;
 	Ok(quote! {
-		::#crate_shaders::static_assertions::const_assert_eq!(::core::mem::size_of::<<#ty as ::#crate_shaders::buffer_content::BufferStruct>::Transfer>(), #size);
+		#crate_shaders::static_assertions::const_assert_eq!(::core::mem::size_of::<<#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer>(), #size);
 	})
 }
