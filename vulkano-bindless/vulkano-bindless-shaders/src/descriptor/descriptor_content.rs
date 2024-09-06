@@ -1,3 +1,6 @@
+use num_derive::{FromPrimitive, ToPrimitive};
+use static_assertions::const_assert;
+
 pub(crate) mod private {
 	pub trait SealedTrait {}
 }
@@ -13,9 +16,12 @@ pub trait DescContent: private::SealedTrait + Sized + Send + Sync + 'static {
 }
 
 /// An enum of the kind of descriptor. Get it for any generic descriptor via [`DescContent::CONTENT_TYPE`].
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum DescContentType {
 	Buffer,
 	Image,
 	Sampler,
 }
+// Insert amount of enum values here!           V
+const_assert!((1 << super::id::ID_TYPE_BITS) >= 3);

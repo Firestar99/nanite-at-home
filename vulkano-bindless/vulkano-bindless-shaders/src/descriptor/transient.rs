@@ -1,4 +1,5 @@
 use crate::buffer_content::{Metadata, MetadataCpuInterface};
+use crate::descriptor::id::DescriptorId;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
@@ -8,7 +9,7 @@ use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone)]
 pub struct Transient<'a> {
-	id: u32,
+	id: DescriptorId,
 	_phantom: PhantomData<&'a ()>,
 }
 const_assert_eq!(mem::size_of::<Transient>(), 4);
@@ -17,7 +18,7 @@ impl<'a> DescRef for Transient<'a> {}
 
 impl<'a> AliveDescRef for Transient<'a> {
 	#[inline]
-	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
 		desc.r.id
 	}
 }
@@ -31,7 +32,7 @@ impl<'a, C: DescContent> TransientDesc<'a, C> {
 	/// * The C generic must match the content that the [`DescRef`] points to.
 	/// * id must be a valid descriptor id that stays valid for the remainder of the frame `'a`.
 	#[inline]
-	pub const unsafe fn new(id: u32, frame_in_flight: FrameInFlight<'a>) -> Self {
+	pub const unsafe fn new(id: DescriptorId, frame_in_flight: FrameInFlight<'a>) -> Self {
 		// We just need the lifetime of the frame, no need to actually store the value.
 		// Apart from maybe future validation?
 		// If this value is ever used, weak's upgrade_unchecked() needs to be adjusted accordingly!
@@ -60,8 +61,9 @@ unsafe impl<'a> DescStructRef for Transient<'a> {
 	}
 }
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Copy, Clone, AnyBitPattern)]
 pub struct TransferTransient {
-	id: u32,
+	id: DescriptorId,
 }
+const_assert_eq!(mem::size_of::<TransferTransient>(), 4);

@@ -40,7 +40,7 @@ unsafe impl<'a> MetadataCpuInterface for StrongMetadataCpu<'a> {
 	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>) {
 		if let Ok(refs) = &mut self.refs {
 			let id = desc.id();
-			let version = unsafe { desc.version_cpu() };
+			let version = unsafe { desc.id().version() };
 			match refs.entry((C::CONTENT_TYPE, desc.id())) {
 				Entry::Occupied(rc) => {
 					if rc.get().version() != version {

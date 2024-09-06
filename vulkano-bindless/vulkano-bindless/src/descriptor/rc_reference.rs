@@ -4,7 +4,7 @@ use crate::rc_slot::RCSlot;
 use static_assertions::assert_impl_all;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use vulkano_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescRef, StrongDesc};
+use vulkano_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescRef, DescriptorId, StrongDesc};
 use vulkano_bindless_shaders::descriptor::{Desc, Sampler, TransientDesc, WeakDesc};
 
 /// Trait defining all common impl between `Desc<RC, C>` and `RCDesc<C>`
@@ -31,19 +31,14 @@ pub trait RCDescExt<C: DescContentCpu>:
 	}
 
 	#[inline]
-	fn id(&self) -> u32 {
+	fn id(&self) -> DescriptorId {
 		self.inner().id()
-	}
-
-	#[inline]
-	fn version(&self) -> u32 {
-		self.inner().version()
 	}
 
 	#[inline]
 	fn to_weak(&self) -> WeakDesc<C> {
 		// Safety: C does not change
-		unsafe { WeakDesc::new(self.id(), self.version()) }
+		unsafe { WeakDesc::new(self.id()) }
 	}
 
 	#[inline]
@@ -55,7 +50,7 @@ pub trait RCDescExt<C: DescContentCpu>:
 	#[inline]
 	fn to_strong(&self) -> StrongDesc<C> {
 		// Safety: C does not change, when calling write_cpu() this StrongDesc is visited and the slot ref inc
-		unsafe { StrongDesc::new(self.id(), self.version()) }
+		unsafe { StrongDesc::new(self.id()) }
 	}
 
 	#[inline]
@@ -216,7 +211,7 @@ impl<T: DescTable> RCInner<T> {
 	}
 
 	#[inline]
-	pub fn id(&self) -> u32 {
+	pub fn id(&self) -> DescriptorId {
 		// we guarantee 32 bits is enough when constructing the resource tables
 		*self.slot.id() as u32
 	}

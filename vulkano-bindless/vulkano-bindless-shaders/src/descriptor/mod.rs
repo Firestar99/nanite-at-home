@@ -1,6 +1,7 @@
 mod buffer;
 mod descriptor_content;
 mod descriptors;
+mod id;
 mod image;
 mod reference;
 mod sampler;
@@ -15,6 +16,7 @@ mod image_types;
 pub use buffer::*;
 pub use descriptor_content::{DescContent, DescContentType};
 pub use descriptors::*;
+pub use id::*;
 pub use image::*;
 pub use reference::*;
 pub use sampler::*;

@@ -25,14 +25,14 @@ macro_rules! decl_descriptors {
 		$(
 			impl<'a> DescriptorsAccess<$storage_ty> for Descriptors<'a> {
 				fn access(&self, desc: &Desc<impl AliveDescRef, $storage_ty>) -> <$storage_ty as DescContent>::AccessType<'_> {
-					unsafe { self.$storage_name.index(desc.id() as usize) }
+					unsafe { self.$storage_name.index(desc.id().index() as usize) }
 				}
 			}
 		)*
 		$(
 			impl<'a> DescriptorsAccess<$sampled_ty> for Descriptors<'a> {
 				fn access(&self, desc: &Desc<impl AliveDescRef, $sampled_ty>) -> <$sampled_ty as DescContent>::AccessType<'_> {
-					unsafe { self.$sampled_name.index(desc.id() as usize) }
+					unsafe { self.$sampled_name.index(desc.id().index() as usize) }
 				}
 			}
 		)*
@@ -42,13 +42,13 @@ standard_image_types!(decl_descriptors);
 
 impl<'a, T: ?Sized + BufferContent + 'static> DescriptorsAccess<Buffer<T>> for Descriptors<'a> {
 	fn access(&self, desc: &Desc<impl AliveDescRef, Buffer<T>>) -> <Buffer<T> as DescContent>::AccessType<'_> {
-		unsafe { BufferSlice::new(self.buffers.index(desc.id() as usize), self.meta) }
+		unsafe { BufferSlice::new(self.buffers.index(desc.id().index() as usize), self.meta) }
 	}
 }
 
 impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
 	fn access(&self, desc: &Desc<impl AliveDescRef, Sampler>) -> <Sampler as DescContent>::AccessType<'_> {
-		unsafe { self.samplers.index(desc.id() as usize) }
+		unsafe { self.samplers.index(desc.id().index() as usize) }
 	}
 }
 
