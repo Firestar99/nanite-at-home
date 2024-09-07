@@ -44,6 +44,7 @@ pub fn lighting_cs(
 	)
 }
 
+#[allow(clippy::too_many_arguments, clippy::useless_conversion)]
 fn lighting_inner(
 	descriptors: &Descriptors,
 	param: &Params<'static>,
@@ -104,6 +105,7 @@ fn lighting_inner(
 	}
 }
 
+#[allow(clippy::useless_conversion)]
 fn sampled_material_from_g_buffer(
 	camera: Camera,
 	g_albedo: &Image2d,

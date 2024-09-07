@@ -28,7 +28,7 @@ pub struct AnimatedSegment<'a, T: Lerp> {
 
 impl<'a, T: Lerp> AnimatedSegment<'a, T> {
 	pub const fn new(segments: &'a [Segment<T>]) -> Self {
-		assert!(segments.len() > 0);
+		assert!(!segments.is_empty());
 		Self {
 			segments,
 			max_time: match segments.last() {

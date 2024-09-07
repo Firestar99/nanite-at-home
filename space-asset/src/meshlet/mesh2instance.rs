@@ -57,7 +57,7 @@ mod runtime {
 		pub fn upload<'a>(
 			&'a self,
 			uploader: &'a Uploader,
-			pbr_materials: &'a Vec<PbrMaterial<RC>>,
+			pbr_materials: &'a [PbrMaterial<RC>],
 		) -> impl Future<Output = Result<MeshletMesh2InstanceCpu, Validated<UploadError>>> + 'a {
 			let mesh = self.mesh.upload(uploader, pbr_materials);
 			let instances = uploader.upload_buffer_iter(self.instances.iter().map(deserialize_infallible));

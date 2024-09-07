@@ -25,7 +25,7 @@ impl<'a> Deref for ImageProcessor<'a> {
 	type Target = Gltf;
 
 	fn deref(&self) -> &Self::Target {
-		&self.gltf
+		self.gltf
 	}
 }
 
@@ -65,7 +65,7 @@ impl<'a> ImageProcessor<'a> {
 					Source::View { view, .. } => {
 						let buffer = gltf.buffer(view.buffer()).ok_or(GltfImageError::MissingBuffer)?;
 						Scheme::Slice(
-							&buffer
+							buffer
 								.get(view.offset()..view.length())
 								.ok_or(GltfImageError::BufferViewOutOfBounds)?,
 						)
@@ -97,6 +97,7 @@ impl<'a> ImageProcessor<'a> {
 		})
 	}
 
+	#[allow(clippy::type_complexity)]
 	fn process_individual_image(
 		gltf: &'a Gltf,
 		settings: EncodeSettings,
@@ -133,7 +134,7 @@ impl<'a> ImageProcessor<'a> {
 			settings: EncodeSettings,
 		) -> anyhow::Result<Image2DDisk<IMAGE_TYPE>> {
 			profiling::scope!("into_optimal()", format!("{:?}", ImageType::try_from_const(IMAGE_TYPE)));
-			Ok(Image2DDisk {
+			Image2DDisk {
 				metadata: Image2DMetadata {
 					size,
 					disk_compression: DiskImageCompression::Embedded,
@@ -147,7 +148,7 @@ impl<'a> ImageProcessor<'a> {
 					ImageType::try_from_const(IMAGE_TYPE),
 					settings
 				)
-			})?)
+			})
 		}
 		let r_values = types[0]
 			.then(|| into_optimal::<{ ImageType::R_VALUES as u32 }>(size, bytes.clone(), settings))

@@ -35,7 +35,7 @@ impl<'a> Scheme<'a> {
 				(Some(match0), _) => Some(Scheme::Base64(match0)),
 				_ => None,
 			}
-		} else if !uri.contains(":") {
+		} else if !uri.contains(':') {
 			urlencoding::decode(uri).map_or(None, |path| Some(Scheme::RelativeFile(path)))
 		} else {
 			None

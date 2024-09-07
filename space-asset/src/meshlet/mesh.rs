@@ -209,7 +209,7 @@ mod runtime {
 		pub fn upload<'a>(
 			&'a self,
 			uploader: &'a Uploader,
-			pbr_materials: &'a Vec<PbrMaterial<RC>>,
+			pbr_materials: &'a [PbrMaterial<RC>],
 		) -> impl Future<Output = Result<MeshletMesh<RC>, Validated<UploadError>>> + 'a {
 			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
 			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));

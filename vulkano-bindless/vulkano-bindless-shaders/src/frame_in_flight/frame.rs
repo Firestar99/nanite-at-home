@@ -95,6 +95,7 @@ impl<'a> From<&FrameInFlight<'a>> for SeedInFlight {
 	}
 }
 
+#[allow(clippy::unnecessary_cast)]
 unsafe impl<'a> BufferStruct for FrameInFlight<'a> {
 	type Transfer = FrameInFlightTransfer;
 
@@ -123,6 +124,7 @@ pub struct FrameInFlightTransfer {
 #[repr(C)]
 pub struct SeedInFlight(ValueType);
 
+#[allow(clippy::unnecessary_cast)]
 impl SeedInFlight {
 	#[cfg(not(target_arch = "spirv"))]
 	#[must_use]
@@ -191,6 +193,7 @@ impl Debug for SeedInFlight {
 	}
 }
 
+#[allow(clippy::unnecessary_cast)]
 unsafe impl BufferStruct for SeedInFlight {
 	type Transfer = SeedInFlightTransfer;
 

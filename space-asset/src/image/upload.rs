@@ -57,7 +57,7 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 					self.decompressed_bytes() as DeviceSize,
 				)
 				.map_err(UploadError::from_validated)?;
-				self.decode_into(src, &mut *upload_buffer.write().unwrap())
+				self.decode_into(src, &mut upload_buffer.write().unwrap())
 					.map_err(UploadError::from_validated)?;
 				upload_buffer
 			};

@@ -63,12 +63,12 @@ impl Div<f32> for Radiance {
 	type Output = Radiance;
 
 	fn div(self, rhs: f32) -> Self::Output {
-		Radiance(self.0 * rhs)
+		Radiance(self.0 / rhs)
 	}
 }
 
 impl DivAssign<f32> for Radiance {
 	fn div_assign(&mut self, rhs: f32) {
-		*self = *self * rhs
+		*self = *self / rhs
 	}
 }

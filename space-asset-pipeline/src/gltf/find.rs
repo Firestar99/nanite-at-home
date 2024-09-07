@@ -49,7 +49,7 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 				out_path,
 			}
 		})
-		.filter(|s| !s.relative.iter().any(|c| c.starts_with(".") && c != "." && c != ".."))
+		.filter(|s| !s.relative.iter().any(|c| c.starts_with('.') && c != "." && c != ".."))
 		.collect::<Vec<_>>())
 }
 
@@ -81,13 +81,7 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 }
 
 fn filter_chars_for_typename(c: char) -> char {
-	if 'a' <= c && c <= 'z' {
-		c
-	} else if 'A' <= c && c <= 'Z' {
-		c
-	} else if '0' <= c && c <= '9' {
-		c
-	} else if c == '_' {
+	if c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit() {
 		c
 	} else {
 		'_'

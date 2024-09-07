@@ -16,6 +16,7 @@ impl CompressedIndices {
 		[f(0), f(1), f(2), f(3), f(4)]
 	}
 
+	#[allow(clippy::needless_range_loop)]
 	pub fn from_values(values: [u32; INDICES_PER_WORD]) -> Self {
 		let mut out = 0;
 		for i in 0..INDICES_PER_WORD {
@@ -170,11 +171,11 @@ mod tests {
 			draw_vertex_offset: MeshletOffset::default(),
 		};
 		let read_cpu: Vec<_> = (0..meshlet.triangle_offset.len())
-			.flat_map(|i| triangle_indices_load_cpu(&meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
+			.flat_map(|i| triangle_indices_load_cpu(meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
 			.collect();
 		assert_eq!(indices, read_cpu, "Written and read contents do not agree");
 		let read_gpu: Vec<_> = (0..meshlet.triangle_offset.len())
-			.flat_map(|i| triangle_indices_load_gpu(&meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
+			.flat_map(|i| triangle_indices_load_gpu(meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
 			.collect();
 		assert_eq!(indices, read_gpu, "GPU optimized loads do not match written contents");
 	}
@@ -224,11 +225,11 @@ mod tests {
 			for tri in 0..triangles {
 				let expect = &indices[tri * 3..tri * 3 + 3];
 				assert_eq!(
-					triangle_indices_load_cpu(&meshlet, &(), tri, |_, i| *vec.get(i).unwrap()).to_array(),
+					triangle_indices_load_cpu(meshlet, &(), tri, |_, i| *vec.get(i).unwrap()).to_array(),
 					expect
 				);
 				assert_eq!(
-					triangle_indices_load_gpu(&meshlet, &(), tri, |_, i| *vec.get(i).unwrap()).to_array(),
+					triangle_indices_load_gpu(meshlet, &(), tri, |_, i| *vec.get(i).unwrap()).to_array(),
 					expect
 				);
 			}
@@ -237,6 +238,7 @@ mod tests {
 	}
 
 	#[test]
+	#[allow(clippy::needless_range_loop)]
 	fn from_to_value() {
 		let test_array = |mul: u32, off: u32| {
 			let mut array = [0; INDICES_PER_WORD];

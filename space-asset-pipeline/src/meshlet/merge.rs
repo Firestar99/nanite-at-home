@@ -30,7 +30,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 
 	let mut mat2mesh = HashMap::<u32, Vec<MeshletMesh2InstanceDisk>>::new();
 	for m2i in single_instances {
-		mat2mesh.entry(m2i.mesh.pbr_material_id).or_insert(Vec::new()).push(m2i);
+		mat2mesh.entry(m2i.mesh.pbr_material_id).or_default().push(m2i);
 	}
 
 	let mut mesh2instances = many_instances;

@@ -21,7 +21,7 @@ impl Gltf {
 			.parent()
 			.map(Path::to_path_buf)
 			.unwrap_or_else(|| PathBuf::from("./"));
-		let gltf::Gltf { document, mut blob } = gltf::Gltf::open(&path)?;
+		let gltf::Gltf { document, mut blob } = gltf::Gltf::open(path)?;
 		let buffers = document
 			.buffers()
 			.map(|buffer| Data::from_source_and_blob(buffer.source(), Some(base.as_path()), &mut blob))

@@ -102,7 +102,7 @@ fn draw_meshlet(
 
 	// let meshlet = mesh.meshlet_unchecked(descriptors, meshlet_id);
 
-	return true;
+	true
 	// }
 }
 

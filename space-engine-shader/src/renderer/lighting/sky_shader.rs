@@ -154,6 +154,7 @@ pub fn sky_shader_cs(
 	let pixel = inv_id.xy();
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
+	#[allow(clippy::useless_conversion)]
 	let albedo_alpha = Vec4::from(g_albedo.fetch(pixel)).w;
 	let skybox = is_skybox(albedo_alpha);
 

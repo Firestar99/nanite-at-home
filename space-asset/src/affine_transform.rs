@@ -16,7 +16,7 @@ impl AffineTransform {
 	pub fn new(transform: Affine3A) -> Self {
 		Self {
 			affine: transform,
-			normals: Mat3A::from(transform.matrix3).inverse().transpose(),
+			normals: transform.matrix3.inverse().transpose(),
 		}
 	}
 
