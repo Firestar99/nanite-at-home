@@ -1,6 +1,6 @@
 use crate::symbols::Symbols;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{Expr, Token, Type};
 
@@ -23,11 +23,15 @@ impl Parse for AssertTransferSizeInput {
 
 pub fn assert_transfer_size(content: proc_macro::TokenStream) -> syn::Result<TokenStream> {
 	let input = syn::parse::<AssertTransferSizeInput>(content)?;
-	let symbols = Symbols::new();
-	let crate_shaders = &symbols.crate_shaders;
+	let symbols = Symbols::new()?;
+	let crate_buffer_content = &symbols.crate_buffer_content;
 	let ty = input.ty;
 	let size = input.size;
+	let trait_ident = match symbols.crate_shaders() {
+		Ok(_) => format_ident!("BufferStruct"),
+		Err(_) => format_ident!("BufferStructPlain"),
+	};
 	Ok(quote! {
-		#crate_shaders::static_assertions::const_assert_eq!(::core::mem::size_of::<<#ty as #crate_shaders::buffer_content::BufferStruct>::Transfer>(), #size);
+		#crate_buffer_content::static_assertions::const_assert_eq!(::core::mem::size_of::<<#ty as #crate_buffer_content::#trait_ident>::Transfer>(), #size);
 	})
 }

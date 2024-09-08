@@ -3086,13 +3086,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "vulkano-bindless-buffer-content"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "spirv-std",
+ "static_assertions",
+]
+
+[[package]]
 name = "vulkano-bindless-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "spirv-std",
  "syn 2.0.71",
 ]
 
@@ -3120,6 +3130,7 @@ dependencies = [
  "num-traits",
  "spirv-std",
  "static_assertions",
+ "vulkano-bindless-buffer-content",
  "vulkano-bindless-macros",
 ]
 

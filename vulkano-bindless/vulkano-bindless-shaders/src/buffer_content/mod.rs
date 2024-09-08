@@ -1,11 +1,11 @@
-use crate::descriptor::DescContent;
-use crate::descriptor::Metadata;
-use crate::descriptor::StrongDesc;
+use crate::descriptor::{DescContent, StrongDesc};
 use bytemuck::AnyBitPattern;
 use core::ops::Deref;
 
-mod glam;
-mod primitive;
+mod metadata;
+
+pub use metadata::*;
+pub use vulkano_bindless_buffer_content::*;
 
 /// Trait for contents of **buffers** that may contain descriptors requiring conversion.
 ///
@@ -66,4 +66,16 @@ unsafe impl<T: BufferStruct> BufferContent for T {
 /// Internal interface to CPU code
 pub unsafe trait MetadataCpuInterface: Deref<Target = Metadata> {
 	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>);
+}
+
+unsafe impl<T: BufferStructPlain> BufferStruct for T {
+	type Transfer = T::Transfer;
+
+	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+		T::write(self)
+	}
+
+	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+		T::read(from)
+	}
 }

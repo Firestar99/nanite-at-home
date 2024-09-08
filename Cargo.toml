@@ -11,6 +11,7 @@ members = [
 	"space-engine-shader",
 	"space-engine-shader-builder",
 	"vulkano-bindless/vulkano-bindless",
+	"vulkano-bindless/vulkano-bindless-buffer-content",
 	"vulkano-bindless/vulkano-bindless-macros",
 	"vulkano-bindless/vulkano-bindless-shaders",
 	"vulkano-bindless/vulkano-bindless-shader-builder",
@@ -41,6 +42,7 @@ space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
 vulkano-bindless = { path = "vulkano-bindless/vulkano-bindless" }
+vulkano-bindless-buffer-content = { path = "vulkano-bindless/vulkano-bindless-buffer-content" }
 vulkano-bindless-shaders = { path = "vulkano-bindless/vulkano-bindless-shaders" }
 vulkano-bindless-macros = { path = "vulkano-bindless/vulkano-bindless-macros" }
 vulkano-bindless-shader-builder = { path = "vulkano-bindless/vulkano-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }

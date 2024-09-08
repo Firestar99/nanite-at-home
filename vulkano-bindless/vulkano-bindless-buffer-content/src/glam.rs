@@ -1,18 +1,17 @@
-use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
-use crate::descriptor::Metadata;
+use crate::BufferStructPlain;
 
 macro_rules! glam_array {
 	($t:ty, $a:ty) => {
-		unsafe impl BufferStruct for $t {
+		unsafe impl BufferStructPlain for $t {
 			type Transfer = $a;
 
 			#[inline]
-			unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+			unsafe fn write(self) -> Self::Transfer {
 				<$t>::to_array(&self)
 			}
 
 			#[inline]
-			unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+			unsafe fn read(from: Self::Transfer) -> Self {
 				<$t>::from_array(from)
 			}
 		}
@@ -21,16 +20,16 @@ macro_rules! glam_array {
 
 macro_rules! glam_cols_array {
 	($t:ty, $a:ty) => {
-		unsafe impl BufferStruct for $t {
+		unsafe impl BufferStructPlain for $t {
 			type Transfer = $a;
 
 			#[inline]
-			unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+			unsafe fn write(self) -> Self::Transfer {
 				<$t>::to_cols_array(&self)
 			}
 
 			#[inline]
-			unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+			unsafe fn read(from: Self::Transfer) -> Self {
 				<$t>::from_cols_array(&from)
 			}
 		}
@@ -83,32 +82,32 @@ glam_array!(glam::U64Vec2, [u64; 2]);
 glam_array!(glam::U64Vec3, [u64; 3]);
 glam_array!(glam::U64Vec4, [u64; 4]);
 
-unsafe impl BufferStruct for glam::Vec3A {
+unsafe impl BufferStructPlain for glam::Vec3A {
 	type Transfer = [f32; 4];
 
 	#[inline]
-	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+	unsafe fn write(self) -> Self::Transfer {
 		glam::Vec4::to_array(&self.extend(0.))
 	}
 
 	#[inline]
-	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+	unsafe fn read(from: Self::Transfer) -> Self {
 		glam::Vec3A::from_vec4(glam::Vec4::from_array(from))
 	}
 }
 
 /// do NOT use slices, otherwise spirv will fail to compile
-unsafe impl BufferStruct for glam::Mat3A {
+unsafe impl BufferStructPlain for glam::Mat3A {
 	type Transfer = [f32; 12];
 
 	#[inline]
-	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
+	unsafe fn write(self) -> Self::Transfer {
 		let a = self.to_cols_array();
 		[a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], 0., 0., 0.]
 	}
 
 	#[inline]
-	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
+	unsafe fn read(from: Self::Transfer) -> Self {
 		let a = from;
 		glam::Mat3A::from_cols_array(&[a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]])
 	}

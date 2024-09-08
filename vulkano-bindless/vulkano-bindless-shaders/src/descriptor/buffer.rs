@@ -1,6 +1,5 @@
-use crate::buffer_content::{BufferContent, BufferStruct};
+use crate::buffer_content::{BufferContent, BufferStruct, Metadata};
 use crate::descriptor::descriptor_content::{private, DescContent, DescContentType};
-use crate::descriptor::metadata::Metadata;
 use core::marker::PhantomData;
 use core::mem;
 use spirv_std::byte_addressable_buffer::buffer_load_intrinsic;

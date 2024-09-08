@@ -1,7 +1,6 @@
-use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
+use crate::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};
 use crate::descriptor::descriptor_content::DescContent;
 use crate::descriptor::descriptors::DescriptorsAccess;
-use crate::descriptor::metadata::Metadata;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ops::Deref;

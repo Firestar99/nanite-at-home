@@ -19,10 +19,9 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
-use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct, Metadata};
 use vulkano_bindless_shaders::descriptor::Buffer;
 use vulkano_bindless_shaders::descriptor::DescContentType;
-use vulkano_bindless_shaders::descriptor::Metadata;
 use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
 
 impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T>

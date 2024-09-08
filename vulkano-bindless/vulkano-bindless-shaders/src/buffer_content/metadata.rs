@@ -20,14 +20,3 @@ impl Metadata {
 		unsafe { FrameInFlight::new_unchecked(SeedInFlight::assemble_unchecked(0xDE, 0xA), 0xD) }
 	}
 }
-
-/// All bindless push constants are this particular struct, with T being the declared push_param.
-///
-/// Must not derive `DescStruct`, as to [`DescStruct::from_transfer`] Self you'd need the Metadata, which this struct
-/// contains. To break the loop, it just stores Metadata flat and params directly as `T::TransferDescStruct`.
-#[repr(C)]
-#[derive(Copy, Clone, AnyBitPattern)]
-pub struct PushConstant<T: bytemuck::AnyBitPattern + Send + Sync> {
-	pub t: T,
-	pub metadata: Metadata,
-}
