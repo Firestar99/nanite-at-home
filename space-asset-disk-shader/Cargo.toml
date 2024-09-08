@@ -1,0 +1,26 @@
+[package]
+name = "space-asset-disk-shader"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+disk = ["dep:rkyv", "glam/rkyv"]
+
+[dependencies]
+# members
+vulkano-bindless-macros = { workspace = true }
+vulkano-bindless-shaders = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+
+# serde
+rkyv = { workspace = true, optional = true }
+
+# other
+static_assertions = { workspace = true }

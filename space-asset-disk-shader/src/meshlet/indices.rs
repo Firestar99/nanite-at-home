@@ -133,17 +133,18 @@ where
 	}
 }
 
-#[cfg(not(target_arch = "spirv"))]
-pub fn triangle_indices_write_vec<Iter>(src: Iter) -> Vec<CompressedIndices>
+#[cfg(feature = "disk")]
+pub fn triangle_indices_write_vec<Iter>(src: Iter) -> std::vec::Vec<CompressedIndices>
 where
 	Iter: ExactSizeIterator<Item = u32>,
 {
-	let mut vec = vec![CompressedIndices(0); triangle_indices_write_capacity(src.len())];
+	let mut vec = std::vec![CompressedIndices(0); triangle_indices_write_capacity(src.len())];
 	triangle_indices_write(src, &mut vec);
 	vec
 }
 
 #[cfg(test)]
+#[cfg(feature = "disk")]
 mod tests {
 	use super::*;
 	use crate::meshlet::offset::MeshletOffset;

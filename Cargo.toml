@@ -3,7 +3,10 @@ members = [
 	"meshlet-renderer",
 	"models",
 	"space-asset-disk",
+	"space-asset-disk-shader",
 	"space-asset-preprocess",
+	"space-asset-rt",
+	"space-asset-shader",
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
@@ -29,8 +32,11 @@ repository = "https://gitlab.com/spacegamedev/space-rust"
 # members
 meshlet-renderer = { path = "meshlet-renderer" }
 models = { path = "models" }
-space-asset-disk = { path = "space-asset-disk", default-features = false }
+space-asset-disk = { path = "space-asset-disk" }
+space-asset-disk-shader = { path = "space-asset-disk-shader" }
 space-asset-preprocess = { path = "space-asset-preprocess" }
+space-asset-rt = { path = "space-asset-rt" }
+space-asset-shader = { path = "space-asset-shader" }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }

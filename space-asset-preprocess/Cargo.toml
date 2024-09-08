@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # my projects
-space-asset-disk = { workspace = true, features = ["disk"] }
+space-asset-disk = { workspace = true }
 
 # async
 rayon = { workspace = true }

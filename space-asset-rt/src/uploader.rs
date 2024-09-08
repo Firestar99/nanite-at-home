@@ -1,8 +1,7 @@
-#![cfg(feature = "runtime")]
-
-use crate::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
+use crate::image::upload::upload_image2d_disk;
 use async_std::task::block_on;
 use rkyv::Deserialize;
+use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::sync::Arc;
@@ -64,7 +63,7 @@ impl Uploader {
 				},
 				bytes: Vec::from([255, 255, 255, 255]).into(),
 			};
-			block_on(disk.upload(&uploader)).unwrap()
+			block_on(upload_image2d_disk(&disk, &uploader)).unwrap()
 		};
 		uploader.white_texture = Some(white_texture);
 		uploader

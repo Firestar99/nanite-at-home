@@ -27,14 +27,14 @@ impl<const IMAGE_TYPE: u32> ArchivedImage2DDisk<IMAGE_TYPE> {
 }
 
 impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
-	pub(super) fn decode(&self, src: &[u8]) -> Result<Vec<u8>, ImageErrors> {
+	pub fn decode(&self, src: &[u8]) -> Result<Vec<u8>, ImageErrors> {
 		let mut vec = vec![0; self.decompressed_bytes()];
 		self.decode_into(src, &mut vec)?;
 		Ok(vec)
 	}
 
 	#[profiling::function]
-	pub(super) fn decode_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
+	pub fn decode_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
 		assert_eq!(dst.len(), self.decompressed_bytes());
 		match self.disk_compression {
 			DiskImageCompression::None => self.decode_none_into(src, dst),

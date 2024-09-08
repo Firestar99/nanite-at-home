@@ -1,16 +1,14 @@
-use crate::affine_transform::AffineTransform;
+use glam::Affine3A;
 use vulkano_bindless_macros::BufferContent;
 
 #[repr(C)]
-#[derive(Copy, Clone, Default, BufferContent)]
-#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
-#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
-pub struct MeshletInstance {
-	pub transform: AffineTransform,
+#[derive(Copy, Clone, Default, Debug, BufferContent, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+pub struct MeshletInstanceDisk {
+	pub transform: Affine3A,
 }
 
-impl MeshletInstance {
-	pub fn new(transform: AffineTransform) -> Self {
+impl MeshletInstanceDisk {
+	pub fn new(transform: Affine3A) -> Self {
 		Self { transform }
 	}
 }

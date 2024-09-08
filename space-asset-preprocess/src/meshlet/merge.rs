@@ -1,5 +1,5 @@
 use space_asset_disk::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
-use space_asset_disk::meshlet::instance::MeshletInstance;
+use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset_disk::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 use space_asset_disk::meshlet::offset::MeshletOffset;
@@ -41,7 +41,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 		);
 		mesh2instances.push(MeshletMesh2InstanceDisk {
 			mesh: merged_mesh,
-			instances: Vec::from([MeshletInstance::default()]),
+			instances: Vec::from([MeshletInstanceDisk::default()]),
 		});
 	}
 
@@ -53,7 +53,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 
 fn merge<'a>(
 	pbr_material_id: u32,
-	meshlets: impl Iterator<Item = (&'a MeshletMeshDisk, MeshletInstance)>,
+	meshlets: impl Iterator<Item = (&'a MeshletMeshDisk, MeshletInstanceDisk)>,
 ) -> MeshletMeshDisk {
 	let mut out = MeshletMeshDisk {
 		meshlets: Vec::new(),
@@ -70,10 +70,9 @@ fn merge<'a>(
 		out.pbr_material_vertices.extend(mesh.pbr_material_vertices.iter());
 
 		let draw_start = out.draw_vertices.len();
-		let transform = instance.transform.affine;
 		out.draw_vertices.extend(mesh.draw_vertices.iter().map(|v| DrawVertex {
 			material_vertex_id: MaterialVertexId(v.material_vertex_id.0 + pbr_start),
-			position: transform.transform_point3(v.position),
+			position: instance.transform.transform_point3(v.position),
 		}));
 
 		// must always stay aligned to a multiple of triangles = 3 indices

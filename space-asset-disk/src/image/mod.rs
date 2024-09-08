@@ -1,10 +1,8 @@
-#![cfg(feature = "disk")]
-
 mod decode;
 mod metadata;
 mod size;
-mod upload;
 
+pub use decode::*;
 pub use metadata::*;
 pub use size::*;
 

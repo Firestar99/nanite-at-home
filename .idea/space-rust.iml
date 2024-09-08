@@ -17,6 +17,7 @@
       <sourceFolder url="file://$MODULE_DIR$/space-asset-disk/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset-preprocess/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset-rt/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-asset-disk-shader/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

@@ -1,5 +1,6 @@
-use space_asset_disk::meshlet::scene::{MeshletSceneCpu, MeshletSceneFile};
-use space_asset_disk::uploader::Uploader;
+use space_asset_disk::meshlet::scene::MeshletSceneFile;
+use space_asset_rt::meshlet::scene::{upload_scene, MeshletSceneCpu};
+use space_asset_rt::uploader::Uploader;
 use space_engine::renderer::Init;
 use std::io;
 use std::sync::Arc;
@@ -40,7 +41,7 @@ where
 		self.selected = selected;
 		let new_scene = self.scenes[selected as usize];
 		println!("loading scene {:?}", new_scene);
-		(self.submit_scene)(upload_scene(&self.init, new_scene).await?);
+		(self.submit_scene)(load_scene(&self.init, new_scene).await?);
 		Ok(true)
 	}
 
@@ -75,7 +76,7 @@ where
 }
 
 #[profiling::function]
-async fn upload_scene(init: &Arc<Init>, scene_file: MeshletSceneFile<'_>) -> io::Result<Arc<MeshletSceneCpu>> {
+async fn load_scene(init: &Arc<Init>, scene_file: MeshletSceneFile<'_>) -> io::Result<Arc<MeshletSceneCpu>> {
 	let scene = scene_file.load()?;
 	let uploader = Uploader::new(
 		init.bindless.clone(),
@@ -83,6 +84,6 @@ async fn upload_scene(init: &Arc<Init>, scene_file: MeshletSceneFile<'_>) -> io:
 		init.cmd_buffer_allocator.clone(),
 		init.queues.client.transfer.clone(),
 	);
-	let cpu = scene.root().upload(&uploader).await.unwrap();
+	let cpu = upload_scene(scene.root(), &uploader).await.unwrap();
 	Ok(Arc::new(cpu))
 }

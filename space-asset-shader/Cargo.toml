@@ -1,0 +1,17 @@
+[package]
+name = "space-asset-shader"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# members
+space-asset-disk-shader = { workspace = true }
+vulkano-bindless-macros = { workspace = true }
+vulkano-bindless-shaders = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }

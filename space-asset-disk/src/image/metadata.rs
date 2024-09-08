@@ -117,7 +117,7 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 		self.disk_compression.decodes_into()
 	}
 
-	pub(crate) fn decompressed_bytes(&self) -> usize {
+	pub fn decompressed_bytes(&self) -> usize {
 		let runtime = self.runtime_compression();
 		let block_size = runtime.block_size();
 		let (width, height) = if block_size != Size::new(1, 1) {
@@ -134,30 +134,3 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 		width as usize * height as usize * runtime.bytes_per_block(self.image_type())
 	}
 }
-
-#[cfg(feature = "runtime")]
-mod runtime {
-	use super::*;
-	use vulkano::format::Format;
-
-	impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
-		pub fn vulkano_format(&self) -> Format {
-			match self.runtime_compression() {
-				RuntimeImageCompression::None => match self.image_type() {
-					ImageType::R_VALUES => Format::R8_UNORM,
-					ImageType::RG_VALUES => Format::R8G8_UNORM,
-					ImageType::RGBA_LINEAR => Format::R8G8B8A8_UNORM,
-					ImageType::RGBA_COLOR => Format::R8G8B8A8_SRGB,
-				},
-				RuntimeImageCompression::BCn => match self.image_type() {
-					ImageType::R_VALUES => Format::BC4_UNORM_BLOCK,
-					ImageType::RG_VALUES => Format::BC5_UNORM_BLOCK,
-					ImageType::RGBA_LINEAR => Format::BC7_UNORM_BLOCK,
-					ImageType::RGBA_COLOR => Format::BC7_SRGB_BLOCK,
-				},
-			}
-		}
-	}
-}
-#[cfg(feature = "runtime")]
-pub use runtime::*;

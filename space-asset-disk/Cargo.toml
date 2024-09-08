@@ -8,29 +8,21 @@ repository.workspace = true
 
 [dependencies]
 # members
-vulkano-bindless = { workspace = true, optional = true }
+space-asset-disk-shader = { workspace = true, features = ["disk"] }
 vulkano-bindless-macros = { workspace = true }
 vulkano-bindless-shaders = { workspace = true }
 
-# vulkan
-vulkano = { workspace = true, optional = true }
-
 # model loader
-zune-image = { workspace = true, optional = true }
-
-# async
-futures = { workspace = true, optional = true }
-async-std = { workspace = true, optional = true }
-rayon = { workspace = true, optional = true }
+zune-image = { workspace = true }
 
 # bytes and numbers
-glam = { workspace = true }
+glam = { workspace = true, features = ["rkyv"] }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
 
 # serde
-rkyv = { workspace = true, optional = true }
-zstd = { workspace = true, optional = true }
+rkyv = { workspace = true }
+zstd = { workspace = true }
 
 # profiling
 profiling = { workspace = true }
@@ -38,8 +30,3 @@ profiling = { workspace = true }
 # other
 static_assertions = { workspace = true }
 num_enum = { workspace = true }
-
-[features]
-default = ["disk"]
-disk = ["dep:rkyv", "glam/rkyv", "dep:zstd", "dep:zune-image"]
-runtime = ["disk", "dep:vulkano-bindless", "dep:vulkano", "dep:futures", "dep:rayon", "dep:async-std"]

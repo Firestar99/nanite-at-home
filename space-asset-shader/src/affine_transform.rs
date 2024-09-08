@@ -3,9 +3,7 @@ use vulkano_bindless_macros::{assert_transfer_size, BufferContent};
 
 /// Affine transformation like [`Affine3A`] but also stores a matrix to transform normals.
 #[repr(C)]
-#[derive(Copy, Clone, Default, BufferContent)]
-#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
-#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[derive(Copy, Clone, Default, Debug, BufferContent)]
 pub struct AffineTransform {
 	pub affine: Affine3A,
 	pub normals: Mat3A,

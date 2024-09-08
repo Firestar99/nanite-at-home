@@ -2,10 +2,10 @@ use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
 use crate::renderer::frame_data::FrameData;
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
-use space_asset_disk::meshlet::instance::MeshletInstance;
-use space_asset_disk::meshlet::mesh::MeshletMesh;
-use space_asset_disk::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use space_asset_shader::meshlet::instance::MeshletInstance;
+use space_asset_shader::meshlet::mesh::MeshletMesh;
+use space_asset_shader::meshlet::mesh2instance::MeshletMesh2Instance;
+use space_asset_shader::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_non_uniform_ballot,
 	subgroup_non_uniform_ballot_bit_count, subgroup_non_uniform_elect, workgroup_memory_barrier_with_group_sync,

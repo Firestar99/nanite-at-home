@@ -9,7 +9,9 @@ repository.workspace = true
 [dependencies]
 # my projects
 models = { workspace = true }
-space-asset-disk = { workspace = true, features = ["runtime"] }
+space-asset-disk = { workspace = true }
+space-asset-rt = { workspace = true }
+space-asset-shader = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }

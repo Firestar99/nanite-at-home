@@ -4,7 +4,7 @@ use crate::fps_camera_controller::FpsCameraController;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use glam::{vec3, vec4, Mat3, Mat4, UVec3, Vec3, Vec3Swizzles};
-use space_asset_disk::affine_transform::AffineTransform;
+use space_asset_shader::affine_transform::AffineTransform;
 use space_engine::device::init::Plugin;
 use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
 use space_engine::device::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
