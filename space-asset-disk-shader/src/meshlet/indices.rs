@@ -3,10 +3,10 @@ use crate::meshlet::MESHLET_INDICES_BITS;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use glam::UVec3;
-use vulkano_bindless_macros::BufferContent;
+use vulkano_bindless_macros::BufferContentPlain;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Default, BufferContent)]
+#[derive(Copy, Clone, Default, BufferContentPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CompressedIndices(pub u32);
 

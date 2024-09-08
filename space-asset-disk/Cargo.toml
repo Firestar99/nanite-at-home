@@ -10,7 +10,7 @@ repository.workspace = true
 # members
 space-asset-disk-shader = { workspace = true, features = ["disk"] }
 vulkano-bindless-macros = { workspace = true }
-vulkano-bindless-shaders = { workspace = true }
+vulkano-bindless-buffer-content = { workspace = true }
 
 # model loader
 zune-image = { workspace = true }

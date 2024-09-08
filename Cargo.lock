@@ -2473,8 +2473,8 @@ dependencies = [
  "rkyv",
  "space-asset-disk-shader",
  "static_assertions",
+ "vulkano-bindless-buffer-content",
  "vulkano-bindless-macros",
- "vulkano-bindless-shaders",
  "zstd",
  "zune-image",
 ]
@@ -2488,8 +2488,8 @@ dependencies = [
  "glam",
  "rkyv",
  "static_assertions",
+ "vulkano-bindless-buffer-content",
  "vulkano-bindless-macros",
- "vulkano-bindless-shaders",
 ]
 
 [[package]]

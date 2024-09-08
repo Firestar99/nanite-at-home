@@ -12,7 +12,7 @@ disk = ["dep:rkyv", "glam/rkyv"]
 [dependencies]
 # members
 vulkano-bindless-macros = { workspace = true }
-vulkano-bindless-shaders = { workspace = true }
+vulkano-bindless-buffer-content = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }

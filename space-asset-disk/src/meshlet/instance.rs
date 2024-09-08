@@ -1,8 +1,8 @@
 use glam::Affine3A;
-use vulkano_bindless_macros::BufferContent;
+use vulkano_bindless_macros::BufferContentPlain;
 
 #[repr(C)]
-#[derive(Copy, Clone, Default, Debug, BufferContent, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
+#[derive(Copy, Clone, Default, Debug, BufferContentPlain, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 pub struct MeshletInstanceDisk {
 	pub transform: Affine3A,
 }
