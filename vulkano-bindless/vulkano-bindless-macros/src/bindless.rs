@@ -147,7 +147,7 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>
 
 		// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 		context.entry_args.append_tokens(quote! {
-			#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &mut #crate_shaders::spirv_std::RuntimeArray<[u32]>,
+			#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &#crate_shaders::spirv_std::RuntimeArray<[u32]>,
 			#image_args
 			#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders::descriptor::Sampler>,
 		});
