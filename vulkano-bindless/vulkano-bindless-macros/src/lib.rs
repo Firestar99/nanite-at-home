@@ -1,3 +1,4 @@
+use crate::buffer_content::BufferContentType;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::Error;
@@ -19,7 +20,14 @@ pub fn bindless(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(BufferContent)]
 pub fn buffer_content(content: TokenStream) -> TokenStream {
-	buffer_content::buffer_content(content)
+	buffer_content::buffer_content(BufferContentType::Default, content)
+		.unwrap_or_else(Error::into_compile_error)
+		.into()
+}
+
+#[proc_macro_derive(BufferContentPlain)]
+pub fn buffer_content_plain(content: TokenStream) -> TokenStream {
+	buffer_content::buffer_content(BufferContentType::Plain, content)
 		.unwrap_or_else(Error::into_compile_error)
 		.into()
 }

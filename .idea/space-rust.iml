@@ -11,11 +11,14 @@
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-shaders/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-shader-builder/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/space-asset-pipeline/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset-shader/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/space-asset/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/models/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/meshlet-renderer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-asset-disk/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-asset-preprocess/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-asset-rt/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/space-asset-disk-shader/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vulkano-bindless/vulkano-bindless-buffer-content/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

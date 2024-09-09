@@ -1,4 +1,4 @@
-use space_asset::meshlet::scene::MeshletSceneFile;
+use space_asset_disk::meshlet::scene::MeshletSceneFile;
 
 pub fn sample_scenes() -> Vec<MeshletSceneFile<'static>> {
 	Vec::from([models::Lantern::glTF::Lantern])

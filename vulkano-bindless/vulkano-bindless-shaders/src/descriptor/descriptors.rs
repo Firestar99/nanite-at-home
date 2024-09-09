@@ -1,8 +1,8 @@
-use crate::buffer_content::BufferContent;
+use crate::buffer_content::{BufferContent, Metadata};
 use crate::descriptor::image_types::standard_image_types;
-use crate::descriptor::metadata::Metadata;
 use crate::descriptor::reference::{AliveDescRef, Desc};
 use crate::descriptor::{Buffer, BufferSlice, DescContent};
+use bytemuck_derive::AnyBitPattern;
 use spirv_std::{RuntimeArray, Sampler};
 
 /// Some struct that facilitates access to a [`ValidDesc`] pointing to some [`DescContent`]
@@ -50,4 +50,15 @@ impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
 	fn access(&self, desc: &Desc<impl AliveDescRef, Sampler>) -> <Sampler as DescContent>::AccessType<'_> {
 		unsafe { self.samplers.index(desc.id() as usize) }
 	}
+}
+
+/// All bindless push constants are this particular struct, with T being the declared push_param.
+///
+/// Must not derive `DescStruct`, as to [`DescStruct::from_transfer`] Self you'd need the Metadata, which this struct
+/// contains. To break the loop, it just stores Metadata flat and params directly as `T::TransferDescStruct`.
+#[repr(C)]
+#[derive(Copy, Clone, AnyBitPattern)]
+pub struct PushConstant<T: bytemuck::AnyBitPattern + Send + Sync> {
+	pub t: T,
+	pub metadata: Metadata,
 }

@@ -3,7 +3,7 @@ use crate::material::radiance::Radiance;
 use core::f32::consts::PI;
 use core::ops::{Deref, DerefMut};
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
-use space_asset::material::pbr::PbrMaterial;
+use space_asset_shader::material::pbr::PbrMaterial;
 use spirv_std::Sampler;
 use vulkano_bindless_shaders::descriptor::{AliveDescRef, Descriptors};
 

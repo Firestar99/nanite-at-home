@@ -1,0 +1,32 @@
+[package]
+name = "space-asset-rt"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# members
+space-asset-disk = { workspace = true }
+space-asset-shader = { workspace = true }
+vulkano-bindless = { workspace = true }
+vulkano-bindless-macros = { workspace = true }
+vulkano-bindless-shaders = { workspace = true }
+
+# vulkan
+vulkano = { workspace = true }
+
+# model loader
+zune-image = { workspace = true }
+
+# serde
+rkyv = { workspace = true }
+
+# async
+futures = { workspace = true }
+async-std = { workspace = true }
+rayon = { workspace = true }
+
+# profiling
+profiling = { workspace = true }

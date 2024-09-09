@@ -1,5 +1,4 @@
-use crate::buffer_content::MetadataCpuInterface;
-use crate::descriptor::metadata::Metadata;
+use crate::buffer_content::{Metadata, MetadataCpuInterface};
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;

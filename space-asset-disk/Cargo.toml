@@ -1,0 +1,32 @@
+[package]
+name = "space-asset-disk"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# members
+space-asset-disk-shader = { workspace = true, features = ["disk"] }
+vulkano-bindless-macros = { workspace = true }
+vulkano-bindless-buffer-content = { workspace = true }
+
+# model loader
+zune-image = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true, features = ["rkyv"] }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+
+# serde
+rkyv = { workspace = true }
+zstd = { workspace = true }
+
+# profiling
+profiling = { workspace = true }
+
+# other
+static_assertions = { workspace = true }
+num_enum = { workspace = true }

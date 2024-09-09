@@ -1,5 +1,4 @@
-use crate::buffer_content::{BufferStruct, MetadataCpuInterface};
-use crate::descriptor::Metadata;
+use crate::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};
 use crate::frame_in_flight::FRAMES_LIMIT;
 use bytemuck_derive::AnyBitPattern;
 use core::fmt::{Debug, Formatter};

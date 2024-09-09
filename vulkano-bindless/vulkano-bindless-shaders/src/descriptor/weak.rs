@@ -1,5 +1,6 @@
+use crate::buffer_content::Metadata;
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{Desc, DescContent, DescRef, Metadata};
+use crate::descriptor::{Desc, DescContent, DescRef};
 use core::mem;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::BufferContent;

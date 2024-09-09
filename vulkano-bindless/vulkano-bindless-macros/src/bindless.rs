@@ -16,7 +16,7 @@ pub struct BindlessContext<'a> {
 }
 
 pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> Result<TokenStream> {
-	let symbols = Symbols::new();
+	let symbols = Symbols::new()?;
 	let item = syn::parse::<ItemFn>(item)?;
 	let attr = syn::parse::<MetaList>(attr)?;
 	match &item.sig.output {
@@ -90,7 +90,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	let param_type_ident = format_ident!("__Bindless_{}_ParamConstant", entry_ident);
 	let param_type = &param.param_ty;
 
-	let crate_shaders = &context.symbols.crate_shaders;
+	let crate_shaders = &context.symbols.crate_shaders()?;
 	let vis = &context.item.vis;
 	let entry_args = &context.entry_args;
 	let inner_ident = format_ident!("__bindless_{}", entry_ident);
@@ -119,7 +119,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 
 fn gen_bindless_descriptors(context: &mut BindlessContext, arg: Option<&PatType>, param: &BindlessParam) -> Result<()> {
 	if let Some(arg) = arg {
-		let crate_shaders = &context.symbols.crate_shaders;
+		let crate_shaders = &context.symbols.crate_shaders()?;
 		let buffers = format_ident!("__bindless_buffers");
 		let samplers = format_ident!("__bindless_samplers");
 
@@ -173,7 +173,7 @@ struct BindlessParam {
 }
 
 fn gen_bindless_param(context: &mut BindlessContext, arg: Option<&PatType>) -> Result<BindlessParam> {
-	let crate_shaders = &context.symbols.crate_shaders;
+	let crate_shaders = &context.symbols.crate_shaders()?;
 	// let param_ty = arg.map_or_else(|| quote!(()), |arg| arg.ty.to_token_stream());
 	let param_ty = match arg {
 		None => Ok(quote!(())),
@@ -232,6 +232,6 @@ fn get_entry_shader_type(context: &mut BindlessContext) -> Result<TokenStream> {
 		_ => Err(Error::new(attr.path.span(), "Unknown bindless shader type"))?,
 	};
 	let shader_type = format_ident!("{}", shader_type_name);
-	let crate_shaders = &context.symbols.crate_shaders;
+	let crate_shaders = &context.symbols.crate_shaders()?;
 	Ok(quote!(#crate_shaders::shader_type::#shader_type))
 }

@@ -1031,7 +1031,7 @@ dependencies = [
 [[package]]
 name = "glam"
 version = "0.29.0"
-source = "git+https://github.com/Firestar99/glam-rs.git?rev=9e4bb5da04b0c294a1a0faca1d365a224b65f5bd#9e4bb5da04b0c294a1a0faca1d365a224b65f5bd"
+source = "git+https://github.com/Firestar99/glam-rs.git?rev=27649a451790a3fc8a34f021937ea3fcb45b5ff5#27649a451790a3fc8a34f021937ea3fcb45b5ff5"
 dependencies = [
  "bytemuck",
  "libm",
@@ -1499,8 +1499,9 @@ dependencies = [
  "profiling",
  "puffin_http",
  "smallvec",
- "space-asset",
- "space-asset-pipeline",
+ "space-asset-disk",
+ "space-asset-rt",
+ "space-asset-shader",
  "space-engine",
  "space-engine-shader",
  "static_assertions",
@@ -1544,8 +1545,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "profiling",
- "space-asset",
- "space-asset-pipeline",
+ "space-asset-disk",
+ "space-asset-preprocess",
 ]
 
 [[package]]
@@ -2461,29 +2462,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "space-asset"
+name = "space-asset-disk"
 version = "0.1.0"
 dependencies = [
- "async-std",
  "bytemuck",
  "bytemuck_derive",
- "futures",
  "glam",
  "num_enum",
  "profiling",
- "rayon",
  "rkyv",
+ "space-asset-disk-shader",
  "static_assertions",
- "vulkano",
- "vulkano-bindless",
+ "vulkano-bindless-buffer-content",
  "vulkano-bindless-macros",
- "vulkano-bindless-shaders",
  "zstd",
  "zune-image",
 ]
 
 [[package]]
-name = "space-asset-pipeline"
+name = "space-asset-disk-shader"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "rkyv",
+ "static_assertions",
+ "vulkano-bindless-buffer-content",
+ "vulkano-bindless-macros",
+]
+
+[[package]]
+name = "space-asset-preprocess"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2504,12 +2514,41 @@ dependencies = [
  "rayon",
  "rkyv",
  "smallvec",
- "space-asset",
+ "space-asset-disk",
  "static_assertions",
  "urlencoding",
  "walkdir",
  "zstd",
  "zune-image",
+]
+
+[[package]]
+name = "space-asset-rt"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "futures",
+ "profiling",
+ "rayon",
+ "rkyv",
+ "space-asset-disk",
+ "space-asset-shader",
+ "vulkano",
+ "vulkano-bindless",
+ "vulkano-bindless-macros",
+ "vulkano-bindless-shaders",
+ "zune-image",
+]
+
+[[package]]
+name = "space-asset-shader"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "space-asset-disk-shader",
+ "vulkano-bindless-macros",
+ "vulkano-bindless-shaders",
 ]
 
 [[package]]
@@ -2528,7 +2567,8 @@ dependencies = [
  "paste",
  "profiling",
  "smallvec",
- "space-asset",
+ "space-asset-rt",
+ "space-asset-shader",
  "space-engine-shader",
  "space-engine-shader-builder",
  "static_assertions",
@@ -2549,7 +2589,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "space-asset",
+ "space-asset-shader",
  "spirv-std",
  "static_assertions",
  "vulkano-bindless-macros",
@@ -3046,13 +3086,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "vulkano-bindless-buffer-content"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "spirv-std",
+ "static_assertions",
+]
+
+[[package]]
 name = "vulkano-bindless-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "spirv-std",
  "syn 2.0.71",
 ]
 
@@ -3080,6 +3130,7 @@ dependencies = [
  "num-traits",
  "spirv-std",
  "static_assertions",
+ "vulkano-bindless-buffer-content",
  "vulkano-bindless-macros",
 ]
 

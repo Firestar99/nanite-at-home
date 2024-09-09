@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # members
+vulkano-bindless-buffer-content = { workspace = true }
 vulkano-bindless-macros = { workspace = true }
 
 # rust-gpu

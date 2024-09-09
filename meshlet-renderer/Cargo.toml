@@ -9,7 +9,9 @@ repository.workspace = true
 [dependencies]
 # my projects
 models = { workspace = true }
-space-asset = { workspace = true }
+space-asset-disk = { workspace = true }
+space-asset-rt = { workspace = true }
+space-asset-shader = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 vulkano-bindless = { workspace = true }
@@ -37,12 +39,6 @@ puffin_http = { workspace = true }
 static_assertions = { workspace = true }
 parking_lot = { workspace = true }
 smallvec = { workspace = true }
-
-[build-dependencies]
-space-asset = { workspace = true }
-space-asset-pipeline = { workspace = true }
-profiling = { workspace = true }
-puffin_http = { workspace = true }
 
 [features]
 profile-with-puffin = ["profiling/profile-with-puffin"]
