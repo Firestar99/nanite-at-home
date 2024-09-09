@@ -5,6 +5,7 @@ use std::path::Path;
 
 const MODELS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/models");
 
+#[allow(clippy::let_and_return)]
 fn main() -> anyhow::Result<()> {
 	#[cfg(feature = "profile-with-puffin")]
 	let _puffin_server = {

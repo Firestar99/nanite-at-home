@@ -1,5 +1,5 @@
 use crate::buffer_content::{BufferContent, BufferStruct};
-use crate::descriptor::descriptor_content::{private, DescContent, DescContentEnum};
+use crate::descriptor::descriptor_content::{private, DescContent, DescContentType};
 use crate::descriptor::metadata::Metadata;
 use core::marker::PhantomData;
 use core::mem;
@@ -13,7 +13,7 @@ impl<T: ?Sized + Send + Sync + 'static> private::SealedTrait for Buffer<T> {}
 
 impl<T: ?Sized + Send + Sync + 'static> DescContent for Buffer<T> {
 	type AccessType<'a> = BufferSlice<'a, T>;
-	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Buffer;
+	const CONTENT_TYPE: DescContentType = DescContentType::Buffer;
 }
 
 pub struct BufferSlice<'a, T: ?Sized> {

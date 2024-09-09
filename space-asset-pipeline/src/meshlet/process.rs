@@ -76,7 +76,7 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 
 	let mesh2instances = meshes_primitives
 		.into_iter()
-		.zip(mesh2instance.into_iter())
+		.zip(mesh2instance)
 		.flat_map(|(mesh_primitives, instances)| {
 			mesh_primitives
 				.into_iter()
@@ -103,7 +103,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	let vertex_positions: Vec<_> = reader
 		.read_positions()
 		.ok_or(MeshletError::NoVertexPositions)?
-		.map(|pos| Vec3::from(pos))
+		.map(Vec3::from)
 		.collect();
 
 	let mut indices: Vec<_> = if let Some(indices) = reader.read_indices() {
@@ -119,7 +119,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 
 	let out = {
 		let adapter =
-			VertexDataAdapter::new(bytemuck::cast_slice(&*vertex_positions), mem::size_of::<Vec3>(), 0).unwrap();
+			VertexDataAdapter::new(bytemuck::cast_slice(&vertex_positions), mem::size_of::<Vec3>(), 0).unwrap();
 		let mut out = {
 			profiling::scope!("meshopt::build_meshlets");
 			meshopt::build_meshlets(
@@ -146,12 +146,9 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	let draw_vertices = out
 		.vertices
 		.into_iter()
-		.map(|i| {
-			DrawVertex {
-				position: vertex_positions[i as usize],
-				material_vertex_id: MaterialVertexId(i),
-			}
-			.encode()
+		.map(|i| DrawVertex {
+			position: vertex_positions[i as usize],
+			material_vertex_id: MaterialVertexId(i),
 		})
 		.collect();
 

@@ -1,8 +1,11 @@
-use crate::descriptor::metadata::Metadata;
-use crate::descriptor::reference::StrongDesc;
 use crate::descriptor::DescContent;
+use crate::descriptor::Metadata;
+use crate::descriptor::StrongDesc;
 use bytemuck::AnyBitPattern;
 use core::ops::Deref;
+
+mod glam;
+mod primitive;
 
 /// Trait for contents of **buffers** that may contain descriptors requiring conversion.
 ///
@@ -15,6 +18,13 @@ use core::ops::Deref;
 /// Should not be manually implemented, see [`BufferStruct`].
 pub unsafe trait BufferContent: Send + Sync {
 	type Transfer: Send + Sync + ?Sized;
+}
+
+unsafe impl<T: BufferContent> BufferContent for [T]
+where
+	T::Transfer: Sized,
+{
+	type Transfer = [T::Transfer];
 }
 
 /// Trait for **sized types** that may contain descriptors requiring conversion and can be stored in a Buffer. Use
@@ -56,26 +66,4 @@ unsafe impl<T: BufferStruct> BufferContent for T {
 /// Internal interface to CPU code
 pub unsafe trait MetadataCpuInterface: Deref<Target = Metadata> {
 	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>);
-}
-
-// impl
-unsafe impl<T: AnyBitPattern + Send + Sync> BufferStruct for T {
-	type Transfer = T;
-
-	#[inline]
-	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
-		self
-	}
-
-	#[inline]
-	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
-		from
-	}
-}
-
-unsafe impl<T: BufferContent> BufferContent for [T]
-where
-	T::Transfer: Sized,
-{
-	type Transfer = [T::Transfer];
 }

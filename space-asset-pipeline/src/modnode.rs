@@ -29,7 +29,7 @@ impl<'a, T> ModNode<'a, T> {
 		if let Some(seg) = path.next() {
 			match self {
 				ModNode::Children(children) => {
-					if let None = path.peek() {
+					if path.peek().is_none() {
 						match children.insert(seg, Self::Object(t)) {
 							Some(ModNode::Object(_)) => Err(ModNodeError::ObjectsNameCollision),
 							Some(ModNode::Children(_)) => Err(ModNodeError::ModuleAndObjectNameCollision),
@@ -43,7 +43,7 @@ impl<'a, T> ModNode<'a, T> {
 					}
 				}
 				ModNode::Object(_) => {
-					if let None = path.peek() {
+					if path.peek().is_none() {
 						Err(ModNodeError::ObjectsNameCollision)
 					} else {
 						Err(ModNodeError::ModuleAndObjectNameCollision)
@@ -51,7 +51,7 @@ impl<'a, T> ModNode<'a, T> {
 				}
 			}
 		} else {
-			return Err(ModNodeError::NoName);
+			Err(ModNodeError::NoName)
 		}
 	}
 

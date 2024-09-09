@@ -29,7 +29,7 @@ impl<const IMAGE_TYPE: u32> ArchivedImage2DDisk<IMAGE_TYPE> {
 impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 	pub(super) fn decode(&self, src: &[u8]) -> Result<Vec<u8>, ImageErrors> {
 		let mut vec = vec![0; self.decompressed_bytes()];
-		self.decode_into(src, &mut *vec)?;
+		self.decode_into(src, &mut vec)?;
 		Ok(vec)
 	}
 

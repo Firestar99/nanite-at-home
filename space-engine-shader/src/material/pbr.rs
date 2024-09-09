@@ -179,5 +179,5 @@ fn geometry_smith(n: Vec3, v: Vec3, l: Vec3, roughness: f32) -> f32 {
 	let ggx2 = geometry_schlick_ggx(n_dot_v, roughness);
 	let ggx1 = geometry_schlick_ggx(n_dot_l, roughness);
 
-	return ggx1 * ggx2;
+	ggx1 * ggx2
 }

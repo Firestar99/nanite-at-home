@@ -15,8 +15,7 @@ use spirv_std::memory::{Scope, Semantics};
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::reference::{Strong, Transient};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
+use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, Transient, TransientDesc};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {
@@ -103,7 +102,7 @@ fn draw_meshlet(
 
 	// let meshlet = mesh.meshlet_unchecked(descriptors, meshlet_id);
 
-	return true;
+	true
 	// }
 }
 

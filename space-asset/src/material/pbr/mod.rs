@@ -46,8 +46,7 @@ mod runtime {
 	use crate::uploader::{UploadError, Uploader};
 	use std::future::Future;
 	use vulkano::Validated;
-	use vulkano_bindless::descriptor::{RCDescExt, RC};
-	use vulkano_bindless_shaders::descriptor::reference::Strong;
+	use vulkano_bindless::descriptor::{RCDescExt, Strong, RC};
 
 	impl PbrMaterial<RC> {
 		pub fn to_strong(&self) -> PbrMaterial<Strong> {

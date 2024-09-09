@@ -38,7 +38,6 @@ zstd = { workspace = true }
 
 # profiling
 profiling = { workspace = true }
-puffin_http = { workspace = true }
 
 # other
 parking_lot = { workspace = true }
@@ -47,10 +46,3 @@ smallvec = { workspace = true }
 clap = { workspace = true }
 walkdir = { workspace = true }
 anyhow = { workspace = true }
-
-[features]
-profile-with-puffin = ["profiling/profile-with-puffin", "space-asset/profile-with-puffin"]
-profile-with-optick = ["profiling/profile-with-optick", "space-asset/profile-with-optick"]
-profile-with-superluminal = ["profiling/profile-with-superluminal", "space-asset/profile-with-superluminal"]
-profile-with-tracing = ["profiling/profile-with-tracing", "space-asset/profile-with-tracing"]
-profile-with-tracy = ["profiling/profile-with-tracy", "space-asset/profile-with-tracy"]

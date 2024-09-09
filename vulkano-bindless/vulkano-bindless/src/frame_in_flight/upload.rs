@@ -12,8 +12,8 @@ use vulkano::memory::allocator::{AllocationCreateInfo, DeviceLayout, MemoryAlloc
 use vulkano::memory::{MappedMemoryRange, MemoryPropertyFlags};
 use vulkano::{Validated, VulkanError};
 use vulkano_bindless_shaders::buffer_content::{BufferStruct, MetadataCpuInterface};
-use vulkano_bindless_shaders::descriptor::metadata::Metadata;
-use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
+use vulkano_bindless_shaders::descriptor::Metadata;
+use vulkano_bindless_shaders::descriptor::StrongDesc;
 use vulkano_bindless_shaders::descriptor::{Buffer, DescContent, TransientDesc};
 
 pub struct UploadInFlight<T: BufferStruct + 'static> {

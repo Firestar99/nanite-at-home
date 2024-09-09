@@ -1,26 +1,22 @@
 mod gpu {
-	use crate::material::pbr::vertex::{EncodedPbrVertex, PbrVertex};
+	use crate::material::pbr::vertex::PbrVertex;
 	use crate::material::pbr::PbrMaterial;
 	use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
 	use crate::meshlet::offset::MeshletOffset;
-	use crate::meshlet::vertex::{DrawVertex, EncodedDrawVertex, MaterialVertexId};
-	use bytemuck_derive::AnyBitPattern;
-	use core::mem;
+	use crate::meshlet::vertex::{DrawVertex, MaterialVertexId};
 	use core::ops::Deref;
 	use glam::UVec3;
-	use static_assertions::const_assert_eq;
-	use vulkano_bindless_macros::BufferContent;
-	use vulkano_bindless_shaders::descriptor::reference::{AliveDescRef, Desc, DescRef};
-	use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors};
+	use vulkano_bindless_macros::{assert_transfer_size, BufferContent};
+	use vulkano_bindless_shaders::descriptor::{AliveDescRef, Buffer, Desc, DescRef, Descriptors};
 
 	#[repr(C)]
-	#[derive(Copy, Clone, Debug, AnyBitPattern)]
+	#[derive(Copy, Clone, Debug, BufferContent)]
 	#[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 	pub struct MeshletData {
 		pub draw_vertex_offset: MeshletOffset,
 		pub triangle_offset: MeshletOffset,
 	}
-	const_assert_eq!(mem::size_of::<MeshletData>(), 2 * 4);
+	assert_transfer_size!(MeshletData, 2 * 4);
 
 	impl AsRef<MeshletData> for MeshletData {
 		fn as_ref(&self) -> &MeshletData {
@@ -58,11 +54,11 @@ mod gpu {
 	#[derive(Copy, Clone, BufferContent)]
 	pub struct MeshletMesh<R: DescRef> {
 		pub meshlets: Desc<R, Buffer<[MeshletData]>>,
-		pub draw_vertices: Desc<R, Buffer<[EncodedDrawVertex]>>,
+		pub draw_vertices: Desc<R, Buffer<[DrawVertex]>>,
 		pub triangles: Desc<R, Buffer<[CompressedIndices]>>,
 		pub num_meshlets: u32,
 		pub pbr_material: PbrMaterial<R>,
-		pub pbr_material_vertices: Desc<R, Buffer<[EncodedPbrVertex]>>,
+		pub pbr_material_vertices: Desc<R, Buffer<[PbrVertex]>>,
 	}
 
 	impl<R: AliveDescRef> MeshletMesh<R> {
@@ -107,7 +103,7 @@ mod gpu {
 				"index out of bounds: the len is {len} but the index is {index}"
 			);
 			let global_index = self.data.draw_vertex_offset.start() + index;
-			self.mesh.draw_vertices.access(descriptors).load(global_index).decode()
+			self.mesh.draw_vertices.access(descriptors).load(global_index)
 		}
 
 		/// # Safety
@@ -115,11 +111,7 @@ mod gpu {
 		pub unsafe fn load_draw_vertex_unchecked(&self, descriptors: &Descriptors, index: usize) -> DrawVertex {
 			unsafe {
 				let global_index = self.data.draw_vertex_offset.start() + index;
-				self.mesh
-					.draw_vertices
-					.access(descriptors)
-					.load_unchecked(global_index)
-					.decode()
+				self.mesh.draw_vertices.access(descriptors).load_unchecked(global_index)
 			}
 		}
 
@@ -151,7 +143,6 @@ mod gpu {
 				.pbr_material_vertices
 				.access(descriptors)
 				.load(index.0 as usize)
-				.decode()
 		}
 
 		/// # Safety
@@ -166,7 +157,6 @@ mod gpu {
 					.pbr_material_vertices
 					.access(descriptors)
 					.load_unchecked(index.0 as usize)
-					.decode()
 			}
 		}
 	}
@@ -175,18 +165,18 @@ pub use gpu::*;
 
 #[cfg(feature = "disk")]
 mod disk {
-	use crate::material::pbr::vertex::EncodedPbrVertex;
+	use crate::material::pbr::vertex::PbrVertex;
 	use crate::meshlet::indices::CompressedIndices;
 	use crate::meshlet::mesh::MeshletData;
-	use crate::meshlet::vertex::EncodedDrawVertex;
+	use crate::meshlet::vertex::DrawVertex;
 	use rkyv::{Archive, Deserialize, Serialize};
 
 	#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 	pub struct MeshletMeshDisk {
 		pub meshlets: Vec<MeshletData>,
-		pub draw_vertices: Vec<EncodedDrawVertex>,
+		pub draw_vertices: Vec<DrawVertex>,
 		pub triangles: Vec<CompressedIndices>,
-		pub pbr_material_vertices: Vec<EncodedPbrVertex>,
+		pub pbr_material_vertices: Vec<PbrVertex>,
 		pub pbr_material_id: u32,
 	}
 }
@@ -200,8 +190,7 @@ mod runtime {
 	use crate::uploader::{deserialize_infallible, UploadError, Uploader};
 	use std::future::Future;
 	use vulkano::Validated;
-	use vulkano_bindless::descriptor::{RCDescExt, RC};
-	use vulkano_bindless_shaders::descriptor::reference::Strong;
+	use vulkano_bindless::descriptor::{RCDescExt, Strong, RC};
 
 	impl MeshletMesh<RC> {
 		pub fn to_strong(&self) -> MeshletMesh<Strong> {
@@ -220,7 +209,7 @@ mod runtime {
 		pub fn upload<'a>(
 			&'a self,
 			uploader: &'a Uploader,
-			pbr_materials: &'a Vec<PbrMaterial<RC>>,
+			pbr_materials: &'a [PbrMaterial<RC>],
 		) -> impl Future<Output = Result<MeshletMesh<RC>, Validated<UploadError>>> + 'a {
 			let meshlets = uploader.upload_buffer_iter(self.meshlets.iter().map(deserialize_infallible));
 			let draw_vertices = uploader.upload_buffer_iter(self.draw_vertices.iter().map(deserialize_infallible));

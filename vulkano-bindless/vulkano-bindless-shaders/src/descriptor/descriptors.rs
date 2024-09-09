@@ -16,7 +16,7 @@ macro_rules! decl_descriptors {
 		{$($sampled_name:ident: $sampled_ty:ty,)*}
 	) => {
 		pub struct Descriptors<'a> {
-			pub buffers: &'a mut RuntimeArray<[u32]>,
+			pub buffers: &'a RuntimeArray<[u32]>,
 			$(pub $storage_name: &'a RuntimeArray<$storage_ty>,)*
 			$(pub $sampled_name: &'a RuntimeArray<$sampled_ty>,)*
 			pub samplers: &'a RuntimeArray<Sampler>,

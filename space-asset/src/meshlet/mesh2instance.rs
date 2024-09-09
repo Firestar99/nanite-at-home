@@ -2,8 +2,7 @@ mod gpu {
 	use crate::meshlet::instance::MeshletInstance;
 	use crate::meshlet::mesh::MeshletMesh;
 	use vulkano_bindless_macros::BufferContent;
-	use vulkano_bindless_shaders::descriptor::reference::DescStructRef;
-	use vulkano_bindless_shaders::descriptor::{Buffer, Desc, DescRef};
+	use vulkano_bindless_shaders::descriptor::{Buffer, Desc, DescRef, DescStructRef};
 
 	#[repr(C)]
 	#[derive(Copy, Clone, BufferContent)]
@@ -39,8 +38,7 @@ mod runtime {
 	use std::future::Future;
 	use std::ops::Deref;
 	use vulkano::Validated;
-	use vulkano_bindless::descriptor::RC;
-	use vulkano_bindless_shaders::descriptor::reference::Strong;
+	use vulkano_bindless::descriptor::{Strong, RC};
 
 	pub struct MeshletMesh2InstanceCpu {
 		pub mesh2instance: MeshletMesh2Instance<RC, Strong>,
@@ -59,7 +57,7 @@ mod runtime {
 		pub fn upload<'a>(
 			&'a self,
 			uploader: &'a Uploader,
-			pbr_materials: &'a Vec<PbrMaterial<RC>>,
+			pbr_materials: &'a [PbrMaterial<RC>],
 		) -> impl Future<Output = Result<MeshletMesh2InstanceCpu, Validated<UploadError>>> + 'a {
 			let mesh = self.mesh.upload(uploader, pbr_materials);
 			let instances = uploader.upload_buffer_iter(self.instances.iter().map(deserialize_infallible));

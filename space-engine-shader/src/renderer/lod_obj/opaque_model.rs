@@ -3,8 +3,8 @@ use glam::{Vec2, Vec3, Vec3A};
 use spirv_std::image::Image2d;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::BufferContent;
-use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 use vulkano_bindless_shaders::descriptor::Buffer;
+use vulkano_bindless_shaders::descriptor::StrongDesc;
 
 #[repr(C)]
 #[derive(Copy, Clone, BufferContent)]

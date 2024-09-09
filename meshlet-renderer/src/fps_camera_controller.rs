@@ -23,6 +23,7 @@ pub struct State {
 	pub rotation_pitch: f32,
 	/// should not be pub: used for remembering key states
 	movement_keys: [[bool; 2]; 3],
+	mouse_disabled: bool,
 	pub move_speed_exponent: i32,
 }
 
@@ -78,6 +79,7 @@ impl FpsCameraController {
 					Space => self.movement_keys[1][1] = value,
 					KeyW => self.movement_keys[2][0] = value,
 					KeyS => self.movement_keys[2][1] = value,
+					KeyM if value => self.mouse_disabled = !self.mouse_disabled,
 					Home => self.state = State::default(),
 					_ => {}
 				}
@@ -86,10 +88,12 @@ impl FpsCameraController {
 				event: DeviceEvent::MouseMotion { delta, .. },
 				..
 			} => {
-				const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
-				let delta = DVec2::from(*delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST * -1.;
-				self.rotation_yaw = (self.rotation_yaw + delta.x) % (2. * PI);
-				self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
+				if !self.mouse_disabled {
+					const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
+					let delta = DVec2::from(*delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST * -1.;
+					self.rotation_yaw = (self.rotation_yaw + delta.x) % (2. * PI);
+					self.rotation_pitch = clamp(self.rotation_pitch + delta.y, -PI / 2., PI / 2.);
+				}
 			}
 			Event::WindowEvent {
 				event: WindowEvent::MouseWheel { delta, .. },

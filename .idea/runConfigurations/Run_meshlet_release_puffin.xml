@@ -1,6 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run meshlet release puffin" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --bin meshlet-renderer --release --features profile-with-puffin" />
+    <option name="buildProfile" value="Dev" />
+    <option name="command" value="run --bin meshlet-renderer --features profile-with-puffin --profile release" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="false" />

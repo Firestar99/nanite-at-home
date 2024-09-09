@@ -7,16 +7,16 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano_bindless_shaders::buffer_content::MetadataCpuInterface;
-use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
-use vulkano_bindless_shaders::descriptor::metadata::Metadata;
-use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 use vulkano_bindless_shaders::descriptor::DescContent;
+use vulkano_bindless_shaders::descriptor::DescContentType;
+use vulkano_bindless_shaders::descriptor::Metadata;
+use vulkano_bindless_shaders::descriptor::StrongDesc;
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
 pub struct StrongMetadataCpu<'a> {
 	bindless: &'a Arc<Bindless>,
 	metadata: Metadata,
-	refs: Result<HashMap<(DescContentEnum, u32), AnyRCDesc>, BackingRefsError>,
+	refs: Result<HashMap<(DescContentType, u32), AnyRCDesc>, BackingRefsError>,
 }
 
 impl<'a> StrongMetadataCpu<'a> {
@@ -42,22 +42,22 @@ unsafe impl<'a> MetadataCpuInterface for StrongMetadataCpu<'a> {
 		if let Ok(refs) = &mut self.refs {
 			let id = desc.id();
 			let version = unsafe { desc.version_cpu() };
-			match refs.entry((C::CONTENT_ENUM, desc.id())) {
+			match refs.entry((C::CONTENT_TYPE, desc.id())) {
 				Entry::Occupied(rc) => {
 					if rc.get().version() != version {
-						self.refs = Err(BackingRefsError::NoLongerAlive(C::CONTENT_ENUM, id, version))
+						self.refs = Err(BackingRefsError::NoLongerAlive(C::CONTENT_TYPE, id, version))
 					}
 				}
 				Entry::Vacant(v) => {
-					let rc = match C::CONTENT_ENUM {
-						DescContentEnum::Buffer => self.bindless.buffer().resource_table.try_get_rc(id, version),
-						DescContentEnum::Image => self.bindless.image().resource_table.try_get_rc(id, version),
-						DescContentEnum::Sampler => self.bindless.sampler().resource_table.try_get_rc(id, version),
+					let rc = match C::CONTENT_TYPE {
+						DescContentType::Buffer => self.bindless.buffer().resource_table.try_get_rc(id, version),
+						DescContentType::Image => self.bindless.image().resource_table.try_get_rc(id, version),
+						DescContentType::Sampler => self.bindless.sampler().resource_table.try_get_rc(id, version),
 					};
 					if let Some(rc) = rc {
 						v.insert(rc);
 					} else {
-						self.refs = Err(BackingRefsError::NoLongerAlive(C::CONTENT_ENUM, id, version))
+						self.refs = Err(BackingRefsError::NoLongerAlive(C::CONTENT_TYPE, id, version))
 					}
 				}
 			}
@@ -75,7 +75,7 @@ impl<'a> Deref for StrongMetadataCpu<'a> {
 
 #[derive(Debug)]
 pub enum BackingRefsError {
-	NoLongerAlive(DescContentEnum, u32, u32),
+	NoLongerAlive(DescContentType, u32, u32),
 }
 
 impl Display for BackingRefsError {

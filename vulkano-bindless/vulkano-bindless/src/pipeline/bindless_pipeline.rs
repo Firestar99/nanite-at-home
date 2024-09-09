@@ -6,9 +6,9 @@ use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano::{Validated, ValidationError, VulkanError};
 use vulkano_bindless_shaders::buffer_content::{BufferStruct, MetadataCpuInterface};
-use vulkano_bindless_shaders::descriptor::metadata::{Metadata, PushConstant};
-use vulkano_bindless_shaders::descriptor::reference::StrongDesc;
 use vulkano_bindless_shaders::descriptor::DescContent;
+use vulkano_bindless_shaders::descriptor::StrongDesc;
+use vulkano_bindless_shaders::descriptor::{Metadata, PushConstant};
 
 pub trait VulkanPipeline {
 	type VulkanType: Pipeline;

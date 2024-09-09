@@ -14,8 +14,8 @@ use vulkano::device::{Device, DeviceOwned};
 use vulkano::image::sampler::{Sampler as VSampler, SamplerCreateInfo};
 use vulkano::shader::ShaderStages;
 use vulkano::{Validated, VulkanError};
-use vulkano_bindless_shaders::descriptor::descriptor_content::DescContentEnum;
-use vulkano_bindless_shaders::descriptor::sampler::Sampler;
+use vulkano_bindless_shaders::descriptor::DescContentType;
+use vulkano_bindless_shaders::descriptor::Sampler;
 use vulkano_bindless_shaders::descriptor::BINDING_SAMPLER;
 
 impl DescContentCpu for Sampler {
@@ -28,7 +28,7 @@ impl DescContentCpu for Sampler {
 }
 
 impl DescTable for SamplerTable {
-	const CONTENT_ENUM: DescContentEnum = DescContentEnum::Sampler;
+	const CONTENT_ENUM: DescContentType = DescContentType::Sampler;
 	type Slot = Arc<VSampler>;
 	type RCSlotsInterface = SamplerInterface;
 

@@ -30,7 +30,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 
 	let mut mat2mesh = HashMap::<u32, Vec<MeshletMesh2InstanceDisk>>::new();
 	for m2i in single_instances {
-		mat2mesh.entry(m2i.mesh.pbr_material_id).or_insert(Vec::new()).push(m2i);
+		mat2mesh.entry(m2i.mesh.pbr_material_id).or_default().push(m2i);
 	}
 
 	let mut mesh2instances = many_instances;
@@ -71,13 +71,9 @@ fn merge<'a>(
 
 		let draw_start = out.draw_vertices.len();
 		let transform = instance.transform.affine;
-		out.draw_vertices.extend(mesh.draw_vertices.iter().map(|v| {
-			let v = v.decode();
-			DrawVertex {
-				material_vertex_id: MaterialVertexId(v.material_vertex_id.0 + pbr_start),
-				position: transform.transform_point3(v.position),
-			}
-			.encode()
+		out.draw_vertices.extend(mesh.draw_vertices.iter().map(|v| DrawVertex {
+			material_vertex_id: MaterialVertexId(v.material_vertex_id.0 + pbr_start),
+			position: transform.transform_point3(v.position),
 		}));
 
 		// must always stay aligned to a multiple of triangles = 3 indices

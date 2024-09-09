@@ -1,21 +1,28 @@
-pub mod buffer;
-pub mod descriptor_content;
-pub mod descriptors;
-pub mod image;
-pub mod metadata;
-pub mod reference;
-pub mod sampler;
+mod buffer;
+mod descriptor_content;
+mod descriptors;
+mod image;
+mod metadata;
+mod reference;
+mod sampler;
+mod strong;
+mod transient;
+mod weak;
 
 #[path = "../../../image_types.rs"]
 #[macro_use]
 mod image_types;
 
-pub use buffer::{Buffer, BufferSlice};
-pub use descriptor_content::DescContent;
-pub use descriptors::Descriptors;
-pub use image::Image;
-pub use reference::{AliveDescRef, Desc, DescRef, StrongDesc, TransientDesc, WeakDesc};
-pub use sampler::Sampler;
+pub use buffer::*;
+pub use descriptor_content::{DescContent, DescContentType};
+pub use descriptors::*;
+pub use image::*;
+pub use metadata::*;
+pub use reference::*;
+pub use sampler::*;
+pub use strong::*;
+pub use transient::*;
+pub use weak::*;
 
 pub const BINDING_BUFFER: u32 = 0;
 pub const BINDING_STORAGE_IMAGE: u32 = 1;

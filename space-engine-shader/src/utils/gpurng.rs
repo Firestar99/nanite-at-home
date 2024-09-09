@@ -13,6 +13,7 @@ impl GpuRng {
 		Self(state)
 	}
 
+	#[allow(clippy::should_implement_trait)]
 	pub fn next(&mut self) -> u32 {
 		let state = self.0;
 		self.0 = self.0 * 747796405 + 2891336453;

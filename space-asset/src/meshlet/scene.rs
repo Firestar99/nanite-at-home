@@ -28,8 +28,8 @@ mod disk {
 			);
 			serializer.serialize_value(self).map_err(|err| match err {
 				CompositeSerializerError::SerializerError(e) => e,
-				CompositeSerializerError::ScratchSpaceError(e) => Err(e).unwrap(),
-				CompositeSerializerError::SharedError(e) => Err(e).unwrap(),
+				CompositeSerializerError::ScratchSpaceError(e) => panic!("{:?}", e),
+				CompositeSerializerError::SharedError(e) => panic!("{:?}", e),
 			})?;
 			Ok(())
 		}
