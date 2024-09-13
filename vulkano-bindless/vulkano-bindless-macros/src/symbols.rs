@@ -1,5 +1,5 @@
 use proc_macro2::Ident;
-use proc_macro_crate::{crate_name, Error, FoundCrate};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::format_ident;
 use syn::{punctuated, Path, PathSegment, Token};
 
@@ -23,27 +23,19 @@ impl Symbols {
 			Err(err) => Err(err),
 		};
 
-		let crate_buffer_content = match crate_name("vulkano-bindless-buffer-content") {
-			Ok(found_crate) => Ok(match &found_crate {
-				FoundCrate::Itself => idents_to_path(&ident_crate, &[&ident_crate]),
-				FoundCrate::Name(name) => idents_to_path(&ident_crate, &[&format_ident!("{}", name)]),
-			}),
-			Err(err) => {
-				if let Error::CrateNotFound { .. } = err {
-					if let Ok(crate_shaders_ident) = &crate_shaders {
-						Ok(idents_to_path(
-							&ident_crate,
-							&[&crate_shaders_ident, &format_ident!("buffer_content")],
-						))
-					} else {
-						Err(err)
-					}
-				} else {
-					Err(err)
+		let crate_buffer_content = if let Ok(crate_shaders_ident) = &crate_shaders {
+			idents_to_path(&ident_crate, &[&crate_shaders_ident, &format_ident!("buffer_content")])
+		} else {
+			match crate_name("vulkano-bindless-buffer-content") {
+				Ok(found_crate) => match &found_crate {
+					FoundCrate::Itself => idents_to_path(&ident_crate, &[&ident_crate]),
+					FoundCrate::Name(name) => idents_to_path(&ident_crate, &[&format_ident!("{}", name)]),
+				},
+				Err(err) => {
+					return Err(syn::Error::new(span, err));
 				}
 			}
-		}
-		.map_err(|e| syn::Error::new(span, e))?;
+		};
 
 		let crate_shaders = crate_shaders.map_err(|e| syn::Error::new(span, e));
 		Ok(Self {
