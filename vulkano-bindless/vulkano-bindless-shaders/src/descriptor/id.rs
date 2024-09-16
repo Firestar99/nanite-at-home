@@ -1,9 +1,8 @@
 use crate::buffer_content::Metadata;
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{Desc, DescContent, DescContentType, DescRef};
+use crate::descriptor::{Desc, DescContent, DescRef};
 use bytemuck_derive::{Pod, Zeroable};
 use core::mem;
-use num_traits::{FromPrimitive, ToPrimitive};
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::BufferContent;
 
@@ -31,48 +30,116 @@ const_assert_eq!(ID_INDEX_MASK << ID_INDEX_SHIFT & ID_TYPE_MASK << ID_TYPE_SHIFT
 const_assert_eq!(ID_INDEX_MASK << ID_INDEX_SHIFT & ID_VERSION_MASK << ID_VERSION_SHIFT, 0);
 const_assert_eq!(ID_TYPE_MASK << ID_TYPE_SHIFT & ID_VERSION_MASK << ID_VERSION_SHIFT, 0);
 
-/// An [`UnsafeDesc`] that does not verify that the resource is actually alive or not, and thus is fully unsafe to use.
-/// The basis of most other descriptor types.
+/// The raw unsafe descriptor identifier to locate a resource. Internally it's a bit packed u32 containing the
+/// [`DescriptorType`], [`DescriptorIndex`] and version. All other descriptors use `DescriptorId` internally.
 #[repr(transparent)]
-#[derive(Copy, Clone, Zeroable, Pod, BufferContent)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Zeroable, Pod, BufferContent)]
 pub struct DescriptorId(u32);
 const_assert_eq!(mem::size_of::<DescriptorId>(), 4);
 
 impl DescriptorId {
-	pub unsafe fn new(content_type: DescContentType, index: u32, version: u32) -> Self {
-		// cannot fail, as ensured by const_assert on DescContentType
-		let content_type = content_type.to_u32().unwrap_or_default();
+	pub unsafe fn new(desc_type: DescriptorType, index: DescriptorIndex, version: DescriptorVersion) -> Self {
 		let mut value = 0;
-		value |= (content_type & ID_TYPE_MASK) << ID_TYPE_SHIFT;
-		value |= (index & ID_INDEX_MASK) << ID_INDEX_SHIFT;
-		value |= (version & ID_VERSION_MASK) << ID_VERSION_SHIFT;
+		value |= (desc_type.0 & ID_TYPE_MASK) << ID_TYPE_SHIFT;
+		value |= (index.0 & ID_INDEX_MASK) << ID_INDEX_SHIFT;
+		value |= (version.0 & ID_VERSION_MASK) << ID_VERSION_SHIFT;
 		Self(value)
 	}
 
-	pub fn content_type(&self) -> DescContentType {
-		match DescContentType::from_u32((self.0 >> ID_TYPE_SHIFT) & ID_TYPE_MASK) {
-			Some(e) => e,
-			None => {
-				// FIXME unreachable on spirv?
-				// // I wish spirv cound panic better, but this should be unreachable anyways
-				// #[cfg(not(target_arch = "spirv"))]
-				unreachable!("Invalid ContentType bits");
-				// #[cfg(target_arch = "spirv")]
-				// DescContentType::Buffer
-			}
-		}
+	pub const fn desc_type(&self) -> DescriptorType {
+		DescriptorType((self.0 >> ID_TYPE_SHIFT) & ID_TYPE_MASK)
 	}
 
-	pub const fn index(&self) -> u32 {
-		(self.0 >> ID_INDEX_SHIFT) & ID_INDEX_MASK
+	pub const fn index(&self) -> DescriptorIndex {
+		DescriptorIndex((self.0 >> ID_INDEX_SHIFT) & ID_INDEX_MASK)
 	}
 
-	pub const fn version(&self) -> u32 {
-		(self.0 >> ID_VERSION_SHIFT) & ID_VERSION_MASK
+	pub const fn version(&self) -> DescriptorVersion {
+		DescriptorVersion((self.0 >> ID_VERSION_SHIFT) & ID_VERSION_MASK)
 	}
 }
 
 impl DescRef for DescriptorId {}
+
+/// The descriptor table type of [`DescriptorId`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, BufferContent)]
+pub struct DescriptorType(u32);
+const_assert_eq!(mem::size_of::<DescriptorType>(), 4);
+
+impl DescriptorType {
+	pub unsafe fn new(type_id: u32) -> Option<Self> {
+		if type_id == type_id & ID_TYPE_MASK {
+			Some(Self::new_unchecked(type_id))
+		} else {
+			None
+		}
+	}
+
+	pub unsafe fn new_unchecked(type_id: u32) -> Self {
+		Self(type_id)
+	}
+
+	pub const fn to_u32(&self) -> u32 {
+		self.0
+	}
+
+	pub const fn to_usize(&self) -> usize {
+		self.0 as usize
+	}
+}
+
+/// The index of [`DescriptorId`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
+pub struct DescriptorIndex(u32);
+const_assert_eq!(mem::size_of::<DescriptorIndex>(), 4);
+
+impl DescriptorIndex {
+	pub unsafe fn new(index: u32) -> Option<Self> {
+		if index == index & ID_INDEX_MASK {
+			Some(Self::new_unchecked(index))
+		} else {
+			None
+		}
+	}
+
+	pub unsafe fn new_unchecked(index: u32) -> Self {
+		Self(index)
+	}
+
+	pub const fn to_u32(&self) -> u32 {
+		self.0
+	}
+
+	pub const fn to_usize(&self) -> usize {
+		self.0 as usize
+	}
+}
+
+/// The version of [`DescriptorId`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
+pub struct DescriptorVersion(u32);
+const_assert_eq!(mem::size_of::<DescriptorVersion>(), 4);
+
+impl DescriptorVersion {
+	pub unsafe fn new(version: u32) -> Option<Self> {
+		if version == version & ID_VERSION_MASK {
+			Some(Self::new_unchecked(version))
+		} else {
+			None
+		}
+	}
+
+	pub unsafe fn new_unchecked(version: u32) -> Self {
+		Self(version)
+	}
+
+	pub const fn to_u32(&self) -> u32 {
+		self.0
+	}
+}
 
 pub type UnsafeDesc<C> = Desc<DescriptorId, C>;
 
