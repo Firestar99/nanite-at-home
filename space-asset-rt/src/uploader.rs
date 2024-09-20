@@ -69,7 +69,7 @@ impl Uploader {
 		uploader
 	}
 
-	pub fn upload_buffer_data<T: BufferStruct>(
+	pub fn upload_buffer_data<T: BufferStruct + 'static>(
 		&self,
 		data: T,
 	) -> impl Future<Output = Result<RCDesc<Buffer<T>>, Validated<UploadError>>> + '_ {
@@ -95,7 +95,7 @@ impl Uploader {
 		async { result?.await }
 	}
 
-	pub fn upload_buffer_iter<T: BufferStruct, I>(
+	pub fn upload_buffer_iter<T: BufferStruct + 'static, I>(
 		&self,
 		iter: I,
 	) -> impl Future<Output = Result<RCDesc<Buffer<[T]>>, Validated<UploadError>>> + '_
@@ -125,7 +125,7 @@ impl Uploader {
 		async { result?.await }
 	}
 
-	fn upload_buffer<T: BufferContent + ?Sized>(
+	fn upload_buffer<T: BufferContent + ?Sized + 'static>(
 		&self,
 		upload_buffer: Subbuffer<T::Transfer>,
 		backing_refs: StrongBackingRefs,

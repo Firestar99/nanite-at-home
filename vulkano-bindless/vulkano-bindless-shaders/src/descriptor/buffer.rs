@@ -2,7 +2,7 @@ use crate::buffer_content::{BufferContent, BufferStruct, Metadata};
 use crate::descriptor::descriptor_content::DescContent;
 use core::marker::PhantomData;
 use core::mem;
-use spirv_std::byte_addressable_buffer::buffer_load_intrinsic;
+use spirv_std::ByteAddressableBuffer;
 
 pub struct Buffer<T: ?Sized + Send + Sync + 'static> {
 	_phantom: PhantomData<T>,
@@ -107,4 +107,8 @@ impl<'a, T: BufferContent + ?Sized> BufferSlice<'a, T> {
 			)
 		}
 	}
+}
+
+unsafe fn buffer_load_intrinsic<T>(buffer: &[u32], offset: u32) -> T {
+	ByteAddressableBuffer::from_slice(buffer).load_unchecked(offset)
 }
