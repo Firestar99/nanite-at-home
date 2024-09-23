@@ -24,6 +24,14 @@ pub struct TableManager {
 	write_queue_ab: CachePadded<AtomicU32>,
 }
 
+struct Table {
+	slots: Box<[TableSlot]>,
+	interface: Box<dyn TableInterface>,
+	reaper_queue: ABArray<SegQueue<DescriptorIndex>>,
+	dead_queue: SegQueue<DescriptorIndex>,
+	next_free: CachePadded<AtomicU32>,
+}
+
 impl TableManager {
 	pub fn new() -> Arc<Self> {
 		Arc::new(TableManager {
@@ -39,7 +47,16 @@ impl TableManager {
 		if let Some(_) = *guard {
 			Err(())
 		} else {
-			*guard = Some(Table::new(slots_capacity, Box::new(interface)));
+			*guard = Some(Table {
+				slots: (0..slots_capacity)
+					.map(|_| TableSlot::default())
+					.collect::<Vec<_>>()
+					.into_boxed_slice(),
+				interface: Box::new(interface),
+				reaper_queue: ABArray::new(|| SegQueue::new()),
+				dead_queue: SegQueue::new(),
+				next_free: CachePadded::new(AtomicU32::new(0)),
+			});
 			Ok(())
 		}
 	}
@@ -61,8 +78,18 @@ impl TableManager {
 
 	fn alloc_slot(self: &Arc<Self>, table: DescriptorType) -> Result<RcTableSlot, SlotAllocationError> {
 		self.with_table(table, |t| unsafe {
-			let index = t.alloc_slot()?;
-			let id = DescriptorId::new(table, index, t.version(index));
+			let index = if let Some(index) = t.dead_queue.pop() {
+				Ok(index)
+			} else {
+				let index = t.next_free.fetch_add(1, Relaxed);
+				if index < t.slots_capacity() {
+					Ok(unsafe { DescriptorIndex::new(index).unwrap() })
+				} else {
+					Err(SlotAllocationError::NoMoreCapacity(t.slots_capacity()))
+				}
+			}?;
+			let version = t.slot(index).read_version();
+			let id = DescriptorId::new(table, index, version);
 			Ok(RcTableSlot::new(Arc::into_raw(self.clone()), id))
 		})
 	}
@@ -112,7 +139,7 @@ impl TableManager {
 				.iter()
 				.map(|table_lock| {
 					let table = table_lock.read();
-					table.as_ref().map(|table| table.gc_queue_collect(gc_queue))
+					table.as_ref().map(|table| self.gc_queue_collect(table, gc_queue))
 				})
 				.collect::<Vec<_>>();
 
@@ -125,62 +152,16 @@ impl TableManager {
 			if let Some(gc_indices) = gc_indices {
 				let table = table.read();
 				if let Some(table) = table.as_ref() {
-					table.gc_queue_drop(gc_indices);
+					self.gc_queue_drop(table, gc_indices);
 				} else {
 					unreachable!();
 				}
 			}
 		}
 	}
-}
 
-struct Table {
-	slots: Box<[TableSlot]>,
-	interface: Box<dyn TableInterface>,
-	reaper_queue: ABArray<SegQueue<DescriptorIndex>>,
-	dead_queue: SegQueue<DescriptorIndex>,
-	next_free: CachePadded<AtomicU32>,
-}
-
-impl Table {
-	fn new(slots_capacity: u32, interface: Box<dyn TableInterface>) -> Self {
-		Self {
-			slots: (0..slots_capacity)
-				.map(|_| TableSlot::default())
-				.collect::<Vec<_>>()
-				.into_boxed_slice(),
-			interface,
-			reaper_queue: ABArray::new(|| SegQueue::new()),
-			dead_queue: SegQueue::new(),
-			next_free: CachePadded::new(AtomicU32::new(0)),
-		}
-	}
-
-	#[inline]
-	fn slots_capacity(&self) -> u32 {
-		self.slots.len() as u32
-	}
-
-	#[inline]
-	fn alloc_slot(&self) -> Result<DescriptorIndex, SlotAllocationError> {
-		if let Some(index) = self.dead_queue.pop() {
-			Ok(index)
-		} else {
-			let index = self.next_free.fetch_add(1, Relaxed);
-			if index < self.slots_capacity() {
-				Ok(unsafe { DescriptorIndex::new(index).unwrap() })
-			} else {
-				Err(SlotAllocationError::NoMoreCapacity(self.slots_capacity()))
-			}
-		}
-	}
-
-	fn version(&self, index: DescriptorIndex) -> DescriptorVersion {
-		unsafe { DescriptorVersion::new(self.slot(index).version.with(|v| *v)).unwrap() }
-	}
-
-	fn gc_queue_collect(&self, ab: AB) -> DescriptorIndexRangeSet {
-		let reaper_queue = &self.reaper_queue[ab];
+	fn gc_queue_collect(&self, table: &Table, ab: AB) -> DescriptorIndexRangeSet {
+		let reaper_queue = &table.reaper_queue[ab];
 		let mut set = DescriptorIndexRangeSet::new();
 		while let Some(index) = reaper_queue.pop() {
 			set.insert(index..index);
@@ -188,11 +169,11 @@ impl Table {
 		set
 	}
 
-	fn gc_queue_drop(&self, indices: DescriptorIndexRangeSet) {
-		self.interface.drop_slots(&indices);
+	fn gc_queue_drop(&self, table: &Table, indices: DescriptorIndexRangeSet) {
+		table.interface.drop_slots(&indices);
 
 		for index in indices.iter() {
-			let slot = self.slot(index);
+			let slot = table.slot(index);
 			unsafe {
 				let valid_version = slot.version.with_mut(|version| {
 					*version += 1;
@@ -200,45 +181,59 @@ impl Table {
 				});
 
 				if valid_version {
-					self.dead_queue.push(index);
+					table.dead_queue.push(index);
 				}
 			}
 		}
 	}
 
 	#[inline]
+	fn ref_inc(&self, id: DescriptorId) {
+		self.with_table(id.desc_type(), |t| {
+			let slot = t.slot(id.index());
+			slot.ref_count.fetch_add(1, Relaxed);
+		})
+	}
+
+	#[inline]
+	fn ref_dec(&self, id: DescriptorId) {
+		self.with_table(id.desc_type(), |t| {
+			let slot = t.slot(id.index());
+			match slot.ref_count.fetch_sub(1, Relaxed) {
+				0 => panic!("TableSlot ref_count underflow!"),
+				1 => {
+					fence(Acquire);
+					t.reaper_queue[self.write_queue_ab()].push(id.index());
+				}
+				_ => (),
+			}
+		})
+	}
+}
+
+impl Table {
+	#[inline]
 	fn slot(&self, index: DescriptorIndex) -> &TableSlot {
 		&self.slots[index.to_usize()]
 	}
 
 	#[inline]
-	fn ref_inc(&self, index: DescriptorIndex) {
-		self.slot(index).ref_count.fetch_add(1, Relaxed);
-	}
-
-	#[inline]
-	fn ref_dec(&self, index: DescriptorIndex) {
-		match self.slot(index).ref_count.fetch_sub(1, Relaxed) {
-			0 => panic!("TableSlot ref_count underflow!"),
-			1 => {
-				fence(Acquire);
-				self.slot_starts_dying(index);
-			}
-			_ => (),
-		}
-	}
-
-	#[cold]
-	#[inline(never)]
-	fn slot_starts_dying(&self, index: DescriptorIndex) {
-		let slot = self.slot(index);
-		// TODO insert to reaper, version inc here or later?
+	fn slots_capacity(&self) -> u32 {
+		self.slots.len() as u32
 	}
 }
 
 struct TableSlot {
 	ref_count: AtomicU32,
 	version: UnsafeCell<u32>,
+}
+
+impl TableSlot {
+	/// # Safety
+	/// creates a reference to `self.version`
+	unsafe fn read_version(&self) -> DescriptorVersion {
+		unsafe { DescriptorVersion::new(self.version.with(|v| *v)).unwrap() }
+	}
 }
 
 impl Default for TableSlot {
@@ -271,16 +266,14 @@ impl RcTableSlot {
 
 impl Clone for RcTableSlot {
 	fn clone(&self) -> Self {
-		self.table_manager()
-			.with_table(self.id.desc_type(), |t| t.ref_inc(self.id.index()));
+		self.table_manager().ref_inc(self.id);
 		unsafe { Self::new(self.table_manager, self.id) }
 	}
 }
 
 impl Drop for RcTableSlot {
 	fn drop(&mut self) {
-		self.table_manager()
-			.with_table(self.id.desc_type(), |t| t.ref_dec(self.id.index()));
+		self.table_manager().ref_dec(self.id);
 	}
 }
 
