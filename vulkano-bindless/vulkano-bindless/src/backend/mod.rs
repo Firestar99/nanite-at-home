@@ -2,5 +2,6 @@
 //! destruction.
 
 pub mod ab;
+pub mod range_set;
 pub mod table;
 pub mod table_id;

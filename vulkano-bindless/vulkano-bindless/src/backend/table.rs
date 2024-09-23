@@ -1,10 +1,10 @@
 use crate::backend::ab::{ABArray, AB};
+use crate::backend::range_set::DescriptorIndexRangeSet;
 use crate::backend::table_id::{TableId, TABLE_COUNT};
 use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use rangemap::RangeSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
@@ -13,7 +13,7 @@ use std::sync::Arc;
 use vulkano_bindless_shaders::descriptor::{DescriptorId, DescriptorIndex, DescriptorType, DescriptorVersion};
 
 pub trait TableInterface {
-	fn drop_slots(&self, indices: &RangeSet<DescriptorIndex>);
+	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
 	fn flush(&self);
 }
 
@@ -179,19 +179,19 @@ impl Table {
 		unsafe { DescriptorVersion::new(self.slot(index).version.with(|v| *v)).unwrap() }
 	}
 
-	fn gc_queue_collect(&self, ab: AB) -> RangeSet<DescriptorIndex> {
+	fn gc_queue_collect(&self, ab: AB) -> DescriptorIndexRangeSet {
 		let reaper_queue = &self.reaper_queue[ab];
-		let mut set = RangeSet::new();
+		let mut set = DescriptorIndexRangeSet::new();
 		while let Some(index) = reaper_queue.pop() {
 			set.insert(index..index);
 		}
 		set
 	}
 
-	fn gc_queue_drop(&self, indices: RangeSet<DescriptorIndex>) {
+	fn gc_queue_drop(&self, indices: DescriptorIndexRangeSet) {
 		self.interface.drop_slots(&indices);
 
-		for index in indices.into_iter().flatten() {
+		for index in indices.iter() {
 			let slot = self.slot(index);
 			unsafe {
 				let valid_version = slot.version.with_mut(|version| {
