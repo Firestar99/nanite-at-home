@@ -213,7 +213,7 @@ impl<T: DescTable> RCInner<T> {
 	#[inline]
 	pub fn id(&self) -> DescriptorId {
 		// we guarantee 32 bits is enough when constructing the resource tables
-		*self.slot.id() as u32
+		todo!()
 	}
 
 	#[inline]
@@ -275,11 +275,7 @@ impl AnyRCDescExt for RC {
 
 	#[inline]
 	fn id(&self) -> u32 {
-		match &self.0 {
-			DescTableEnum::Buffer(b) => b.id(),
-			DescTableEnum::Image(i) => i.id(),
-			DescTableEnum::Sampler(s) => s.id(),
-		}
+		todo!()
 	}
 
 	#[inline]

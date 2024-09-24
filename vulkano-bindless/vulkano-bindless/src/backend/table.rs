@@ -12,7 +12,7 @@ use std::sync::atomic::{fence, AtomicU32};
 use std::sync::Arc;
 use vulkano_bindless_shaders::descriptor::{DescriptorId, DescriptorIndex, DescriptorType, DescriptorVersion};
 
-pub trait TableInterface {
+pub trait TableInterface: 'static {
 	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
 	fn flush(&self);
 }
@@ -43,7 +43,7 @@ impl TableManager {
 
 	// FIXME replace TableId with DescriptorType?
 	pub fn register<T: TableInterface>(&self, id: TableId, slots_capacity: u32, interface: T) -> Result<(), ()> {
-		let guard = self.tables[id.to_usize()].write();
+		let mut guard = self.tables[id.to_usize()].write();
 		if let Some(_) = *guard {
 			Err(())
 		} else {
@@ -83,7 +83,7 @@ impl TableManager {
 			} else {
 				let index = t.next_free.fetch_add(1, Relaxed);
 				if index < t.slots_capacity() {
-					Ok(unsafe { DescriptorIndex::new(index).unwrap() })
+					Ok(DescriptorIndex::new(index).unwrap())
 				} else {
 					Err(SlotAllocationError::NoMoreCapacity(t.slots_capacity()))
 				}

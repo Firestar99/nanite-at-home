@@ -38,7 +38,7 @@ pub struct ABArray<T>([T; 2]);
 
 impl<T> ABArray<T> {
 	#[inline]
-	pub fn new(f: impl FnMut() -> T) -> Self {
+	pub fn new(mut f: impl FnMut() -> T) -> Self {
 		Self([f(), f()])
 	}
 }
