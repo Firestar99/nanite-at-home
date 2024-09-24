@@ -39,6 +39,7 @@ rangemap = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
+anyhow = { workspace = true }
 
 [features]
 loom_tests = []

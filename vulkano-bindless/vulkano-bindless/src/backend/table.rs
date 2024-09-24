@@ -1,6 +1,6 @@
 use crate::backend::ab::{ABArray, AB};
 use crate::backend::range_set::DescriptorIndexRangeSet;
-use crate::backend::table_id::{TableId, TABLE_COUNT};
+use crate::backend::table_id::TABLE_COUNT;
 use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
@@ -42,10 +42,15 @@ impl TableManager {
 	}
 
 	// FIXME replace TableId with DescriptorType?
-	pub fn register<T: TableInterface>(&self, id: TableId, slots_capacity: u32, interface: T) -> Result<(), ()> {
-		let mut guard = self.tables[id.to_usize()].write();
+	pub fn register<T: TableInterface>(
+		&self,
+		table_id: DescriptorType,
+		slots_capacity: u32,
+		interface: T,
+	) -> Result<(), TableRegisterError> {
+		let mut guard = self.tables[table_id.to_usize()].write();
 		if let Some(_) = *guard {
-			Err(())
+			Err(TableRegisterError::TableAlreadyRegistered(table_id))
 		} else {
 			*guard = Some(Table {
 				slots: (0..slots_capacity)
@@ -88,7 +93,9 @@ impl TableManager {
 					Err(SlotAllocationError::NoMoreCapacity(t.slots_capacity()))
 				}
 			}?;
-			let version = t.slot(index).read_version();
+			let slot = t.slot(index);
+			slot.ref_count.store(1, Relaxed);
+			let version = slot.read_version();
 			let id = DescriptorId::new(table, index, version);
 			Ok(RcTableSlot::new(Arc::into_raw(self.clone()), id))
 		})
@@ -164,7 +171,7 @@ impl TableManager {
 		let reaper_queue = &table.reaper_queue[ab];
 		let mut set = DescriptorIndexRangeSet::new();
 		while let Some(index) = reaper_queue.pop() {
-			set.insert(index..index);
+			set.insert(index);
 		}
 		set
 	}
@@ -245,6 +252,7 @@ impl Default for TableSlot {
 	}
 }
 
+#[derive(Debug)]
 pub struct RcTableSlot {
 	table_manager: *const TableManager,
 	id: DescriptorId,
@@ -289,6 +297,21 @@ impl Drop for FrameGuard {
 }
 
 #[derive(Debug)]
+pub enum TableRegisterError {
+	TableAlreadyRegistered(DescriptorType),
+}
+
+impl Error for TableRegisterError {}
+
+impl Display for TableRegisterError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			TableRegisterError::TableAlreadyRegistered(table) => write!(f, "Table {:?} already registered", table),
+		}
+	}
+}
+
+#[derive(Debug)]
 pub enum SlotAllocationError {
 	NoMoreCapacity(u32),
 }
@@ -302,5 +325,109 @@ impl Display for SlotAllocationError {
 				write!(f, "Ran out of available slots with a capacity of {}!", *cap)
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	const TEST_TABLE: DescriptorType = unsafe { DescriptorType::new_unchecked(0) };
+
+	struct TestInterface {
+		drops: Mutex<Vec<DescriptorIndexRangeSet>>,
+	}
+
+	impl TestInterface {
+		pub fn new() -> Self {
+			Self {
+				drops: Mutex::new(Vec::new()),
+			}
+		}
+	}
+
+	impl TableInterface for TestInterface {
+		fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
+			self.drops.lock().push(indices.clone());
+		}
+
+		fn flush(&self) {}
+	}
+
+	#[test]
+	fn test_table_register() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, 128, TestInterface::new())?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_table_double_register() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, 128, TestInterface::new())?;
+		match tm.register(TEST_TABLE, 256, TestInterface::new()) {
+			Ok(_) => panic!("expected Err from double registering the same table interface"),
+			Err(_) => Ok(()),
+		}
+	}
+
+	#[test]
+	fn test_alloc_slot() -> anyhow::Result<()> {
+		const N: u32 = 128;
+
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, N, TestInterface::new())?;
+
+		for i in 0..N {
+			let slot = tm.alloc_slot(TEST_TABLE)?;
+			assert_eq!(slot.id.index().to_u32(), i);
+			assert_eq!(slot.id.desc_type(), TEST_TABLE);
+			assert_eq!(slot.id.version().to_u32(), 0);
+		}
+
+		tm.alloc_slot(TEST_TABLE).expect_err("we should be out of slots");
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_slot_reuse() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, 128, TestInterface::new())?;
+
+		let alloc = |cnt: u32, exp_offset: u32, exp_version: u32| {
+			(0..cnt)
+				.map(|i| {
+					let slot = tm.alloc_slot(TEST_TABLE).unwrap();
+					assert_eq!(slot.id.index().to_u32(), i + exp_offset);
+					assert_eq!(slot.id.version().to_u32(), exp_version);
+					slot
+				})
+				.collect::<Vec<_>>()
+		};
+		let flush = || drop(tm.frame());
+
+		let alloc1 = alloc(5, 0, 0);
+		let alloc2 = alloc(8, 5, 0);
+		drop(alloc1);
+		flush();
+
+		let alloc1 = alloc(5, 0, 1);
+		let alloc3 = alloc(3, 5 + 8, 0);
+		drop(alloc2);
+		flush();
+
+		let alloc2 = alloc(8, 5, 1);
+		let alloc4 = alloc(1, 5 + 8 + 3, 0);
+		drop((alloc1, alloc2, alloc3));
+		flush();
+
+		let alloc1 = alloc(5, 0, 2);
+		let alloc2 = alloc(8, 5, 2);
+		let alloc3 = alloc(3, 5 + 8, 1);
+		let alloc5 = alloc(2, 5 + 8 + 3 + 1, 0);
+		drop((alloc1, alloc2, alloc3, alloc4, alloc5));
+
+		Ok(())
 	}
 }

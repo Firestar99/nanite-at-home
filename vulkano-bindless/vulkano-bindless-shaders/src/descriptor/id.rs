@@ -38,7 +38,7 @@ pub struct DescriptorId(u32);
 const_assert_eq!(mem::size_of::<DescriptorId>(), 4);
 
 impl DescriptorId {
-	pub unsafe fn new(desc_type: DescriptorType, index: DescriptorIndex, version: DescriptorVersion) -> Self {
+	pub const unsafe fn new(desc_type: DescriptorType, index: DescriptorIndex, version: DescriptorVersion) -> Self {
 		let mut value = 0;
 		value |= (desc_type.0 & ID_TYPE_MASK) << ID_TYPE_SHIFT;
 		value |= (index.0 & ID_INDEX_MASK) << ID_INDEX_SHIFT;
@@ -68,7 +68,7 @@ pub struct DescriptorType(u32);
 const_assert_eq!(mem::size_of::<DescriptorType>(), 4);
 
 impl DescriptorType {
-	pub unsafe fn new(type_id: u32) -> Option<Self> {
+	pub const unsafe fn new(type_id: u32) -> Option<Self> {
 		if type_id == type_id & ID_TYPE_MASK {
 			Some(Self::new_unchecked(type_id))
 		} else {
@@ -76,7 +76,7 @@ impl DescriptorType {
 		}
 	}
 
-	pub unsafe fn new_unchecked(type_id: u32) -> Self {
+	pub const unsafe fn new_unchecked(type_id: u32) -> Self {
 		Self(type_id)
 	}
 
@@ -96,7 +96,7 @@ pub struct DescriptorIndex(u32);
 const_assert_eq!(mem::size_of::<DescriptorIndex>(), 4);
 
 impl DescriptorIndex {
-	pub unsafe fn new(index: u32) -> Option<Self> {
+	pub const unsafe fn new(index: u32) -> Option<Self> {
 		if index == index & ID_INDEX_MASK {
 			Some(Self::new_unchecked(index))
 		} else {
@@ -104,7 +104,7 @@ impl DescriptorIndex {
 		}
 	}
 
-	pub unsafe fn new_unchecked(index: u32) -> Self {
+	pub const unsafe fn new_unchecked(index: u32) -> Self {
 		Self(index)
 	}
 
@@ -124,7 +124,7 @@ pub struct DescriptorVersion(u32);
 const_assert_eq!(mem::size_of::<DescriptorVersion>(), 4);
 
 impl DescriptorVersion {
-	pub unsafe fn new(version: u32) -> Option<Self> {
+	pub const unsafe fn new(version: u32) -> Option<Self> {
 		if version == version & ID_VERSION_MASK {
 			Some(Self::new_unchecked(version))
 		} else {
@@ -132,7 +132,7 @@ impl DescriptorVersion {
 		}
 	}
 
-	pub unsafe fn new_unchecked(version: u32) -> Self {
+	pub const unsafe fn new_unchecked(version: u32) -> Self {
 		Self(version)
 	}
 
