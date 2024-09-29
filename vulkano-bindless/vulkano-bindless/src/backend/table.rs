@@ -1,5 +1,6 @@
 use crate::backend::ab::{ABArray, AB};
 use crate::backend::range_set::DescriptorIndexRangeSet;
+use crate::backend::slot_array::SlotArray;
 use crate::backend::table_id::TABLE_COUNT;
 use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
@@ -46,7 +47,7 @@ pub struct TableManager {
 }
 
 struct Table {
-	slots: Box<[TableSlot]>,
+	slots: SlotArray<TableSlot>,
 	interface: Box<dyn TableInterface>,
 	reaper_queue: ABArray<SegQueue<DescriptorIndex>>,
 	dead_queue: SegQueue<DescriptorIndex>,
@@ -74,10 +75,7 @@ impl TableManager {
 			Err(TableRegisterError::TableAlreadyRegistered(table_id))
 		} else {
 			*guard = Some(Table {
-				slots: (0..slots_capacity)
-					.map(|_| TableSlot::default())
-					.collect::<Vec<_>>()
-					.into_boxed_slice(),
+				slots: SlotArray::new(slots_capacity),
 				interface: Box::new(interface),
 				reaper_queue: ABArray::new(|| SegQueue::new()),
 				dead_queue: SegQueue::new(),
@@ -119,7 +117,7 @@ impl TableManager {
 					Err(SlotAllocationError::NoMoreCapacity(t.slots_capacity()))
 				}
 			}?;
-			let slot = t.slot(index);
+			let slot = &t.slots[index];
 			slot.ref_count.store(1, Relaxed);
 			let version = slot.read_version();
 			let id = DescriptorId::new(table, index, version);
@@ -199,9 +197,8 @@ impl TableManager {
 					table.interface.drop_slots(&gc_indices);
 
 					for index in gc_indices.iter() {
-						let slot = table.slot(index);
 						unsafe {
-							let valid_version = slot.version.with_mut(|version| {
+							let valid_version = table.slots[index].version.with_mut(|version| {
 								*version += 1;
 								DescriptorVersion::new(*version).is_some()
 							});
@@ -221,16 +218,14 @@ impl TableManager {
 	#[inline]
 	fn ref_inc(&self, id: DescriptorId) {
 		self.with_table(id.desc_type(), |t| {
-			let slot = t.slot(id.index());
-			slot.ref_count.fetch_add(1, Relaxed);
+			t.slots[id.index()].ref_count.fetch_add(1, Relaxed);
 		})
 	}
 
 	#[inline]
 	fn ref_dec(&self, id: DescriptorId) {
 		self.with_table(id.desc_type(), |t| {
-			let slot = t.slot(id.index());
-			match slot.ref_count.fetch_sub(1, Relaxed) {
+			match t.slots[id.index()].ref_count.fetch_sub(1, Relaxed) {
 				0 => panic!("TableSlot ref_count underflow!"),
 				1 => {
 					fence(Acquire);
@@ -243,11 +238,6 @@ impl TableManager {
 }
 
 impl Table {
-	#[inline]
-	fn slot(&self, index: DescriptorIndex) -> &TableSlot {
-		&self.slots[index.to_usize()]
-	}
-
 	#[inline]
 	fn slots_capacity(&self) -> u32 {
 		self.slots.len() as u32
@@ -276,7 +266,7 @@ impl Default for TableSlot {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct RcTableSlot {
 	table_manager: *const TableManager,
 	id: DescriptorId,

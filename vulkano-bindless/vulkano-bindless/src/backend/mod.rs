@@ -3,5 +3,6 @@
 
 pub mod ab;
 pub mod range_set;
+pub mod slot_array;
 pub mod table;
 pub mod table_id;

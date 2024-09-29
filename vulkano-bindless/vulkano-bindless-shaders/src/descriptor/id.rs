@@ -33,7 +33,7 @@ const_assert_eq!(ID_TYPE_MASK << ID_TYPE_SHIFT & ID_VERSION_MASK << ID_VERSION_S
 /// The raw unsafe descriptor identifier to locate a resource. Internally it's a bit packed u32 containing the
 /// [`DescriptorType`], [`DescriptorIndex`] and version. All other descriptors use `DescriptorId` internally.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Zeroable, Pod, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Zeroable, Pod, BufferContent)]
 pub struct DescriptorId(u32);
 const_assert_eq!(mem::size_of::<DescriptorId>(), 4);
 
@@ -63,7 +63,7 @@ impl DescRef for DescriptorId {}
 
 /// The descriptor table type of [`DescriptorId`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, BufferContent)]
 pub struct DescriptorType(u32);
 const_assert_eq!(mem::size_of::<DescriptorType>(), 4);
 
@@ -91,7 +91,7 @@ impl DescriptorType {
 
 /// The index of [`DescriptorId`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
 pub struct DescriptorIndex(u32);
 const_assert_eq!(mem::size_of::<DescriptorIndex>(), 4);
 
@@ -119,7 +119,7 @@ impl DescriptorIndex {
 
 /// The version of [`DescriptorId`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
 pub struct DescriptorVersion(u32);
 const_assert_eq!(mem::size_of::<DescriptorVersion>(), 4);
 
