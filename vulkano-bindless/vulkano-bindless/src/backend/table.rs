@@ -223,15 +223,16 @@ impl TableManager {
 	}
 
 	#[inline]
-	fn ref_dec(&self, id: DescriptorId) {
+	fn ref_dec(&self, id: DescriptorId) -> bool {
 		self.with_table(id.desc_type(), |t| {
 			match t.slots[id.index()].ref_count.fetch_sub(1, Relaxed) {
 				0 => panic!("TableSlot ref_count underflow!"),
 				1 => {
 					fence(Acquire);
 					t.reaper_queue[self.write_queue_ab()].push(id.index());
+					true
 				}
-				_ => (),
+				_ => false,
 			}
 		})
 	}
@@ -295,7 +296,11 @@ impl Clone for RcTableSlot {
 
 impl Drop for RcTableSlot {
 	fn drop(&mut self) {
-		self.table_manager().ref_dec(self.id);
+		if self.table_manager().ref_dec(self.id) {
+			// Safety: slot ref count hit 0, so decrement ref count of `TableManager` which was incremented in
+			// `alloc_slot()` when this slot was created
+			unsafe { drop(Arc::from_raw(self.table_manager)) };
+		}
 	}
 }
 
