@@ -58,7 +58,7 @@ impl TableManager {
 		Arc::new(TableManager {
 			tables: core::array::from_fn(|_| RwLock::new(None)),
 			frame_mutex: Mutex::new(ABArray::new(|| 0)),
-			write_queue_ab: CachePadded::new(AtomicU32::new(AB::A.to_u32())),
+			write_queue_ab: CachePadded::new(AtomicU32::new(AB::B.to_u32())),
 		})
 	}
 
@@ -131,9 +131,13 @@ impl TableManager {
 		let frame_ab;
 		{
 			let mut guard = self.frame_mutex.lock();
-			// note the negation!
-			frame_ab = !self.write_queue_ab();
+			frame_ab = self.frame_ab();
 			guard[frame_ab] += 1;
+
+			// if we ran dry of frames (like we are at startup), switch frame ab after first frame
+			if guard[!frame_ab] == 0 {
+				self.gc_queue(guard, !frame_ab);
+			}
 		}
 
 		FrameGuard {
@@ -142,14 +146,17 @@ impl TableManager {
 		}
 	}
 
-	fn frame_drop(self: &Arc<Self>, frame_ab: AB) {
+	fn frame_drop(self: &Arc<Self>, dropped_frame_ab: AB) {
 		let mut guard = self.frame_mutex.lock();
-		let frame_cnt = &mut guard[frame_ab];
+		let frame_cnt = &mut guard[dropped_frame_ab];
 		match *frame_cnt {
 			0 => panic!("frame ref counting underflow"),
 			1 => {
 				*frame_cnt = 0;
-				self.last_frame_finished(guard, frame_ab);
+				let frame_ab = self.frame_ab();
+				if frame_ab != dropped_frame_ab {
+					self.gc_queue(guard, dropped_frame_ab);
+				}
 			}
 			_ => *frame_cnt -= 1,
 		}
@@ -157,26 +164,30 @@ impl TableManager {
 
 	#[cold]
 	#[inline(never)]
-	fn last_frame_finished(&self, guard: MutexGuard<ABArray<u32>>, frame_ab: AB) {
+	fn gc_queue(&self, guard: MutexGuard<ABArray<u32>>, dropped_frame_ab: AB) {
 		let table_gc_indices;
 		{
-			let write_queue_ab = self.write_queue_ab();
-			// note the double inversion
-			if !write_queue_ab != frame_ab {
-				return;
-			}
-
-			let gc_queue = !frame_ab;
+			let gc_queue = !dropped_frame_ab;
 			table_gc_indices = self
 				.tables
 				.iter()
 				.map(|table_lock| {
 					let table = table_lock.read();
-					table.as_ref().map(|table| self.gc_queue_collect(table, gc_queue))
+					table.as_ref().map(|table| {
+						let reaper_queue = &table.reaper_queue[gc_queue];
+						let mut set = DescriptorIndexRangeSet::new();
+						while let Some(index) = reaper_queue.pop() {
+							set.insert(index);
+						}
+						set
+					})
 				})
 				.collect::<Vec<_>>();
 
-			// TODO Release is a bit defensive here.
+			// Release may seem a bit defensive here, as we don't actually need to flush any memory.
+			// But it ensures that when creating a new FrameGuard afterward and sending it to another thread via
+			// Rel/Acq, this write is visible. Which is important as it could otherwise write to be gc'ed objects to the
+			// wrong queue.
 			self.write_queue_ab.store(gc_queue.to_u32(), Release);
 			drop(guard);
 		}
@@ -185,36 +196,23 @@ impl TableManager {
 			if let Some(gc_indices) = gc_indices {
 				let table = table.read();
 				if let Some(table) = table.as_ref() {
-					self.gc_queue_drop(table, gc_indices);
+					table.interface.drop_slots(&gc_indices);
+
+					for index in gc_indices.iter() {
+						let slot = table.slot(index);
+						unsafe {
+							let valid_version = slot.version.with_mut(|version| {
+								*version += 1;
+								DescriptorVersion::new(*version).is_some()
+							});
+
+							if valid_version {
+								table.dead_queue.push(index);
+							}
+						}
+					}
 				} else {
 					unreachable!();
-				}
-			}
-		}
-	}
-
-	fn gc_queue_collect(&self, table: &Table, ab: AB) -> DescriptorIndexRangeSet {
-		let reaper_queue = &table.reaper_queue[ab];
-		let mut set = DescriptorIndexRangeSet::new();
-		while let Some(index) = reaper_queue.pop() {
-			set.insert(index);
-		}
-		set
-	}
-
-	fn gc_queue_drop(&self, table: &Table, indices: DescriptorIndexRangeSet) {
-		table.interface.drop_slots(&indices);
-
-		for index in indices.iter() {
-			let slot = table.slot(index);
-			unsafe {
-				let valid_version = slot.version.with_mut(|version| {
-					*version += 1;
-					DescriptorVersion::new(*version).is_some()
-				});
-
-				if valid_version {
-					table.dead_queue.push(index);
 				}
 			}
 		}
@@ -638,7 +636,7 @@ mod tests {
 		drop(a1);
 
 		drop(tm.alloc_slot(TEST_TABLE)?);
-		assert_eq!(ti.take(), &[&[]]);
+		assert_eq!(ti.take(), &[&[], &[]]);
 
 		// doesn't matter how many frames, it never gets dropped until long_frame_b is done
 		for _ in 0..5 {
@@ -649,15 +647,13 @@ mod tests {
 			assert_eq!(ti.take(), &[&[]; 0]);
 		}
 
+		// gc of nothing
 		drop(long_frame_b);
-		// cleanup of nothing happened
 		assert_eq!(ti.take(), &[&[]]);
 
+		// 2nd gc should drop 0
 		drop(tm.frame());
-		assert_eq!(ti.take(), &[&[]]);
-
-		drop(tm.frame());
-		assert_eq!(ti.take(), &[&[0]]);
+		assert_eq!(ti.take(), &[&[0][..], &[]]);
 
 		Ok(())
 	}
@@ -671,10 +667,10 @@ mod tests {
 		let a1 = tm.frame();
 		drop(tm.alloc_slot(TEST_TABLE)?);
 		drop(a1);
-		assert_eq!(ti.take(), &[&[]]);
+		assert_eq!(ti.take(), &[&[], &[]]);
 
 		drop(tm.frame());
-		assert_eq!(ti.take(), &[&[0]]);
+		assert_eq!(ti.take(), &[&[0][..], &[]]);
 
 		Ok(())
 	}
