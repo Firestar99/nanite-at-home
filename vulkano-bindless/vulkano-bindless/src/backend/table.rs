@@ -7,6 +7,7 @@ use crossbeam_utils::CachePadded;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::ops::Deref;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{fence, AtomicU32};
 use std::sync::Arc;
@@ -15,6 +16,26 @@ use vulkano_bindless_shaders::descriptor::{DescriptorId, DescriptorIndex, Descri
 pub trait TableInterface: 'static {
 	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
 	fn flush(&self);
+}
+
+impl<T: TableInterface> TableInterface for Arc<T> {
+	fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
+		self.deref().drop_slots(indices);
+	}
+
+	fn flush(&self) {
+		self.deref().flush();
+	}
+}
+
+impl<T: TableInterface> TableInterface for Box<T> {
+	fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
+		self.deref().drop_slots(indices);
+	}
+
+	fn flush(&self) {
+		self.deref().flush();
+	}
 }
 
 pub struct TableManager {
@@ -79,6 +100,11 @@ impl TableManager {
 	#[inline]
 	fn write_queue_ab(&self) -> AB {
 		AB::from_u32(self.write_queue_ab.load(Relaxed)).unwrap()
+	}
+
+	#[inline]
+	fn frame_ab(&self) -> AB {
+		!self.write_queue_ab()
 	}
 
 	fn alloc_slot(self: &Arc<Self>, table: DescriptorType) -> Result<RcTableSlot, SlotAllocationError> {
@@ -290,6 +316,16 @@ pub struct FrameGuard {
 	frame_ab: AB,
 }
 
+impl FrameGuard {
+	pub fn table_manager(&self) -> &Arc<TableManager> {
+		&self.table_manager
+	}
+
+	pub fn ab(&self) -> AB {
+		self.frame_ab
+	}
+}
+
 impl Drop for FrameGuard {
 	fn drop(&mut self) {
 		self.table_manager.frame_drop(self.frame_ab);
@@ -331,22 +367,39 @@ impl Display for SlotAllocationError {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::backend::ab::AB::*;
+	use std::mem::take;
 
 	const TEST_TABLE: DescriptorType = unsafe { DescriptorType::new_unchecked(0) };
 
-	struct TestInterface {
+	struct DummyInterface;
+
+	impl TableInterface for DummyInterface {
+		fn drop_slots(&self, _indices: &DescriptorIndexRangeSet) {}
+
+		fn flush(&self) {}
+	}
+
+	struct SimpleInterface {
 		drops: Mutex<Vec<DescriptorIndexRangeSet>>,
 	}
 
-	impl TestInterface {
-		pub fn new() -> Self {
-			Self {
+	impl SimpleInterface {
+		pub fn new() -> Arc<Self> {
+			Arc::new(Self {
 				drops: Mutex::new(Vec::new()),
-			}
+			})
+		}
+
+		pub fn take(&self) -> Vec<Vec<u32>> {
+			take(&mut *self.drops.lock())
+				.into_iter()
+				.map(|set| set.iter().map(|i| i.to_u32()).collect())
+				.collect()
 		}
 	}
 
-	impl TableInterface for TestInterface {
+	impl TableInterface for SimpleInterface {
 		fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
 			self.drops.lock().push(indices.clone());
 		}
@@ -357,15 +410,15 @@ mod tests {
 	#[test]
 	fn test_table_register() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, TestInterface::new())?;
+		tm.register(TEST_TABLE, 128, DummyInterface)?;
 		Ok(())
 	}
 
 	#[test]
 	fn test_table_double_register() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, TestInterface::new())?;
-		match tm.register(TEST_TABLE, 256, TestInterface::new()) {
+		tm.register(TEST_TABLE, 128, DummyInterface)?;
+		match tm.register(TEST_TABLE, 256, DummyInterface) {
 			Ok(_) => panic!("expected Err from double registering the same table interface"),
 			Err(_) => Ok(()),
 		}
@@ -376,7 +429,7 @@ mod tests {
 		const N: u32 = 128;
 
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, N, TestInterface::new())?;
+		tm.register(TEST_TABLE, N, DummyInterface)?;
 
 		for i in 0..N {
 			let slot = tm.alloc_slot(TEST_TABLE)?;
@@ -386,6 +439,8 @@ mod tests {
 		}
 
 		tm.alloc_slot(TEST_TABLE).expect_err("we should be out of slots");
+		tm.alloc_slot(TEST_TABLE)
+			.expect_err("asking again but still out of slots");
 
 		Ok(())
 	}
@@ -393,7 +448,7 @@ mod tests {
 	#[test]
 	fn test_slot_reuse() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, TestInterface::new())?;
+		tm.register(TEST_TABLE, 128, DummyInterface)?;
 
 		let alloc = |cnt: u32, exp_offset: u32, exp_version: u32| {
 			(0..cnt)
@@ -405,7 +460,11 @@ mod tests {
 				})
 				.collect::<Vec<_>>()
 		};
-		let flush = || drop(tm.frame());
+		let flush = || {
+			for _ in 0..3 {
+				drop(tm.frame());
+			}
+		};
 
 		let alloc1 = alloc(5, 0, 0);
 		let alloc2 = alloc(8, 5, 0);
@@ -427,6 +486,195 @@ mod tests {
 		let alloc3 = alloc(3, 5 + 8, 1);
 		let alloc5 = alloc(2, 5 + 8 + 3 + 1, 0);
 		drop((alloc1, alloc2, alloc3, alloc4, alloc5));
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_frames_sequential() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, 128, DummyInterface)?;
+
+		let frame = |exp: AB| {
+			let f = tm.frame();
+			assert_eq!(f.frame_ab, exp);
+			drop(f);
+		};
+
+		for _ in 0..5 {
+			frame(A);
+		}
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_frames_dry_out() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, 128, DummyInterface)?;
+
+		for i in 0..5 {
+			println!("iter {}", i);
+			let flip = |ab: AB| if i % 2 == 0 { ab } else { !ab };
+
+			assert_eq!(tm.frame_ab(), flip(A));
+			let a1 = tm.frame();
+			assert_eq!(a1.frame_ab, flip(A));
+
+			assert_eq!(tm.frame_ab(), flip(B));
+			let b1 = tm.frame();
+			assert_eq!(b1.frame_ab, flip(B));
+
+			assert_eq!(tm.frame_ab(), flip(B));
+			drop(a1);
+			assert_eq!(tm.frame_ab(), flip(A));
+			drop(b1);
+			assert_eq!(tm.frame_ab(), flip(B));
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn test_frames_interleaved() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		tm.register(TEST_TABLE, 128, DummyInterface)?;
+
+		let a1 = tm.frame();
+		assert_eq!(a1.frame_ab, A);
+
+		let b1 = tm.frame();
+		assert_eq!(b1.frame_ab, B);
+		let b2 = tm.frame();
+		assert_eq!(b2.frame_ab, B);
+
+		drop(a1);
+		let a2 = tm.frame();
+		assert_eq!(a2.frame_ab, A);
+		let a3 = tm.frame();
+		assert_eq!(a3.frame_ab, A);
+
+		drop((b1, b2));
+		let b3 = tm.frame();
+		assert_eq!(b3.frame_ab, B);
+
+		// no switch!
+		drop(b3);
+		let b4 = tm.frame();
+		assert_eq!(b4.frame_ab, B);
+
+		Ok(())
+	}
+
+	struct FrameSwitch {
+		tm: Arc<TableManager>,
+		frame: ABArray<Option<FrameGuard>>,
+		ab: AB,
+	}
+
+	impl FrameSwitch {
+		pub fn new(tm: Arc<TableManager>) -> Self {
+			let mut switch = Self {
+				tm,
+				frame: ABArray::new(|| None),
+				ab: A,
+			};
+			for _ in 0..3 {
+				switch.switch();
+			}
+			switch
+		}
+
+		pub fn switch(&mut self) {
+			let slot = &mut self.frame[self.ab];
+			drop(slot.take());
+			let frame = self.tm.frame();
+			assert_eq!(frame.frame_ab, self.ab);
+			*slot = Some(frame);
+			self.ab = !self.ab;
+		}
+	}
+
+	#[test]
+	fn test_gc() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		let mut ti = SimpleInterface::new();
+		tm.register(TEST_TABLE, 128, ti.clone())?;
+		let mut switch = FrameSwitch::new(tm.clone());
+		ti.take();
+
+		let slot1 = tm.alloc_slot(TEST_TABLE)?;
+		let slot2 = tm.alloc_slot(TEST_TABLE)?;
+		drop(slot1);
+		assert_eq!(ti.take(), Vec::<Vec<u32>>::new());
+
+		switch.switch();
+		assert_eq!(ti.take(), &[&[]]);
+
+		drop(slot2);
+		switch.switch();
+		assert_eq!(ti.take(), &[&[0]]);
+
+		switch.switch();
+		assert_eq!(ti.take(), &[&[1]]);
+
+		switch.switch();
+		assert_eq!(ti.take(), &[&[]]);
+		switch.switch();
+		assert_eq!(ti.take(), &[&[]]);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_gc_long() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		let mut ti = SimpleInterface::new();
+		tm.register(TEST_TABLE, 128, ti.clone())?;
+
+		let a1 = tm.frame();
+		assert_eq!(a1.frame_ab, A);
+		let long_frame_b = tm.frame();
+		assert_eq!(long_frame_b.frame_ab, B);
+		drop(a1);
+
+		drop(tm.alloc_slot(TEST_TABLE)?);
+		assert_eq!(ti.take(), &[&[]]);
+
+		// doesn't matter how many frames, it never gets dropped until long_frame_b is done
+		for _ in 0..5 {
+			let a = tm.frame();
+			assert_eq!(a.frame_ab, A);
+			drop(a);
+			// no cleanup happened
+			assert_eq!(ti.take(), &[&[]; 0]);
+		}
+
+		drop(long_frame_b);
+		// cleanup of nothing happened
+		assert_eq!(ti.take(), &[&[]]);
+
+		drop(tm.frame());
+		assert_eq!(ti.take(), &[&[]]);
+
+		drop(tm.frame());
+		assert_eq!(ti.take(), &[&[0]]);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_gc_dry_out() -> anyhow::Result<()> {
+		let tm = TableManager::new();
+		let mut ti = SimpleInterface::new();
+		tm.register(TEST_TABLE, 128, ti.clone())?;
+
+		let a1 = tm.frame();
+		drop(tm.alloc_slot(TEST_TABLE)?);
+		drop(a1);
+		assert_eq!(ti.take(), &[&[]]);
+
+		drop(tm.frame());
+		assert_eq!(ti.take(), &[&[0]]);
 
 		Ok(())
 	}
