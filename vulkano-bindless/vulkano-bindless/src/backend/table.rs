@@ -5,98 +5,84 @@ use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use parking_lot::{Mutex, MutexGuard, RwLock};
+use static_assertions::const_assert_eq;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::ops::Deref;
+use std::fmt::{Debug, Display, Formatter};
+use std::mem::MaybeUninit;
+use std::ops::{Deref, Index};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{fence, AtomicU32};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use vulkano_bindless_shaders::descriptor::{
 	DescriptorId, DescriptorIndex, DescriptorType, DescriptorVersion, ID_TYPE_BITS,
 };
 
 pub trait TableInterface: 'static {
+	type Slot;
 	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
 	fn flush(&self);
-}
-
-impl<T: TableInterface> TableInterface for Arc<T> {
-	fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
-		self.deref().drop_slots(indices);
-	}
-
-	fn flush(&self) {
-		self.deref().flush();
-	}
-}
-
-impl<T: TableInterface> TableInterface for Box<T> {
-	fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
-		self.deref().drop_slots(indices);
-	}
-
-	fn flush(&self) {
-		self.deref().flush();
-	}
 }
 
 pub const TABLE_COUNT: u32 = 1 << ID_TYPE_BITS;
 
 pub struct TableManager {
 	// TODO I hate this RwLock
-	tables: [RwLock<Option<Table>>; TABLE_COUNT as usize],
+	tables: [RwLock<Option<Weak<dyn AbstractTable>>>; TABLE_COUNT as usize],
+	table_next_free: CachePadded<AtomicU32>,
 	frame_mutex: Mutex<ABArray<u32>>,
 	write_queue_ab: CachePadded<AtomicU32>,
 }
 
-struct Table {
-	slots: SlotArray<TableSlot>,
-	interface: Box<dyn TableInterface>,
+unsafe impl Send for TableManager {}
+unsafe impl Sync for TableManager {}
+
+pub struct Table<I: TableInterface> {
+	table_manager: Arc<TableManager>,
+	table_id: DescriptorType,
+	interface: I,
+	slot_counters: SlotArray<SlotCounter>,
+	slots: SlotArray<UnsafeCell<MaybeUninit<I::Slot>>>,
 	reaper_queue: ABArray<SegQueue<DescriptorIndex>>,
 	dead_queue: SegQueue<DescriptorIndex>,
 	next_free: CachePadded<AtomicU32>,
 }
 
+unsafe impl<I: TableInterface> Send for Table<I> {}
+unsafe impl<I: TableInterface> Sync for Table<I> {}
+
 impl TableManager {
 	pub fn new() -> Arc<Self> {
 		Arc::new(TableManager {
 			tables: core::array::from_fn(|_| RwLock::new(None)),
+			table_next_free: CachePadded::new(AtomicU32::new(0)),
 			frame_mutex: Mutex::new(ABArray::new(|| 0)),
 			write_queue_ab: CachePadded::new(AtomicU32::new(AB::B.to_u32())),
 		})
 	}
 
-	pub fn register<T: TableInterface>(
+	pub fn register<I: TableInterface>(
 		self: &Arc<Self>,
-		table_id: DescriptorType,
 		slots_capacity: u32,
-		interface: T,
-	) -> Result<TableRegistration, TableRegisterError> {
-		let mut guard = self.tables[table_id.to_usize()].write();
-		if let Some(_) = *guard {
-			Err(TableRegisterError::TableAlreadyRegistered(table_id))
-		} else {
-			*guard = Some(Table {
-				slots: SlotArray::new(slots_capacity),
-				interface: Box::new(interface),
+		interface: I,
+	) -> Result<Arc<Table<I>>, TableRegisterError> {
+		let table_id = self.table_next_free.fetch_add(1, Relaxed);
+		if table_id < TABLE_COUNT {
+			let mut guard = self.tables[table_id as usize].write();
+			let table = Arc::new(Table {
+				table_manager: self.clone(),
+				table_id: unsafe { DescriptorType::new(table_id).unwrap() },
+				interface,
+				slot_counters: SlotArray::new(slots_capacity),
+				slots: SlotArray::new_generator(slots_capacity, |_| UnsafeCell::new(MaybeUninit::uninit())),
 				reaper_queue: ABArray::new(|| SegQueue::new()),
 				dead_queue: SegQueue::new(),
 				next_free: CachePadded::new(AtomicU32::new(0)),
 			});
-			Ok(TableRegistration {
-				table_manager: self.clone(),
-				descriptor_type: table_id,
-			})
-		}
-	}
-
-	#[inline]
-	fn with_table<R>(&self, table_id: DescriptorType, f: impl FnOnce(&Table) -> R) -> R {
-		let table = self.tables[table_id.to_usize()].read();
-		if let Some(table) = table.as_ref() {
-			f(table)
+			let old_table = guard.replace(Arc::downgrade(&(table.clone() as Arc<dyn AbstractTable>)));
+			assert!(old_table.is_none());
+			Ok(table)
 		} else {
-			panic!("Invalid DescriptorType: table {:?} not registered", table_id)
+			Err(TableRegisterError::OutOfTables)
 		}
 	}
 
@@ -108,26 +94,6 @@ impl TableManager {
 	#[inline]
 	fn frame_ab(&self) -> AB {
 		!self.write_queue_ab()
-	}
-
-	fn alloc_slot(self: &Arc<Self>, table: DescriptorType) -> Result<RcTableSlot, SlotAllocationError> {
-		self.with_table(table, |t| unsafe {
-			let index = if let Some(index) = t.dead_queue.pop() {
-				Ok(index)
-			} else {
-				let index = t.next_free.fetch_add(1, Relaxed);
-				if index < t.slots_capacity() {
-					Ok(DescriptorIndex::new(index).unwrap())
-				} else {
-					Err(SlotAllocationError::NoMoreCapacity(t.slots_capacity()))
-				}
-			}?;
-			let slot = &t.slots[index];
-			slot.ref_count.store(1, Relaxed);
-			let version = slot.read_version();
-			let id = DescriptorId::new(table, index, version);
-			Ok(RcTableSlot::new(Arc::into_raw(self.clone()), id))
-		})
 	}
 
 	pub fn frame(self: &Arc<Self>) -> FrameGuard {
@@ -174,15 +140,14 @@ impl TableManager {
 			table_gc_indices = self
 				.tables
 				.iter()
-				.map(|table_lock| {
+				.filter_map(|table_lock| {
 					let table = table_lock.read();
-					table.as_ref().map(|table| {
-						let reaper_queue = &table.reaper_queue[gc_queue];
-						let mut set = DescriptorIndexRangeSet::new();
-						while let Some(index) = reaper_queue.pop() {
-							set.insert(index);
+					table.as_ref().and_then(|table| {
+						if let Some(table) = table.upgrade() {
+							Some((table.gc_collect(gc_queue), table))
+						} else {
+							None
 						}
-						set
 					})
 				})
 				.collect::<Vec<_>>();
@@ -195,67 +160,114 @@ impl TableManager {
 			drop(guard);
 		}
 
-		for (table, gc_indices) in self.tables.iter().zip(table_gc_indices) {
-			if let Some(gc_indices) = gc_indices {
-				let table = table.read();
-				if let Some(table) = table.as_ref() {
-					table.interface.drop_slots(&gc_indices);
+		for (gc_indices, table) in table_gc_indices {
+			table.gc_drop(gc_indices)
+		}
+	}
+}
 
-					for index in gc_indices.iter() {
-						unsafe {
-							let valid_version = table.slots[index].version.with_mut(|version| {
-								*version += 1;
-								DescriptorVersion::new(*version).is_some()
-							});
+impl<I: TableInterface> Table<I> {
+	#[inline]
+	pub fn slots_capacity(&self) -> u32 {
+		self.slot_counters.len() as u32
+	}
 
-							if valid_version {
-								table.dead_queue.push(index);
-							}
-						}
-					}
-				} else {
-					unreachable!();
-				}
+	pub fn alloc_slot(self: &Arc<Self>, slot: I::Slot) -> Result<RcTableSlot<I>, SlotAllocationError> {
+		let index = if let Some(index) = self.dead_queue.pop() {
+			Ok(index)
+		} else {
+			let index = self.next_free.fetch_add(1, Relaxed);
+			if index < self.slots_capacity() {
+				// Safety: atomic ensures it's unique
+				unsafe { Ok(DescriptorIndex::new(index).unwrap()) }
+			} else {
+				Err(SlotAllocationError::NoMoreCapacity(self.slots_capacity()))
 			}
+		}?;
+
+		// Safety: we just allocated index, we have exclusive access to slot, which is currently uninitialized
+		unsafe {
+			self.slots[index].with_mut(|s| {
+				s.write(slot);
+			})
+		}
+		let slot = &self.slot_counters[index];
+		slot.ref_count.store(1, Release);
+
+		// Safety: this is a valid id, we transfer the ref_count inc above to the RcTableSlot
+		unsafe {
+			let id = DescriptorId::new(self.table_id, index, slot.read_version());
+			Ok(RcTableSlot::new(Arc::into_raw(self.clone()), id))
 		}
 	}
 
 	#[inline]
 	fn ref_inc(&self, id: DescriptorId) {
-		self.with_table(id.desc_type(), |t| {
-			t.slots[id.index()].ref_count.fetch_add(1, Relaxed);
-		})
+		self.slot_counters[id.index()].ref_count.fetch_add(1, Relaxed);
 	}
 
 	#[inline]
 	fn ref_dec(&self, id: DescriptorId) -> bool {
-		self.with_table(id.desc_type(), |t| {
-			match t.slots[id.index()].ref_count.fetch_sub(1, Relaxed) {
-				0 => panic!("TableSlot ref_count underflow!"),
-				1 => {
-					fence(Acquire);
-					t.reaper_queue[self.write_queue_ab()].push(id.index());
-					true
-				}
-				_ => false,
+		match self.slot_counters[id.index()].ref_count.fetch_sub(1, Relaxed) {
+			0 => panic!("TableSlot ref_count underflow!"),
+			1 => {
+				fence(Acquire);
+				self.reaper_queue[self.table_manager.write_queue_ab()].push(id.index());
+				true
 			}
-		})
+			_ => false,
+		}
 	}
 }
 
-impl Table {
-	#[inline]
-	fn slots_capacity(&self) -> u32 {
-		self.slots.len() as u32
+impl<I: TableInterface> Deref for Table<I> {
+	type Target = I;
+
+	fn deref(&self) -> &Self::Target {
+		&self.interface
 	}
 }
 
-struct TableSlot {
+trait AbstractTable {
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet;
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet);
+}
+
+impl<I: TableInterface> AbstractTable for Table<I> {
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet {
+		let reaper_queue = &self.reaper_queue[gc_queue];
+		let mut set = DescriptorIndexRangeSet::new();
+		while let Some(index) = reaper_queue.pop() {
+			set.insert(index);
+		}
+		set
+	}
+
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet) {
+		// FIXME drop slots[index]
+		self.interface.drop_slots(&gc_indices);
+		for index in gc_indices.iter() {
+			unsafe {
+				let valid_version = self.slot_counters[index].version.with_mut(|version| {
+					*version += 1;
+					DescriptorVersion::new(*version).is_some()
+				});
+				if valid_version {
+					self.dead_queue.push(index);
+				}
+			}
+		}
+	}
+}
+
+#[derive(Debug)]
+struct SlotCounter {
 	ref_count: AtomicU32,
 	version: UnsafeCell<u32>,
 }
+const_assert_eq!(core::mem::size_of::<SlotCounter>(), 8);
 
-impl TableSlot {
+impl SlotCounter {
 	/// # Safety
 	/// creates a reference to `self.version`
 	unsafe fn read_version(&self) -> DescriptorVersion {
@@ -263,7 +275,7 @@ impl TableSlot {
 	}
 }
 
-impl Default for TableSlot {
+impl Default for SlotCounter {
 	fn default() -> Self {
 		Self {
 			ref_count: AtomicU32::new(0),
@@ -272,42 +284,69 @@ impl Default for TableSlot {
 	}
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
-pub struct RcTableSlot {
-	table_manager: *const TableManager,
+#[derive(Eq, PartialEq, Hash)]
+pub struct RcTableSlot<I: TableInterface> {
+	table: *const Table<I>,
 	id: DescriptorId,
 }
 
-unsafe impl Send for RcTableSlot {}
-unsafe impl Sync for RcTableSlot {}
+unsafe impl<I: TableInterface> Send for RcTableSlot<I> {}
+unsafe impl<I: TableInterface> Sync for RcTableSlot<I> {}
 
-impl RcTableSlot {
+impl<I: TableInterface> RcTableSlot<I> {
 	/// Creates a mew RcTableSlot
 	///
 	/// # Safety
 	/// This function will take ownership of one `ref_count` increment of the slot.
-	unsafe fn new(table_manager: *const TableManager, id: DescriptorId) -> Self {
-		Self { table_manager, id }
+	#[inline]
+	unsafe fn new(table: *const Table<I>, id: DescriptorId) -> Self {
+		Self { table, id }
 	}
 
-	fn table_manager(&self) -> &TableManager {
-		unsafe { &*self.table_manager }
+	#[inline]
+	pub fn table(&self) -> &Table<I> {
+		unsafe { &*self.table }
+	}
+
+	#[inline]
+	pub fn id(&self) -> DescriptorId {
+		self.id
 	}
 }
 
-impl Clone for RcTableSlot {
+impl<I: TableInterface> Deref for RcTableSlot<I> {
+	type Target = I::Slot;
+
+	#[inline]
+	fn deref(&self) -> &Self::Target {
+		unsafe { (&*self.table().slots.index(self.id.index()).get()).assume_init_ref() }
+	}
+}
+
+impl<I: TableInterface> Debug for RcTableSlot<I> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("RcTableSlot")
+			.field("table_id", &self.table().table_id.to_u32())
+			.field("id", &self.id)
+			.finish()
+	}
+}
+
+impl<I: TableInterface> Clone for RcTableSlot<I> {
+	#[inline]
 	fn clone(&self) -> Self {
-		self.table_manager().ref_inc(self.id);
-		unsafe { Self::new(self.table_manager, self.id) }
+		self.table().ref_inc(self.id);
+		unsafe { Self::new(self.table, self.id) }
 	}
 }
 
-impl Drop for RcTableSlot {
+impl<I: TableInterface> Drop for RcTableSlot<I> {
+	#[inline]
 	fn drop(&mut self) {
-		if self.table_manager().ref_dec(self.id) {
+		if self.table().ref_dec(self.id) {
 			// Safety: slot ref count hit 0, so decrement ref count of `TableManager` which was incremented in
 			// `alloc_slot()` when this slot was created
-			unsafe { drop(Arc::from_raw(self.table_manager)) };
+			unsafe { drop(Arc::from_raw(self.table)) };
 		}
 	}
 }
@@ -333,29 +372,9 @@ impl Drop for FrameGuard {
 	}
 }
 
-#[derive(Clone)]
-pub struct TableRegistration {
-	table_manager: Arc<TableManager>,
-	descriptor_type: DescriptorType,
-}
-
-impl TableRegistration {
-	pub fn table_manager(&self) -> &Arc<TableManager> {
-		&self.table_manager
-	}
-
-	pub fn descriptor_type(&self) -> DescriptorType {
-		self.descriptor_type
-	}
-
-	pub fn alloc_slot(&self) -> Result<RcTableSlot, SlotAllocationError> {
-		self.table_manager.alloc_slot(self.descriptor_type)
-	}
-}
-
 #[derive(Debug)]
 pub enum TableRegisterError {
-	TableAlreadyRegistered(DescriptorType),
+	OutOfTables,
 }
 
 impl Error for TableRegisterError {}
@@ -363,7 +382,11 @@ impl Error for TableRegisterError {}
 impl Display for TableRegisterError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
-			TableRegisterError::TableAlreadyRegistered(table) => write!(f, "Table {:?} already registered", table),
+			TableRegisterError::OutOfTables => write!(
+				f,
+				"Registration failed due to running out of table ids, current max is {:?}",
+				TABLE_COUNT
+			),
 		}
 	}
 }
@@ -391,11 +414,11 @@ mod tests {
 	use crate::backend::ab::AB::*;
 	use std::mem::take;
 
-	const TEST_TABLE: DescriptorType = unsafe { DescriptorType::new_unchecked(0) };
-
 	struct DummyInterface;
 
 	impl TableInterface for DummyInterface {
+		type Slot = u32;
+
 		fn drop_slots(&self, _indices: &DescriptorIndexRangeSet) {}
 
 		fn flush(&self) {}
@@ -406,10 +429,10 @@ mod tests {
 	}
 
 	impl SimpleInterface {
-		pub fn new() -> Arc<Self> {
-			Arc::new(Self {
+		pub fn new() -> Self {
+			Self {
 				drops: Mutex::new(Vec::new()),
-			})
+			}
 		}
 
 		pub fn take(&self) -> Vec<Vec<u32>> {
@@ -421,6 +444,8 @@ mod tests {
 	}
 
 	impl TableInterface for SimpleInterface {
+		type Slot = u32;
+
 		fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
 			self.drops.lock().push(indices.clone());
 		}
@@ -431,18 +456,8 @@ mod tests {
 	#[test]
 	fn test_table_register() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, DummyInterface)?;
+		tm.register(128, DummyInterface)?;
 		Ok(())
-	}
-
-	#[test]
-	fn test_table_double_register() -> anyhow::Result<()> {
-		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, DummyInterface)?;
-		match tm.register(TEST_TABLE, 256, DummyInterface) {
-			Ok(_) => panic!("expected Err from double registering the same table interface"),
-			Err(_) => Ok(()),
-		}
 	}
 
 	#[test]
@@ -450,18 +465,21 @@ mod tests {
 		const N: u32 = 128;
 
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, N, DummyInterface)?;
+		let table = tm.register(N, DummyInterface)?;
 
-		for i in 0..N {
-			let slot = tm.alloc_slot(TEST_TABLE)?;
-			assert_eq!(slot.id.index().to_u32(), i);
-			assert_eq!(slot.id.desc_type(), TEST_TABLE);
-			assert_eq!(slot.id.version().to_u32(), 0);
-		}
+		let _slots = (0..N)
+			.map(|i| {
+				let slot = table.alloc_slot(42 + i).unwrap();
+				assert_eq!(slot.id.index().to_u32(), i);
+				assert_eq!(slot.id.desc_type().to_u32(), 0);
+				assert_eq!(slot.id.version().to_u32(), 0);
+				assert_eq!(*slot, 42 + i);
+				slot
+			})
+			.collect::<Vec<_>>();
 
-		tm.alloc_slot(TEST_TABLE).expect_err("we should be out of slots");
-		tm.alloc_slot(TEST_TABLE)
-			.expect_err("asking again but still out of slots");
+		table.alloc_slot(69).expect_err("we should be out of slots");
+		table.alloc_slot(69).expect_err("asking again but still out of slots");
 
 		Ok(())
 	}
@@ -469,12 +487,13 @@ mod tests {
 	#[test]
 	fn test_slot_reuse() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, DummyInterface)?;
+		let table = tm.register(128, DummyInterface)?;
 
 		let alloc = |cnt: u32, exp_offset: u32, exp_version: u32| {
 			(0..cnt)
 				.map(|i| {
-					let slot = tm.alloc_slot(TEST_TABLE).unwrap();
+					let slot = table.alloc_slot(42 + i).unwrap();
+					assert_eq!(*slot, 42 + i);
 					assert_eq!(slot.id.index().to_u32(), i + exp_offset);
 					assert_eq!(slot.id.version().to_u32(), exp_version);
 					slot
@@ -514,7 +533,7 @@ mod tests {
 	#[test]
 	fn test_frames_sequential() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, DummyInterface)?;
+		tm.register(128, DummyInterface)?;
 
 		let frame = |exp: AB| {
 			let f = tm.frame();
@@ -532,7 +551,7 @@ mod tests {
 	#[test]
 	fn test_frames_dry_out() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, DummyInterface)?;
+		tm.register(128, DummyInterface)?;
 
 		for i in 0..5 {
 			println!("iter {}", i);
@@ -558,7 +577,7 @@ mod tests {
 	#[test]
 	fn test_frames_interleaved() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		tm.register(TEST_TABLE, 128, DummyInterface)?;
+		tm.register(128, DummyInterface)?;
 
 		let a1 = tm.frame();
 		assert_eq!(a1.frame_ab, A);
@@ -618,13 +637,13 @@ mod tests {
 	#[test]
 	fn test_gc() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		let ti = SimpleInterface::new();
-		tm.register(TEST_TABLE, 128, ti.clone())?;
+		let table = tm.register(128, SimpleInterface::new())?;
 		let mut switch = FrameSwitch::new(tm.clone());
+		let ti = &table.interface;
 		ti.take();
 
-		let slot1 = tm.alloc_slot(TEST_TABLE)?;
-		let slot2 = tm.alloc_slot(TEST_TABLE)?;
+		let slot1 = table.alloc_slot(42)?;
+		let slot2 = table.alloc_slot(69)?;
 		drop(slot1);
 		assert_eq!(ti.take(), Vec::<Vec<u32>>::new());
 
@@ -649,8 +668,8 @@ mod tests {
 	#[test]
 	fn test_gc_long() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		let ti = SimpleInterface::new();
-		tm.register(TEST_TABLE, 128, ti.clone())?;
+		let table = tm.register(128, SimpleInterface::new())?;
+		let ti = &table.interface;
 
 		let a1 = tm.frame();
 		assert_eq!(a1.frame_ab, A);
@@ -658,7 +677,7 @@ mod tests {
 		assert_eq!(long_frame_b.frame_ab, B);
 		drop(a1);
 
-		drop(tm.alloc_slot(TEST_TABLE)?);
+		drop(table.alloc_slot(42)?);
 		assert_eq!(ti.take(), &[&[], &[]]);
 
 		// doesn't matter how many frames, it never gets dropped until long_frame_b is done
@@ -684,11 +703,11 @@ mod tests {
 	#[test]
 	fn test_gc_dry_out() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		let ti = SimpleInterface::new();
-		tm.register(TEST_TABLE, 128, ti.clone())?;
+		let table = tm.register(128, SimpleInterface::new())?;
+		let ti = &table.interface;
 
 		let a1 = tm.frame();
-		drop(tm.alloc_slot(TEST_TABLE)?);
+		drop(table.alloc_slot(42)?);
 		drop(a1);
 		assert_eq!(ti.take(), &[&[], &[]]);
 
