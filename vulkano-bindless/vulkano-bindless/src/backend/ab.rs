@@ -8,6 +8,8 @@ pub enum AB {
 }
 
 impl AB {
+	pub const VALUES: [AB; 2] = [AB::A, AB::B];
+
 	pub fn to_u32(&self) -> u32 {
 		*self as u32
 	}

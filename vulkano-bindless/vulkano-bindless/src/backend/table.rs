@@ -244,18 +244,30 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 	}
 
 	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet) {
-		// FIXME drop slots[index]
 		self.interface.drop_slots(&gc_indices);
-		for index in gc_indices.iter() {
-			unsafe {
-				let valid_version = self.slot_counters[index].version.with_mut(|version| {
+
+		for i in gc_indices.iter() {
+			// Safety: we have exclusive access to the previously initialized slot
+			let valid_version = unsafe {
+				self.slots.index(i).with_mut(|s| s.assume_init_drop());
+				self.slot_counters[i].version.with_mut(|version| {
 					*version += 1;
 					DescriptorVersion::new(*version).is_some()
-				});
-				if valid_version {
-					self.dead_queue.push(index);
-				}
+				})
+			};
+
+			// we send / share the slot to the dead_queue
+			if valid_version {
+				self.dead_queue.push(i);
 			}
+		}
+	}
+}
+
+impl<I: TableInterface> Drop for Table<I> {
+	fn drop(&mut self) {
+		for ab in AB::VALUES {
+			self.gc_drop(self.gc_collect(ab))
 		}
 	}
 }
@@ -417,7 +429,7 @@ mod tests {
 	struct DummyInterface;
 
 	impl TableInterface for DummyInterface {
-		type Slot = u32;
+		type Slot = Arc<u32>;
 
 		fn drop_slots(&self, _indices: &DescriptorIndexRangeSet) {}
 
@@ -444,7 +456,7 @@ mod tests {
 	}
 
 	impl TableInterface for SimpleInterface {
-		type Slot = u32;
+		type Slot = Arc<u32>;
 
 		fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
 			self.drops.lock().push(indices.clone());
@@ -469,17 +481,19 @@ mod tests {
 
 		let _slots = (0..N)
 			.map(|i| {
-				let slot = table.alloc_slot(42 + i).unwrap();
+				let slot = table.alloc_slot(Arc::new(42 + i)).unwrap();
 				assert_eq!(slot.id.index().to_u32(), i);
 				assert_eq!(slot.id.desc_type().to_u32(), 0);
 				assert_eq!(slot.id.version().to_u32(), 0);
-				assert_eq!(*slot, 42 + i);
+				assert_eq!(**slot, 42 + i);
 				slot
 			})
 			.collect::<Vec<_>>();
 
-		table.alloc_slot(69).expect_err("we should be out of slots");
-		table.alloc_slot(69).expect_err("asking again but still out of slots");
+		table.alloc_slot(Arc::new(69)).expect_err("we should be out of slots");
+		table
+			.alloc_slot(Arc::new(70))
+			.expect_err("asking again but still out of slots");
 
 		Ok(())
 	}
@@ -492,8 +506,8 @@ mod tests {
 		let alloc = |cnt: u32, exp_offset: u32, exp_version: u32| {
 			(0..cnt)
 				.map(|i| {
-					let slot = table.alloc_slot(42 + i).unwrap();
-					assert_eq!(*slot, 42 + i);
+					let slot = table.alloc_slot(Arc::new(42 + i)).unwrap();
+					assert_eq!(**slot, 42 + i);
 					assert_eq!(slot.id.index().to_u32(), i + exp_offset);
 					assert_eq!(slot.id.version().to_u32(), exp_version);
 					slot
@@ -642,8 +656,8 @@ mod tests {
 		let ti = &table.interface;
 		ti.take();
 
-		let slot1 = table.alloc_slot(42)?;
-		let slot2 = table.alloc_slot(69)?;
+		let slot1 = table.alloc_slot(Arc::new(42))?;
+		let slot2 = table.alloc_slot(Arc::new(69))?;
 		drop(slot1);
 		assert_eq!(ti.take(), Vec::<Vec<u32>>::new());
 
@@ -677,7 +691,7 @@ mod tests {
 		assert_eq!(long_frame_b.frame_ab, B);
 		drop(a1);
 
-		drop(table.alloc_slot(42)?);
+		drop(table.alloc_slot(Arc::new(42))?);
 		assert_eq!(ti.take(), &[&[], &[]]);
 
 		// doesn't matter how many frames, it never gets dropped until long_frame_b is done
@@ -707,7 +721,7 @@ mod tests {
 		let ti = &table.interface;
 
 		let a1 = tm.frame();
-		drop(table.alloc_slot(42)?);
+		drop(table.alloc_slot(Arc::new(42))?);
 		drop(a1);
 		assert_eq!(ti.take(), &[&[], &[]]);
 
