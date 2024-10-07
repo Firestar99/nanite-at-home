@@ -1,7 +1,6 @@
 use crate::backend::ab::{ABArray, AB};
 use crate::backend::range_set::DescriptorIndexRangeSet;
 use crate::backend::slot_array::SlotArray;
-use crate::backend::table_id::TABLE_COUNT;
 use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
@@ -12,7 +11,9 @@ use std::ops::Deref;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{fence, AtomicU32};
 use std::sync::Arc;
-use vulkano_bindless_shaders::descriptor::{DescriptorId, DescriptorIndex, DescriptorType, DescriptorVersion};
+use vulkano_bindless_shaders::descriptor::{
+	DescriptorId, DescriptorIndex, DescriptorType, DescriptorVersion, ID_TYPE_BITS,
+};
 
 pub trait TableInterface: 'static {
 	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
@@ -39,6 +40,8 @@ impl<T: TableInterface> TableInterface for Box<T> {
 	}
 }
 
+pub const TABLE_COUNT: u32 = 1 << ID_TYPE_BITS;
+
 pub struct TableManager {
 	// TODO I hate this RwLock
 	tables: [RwLock<Option<Table>>; TABLE_COUNT as usize],
@@ -63,13 +66,12 @@ impl TableManager {
 		})
 	}
 
-	// FIXME replace TableId with DescriptorType?
 	pub fn register<T: TableInterface>(
-		&self,
+		self: &Arc<Self>,
 		table_id: DescriptorType,
 		slots_capacity: u32,
 		interface: T,
-	) -> Result<(), TableRegisterError> {
+	) -> Result<TableRegistration, TableRegisterError> {
 		let mut guard = self.tables[table_id.to_usize()].write();
 		if let Some(_) = *guard {
 			Err(TableRegisterError::TableAlreadyRegistered(table_id))
@@ -81,7 +83,10 @@ impl TableManager {
 				dead_queue: SegQueue::new(),
 				next_free: CachePadded::new(AtomicU32::new(0)),
 			});
-			Ok(())
+			Ok(TableRegistration {
+				table_manager: self.clone(),
+				descriptor_type: table_id,
+			})
 		}
 	}
 
@@ -273,6 +278,9 @@ pub struct RcTableSlot {
 	id: DescriptorId,
 }
 
+unsafe impl Send for RcTableSlot {}
+unsafe impl Sync for RcTableSlot {}
+
 impl RcTableSlot {
 	/// Creates a mew RcTableSlot
 	///
@@ -322,6 +330,26 @@ impl FrameGuard {
 impl Drop for FrameGuard {
 	fn drop(&mut self) {
 		self.table_manager.frame_drop(self.frame_ab);
+	}
+}
+
+#[derive(Clone)]
+pub struct TableRegistration {
+	table_manager: Arc<TableManager>,
+	descriptor_type: DescriptorType,
+}
+
+impl TableRegistration {
+	pub fn table_manager(&self) -> &Arc<TableManager> {
+		&self.table_manager
+	}
+
+	pub fn descriptor_type(&self) -> DescriptorType {
+		self.descriptor_type
+	}
+
+	pub fn alloc_slot(&self) -> Result<RcTableSlot, SlotAllocationError> {
+		self.table_manager.alloc_slot(self.descriptor_type)
 	}
 }
 
@@ -590,7 +618,7 @@ mod tests {
 	#[test]
 	fn test_gc() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		let mut ti = SimpleInterface::new();
+		let ti = SimpleInterface::new();
 		tm.register(TEST_TABLE, 128, ti.clone())?;
 		let mut switch = FrameSwitch::new(tm.clone());
 		ti.take();
@@ -621,7 +649,7 @@ mod tests {
 	#[test]
 	fn test_gc_long() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		let mut ti = SimpleInterface::new();
+		let ti = SimpleInterface::new();
 		tm.register(TEST_TABLE, 128, ti.clone())?;
 
 		let a1 = tm.frame();
@@ -656,7 +684,7 @@ mod tests {
 	#[test]
 	fn test_gc_dry_out() -> anyhow::Result<()> {
 		let tm = TableManager::new();
-		let mut ti = SimpleInterface::new();
+		let ti = SimpleInterface::new();
 		tm.register(TEST_TABLE, 128, ti.clone())?;
 
 		let a1 = tm.frame();

@@ -3,6 +3,7 @@ use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{Desc, DescContent, DescRef};
 use bytemuck_derive::{Pod, Zeroable};
 use core::mem;
+use core::ops::Sub;
 use static_assertions::const_assert_eq;
 use vulkano_bindless_macros::BufferContent;
 
@@ -114,6 +115,14 @@ impl DescriptorIndex {
 
 	pub const fn to_usize(&self) -> usize {
 		self.0 as usize
+	}
+}
+
+impl Sub for DescriptorIndex {
+	type Output = i32;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		self.0 as i32 - rhs.0 as i32
 	}
 }
 
