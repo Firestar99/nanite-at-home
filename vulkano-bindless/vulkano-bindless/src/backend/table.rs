@@ -17,34 +17,38 @@ use vulkano_bindless_shaders::descriptor::{
 	DescriptorId, DescriptorIndex, DescriptorType, DescriptorVersion, ID_TYPE_BITS,
 };
 
-pub trait TableInterface: 'static {
+pub trait TableInterface: Sized + 'static {
 	type Slot;
 	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
-	fn flush(&self);
+	fn flush(&self, flush_queue: DrainFlushQueue<'_, Self>);
 }
 
 pub const TABLE_COUNT: u32 = 1 << ID_TYPE_BITS;
 
+#[repr(C)]
 pub struct TableManager {
 	// TODO I hate this RwLock
 	tables: [RwLock<Option<Weak<dyn AbstractTable>>>; TABLE_COUNT as usize],
+	frame_mutex: CachePadded<Mutex<ABArray<u32>>>,
 	table_next_free: CachePadded<AtomicU32>,
-	frame_mutex: Mutex<ABArray<u32>>,
 	write_queue_ab: CachePadded<AtomicU32>,
+	flush_mutex: CachePadded<Mutex<()>>,
 }
 
 unsafe impl Send for TableManager {}
 unsafe impl Sync for TableManager {}
 
+#[repr(C)]
 pub struct Table<I: TableInterface> {
 	table_manager: Arc<TableManager>,
 	table_id: DescriptorType,
-	interface: I,
 	slot_counters: SlotArray<SlotCounter>,
 	slots: SlotArray<UnsafeCell<MaybeUninit<I::Slot>>>,
+	flush_queue: SegQueue<RcTableSlot<I>>,
 	reaper_queue: ABArray<SegQueue<DescriptorIndex>>,
 	dead_queue: SegQueue<DescriptorIndex>,
 	next_free: CachePadded<AtomicU32>,
+	interface: I,
 }
 
 unsafe impl<I: TableInterface> Send for Table<I> {}
@@ -55,8 +59,9 @@ impl TableManager {
 		Arc::new(TableManager {
 			tables: core::array::from_fn(|_| RwLock::new(None)),
 			table_next_free: CachePadded::new(AtomicU32::new(0)),
-			frame_mutex: Mutex::new(ABArray::new(|| 0)),
+			frame_mutex: CachePadded::new(Mutex::new(ABArray::new(|| 0))),
 			write_queue_ab: CachePadded::new(AtomicU32::new(AB::B.to_u32())),
+			flush_mutex: CachePadded::new(Mutex::new(())),
 		})
 	}
 
@@ -74,6 +79,7 @@ impl TableManager {
 				interface,
 				slot_counters: SlotArray::new(slots_capacity),
 				slots: SlotArray::new_generator(slots_capacity, |_| UnsafeCell::new(MaybeUninit::uninit())),
+				flush_queue: SegQueue::new(),
 				reaper_queue: ABArray::new(|| SegQueue::new()),
 				dead_queue: SegQueue::new(),
 				next_free: CachePadded::new(AtomicU32::new(0)),
@@ -164,6 +170,15 @@ impl TableManager {
 			table.gc_drop(gc_indices)
 		}
 	}
+
+	pub fn flush(&self) {
+		let _guard = self.flush_mutex.lock();
+		for table_lock in &self.tables {
+			if let Some(table) = table_lock.read().as_ref().and_then(Weak::upgrade) {
+				table.flush();
+			}
+		}
+	}
 }
 
 impl<I: TableInterface> Table<I> {
@@ -192,12 +207,14 @@ impl<I: TableInterface> Table<I> {
 			})
 		}
 		let slot = &self.slot_counters[index];
-		slot.ref_count.store(1, Release);
+		slot.ref_count.store(2, Release);
 
-		// Safety: this is a valid id, we transfer the ref_count inc above to the RcTableSlot
+		// Safety: this is a valid id, we transfer the **2** ref_count inc above to the **2** RcTableSlots created
 		unsafe {
 			let id = DescriptorId::new(self.table_id, index, slot.read_version());
-			Ok(RcTableSlot::new(Arc::into_raw(self.clone()), id))
+			let table = Arc::into_raw(self.clone());
+			self.flush_queue.push(RcTableSlot::new(table, id));
+			Ok(RcTableSlot::new(table, id))
 		}
 	}
 
@@ -231,6 +248,7 @@ impl<I: TableInterface> Deref for Table<I> {
 trait AbstractTable {
 	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet;
 	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet);
+	fn flush(&self);
 }
 
 impl<I: TableInterface> AbstractTable for Table<I> {
@@ -262,10 +280,15 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 			}
 		}
 	}
+
+	fn flush(&self) {
+		self.interface.flush(DrainFlushQueue(self))
+	}
 }
 
 impl<I: TableInterface> Drop for Table<I> {
 	fn drop(&mut self) {
+		self.flush();
 		for ab in AB::VALUES {
 			self.gc_drop(self.gc_collect(ab))
 		}
@@ -384,6 +407,20 @@ impl Drop for FrameGuard {
 	}
 }
 
+pub struct DrainFlushQueue<'a, I: TableInterface>(&'a Table<I>);
+
+impl<'a, I: TableInterface> Iterator for DrainFlushQueue<'a, I> {
+	type Item = RcTableSlot<I>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.0.flush_queue.pop()
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		(self.0.flush_queue.len(), None)
+	}
+}
+
 #[derive(Debug)]
 pub enum TableRegisterError {
 	OutOfTables,
@@ -433,7 +470,9 @@ mod tests {
 
 		fn drop_slots(&self, _indices: &DescriptorIndexRangeSet) {}
 
-		fn flush(&self) {}
+		fn flush(&self, flush_queue: DrainFlushQueue<'_, Self>) {
+			for _ in flush_queue {}
+		}
 	}
 
 	struct SimpleInterface {
@@ -462,7 +501,9 @@ mod tests {
 			self.drops.lock().push(indices.clone());
 		}
 
-		fn flush(&self) {}
+		fn flush(&self, flush_queue: DrainFlushQueue<'_, Self>) {
+			for _ in flush_queue {}
+		}
 	}
 
 	#[test]
@@ -474,26 +515,29 @@ mod tests {
 
 	#[test]
 	fn test_alloc_slot() -> anyhow::Result<()> {
-		const N: u32 = 128;
+		const N: u32 = 4;
 
 		let tm = TableManager::new();
 		let table = tm.register(N, DummyInterface)?;
 
-		let _slots = (0..N)
-			.map(|i| {
-				let slot = table.alloc_slot(Arc::new(42 + i)).unwrap();
-				assert_eq!(slot.id.index().to_u32(), i);
-				assert_eq!(slot.id.desc_type().to_u32(), 0);
-				assert_eq!(slot.id.version().to_u32(), 0);
-				assert_eq!(**slot, 42 + i);
-				slot
-			})
-			.collect::<Vec<_>>();
+		{
+			let _slots = (0..N)
+				.map(|i| {
+					let slot = table.alloc_slot(Arc::new(42 + i)).unwrap();
+					assert_eq!(slot.id.index().to_u32(), i);
+					assert_eq!(slot.id.desc_type().to_u32(), 0);
+					assert_eq!(slot.id.version().to_u32(), 0);
+					assert_eq!(**slot, 42 + i);
+					slot
+				})
+				.collect::<Vec<_>>();
 
-		table.alloc_slot(Arc::new(69)).expect_err("we should be out of slots");
-		table
-			.alloc_slot(Arc::new(70))
-			.expect_err("asking again but still out of slots");
+			table.alloc_slot(Arc::new(69)).expect_err("we should be out of slots");
+			table
+				.alloc_slot(Arc::new(70))
+				.expect_err("asking again but still out of slots");
+		}
+		tm.flush();
 
 		Ok(())
 	}
@@ -504,7 +548,7 @@ mod tests {
 		let table = tm.register(128, DummyInterface)?;
 
 		let alloc = |cnt: u32, exp_offset: u32, exp_version: u32| {
-			(0..cnt)
+			let vec = (0..cnt)
 				.map(|i| {
 					let slot = table.alloc_slot(Arc::new(42 + i)).unwrap();
 					assert_eq!(**slot, 42 + i);
@@ -512,7 +556,9 @@ mod tests {
 					assert_eq!(slot.id.version().to_u32(), exp_version);
 					slot
 				})
-				.collect::<Vec<_>>()
+				.collect::<Vec<_>>();
+			tm.flush();
+			vec
 		};
 		let flush = || {
 			for _ in 0..3 {
@@ -658,6 +704,8 @@ mod tests {
 
 		let slot1 = table.alloc_slot(Arc::new(42))?;
 		let slot2 = table.alloc_slot(Arc::new(69))?;
+		tm.flush();
+
 		drop(slot1);
 		assert_eq!(ti.take(), Vec::<Vec<u32>>::new());
 
@@ -692,6 +740,7 @@ mod tests {
 		drop(a1);
 
 		drop(table.alloc_slot(Arc::new(42))?);
+		tm.flush();
 		assert_eq!(ti.take(), &[&[], &[]]);
 
 		// doesn't matter how many frames, it never gets dropped until long_frame_b is done
@@ -722,6 +771,7 @@ mod tests {
 
 		let a1 = tm.frame();
 		drop(table.alloc_slot(Arc::new(42))?);
+		tm.flush();
 		drop(a1);
 		assert_eq!(ti.take(), &[&[], &[]]);
 
