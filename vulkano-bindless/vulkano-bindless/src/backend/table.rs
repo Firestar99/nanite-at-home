@@ -26,7 +26,7 @@ pub trait TableInterface: Sized + 'static {
 pub const TABLE_COUNT: u32 = 1 << ID_TYPE_BITS;
 
 #[repr(C)]
-pub struct TableManager {
+pub struct TableSync {
 	// TODO I hate this RwLock
 	tables: [RwLock<Option<Weak<dyn AbstractTable>>>; TABLE_COUNT as usize],
 	frame_mutex: CachePadded<Mutex<ABArray<u32>>>,
@@ -35,12 +35,12 @@ pub struct TableManager {
 	flush_mutex: CachePadded<Mutex<()>>,
 }
 
-unsafe impl Send for TableManager {}
-unsafe impl Sync for TableManager {}
+unsafe impl Send for TableSync {}
+unsafe impl Sync for TableSync {}
 
 #[repr(C)]
 pub struct Table<I: TableInterface> {
-	table_manager: Arc<TableManager>,
+	table_manager: Arc<TableSync>,
 	table_id: DescriptorType,
 	slot_counters: SlotArray<SlotCounter>,
 	slots: SlotArray<UnsafeCell<MaybeUninit<I::Slot>>>,
@@ -54,9 +54,9 @@ pub struct Table<I: TableInterface> {
 unsafe impl<I: TableInterface> Send for Table<I> {}
 unsafe impl<I: TableInterface> Sync for Table<I> {}
 
-impl TableManager {
+impl TableSync {
 	pub fn new() -> Arc<Self> {
-		Arc::new(TableManager {
+		Arc::new(TableSync {
 			tables: core::array::from_fn(|_| RwLock::new(None)),
 			table_next_free: CachePadded::new(AtomicU32::new(0)),
 			frame_mutex: CachePadded::new(Mutex::new(ABArray::new(|| 0))),
@@ -387,12 +387,12 @@ impl<I: TableInterface> Drop for RcTableSlot<I> {
 }
 
 pub struct FrameGuard {
-	table_manager: Arc<TableManager>,
+	table_manager: Arc<TableSync>,
 	frame_ab: AB,
 }
 
 impl FrameGuard {
-	pub fn table_manager(&self) -> &Arc<TableManager> {
+	pub fn table_manager(&self) -> &Arc<TableSync> {
 		&self.table_manager
 	}
 
@@ -508,7 +508,7 @@ mod tests {
 
 	#[test]
 	fn test_table_register() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		tm.register(128, DummyInterface)?;
 		Ok(())
 	}
@@ -517,7 +517,7 @@ mod tests {
 	fn test_alloc_slot() -> anyhow::Result<()> {
 		const N: u32 = 4;
 
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		let table = tm.register(N, DummyInterface)?;
 
 		{
@@ -544,7 +544,7 @@ mod tests {
 
 	#[test]
 	fn test_slot_reuse() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		let table = tm.register(128, DummyInterface)?;
 
 		let alloc = |cnt: u32, exp_offset: u32, exp_version: u32| {
@@ -592,7 +592,7 @@ mod tests {
 
 	#[test]
 	fn test_frames_sequential() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		tm.register(128, DummyInterface)?;
 
 		let frame = |exp: AB| {
@@ -610,7 +610,7 @@ mod tests {
 
 	#[test]
 	fn test_frames_dry_out() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		tm.register(128, DummyInterface)?;
 
 		for i in 0..5 {
@@ -636,7 +636,7 @@ mod tests {
 
 	#[test]
 	fn test_frames_interleaved() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		tm.register(128, DummyInterface)?;
 
 		let a1 = tm.frame();
@@ -666,13 +666,13 @@ mod tests {
 	}
 
 	struct FrameSwitch {
-		tm: Arc<TableManager>,
+		tm: Arc<TableSync>,
 		frame: ABArray<Option<FrameGuard>>,
 		ab: AB,
 	}
 
 	impl FrameSwitch {
-		pub fn new(tm: Arc<TableManager>) -> Self {
+		pub fn new(tm: Arc<TableSync>) -> Self {
 			let mut switch = Self {
 				tm,
 				frame: ABArray::new(|| None),
@@ -696,7 +696,7 @@ mod tests {
 
 	#[test]
 	fn test_gc() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		let table = tm.register(128, SimpleInterface::new())?;
 		let mut switch = FrameSwitch::new(tm.clone());
 		let ti = &table.interface;
@@ -729,7 +729,7 @@ mod tests {
 
 	#[test]
 	fn test_gc_long() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		let table = tm.register(128, SimpleInterface::new())?;
 		let ti = &table.interface;
 
@@ -765,7 +765,7 @@ mod tests {
 
 	#[test]
 	fn test_gc_dry_out() -> anyhow::Result<()> {
-		let tm = TableManager::new();
+		let tm = TableSync::new();
 		let table = tm.register(128, SimpleInterface::new())?;
 		let ti = &table.interface;
 
