@@ -1,6 +1,7 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
-use crate::descriptor::{AnyRCDesc, Bindless};
+use crate::descriptor::{AnyRCDesc, AnyRCDescExt, Bindless};
 use ahash::{HashMap, HashMapExt};
+use std::collections::hash_map::Entry;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -35,8 +36,20 @@ impl<'a> StrongMetadataCpu<'a> {
 }
 
 unsafe impl<'a> MetadataCpuInterface for StrongMetadataCpu<'a> {
-	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, _desc: StrongDesc<C>) {
-		todo!()
+	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>) {
+		if let Ok(refs) = &mut self.refs {
+			let id = desc.id();
+			match refs.entry(id) {
+				Entry::Occupied(_) => {}
+				Entry::Vacant(v) => {
+					if let Some(rc) = self.bindless.table_sync.try_recover(id) {
+						v.insert(AnyRCDesc::new(rc));
+					} else {
+						self.refs = Err(BackingRefsError::NoLongerAlive(id))
+					}
+				}
+			}
+		}
 	}
 }
 

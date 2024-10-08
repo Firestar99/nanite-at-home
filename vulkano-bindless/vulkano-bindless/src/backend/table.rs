@@ -181,6 +181,17 @@ impl TableSync {
 			}
 		}
 	}
+
+	pub fn try_recover(self: &Arc<Self>, id: DescriptorId) -> Option<RcTableSlot> {
+		let table = self.tables[id.desc_type().to_usize()].read();
+		if let Some(table) = table.as_ref() {
+			table
+				.try_recover(id, self.write_queue_ab())
+				.then(|| unsafe { RcTableSlot::new(Arc::as_ptr(self), id) })
+		} else {
+			None
+		}
+	}
 }
 
 impl<I: TableInterface> Table<I> {
@@ -251,6 +262,7 @@ trait AbstractTable: Any + Send + Sync + 'static {
 	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet;
 	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet);
 	fn flush(&self);
+	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
 }
 
 impl<I: TableInterface> AbstractTable for Table<I> {
@@ -311,6 +323,31 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 
 	fn flush(&self) {
 		self.interface.flush(self.drain_flush_queue())
+	}
+
+	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool {
+		let counters = &self.slot_counters[id.index()];
+		let ref_old = counters.ref_count.load(Acquire);
+		if ref_old != 0 {
+			match counters
+				.ref_count
+				.compare_exchange(ref_old, ref_old + 1, Acquire, Relaxed)
+			{
+				Ok(_) => {
+					// Safety: we inc ref count so this slot must be alive and we can read this
+					let version = unsafe { counters.version.with(|v| *v) };
+					if id.version().to_u32() == version {
+						true
+					} else {
+						self.ref_dec(id, write_queue_ab);
+						false
+					}
+				}
+				Err(_) => false,
+			}
+		} else {
+			false
+		}
 	}
 }
 
