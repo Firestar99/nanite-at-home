@@ -44,7 +44,7 @@ pub struct Table<I: TableInterface> {
 	table_id: DescriptorType,
 	slot_counters: SlotArray<SlotCounter>,
 	slots: SlotArray<UnsafeCell<MaybeUninit<I::Slot>>>,
-	flush_queue: SegQueue<RcTableSlot<I>>,
+	flush_queue: SegQueue<RcTableSlot<Table<I>>>,
 	reaper_queue: ABArray<SegQueue<DescriptorIndex>>,
 	dead_queue: SegQueue<DescriptorIndex>,
 	next_free: CachePadded<AtomicU32>,
@@ -187,7 +187,7 @@ impl<I: TableInterface> Table<I> {
 		self.slot_counters.len() as u32
 	}
 
-	pub fn alloc_slot(self: &Arc<Self>, slot: I::Slot) -> Result<RcTableSlot<I>, SlotAllocationError> {
+	pub fn alloc_slot(self: &Arc<Self>, slot: I::Slot) -> Result<RcTableSlot<Table<I>>, SlotAllocationError> {
 		let index = if let Some(index) = self.dead_queue.pop() {
 			Ok(index)
 		} else {
@@ -217,6 +217,30 @@ impl<I: TableInterface> Table<I> {
 			Ok(RcTableSlot::new(table, id))
 		}
 	}
+}
+
+impl<I: TableInterface> Deref for Table<I> {
+	type Target = I;
+
+	fn deref(&self) -> &Self::Target {
+		&self.interface
+	}
+}
+
+/// Internal Trait
+pub unsafe trait AbstractTable: 'static {
+	fn table_id(&self) -> DescriptorType;
+	fn ref_inc(&self, id: DescriptorId);
+	fn ref_dec(&self, id: DescriptorId) -> bool;
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet;
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet);
+	fn flush(&self);
+}
+
+unsafe impl<I: TableInterface> AbstractTable for Table<I> {
+	fn table_id(&self) -> DescriptorType {
+		self.table_id
+	}
 
 	#[inline]
 	fn ref_inc(&self, id: DescriptorId) {
@@ -235,23 +259,7 @@ impl<I: TableInterface> Table<I> {
 			_ => false,
 		}
 	}
-}
 
-impl<I: TableInterface> Deref for Table<I> {
-	type Target = I;
-
-	fn deref(&self) -> &Self::Target {
-		&self.interface
-	}
-}
-
-trait AbstractTable {
-	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet;
-	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet);
-	fn flush(&self);
-}
-
-impl<I: TableInterface> AbstractTable for Table<I> {
 	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet {
 		let reaper_queue = &self.reaper_queue[gc_queue];
 		let mut set = DescriptorIndexRangeSet::new();
@@ -320,26 +328,26 @@ impl Default for SlotCounter {
 }
 
 #[derive(Eq, PartialEq, Hash)]
-pub struct RcTableSlot<I: TableInterface> {
-	table: *const Table<I>,
+pub struct RcTableSlot<T: AbstractTable + ?Sized> {
+	table: *const T,
 	id: DescriptorId,
 }
 
-unsafe impl<I: TableInterface> Send for RcTableSlot<I> {}
-unsafe impl<I: TableInterface> Sync for RcTableSlot<I> {}
+unsafe impl<T: AbstractTable + ?Sized> Send for RcTableSlot<T> {}
+unsafe impl<T: AbstractTable + ?Sized> Sync for RcTableSlot<T> {}
 
-impl<I: TableInterface> RcTableSlot<I> {
+impl<T: AbstractTable + ?Sized> RcTableSlot<T> {
 	/// Creates a mew RcTableSlot
 	///
 	/// # Safety
 	/// This function will take ownership of one `ref_count` increment of the slot.
 	#[inline]
-	unsafe fn new(table: *const Table<I>, id: DescriptorId) -> Self {
+	unsafe fn new(table: *const T, id: DescriptorId) -> Self {
 		Self { table, id }
 	}
 
 	#[inline]
-	pub fn table(&self) -> &Table<I> {
+	pub fn table(&self) -> &T {
 		unsafe { &*self.table }
 	}
 
@@ -349,7 +357,16 @@ impl<I: TableInterface> RcTableSlot<I> {
 	}
 }
 
-impl<I: TableInterface> Deref for RcTableSlot<I> {
+impl<T: AbstractTable + Sized> RcTableSlot<T> {
+	pub fn into_dyn(self) -> RcTableSlot<dyn AbstractTable> {
+		RcTableSlot {
+			table: self.table as *const dyn AbstractTable,
+			id: self.id,
+		}
+	}
+}
+
+impl<I: TableInterface> Deref for RcTableSlot<Table<I>> {
 	type Target = I::Slot;
 
 	#[inline]
@@ -358,16 +375,16 @@ impl<I: TableInterface> Deref for RcTableSlot<I> {
 	}
 }
 
-impl<I: TableInterface> Debug for RcTableSlot<I> {
+impl<T: AbstractTable + ?Sized> Debug for RcTableSlot<T> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("RcTableSlot")
-			.field("table_id", &self.table().table_id.to_u32())
+			.field("table_id", &self.table().table_id().to_u32())
 			.field("id", &self.id)
 			.finish()
 	}
 }
 
-impl<I: TableInterface> Clone for RcTableSlot<I> {
+impl<T: AbstractTable + ?Sized> Clone for RcTableSlot<T> {
 	#[inline]
 	fn clone(&self) -> Self {
 		self.table().ref_inc(self.id);
@@ -375,7 +392,7 @@ impl<I: TableInterface> Clone for RcTableSlot<I> {
 	}
 }
 
-impl<I: TableInterface> Drop for RcTableSlot<I> {
+impl<T: AbstractTable + ?Sized> Drop for RcTableSlot<T> {
 	#[inline]
 	fn drop(&mut self) {
 		if self.table().ref_dec(self.id) {
@@ -410,7 +427,7 @@ impl Drop for FrameGuard {
 pub struct DrainFlushQueue<'a, I: TableInterface>(&'a Table<I>);
 
 impl<'a, I: TableInterface> Iterator for DrainFlushQueue<'a, I> {
-	type Item = RcTableSlot<I>;
+	type Item = RcTableSlot<Table<I>>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.0.flush_queue.pop()
