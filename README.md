@@ -54,13 +54,11 @@ For many scenes with usual poly counts, like Bistro or Sponza, you have to reduc
 The Lantern scene is always available, for additional scenes checkout the `scenes` branch with ~1GiB of additional scenes available. You may also add scenes in the `gltf` or `glb` format yourself by putting them in `/models/models/local/`, restarting and cycling to them using the T/G keys.
 
 Available scenes:
+* [Damaged Helmet](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DamagedHelmet): CC BY 4.0, ctxwing, theblueturtle_
 * [Lantern](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Lantern): CC0 1.0 Universal, Microsoft, Frank Galligan
 * [Not a Stanford Bunny](https://jocelyndaprato.artstation.com/projects/g8PKBm), no right to sell, Feel free to share, use, modify, by Jocelyn Da Prato
 * [Amazon Lumberyard Bistro](https://developer.nvidia.com/orca/amazon-lumberyard-bistro), CC-BY 4.0, 2017 Amazon Lumberyard
 * [Sponza](https://casual-effects.com/data/): CC BY 3.0, 2010 Frank Meinl, Crytek
-* [San Miguel](https://casual-effects.com/data/): CC BY 3.0, Guillermo M. Leal Llaguno
-* [Rungholt](https://casual-effects.com/data/): CC BY 3.0, kescha
-* [Damaged Helmet](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DamagedHelmet): CC BY 4.0, ctxwing, theblueturtle_
 
 ## Technical Details
 
