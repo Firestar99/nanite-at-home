@@ -21,7 +21,6 @@ pub mod descriptor;
 pub mod frame_in_flight;
 pub mod frame_manager;
 pub mod pipeline;
-pub mod rc_slot;
 pub mod required_features;
 pub mod sync;
 

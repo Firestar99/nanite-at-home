@@ -5,16 +5,15 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano_bindless_shaders::buffer_content::{Metadata, MetadataCpuInterface};
-use vulkano_bindless_shaders::descriptor::DescContent;
-use vulkano_bindless_shaders::descriptor::DescContentType;
 use vulkano_bindless_shaders::descriptor::StrongDesc;
+use vulkano_bindless_shaders::descriptor::{DescContent, DescriptorId};
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
 #[allow(dead_code)]
 pub struct StrongMetadataCpu<'a> {
 	bindless: &'a Arc<Bindless>,
 	metadata: Metadata,
-	refs: Result<HashMap<(DescContentType, u32), AnyRCDesc>, BackingRefsError>,
+	refs: Result<HashMap<DescriptorId, AnyRCDesc>, BackingRefsError>,
 }
 
 impl<'a> StrongMetadataCpu<'a> {
@@ -51,15 +50,15 @@ impl<'a> Deref for StrongMetadataCpu<'a> {
 
 #[derive(Debug)]
 pub enum BackingRefsError {
-	NoLongerAlive(DescContentType, u32, u32),
+	NoLongerAlive(DescriptorId),
 }
 
 impl Display for BackingRefsError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		match self {
-			BackingRefsError::NoLongerAlive(desc, id, version) => f.write_fmt(format_args!(
-				"{:?} id: {} version: {} was no longer alive while StrongDesc of it existed",
-				desc, id, version
+			BackingRefsError::NoLongerAlive(desc) => f.write_fmt(format_args!(
+				"{:?} was no longer alive while StrongDesc of it existed",
+				desc
 			)),
 		}
 	}

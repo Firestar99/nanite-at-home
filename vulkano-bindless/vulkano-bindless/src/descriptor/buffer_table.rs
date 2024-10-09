@@ -1,10 +1,10 @@
+use crate::backend::range_set::{range_to_descriptor_index, DescriptorIndexRangeSet};
+use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
-use crate::descriptor::descriptor_content::{DescContentCpu, DescTable, DescTableEnum, DescTableEnumType};
+use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::resource_table::{FlushUpdates, ResourceTable, TableEpochGuard};
-use crate::descriptor::{AnyRCDesc, Bindless};
-use crate::rc_slot::{RCSlotsInterface, SlotIndex};
+use crate::descriptor::{AnyRCDesc, Bindless, RCDescExt};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -15,14 +15,11 @@ use vulkano::buffer::{Buffer as VBuffer, BufferContents as VBufferContents};
 use vulkano::descriptor_set::layout::{DescriptorSetLayoutBinding, DescriptorType};
 use vulkano::descriptor_set::{DescriptorSet, InvalidateDescriptorSet, WriteDescriptorSet};
 use vulkano::device::physical::PhysicalDevice;
-use vulkano::device::{Device, DeviceOwned};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator};
 use vulkano::shader::ShaderStages;
 use vulkano::{DeviceSize, Validated};
 use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct, Metadata};
-use vulkano_bindless_shaders::descriptor::Buffer;
-use vulkano_bindless_shaders::descriptor::DescContentType;
-use vulkano_bindless_shaders::descriptor::BINDING_BUFFER;
+use vulkano_bindless_shaders::descriptor::{Buffer, BINDING_BUFFER};
 
 impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T>
 where
@@ -31,15 +28,13 @@ where
 	type DescTable = BufferTable;
 	type VulkanType = Subbuffer<T::Transfer>;
 
-	fn deref_table(slot: &<Self::DescTable as DescTable>::Slot) -> &Self::VulkanType {
-		slot.buffer.reinterpret_ref()
+	fn deref_table(slot: &RcTableSlot) -> &Self::VulkanType {
+		slot.try_deref::<BufferInterface>().unwrap().buffer.reinterpret_ref()
 	}
 }
 
 impl DescTable for BufferTable {
-	const CONTENT_ENUM: DescContentType = DescContentType::Buffer;
 	type Slot = BufferSlot;
-	type RCSlotsInterface = BufferInterface;
 
 	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32 {
 		physical_device
@@ -65,36 +60,6 @@ impl DescTable for BufferTable {
 		.ok_or(())
 		.unwrap_err();
 	}
-
-	#[inline]
-	fn lock_table(&self) -> TableEpochGuard<Self> {
-		self.resource_table.epoch_guard()
-	}
-
-	#[inline]
-	fn table_enum_new<A: DescTableEnumType>(inner: A::Type<Self>) -> DescTableEnum<A> {
-		DescTableEnum::Buffer(inner)
-	}
-
-	#[inline]
-	fn table_enum_try_deref<A: DescTableEnumType>(table_enum: &DescTableEnum<A>) -> Option<&A::Type<Self>> {
-		if let DescTableEnum::Buffer(v) = table_enum {
-			Some(v)
-		} else {
-			None
-		}
-	}
-
-	#[inline]
-	fn table_enum_try_into<A: DescTableEnumType>(
-		table_enum: DescTableEnum<A>,
-	) -> Result<A::Type<Self>, DescTableEnum<A>> {
-		if let DescTableEnum::Buffer(v) = table_enum {
-			Ok(v)
-		} else {
-			Err(table_enum)
-		}
-	}
 }
 
 pub struct BufferSlot {
@@ -103,15 +68,13 @@ pub struct BufferSlot {
 }
 
 pub struct BufferTable {
-	pub device: Arc<Device>,
-	pub(super) resource_table: ResourceTable<BufferTable>,
+	table: Arc<Table<BufferInterface>>,
 }
 
 impl BufferTable {
-	pub fn new(descriptor_set: Arc<DescriptorSet>, count: u32) -> Self {
+	pub fn new(table_sync: &Arc<TableSync>, descriptor_set: Arc<DescriptorSet>, count: u32) -> Self {
 		Self {
-			device: descriptor_set.device().clone(),
-			resource_table: ResourceTable::new(count, BufferInterface { descriptor_set }),
+			table: table_sync.register(count, BufferInterface { descriptor_set }).unwrap(),
 		}
 	}
 }
@@ -163,13 +126,17 @@ impl<'a> BufferTableAccess<'a> {
 	where
 		T::Transfer: VBufferContents,
 	{
-		self.resource_table
-			.alloc_slot(BufferSlot {
-				buffer: buffer.into_bytes(),
-				_strong_refs: strong_refs,
-			})
-			.map_err(|a| format!("BufferTable: {}", a))
-			.unwrap()
+		unsafe {
+			RCDesc::new(
+				self.table
+					.alloc_slot(BufferSlot {
+						buffer: buffer.into_bytes(),
+						_strong_refs: strong_refs,
+					})
+					.map_err(|a| format!("BufferTable: {}", a))
+					.unwrap(),
+			)
+		}
 	}
 
 	pub fn alloc_from_data<T: BufferStruct>(
@@ -250,19 +217,27 @@ impl<'a> BufferTableAccess<'a> {
 		let buffer = VBuffer::new_unsized::<T::Transfer>(allocator, create_info, allocation_info, len)?;
 		Ok(self.alloc_slot(buffer, strong_refs))
 	}
-}
 
-impl BufferTable {
-	pub(crate) fn flush_updates(&self, mut writes: impl FnMut(WriteDescriptorSet)) -> FlushUpdates<BufferTable> {
-		let flush_updates = self.resource_table.flush_updates();
-		flush_updates.iter(|first_array_element, buffer| {
+	pub(crate) fn flush_descriptors(
+		&self,
+		delay_drop: &mut Vec<RcTableSlot>,
+		mut writes: impl FnMut(WriteDescriptorSet),
+	) {
+		let flush_queue = self.table.drain_flush_queue();
+		let mut set = DescriptorIndexRangeSet::new();
+		delay_drop.reserve(flush_queue.size_hint().0);
+		for x in flush_queue {
+			set.insert(x.id().index());
+			delay_drop.push(x);
+		}
+		for range in set.iter_ranges() {
 			writes(WriteDescriptorSet::buffer_array(
 				BINDING_BUFFER,
-				first_array_element,
-				buffer.iter().map(|slot| slot.buffer.clone()),
+				range.start.to_u32(),
+				range_to_descriptor_index(range)
+					.map(|index| unsafe { self.table.get_slot_unchecked(index).buffer.clone() }),
 			));
-		});
-		flush_updates
+		}
 	}
 }
 
@@ -270,16 +245,23 @@ pub struct BufferInterface {
 	descriptor_set: Arc<DescriptorSet>,
 }
 
-impl RCSlotsInterface<<BufferTable as DescTable>::Slot> for BufferInterface {
-	fn drop_slot(&self, index: SlotIndex, t: <BufferTable as DescTable>::Slot) {
-		self.descriptor_set
-			.invalidate(&[InvalidateDescriptorSet::invalidate_array(
-				BINDING_BUFFER,
-				index.0 as u32,
-				1,
-			)])
-			.unwrap();
-		drop(t);
+impl TableInterface for BufferInterface {
+	type Slot = BufferSlot;
+
+	fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
+		for x in indices.iter_ranges() {
+			self.descriptor_set
+				.invalidate(&[InvalidateDescriptorSet::invalidate_array(
+					BINDING_BUFFER,
+					x.start.to_u32(),
+					(x.end - x.start) as u32,
+				)])
+				.unwrap();
+		}
+	}
+
+	fn flush(&self, _flush_queue: DrainFlushQueue<'_, Self>) {
+		// do nothing, flushing of descriptors is handled differently
 	}
 }
 

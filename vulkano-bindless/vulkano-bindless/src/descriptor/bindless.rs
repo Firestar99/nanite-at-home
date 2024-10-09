@@ -1,9 +1,9 @@
+use crate::backend::table::{FrameGuard, TableSync};
 use crate::descriptor::bindless_descriptor_allocator::BindlessDescriptorSetAllocator;
 use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
 use crate::descriptor::descriptor_content::DescTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
-use crate::descriptor::resource_table::TableEpochGuard;
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
 use crate::sync::Mutex;
 use smallvec::SmallVec;
@@ -31,16 +31,11 @@ pub struct Bindless {
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],
 	pub descriptor_set: Arc<DescriptorSet>,
+	pub table_sync: Arc<TableSync>,
 	pub(super) buffer: BufferTable,
 	pub(super) image: ImageTable,
 	pub(super) sampler: SamplerTable,
 	flush_lock: Mutex<()>,
-}
-
-pub struct BindlessLock {
-	_buffer: TableEpochGuard<BufferTable>,
-	_image: TableEpochGuard<ImageTable>,
-	_sampler: TableEpochGuard<SamplerTable>,
 }
 
 assert_impl_all!(Bindless: Send, Sync);
@@ -89,10 +84,13 @@ impl Bindless {
 			.unwrap()
 		});
 
+		let table_sync = TableSync::new();
+
 		Arc::new(Self {
-			buffer: BufferTable::new(descriptor_set.clone(), counts.buffers),
-			image: ImageTable::new(descriptor_set.clone(), counts.image),
-			sampler: SamplerTable::new(descriptor_set.clone(), counts.samplers),
+			buffer: BufferTable::new(&table_sync, descriptor_set.clone(), counts.buffers),
+			image: ImageTable::new(&table_sync, descriptor_set.clone(), counts.image),
+			sampler: SamplerTable::new(&table_sync, descriptor_set.clone(), counts.samplers),
+			table_sync,
 			descriptor_set_layout,
 			pipeline_layouts,
 			descriptor_set,
@@ -125,26 +123,23 @@ impl Bindless {
 		//  * descriptor set may be used in command buffers concurrently, see spec
 		unsafe {
 			let mut writes: SmallVec<[_; 8]> = SmallVec::new();
-			let buffer = self.buffer.flush_updates(|w| writes.push(w));
-			let image = self.image.flush_updates(|w| writes.push(w));
-			let sampler = self.sampler.flush_updates(|w| writes.push(w));
+			let mut delay_drop = Vec::new();
+			self.buffer().flush_descriptors(&mut delay_drop, |w| writes.push(w));
+			self.image().flush_descriptors(&mut delay_drop, |w| writes.push(w));
+			self.sampler().flush_descriptors(&mut delay_drop, |w| writes.push(w));
 			if !writes.is_empty() {
 				self.descriptor_set.update_by_ref(writes, []).unwrap();
 			}
 			// drop after update, to allow already freed slots to correctly invalidate the descriptor slot
-			drop((buffer, image, sampler));
+			drop(delay_drop);
 		}
 	}
 
 	/// Locking the Bindless system will ensure that any resource, that is dropped after the lock has been created, will
 	/// not be deallocated or removed from the bindless descriptor set until this lock is dropped. There may be multiple
 	/// active locks at the same time that can be unlocked out of order.
-	pub fn lock(&self) -> BindlessLock {
-		BindlessLock {
-			_buffer: self.buffer.lock_table(),
-			_image: self.image.lock_table(),
-			_sampler: self.sampler.lock_table(),
-		}
+	pub fn lock(&self) -> FrameGuard {
+		self.table_sync.frame()
 	}
 
 	/// Get a pipeline layout with just the bindless descriptor set and the correct push constant size  for your

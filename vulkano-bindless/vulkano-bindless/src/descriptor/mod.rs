@@ -6,7 +6,6 @@ pub mod descriptor_content;
 pub mod descriptor_counts;
 pub mod image_table;
 pub mod rc_reference;
-pub mod resource_table;
 pub mod sampler_table;
 
 pub use bindless::*;
@@ -15,6 +14,5 @@ pub use descriptor_content::*;
 pub use descriptor_counts::*;
 pub use image_table::*;
 pub use rc_reference::*;
-pub use resource_table::*;
 pub use sampler_table::*;
 pub use vulkano_bindless_shaders::descriptor::*;
