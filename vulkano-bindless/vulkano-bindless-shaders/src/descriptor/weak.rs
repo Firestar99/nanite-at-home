@@ -1,16 +1,14 @@
 use crate::buffer_content::Metadata;
+use crate::descriptor::id::DescriptorId;
 use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{Desc, DescContent, DescRef};
-use core::mem;
-use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::BufferContent;
+use vulkano_bindless_macros::{assert_transfer_size, BufferContent};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Weak {
-	id: u32,
-	version: u32,
+	id: DescriptorId,
 }
-const_assert_eq!(mem::size_of::<Weak>(), 8);
+assert_transfer_size!(Weak, 4);
 
 impl DescRef for Weak {}
 
@@ -22,18 +20,13 @@ impl<C: DescContent> WeakDesc<C> {
 	/// # Safety
 	/// The C generic must match the content that the [`DescRef`] points to
 	#[inline]
-	pub const unsafe fn new(id: u32, version: u32) -> WeakDesc<C> {
-		unsafe { Self::new_inner(Weak { id, version }) }
+	pub const unsafe fn new(id: DescriptorId) -> WeakDesc<C> {
+		unsafe { Self::new_inner(Weak { id }) }
 	}
 
 	#[inline]
-	pub const fn id(&self) -> u32 {
+	pub const fn id(&self) -> DescriptorId {
 		self.r.id
-	}
-
-	#[inline]
-	pub const fn version(&self) -> u32 {
-		self.r.version
 	}
 
 	/// Upgrades a WeakDesc to a TransientDesc that is valid for the current frame in flight, assuming the descriptor

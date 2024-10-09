@@ -3065,6 +3065,7 @@ name = "vulkano-bindless"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.11",
+ "anyhow",
  "bytemuck",
  "bytemuck_derive",
  "crossbeam-queue",

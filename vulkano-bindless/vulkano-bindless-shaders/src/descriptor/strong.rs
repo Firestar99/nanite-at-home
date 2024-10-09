@@ -1,24 +1,21 @@
 use crate::buffer_content::{Metadata, MetadataCpuInterface};
+use crate::descriptor::id::DescriptorId;
 use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
-use core::mem;
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone)]
 pub struct Strong {
-	id: u32,
-	/// internal value only used on the CPU to validate that slot wasn't reused
-	_version: u32,
+	id: DescriptorId,
 }
-const_assert_eq!(mem::size_of::<Strong>(), 8);
 
 impl DescRef for Strong {}
 
 impl AliveDescRef for Strong {
 	#[inline]
-	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32 {
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
 		desc.r.id
 	}
 }
@@ -31,17 +28,8 @@ impl<C: DescContent> StrongDesc<C> {
 	/// # Safety
 	/// id must be a valid descriptor id that is somehow ensured to stay valid for as long as this StrongDesc exists
 	#[inline]
-	pub const unsafe fn new(id: u32, version: u32) -> Self {
-		unsafe { Self::new_inner(Strong { id, _version: version }) }
-	}
-
-	/// Get the version
-	///
-	/// # Safety
-	/// only available on the cpu
-	#[cfg(not(target_arch = "spirv"))]
-	pub unsafe fn version_cpu(&self) -> u32 {
-		self.r._version
+	pub const unsafe fn new(id: DescriptorId) -> Self {
+		unsafe { Self::new_inner(Strong { id }) }
 	}
 
 	#[inline]
@@ -59,16 +47,15 @@ unsafe impl DescStructRef for Strong {
 		meta: &mut impl MetadataCpuInterface,
 	) -> Self::TransferDescStruct {
 		meta.visit_strong_descriptor(desc);
-		Self::TransferDescStruct { id: desc.r.id }
+		TransferStrong(desc.r.id)
 	}
 
 	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
-		unsafe { StrongDesc::new(from.id, 0) }
+		unsafe { StrongDesc::new(from.0) }
 	}
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, AnyBitPattern)]
-pub struct TransferStrong {
-	id: u32,
-}
+pub struct TransferStrong(DescriptorId);
+const_assert_eq!(core::mem::size_of::<TransferStrong>(), 4);

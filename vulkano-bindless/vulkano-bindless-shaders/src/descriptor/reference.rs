@@ -1,6 +1,7 @@
 use crate::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};
 use crate::descriptor::descriptor_content::DescContent;
 use crate::descriptor::descriptors::DescriptorsAccess;
+use crate::descriptor::id::DescriptorId;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -159,11 +160,11 @@ impl<R: DescRef + Eq> Eq for AnyDesc<R> {}
 
 /// A [`DescRef`] that somehow ensures the content it's pointing to is always alive, allowing it to be accessed.
 pub trait AliveDescRef: DescRef {
-	fn id<C: DescContent>(desc: &Desc<Self, C>) -> u32;
+	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId;
 }
 
 impl<R: AliveDescRef, C: DescContent> Desc<R, C> {
-	pub fn id(&self) -> u32 {
+	pub fn id(&self) -> DescriptorId {
 		R::id(self)
 	}
 

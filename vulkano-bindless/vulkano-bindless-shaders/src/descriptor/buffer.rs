@@ -1,5 +1,5 @@
 use crate::buffer_content::{BufferContent, BufferStruct, Metadata};
-use crate::descriptor::descriptor_content::{private, DescContent, DescContentType};
+use crate::descriptor::descriptor_content::DescContent;
 use core::marker::PhantomData;
 use core::mem;
 use spirv_std::byte_addressable_buffer::buffer_load_intrinsic;
@@ -8,11 +8,8 @@ pub struct Buffer<T: ?Sized + Send + Sync + 'static> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: ?Sized + Send + Sync + 'static> private::SealedTrait for Buffer<T> {}
-
 impl<T: ?Sized + Send + Sync + 'static> DescContent for Buffer<T> {
 	type AccessType<'a> = BufferSlice<'a, T>;
-	const CONTENT_TYPE: DescContentType = DescContentType::Buffer;
 }
 
 pub struct BufferSlice<'a, T: ?Sized> {

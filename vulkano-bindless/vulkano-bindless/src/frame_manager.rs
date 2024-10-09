@@ -1,4 +1,4 @@
-use crate::descriptor::bindless::BindlessLock;
+use crate::backend::table::FrameGuard;
 use crate::descriptor::Bindless;
 use crate::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ pub type PrevFrameFuture = NowFuture;
 
 struct PrevFrame {
 	fence_rendered: FenceSignalFuture<Box<dyn GpuFuture>>,
-	_lock: BindlessLock,
+	_guard: FrameGuard,
 }
 
 impl FrameManager {
@@ -92,14 +92,14 @@ impl FrameManager {
 
 		// do the render, write back GpuFuture
 		let fence_rendered = {
-			let _lock = self.bindless.lock();
+			let _guard = self.bindless.lock();
 			let frame = Frame {
 				frame_manager: self,
 				fif,
 			};
 			f(&frame, prev_frame_future)
 				.and_then(|fence| frame.flush(fence).ok())
-				.map(|fence_rendered| PrevFrame { fence_rendered, _lock })
+				.map(|fence_rendered| PrevFrame { fence_rendered, _guard })
 		};
 		*self.prev_frame.index_mut(fif) = fence_rendered;
 	}
