@@ -92,6 +92,7 @@ impl MeshletRenderTask {
 		})
 		.unwrap();
 		let scenes = self.scenes.lock().clone();
+		#[allow(clippy::unused_enumerate_index)]
 		for (_id, scene) in scenes.iter().enumerate() {
 			profiling::scope!("draw scene", _id.to_string());
 			for mesh2instance in &scene.mesh2instances {

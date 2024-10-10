@@ -1,12 +1,12 @@
 use crate::backend::ab::{ABArray, AB};
 use crate::backend::range_set::DescriptorIndexRangeSet;
 use crate::backend::slot_array::SlotArray;
-use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use static_assertions::const_assert_eq;
 use std::any::Any;
+use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::MaybeUninit;
@@ -81,7 +81,7 @@ impl TableSync {
 				slot_counters: SlotArray::new(slots_capacity),
 				slots: SlotArray::new_generator(slots_capacity, |_| UnsafeCell::new(MaybeUninit::uninit())),
 				flush_queue: SegQueue::new(),
-				reaper_queue: ABArray::new(|| SegQueue::new()),
+				reaper_queue: ABArray::new(SegQueue::new),
 				dead_queue: SegQueue::new(),
 				next_free: CachePadded::new(AtomicU32::new(0)),
 			});
@@ -214,11 +214,7 @@ impl<I: TableInterface> Table<I> {
 		}?;
 
 		// Safety: we just allocated index, we have exclusive access to slot, which is currently uninitialized
-		unsafe {
-			self.slots[index].with_mut(|s| {
-				s.write(slot);
-			})
-		}
+		unsafe { (*self.slots[index].get()).write(slot) };
 		let slot = &self.slot_counters[index];
 		slot.ref_count.store(2, Release);
 
@@ -236,7 +232,7 @@ impl<I: TableInterface> Table<I> {
 	/// # Safety
 	/// Assumes the slot is initialized
 	pub unsafe fn get_slot_unchecked(&self, index: DescriptorIndex) -> &I::Slot {
-		unsafe { (&*self.slots[index].get()).assume_init_ref() }
+		unsafe { (*self.slots[index].get()).assume_init_ref() }
 	}
 
 	#[inline]
@@ -255,7 +251,6 @@ impl<I: TableInterface> Deref for Table<I> {
 
 /// Internal Trait
 trait AbstractTable: Any + Send + Sync + 'static {
-	fn table_id(&self) -> DescriptorType;
 	fn as_any(&self) -> &dyn Any;
 	fn ref_inc(&self, id: DescriptorId);
 	fn ref_dec(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
@@ -266,10 +261,6 @@ trait AbstractTable: Any + Send + Sync + 'static {
 }
 
 impl<I: TableInterface> AbstractTable for Table<I> {
-	fn table_id(&self) -> DescriptorType {
-		self.table_id
-	}
-
 	fn as_any(&self) -> &dyn Any {
 		self
 	}
@@ -307,11 +298,10 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 		for i in gc_indices.iter() {
 			// Safety: we have exclusive access to the previously initialized slot
 			let valid_version = unsafe {
-				self.slots.index(i).with_mut(|s| s.assume_init_drop());
-				self.slot_counters[i].version.with_mut(|version| {
-					*version += 1;
-					DescriptorVersion::new(*version).is_some()
-				})
+				(*self.slots.index(i).get()).assume_init_drop();
+				let version = &mut *self.slot_counters[i].version.get();
+				*version += 1;
+				DescriptorVersion::new(*version).is_some()
 			};
 
 			// we send / share the slot to the dead_queue
@@ -335,7 +325,7 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 			{
 				Ok(_) => {
 					// Safety: we inc ref count so this slot must be alive and we can read this
-					let version = unsafe { counters.version.with(|v| *v) };
+					let version = unsafe { *counters.version.get() };
 					if id.version().to_u32() == version {
 						true
 					} else {
@@ -371,7 +361,7 @@ impl SlotCounter {
 	/// # Safety
 	/// creates a reference to `self.version`
 	unsafe fn read_version(&self) -> DescriptorVersion {
-		unsafe { DescriptorVersion::new(self.version.with(|v| *v)).unwrap() }
+		unsafe { DescriptorVersion::new(*self.version.get()).unwrap() }
 	}
 }
 
@@ -421,11 +411,10 @@ impl RcTableSlot {
 
 	pub fn try_deref<I: TableInterface>(&self) -> Option<&I::Slot> {
 		self.table(|table| {
-			if let Some(table) = table.as_any().downcast_ref::<Table<I>>() {
-				Some(unsafe { (&*table.slots.index(self.id.index()).get()).assume_init_ref() })
-			} else {
-				None
-			}
+			table
+				.as_any()
+				.downcast_ref::<Table<I>>()
+				.map(|table| unsafe { (*table.slots.index(self.id.index()).get()).assume_init_ref() })
 		})
 	}
 }

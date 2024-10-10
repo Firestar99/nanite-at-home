@@ -6,6 +6,12 @@ pub struct DebugSettingsSelector {
 	selected: DebugSettings,
 }
 
+impl Default for DebugSettingsSelector {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl DebugSettingsSelector {
 	pub fn new() -> Self {
 		Self {
@@ -21,6 +27,7 @@ impl DebugSettingsSelector {
 		self.selected
 	}
 
+	#[allow(clippy::single_match)]
 	pub fn handle_input(&mut self, event: &Event<()>) {
 		match event {
 			Event::WindowEvent {

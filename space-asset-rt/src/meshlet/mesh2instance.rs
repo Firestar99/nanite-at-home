@@ -41,8 +41,8 @@ pub fn upload_mesh_2_instance<'a>(
 		let mesh = uploader.upload_buffer_data(mesh.await?.to_strong());
 		Ok(MeshletMesh2InstanceCpu {
 			mesh2instance: MeshletMesh2Instance {
-				mesh: mesh.await?.into(),
-				instances: instances.await?.into(),
+				mesh: mesh.await?,
+				instances: instances.await?,
 			},
 			num_meshlets: this.mesh.meshlets.len() as u32,
 		})

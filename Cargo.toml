@@ -55,8 +55,8 @@ vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "eb
 winit = { version = "0.29" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu", rev = "809e9fa349c4bbb699b29207993187e4deff9999", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu", rev = "809e9fa349c4bbb699b29207993187e4deff9999" }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "f838d2792b9b226f1c0cb874dce1874a7e046b30", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "f838d2792b9b226f1c0cb874dce1874a7e046b30" }
 
 # async
 async-std = "1.12.0"
@@ -78,7 +78,7 @@ libm = { version = "0.2", default-features = false }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
-num-derive = "0.3"
+num-derive = "0.4.2"
 memoffset = "0.9.1"
 
 # serde

@@ -24,7 +24,7 @@ impl Symbols {
 		};
 
 		let crate_buffer_content = if let Ok(crate_shaders_ident) = &crate_shaders {
-			idents_to_path(&ident_crate, &[&crate_shaders_ident, &format_ident!("buffer_content")])
+			idents_to_path(&ident_crate, &[crate_shaders_ident, &format_ident!("buffer_content")])
 		} else {
 			match crate_name("vulkano-bindless-buffer-content") {
 				Ok(found_crate) => match &found_crate {

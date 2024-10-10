@@ -179,7 +179,8 @@ impl<'a> RendererMainFrame<'a> {
 			&r.depth_image,
 			future,
 		);
-		let future = p.lighting_task.record(
+
+		p.lighting_task.record(
 			c,
 			&r.g_albedo_image,
 			&r.g_normal_image,
@@ -187,8 +188,7 @@ impl<'a> RendererMainFrame<'a> {
 			&r.depth_image,
 			&self.output_image,
 			future,
-		);
-		future
+		)
 	}
 }
 

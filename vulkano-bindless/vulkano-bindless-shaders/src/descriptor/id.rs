@@ -39,6 +39,9 @@ pub struct DescriptorId(u32);
 const_assert_eq!(mem::size_of::<DescriptorId>(), 4);
 
 impl DescriptorId {
+	/// # Safety
+	/// You must ensure that the supplied [`DescriptorType`], [`DescriptorIndex`] and [`DescriptorVersion`] are all
+	/// valid themselves and point to a valid descriptor.
 	pub const unsafe fn new(desc_type: DescriptorType, index: DescriptorIndex, version: DescriptorVersion) -> Self {
 		let mut value = 0;
 		value |= (desc_type.0 & ID_TYPE_MASK) << ID_TYPE_SHIFT;
@@ -69,6 +72,12 @@ pub struct DescriptorType(u32);
 const_assert_eq!(mem::size_of::<DescriptorType>(), 4);
 
 impl DescriptorType {
+	/// Creates a new `DescriptorIndex` or None if the version is too large to be represented by [`ID_TYPE_BITS`]
+	/// bits.
+	///
+	/// # Safety
+	/// The supplied `type_id` must be a valid `DescriptorType`. In practice, you should never have to construct a
+	/// `DescriptorType` yourself and instead let `TableSync::register` do that for you.
 	pub const unsafe fn new(type_id: u32) -> Option<Self> {
 		if type_id == type_id & ID_TYPE_MASK {
 			Some(Self::new_unchecked(type_id))
@@ -77,6 +86,8 @@ impl DescriptorType {
 		}
 	}
 
+	/// # Safety
+	/// See [`Self::new`]. The supplied `type_id` must fit into [`ID_TYPE_BITS`] bits.
 	pub const unsafe fn new_unchecked(type_id: u32) -> Self {
 		Self(type_id)
 	}
@@ -97,6 +108,11 @@ pub struct DescriptorIndex(u32);
 const_assert_eq!(mem::size_of::<DescriptorIndex>(), 4);
 
 impl DescriptorIndex {
+	/// Creates a new `DescriptorIndex` or None if the version is too large to be represented by [`ID_INDEX_BITS`]
+	/// bits.
+	///
+	/// # Safety
+	/// The supplied `index` must be a valid `DescriptorIndex` in whichever context it is used
 	pub const unsafe fn new(index: u32) -> Option<Self> {
 		if index == index & ID_INDEX_MASK {
 			Some(Self::new_unchecked(index))
@@ -105,6 +121,8 @@ impl DescriptorIndex {
 		}
 	}
 
+	/// # Safety
+	/// See [`Self::new`]. The supplied `index` must fit into [`ID_INDEX_BITS`] bits.
 	pub const unsafe fn new_unchecked(index: u32) -> Self {
 		Self(index)
 	}
@@ -133,6 +151,11 @@ pub struct DescriptorVersion(u32);
 const_assert_eq!(mem::size_of::<DescriptorVersion>(), 4);
 
 impl DescriptorVersion {
+	/// Creates a new `DescriptorVersion` or None if the version is too large to be represented by [`ID_VERSION_BITS`]
+	/// bits.
+	///
+	/// # Safety
+	/// The supplied `version` must be a valid `DescriptorVersion` in whichever context it is used
 	pub const unsafe fn new(version: u32) -> Option<Self> {
 		if version == version & ID_VERSION_MASK {
 			Some(Self::new_unchecked(version))
@@ -141,6 +164,8 @@ impl DescriptorVersion {
 		}
 	}
 
+	/// # Safety
+	/// See [`Self::new`]. The supplied `version` must fit into [`ID_VERSION_BITS`] bits.
 	pub const unsafe fn new_unchecked(version: u32) -> Self {
 		Self(version)
 	}
@@ -167,6 +192,11 @@ impl<C: DescContent> UnsafeDesc<C> {
 		self.r
 	}
 
+	/// Unsafely create a [`TransientDesc`] that can be used to access its contents.
+	///
+	/// # Safety
+	/// There is no verification that the contents are actually still alive, and the returned [`TransientDesc`] may
+	/// point to a dropped resource.
 	#[inline]
 	pub unsafe fn to_transient_unchecked<'a>(&self, meta: Metadata) -> TransientDesc<'a, C> {
 		unsafe { TransientDesc::new(self.r, meta.fake_fif()) }

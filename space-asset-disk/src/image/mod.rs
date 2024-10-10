@@ -2,7 +2,6 @@ mod decode;
 mod metadata;
 mod size;
 
-pub use decode::*;
 pub use metadata::*;
 pub use size::*;
 

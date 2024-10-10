@@ -9,6 +9,12 @@ pub fn range_to_descriptor_index(range: Range<DescriptorIndex>) -> impl Iterator
 #[derive(Clone, Debug)]
 pub struct DescriptorIndexRangeSet(pub RangeSet<DescriptorIndex>);
 
+impl Default for DescriptorIndexRangeSet {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl DescriptorIndexRangeSet {
 	pub fn new() -> Self {
 		Self(RangeSet::new())

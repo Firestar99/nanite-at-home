@@ -1,9 +1,12 @@
+// caused by AnyBitPattern derive on PushConstant
+#![allow(clippy::multiple_bound_locations)]
+
 use crate::buffer_content::{BufferContent, Metadata};
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::reference::{AliveDescRef, Desc};
 use crate::descriptor::{Buffer, BufferSlice, DescContent};
 use bytemuck_derive::AnyBitPattern;
-use spirv_std::{RuntimeArray, Sampler};
+use spirv_std::{RuntimeArray, Sampler, TypedBuffer};
 
 /// Some struct that facilitates access to a [`ValidDesc`] pointing to some [`DescContent`]
 pub trait DescriptorsAccess<C: DescContent + ?Sized> {
@@ -16,7 +19,7 @@ macro_rules! decl_descriptors {
 		{$($sampled_name:ident: $sampled_ty:ty,)*}
 	) => {
 		pub struct Descriptors<'a> {
-			pub buffers: &'a RuntimeArray<[u32]>,
+			pub buffers: &'a RuntimeArray<TypedBuffer<[u32]>>,
 			$(pub $storage_name: &'a RuntimeArray<$storage_ty>,)*
 			$(pub $sampled_name: &'a RuntimeArray<$sampled_ty>,)*
 			pub samplers: &'a RuntimeArray<Sampler>,
