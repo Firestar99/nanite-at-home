@@ -1,5 +1,3 @@
-#![cfg_attr(feature = "loom_tests", feature(arbitrary_self_types))]
-
 //! An attempt at making a safe fully-bindless system for Vulkano.
 //!
 //! # Safety
@@ -22,7 +20,6 @@ pub mod frame_in_flight;
 pub mod frame_manager;
 pub mod pipeline;
 pub mod required_features;
-pub mod sync;
 
 pub use vulkano_bindless_shaders::buffer_content;
 pub use vulkano_bindless_shaders::shader_type;

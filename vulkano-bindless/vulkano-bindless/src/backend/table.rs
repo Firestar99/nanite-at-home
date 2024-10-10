@@ -1,12 +1,12 @@
 use crate::backend::ab::{ABArray, AB};
 use crate::backend::range_set::DescriptorIndexRangeSet;
 use crate::backend::slot_array::SlotArray;
-use crate::sync::cell::UnsafeCell;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use static_assertions::const_assert_eq;
 use std::any::Any;
+use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::MaybeUninit;
@@ -214,11 +214,7 @@ impl<I: TableInterface> Table<I> {
 		}?;
 
 		// Safety: we just allocated index, we have exclusive access to slot, which is currently uninitialized
-		unsafe {
-			self.slots[index].with_mut(|s| {
-				s.write(slot);
-			})
-		}
+		unsafe { (&mut *self.slots[index].get()).write(slot) };
 		let slot = &self.slot_counters[index];
 		slot.ref_count.store(2, Release);
 
@@ -307,11 +303,10 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 		for i in gc_indices.iter() {
 			// Safety: we have exclusive access to the previously initialized slot
 			let valid_version = unsafe {
-				self.slots.index(i).with_mut(|s| s.assume_init_drop());
-				self.slot_counters[i].version.with_mut(|version| {
-					*version += 1;
-					DescriptorVersion::new(*version).is_some()
-				})
+				(&mut *self.slots.index(i).get()).assume_init_drop();
+				let version = &mut *self.slot_counters[i].version.get();
+				*version += 1;
+				DescriptorVersion::new(*version).is_some()
 			};
 
 			// we send / share the slot to the dead_queue
@@ -335,7 +330,7 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 			{
 				Ok(_) => {
 					// Safety: we inc ref count so this slot must be alive and we can read this
-					let version = unsafe { counters.version.with(|v| *v) };
+					let version = unsafe { *counters.version.get() };
 					if id.version().to_u32() == version {
 						true
 					} else {
@@ -371,7 +366,7 @@ impl SlotCounter {
 	/// # Safety
 	/// creates a reference to `self.version`
 	unsafe fn read_version(&self) -> DescriptorVersion {
-		unsafe { DescriptorVersion::new(self.version.with(|v| *v)).unwrap() }
+		unsafe { DescriptorVersion::new(*self.version.get()).unwrap() }
 	}
 }
 

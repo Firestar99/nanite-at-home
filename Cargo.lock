@@ -2970,7 +2970,6 @@ dependencies = [
  "crossbeam-utils",
  "futures",
  "glam",
- "loom",
  "num-derive",
  "num-traits",
  "once_cell",

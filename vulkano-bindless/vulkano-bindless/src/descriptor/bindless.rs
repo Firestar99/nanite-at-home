@@ -5,7 +5,7 @@ use crate::descriptor::descriptor_content::DescTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
-use crate::sync::Mutex;
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 use static_assertions::assert_impl_all;
 use std::collections::BTreeMap;

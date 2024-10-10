@@ -31,7 +31,6 @@ parking_lot = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
-loom = { workspace = true }
 ahash = { workspace = true }
 crossbeam-queue = { workspace = true }
 crossbeam-utils = { workspace = true }
@@ -40,6 +39,3 @@ rangemap = { workspace = true }
 [dev-dependencies]
 rand = { workspace = true }
 anyhow = { workspace = true }
-
-[features]
-loom_tests = []
