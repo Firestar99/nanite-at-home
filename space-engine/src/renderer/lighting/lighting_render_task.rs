@@ -59,6 +59,7 @@ impl LightingRenderTask {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	#[profiling::function]
 	pub fn record(
 		&self,

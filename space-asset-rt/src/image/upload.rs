@@ -63,7 +63,7 @@ fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 				uploader.memory_allocator.clone(),
 				ImageCreateInfo {
 					image_type: vulkano::image::ImageType::Dim2d,
-					format: vulkano_format(&this),
+					format: vulkano_format(this),
 					extent: [this.size.width, this.size.height, 1],
 					usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
 					..ImageCreateInfo::default()
@@ -106,8 +106,7 @@ fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 		Ok(uploader
 			.bindless
 			.image()
-			.alloc_slot_2d(ImageView::new_default(perm_image).map_err(UploadError::from_validated)?)
-			.into())
+			.alloc_slot_2d(ImageView::new_default(perm_image).map_err(UploadError::from_validated)?))
 	}
 }
 

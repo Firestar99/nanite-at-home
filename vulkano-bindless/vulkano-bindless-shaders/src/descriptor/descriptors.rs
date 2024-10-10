@@ -1,3 +1,6 @@
+// caused by AnyBitPattern derive on PushConstant
+#![allow(clippy::multiple_bound_locations)]
+
 use crate::buffer_content::{BufferContent, Metadata};
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::reference::{AliveDescRef, Desc};

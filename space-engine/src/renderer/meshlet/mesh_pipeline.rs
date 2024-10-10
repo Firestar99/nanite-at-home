@@ -77,8 +77,7 @@ impl MeshDrawPipeline {
 					],
 					depth_attachment_format: Some(depth_format),
 					..PipelineRenderingCreateInfo::default()
-				})
-				.into(),
+				}),
 				discard_rectangle_state: None,
 				dynamic_state: [DynamicState::Viewport].into_iter().collect(),
 				conservative_rasterization_state: None,

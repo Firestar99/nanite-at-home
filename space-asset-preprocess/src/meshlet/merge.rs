@@ -37,7 +37,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 	for (mat, meshes) in mat2mesh {
 		let merged_mesh = merge(
 			mat,
-			meshes.iter().map(|m2i| (&m2i.mesh, *m2i.instances.get(0).unwrap())),
+			meshes.iter().map(|m2i| (&m2i.mesh, *m2i.instances.first().unwrap())),
 		);
 		mesh2instances.push(MeshletMesh2InstanceDisk {
 			mesh: merged_mesh,

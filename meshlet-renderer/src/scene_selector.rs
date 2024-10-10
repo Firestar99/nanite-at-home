@@ -22,7 +22,7 @@ where
 	F: FnMut(Arc<MeshletSceneCpu>),
 {
 	pub async fn new(init: Arc<Init>, scenes: Vec<MeshletSceneFile<'a>>, submit_scene: F) -> io::Result<Self> {
-		assert!(scenes.len() >= 1);
+		assert!(!scenes.is_empty());
 		let mut this = Self {
 			init,
 			scenes,
@@ -46,30 +46,28 @@ where
 	}
 
 	pub async fn handle_input(&mut self, event: &Event<()>) -> io::Result<()> {
-		match event {
-			Event::WindowEvent {
-				event:
-					WindowEvent::KeyboardInput {
-						event:
-							KeyEvent {
-								state: ElementState::Pressed,
-								physical_key: Code { 0: code },
-								..
-							},
-						..
-					},
-				..
-			} => {
-				use winit::keyboard::KeyCode::*;
-				let mut selected = self.selected;
-				match code {
-					KeyT => selected -= 1,
-					KeyG => selected += 1,
-					_ => {}
-				}
-				self.set_scene(selected).await?;
+		if let Event::WindowEvent {
+			event:
+				WindowEvent::KeyboardInput {
+					event:
+						KeyEvent {
+							state: ElementState::Pressed,
+							physical_key: Code { 0: code },
+							..
+						},
+					..
+				},
+			..
+		} = event
+		{
+			use winit::keyboard::KeyCode::*;
+			let mut selected = self.selected;
+			match code {
+				KeyT => selected -= 1,
+				KeyG => selected += 1,
+				_ => {}
 			}
-			_ => {}
+			self.set_scene(selected).await?;
 		}
 		Ok(())
 	}

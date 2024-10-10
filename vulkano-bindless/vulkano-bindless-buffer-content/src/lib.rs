@@ -27,7 +27,11 @@ pub use static_assertions;
 pub unsafe trait BufferStructPlain: Copy + Clone + Sized + Send + Sync {
 	type Transfer: AnyBitPattern + Send + Sync;
 
+	/// # Safety
+	/// See [`BufferStructPlain`]
 	unsafe fn write(self) -> Self::Transfer;
 
+	/// # Safety
+	/// See [`BufferStructPlain`]
 	unsafe fn read(from: Self::Transfer) -> Self;
 }

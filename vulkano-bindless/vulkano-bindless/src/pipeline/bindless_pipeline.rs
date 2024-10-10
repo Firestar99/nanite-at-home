@@ -61,7 +61,7 @@ impl<Pipeline: VulkanPipeline, T: BufferStruct> BindlessPipeline<Pipeline, T> {
 		custom_layout: Option<Arc<PipelineLayout>>,
 	) -> Result<Arc<PipelineLayout>, Validated<VulkanError>> {
 		if let Some(layout) = custom_layout {
-			match layout.set_layouts().get(0) {
+			match layout.set_layouts().first() {
 				Some(set_0) if Arc::ptr_eq(set_0, bindless.descriptor_set.layout()) => {}
 				_ => Err(Validated::from(Box::new(ValidationError {
 					problem: "DescriptorSet 0 must be the bindless descriptor set".into(),

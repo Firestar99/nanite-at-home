@@ -35,12 +35,12 @@ pub fn upload_mesh<'a>(
 		uploader.upload_buffer_iter(this.pbr_material_vertices.iter().map(deserialize_infallible));
 	async {
 		Ok(MeshletMesh {
-			meshlets: meshlets.await?.into(),
-			draw_vertices: draw_vertices.await?.into(),
-			triangles: triangles.await?.into(),
+			meshlets: meshlets.await?,
+			draw_vertices: draw_vertices.await?,
+			triangles: triangles.await?,
 			num_meshlets: this.meshlets.len() as u32,
 			pbr_material: pbr_materials.get(this.pbr_material_id as usize).unwrap().clone(),
-			pbr_material_vertices: pbr_material_vertices.await?.into(),
+			pbr_material_vertices: pbr_material_vertices.await?,
 		})
 	}
 }
