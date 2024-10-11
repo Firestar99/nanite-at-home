@@ -4,9 +4,10 @@ use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
+use core::fmt::{Debug, Formatter};
 use static_assertions::const_assert_eq;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Strong {
 	id: DescriptorId,
 }
@@ -17,6 +18,12 @@ impl AliveDescRef for Strong {
 	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
 		desc.r.id
+	}
+}
+
+impl Debug for Strong {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_tuple("Strong").field(&self.id).finish()
 	}
 }
 

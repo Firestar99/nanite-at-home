@@ -1,11 +1,12 @@
 use crate::backend::table::RcTableSlot;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef};
 use crate::frame_in_flight::FrameInFlight;
+use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use vulkano_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescriptorId, StrongDesc, TransientDesc, WeakDesc};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RC(RcTableSlot);
 
 impl DescRef for RC {}
@@ -22,6 +23,12 @@ impl<C: DescContentCpu> DerefDescRef<C> for RC {
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
 		C::deref_table(&desc.r.0)
+	}
+}
+
+impl Debug for RC {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_tuple("RC").field(&self.0.id()).finish()
 	}
 }
 

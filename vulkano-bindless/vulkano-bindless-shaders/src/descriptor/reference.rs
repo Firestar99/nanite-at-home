@@ -2,6 +2,7 @@ use crate::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};
 use crate::descriptor::descriptor_content::DescContent;
 use crate::descriptor::descriptors::DescriptorsAccess;
 use crate::descriptor::id::DescriptorId;
+use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -51,6 +52,12 @@ impl<R: DescRef + Clone, C: DescContent> Clone for Desc<R, C> {
 			r: self.r.clone(),
 			_phantom: PhantomData,
 		}
+	}
+}
+
+impl<R: DescRef + Debug, C: DescContent> Debug for Desc<R, C> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_tuple("Desc").field(&self.r).finish()
 	}
 }
 

@@ -2,15 +2,22 @@ use crate::buffer_content::Metadata;
 use crate::descriptor::id::DescriptorId;
 use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{Desc, DescContent, DescRef};
+use core::fmt::{Debug, Formatter};
 use vulkano_bindless_macros::{assert_transfer_size, BufferContent};
 
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, BufferContent)]
 pub struct Weak {
 	id: DescriptorId,
 }
 assert_transfer_size!(Weak, 4);
 
 impl DescRef for Weak {}
+
+impl Debug for Weak {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_tuple("Weak").field(&self.id).finish()
+	}
+}
 
 pub type WeakDesc<C> = Desc<Weak, C>;
 
