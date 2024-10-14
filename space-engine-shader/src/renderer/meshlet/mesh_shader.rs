@@ -8,7 +8,7 @@ use space_asset_shader::meshlet::mesh2instance::MeshletMesh2Instance;
 use space_asset_shader::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{
 	atomic_i_add, emit_mesh_tasks_ext_payload, set_mesh_outputs_ext, subgroup_ballot, subgroup_ballot_bit_count,
-	subgroup_elect, workgroup_memory_barrier_with_group_sync, GroupOperation, IndexUnchecked,
+	subgroup_elect, workgroup_memory_barrier_with_group_sync, IndexUnchecked,
 };
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::Sampler;
@@ -57,7 +57,7 @@ pub fn meshlet_task(
 		let draw = draw_meshlet(descriptors, instance, mesh, meshlet_id);
 
 		let draw_ballot = subgroup_ballot(draw);
-		let draw_subgroup_count = subgroup_ballot_bit_count::<{ GroupOperation::Reduce as u32 }>(draw_ballot);
+		let draw_subgroup_count = subgroup_ballot_bit_count(draw_ballot);
 
 		let draw_count = if sg_num == 1 {
 			draw_subgroup_count

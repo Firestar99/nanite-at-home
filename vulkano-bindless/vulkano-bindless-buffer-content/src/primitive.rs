@@ -38,6 +38,16 @@ identity!(isize);
 identity!(f32);
 identity!(f64);
 
+identity!(spirv_std::arch::SubgroupMask);
+identity!(spirv_std::memory::Semantics);
+identity!(spirv_std::ray_tracing::RayFlags);
+identity!(spirv_std::indirect_command::DrawIndirectCommand);
+identity!(spirv_std::indirect_command::DrawIndexedIndirectCommand);
+identity!(spirv_std::indirect_command::DispatchIndirectCommand);
+identity!(spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT);
+identity!(spirv_std::indirect_command::TraceRaysIndirectCommandKHR);
+identity!(spirv_std::indirect_command::TraceRaysIndirectCommand2KHR);
+
 unsafe impl<T: BufferStructPlain> BufferStructPlain for Wrapping<T>
 where
 	// unfortunately has to be Pod, even though AnyBitPattern would be sufficient,
