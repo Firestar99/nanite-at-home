@@ -41,7 +41,21 @@ where
 		self.selected = selected;
 		let new_scene = self.scenes[selected as usize];
 		println!("loading scene {:?}", new_scene);
-		(self.submit_scene)(load_scene(&self.init, new_scene).await?);
+		let scene = load_scene(&self.init, new_scene).await?;
+		{
+			let meshes = scene.mesh2instances.len();
+			let num_instances = scene
+				.mesh2instances
+				.iter()
+				.map(|m2i| m2i.instances.len() as usize)
+				.sum::<usize>();
+			let num_meshlets = scene.mesh2instances.iter().map(|m2i| m2i.num_meshlets).sum::<u32>();
+			println!(
+				"{} meshes / draws, {} instances, {} meshlets",
+				meshes, num_instances, num_meshlets
+			);
+		}
+		(self.submit_scene)(scene);
 		Ok(true)
 	}
 

@@ -204,7 +204,7 @@ pub fn meshlet_fragment_g_buffer(
 	let loc = SurfaceLocation::new(
 		out_vertex.world_pos,
 		frame_data.camera.transform.translation(),
-		out_vertex.normals,
+		out_vertex.normals.normalize(),
 		out_vertex.tex_coords,
 	);
 	let sampled = mesh
