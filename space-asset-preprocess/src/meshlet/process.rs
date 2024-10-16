@@ -13,11 +13,11 @@ use smallvec::SmallVec;
 use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
-use space_asset_disk::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
 use space_asset_disk::meshlet::offset::MeshletOffset;
 use space_asset_disk::meshlet::scene::MeshletSceneDisk;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use space_asset_disk::range::RangeU32;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	profiling::scope!("process_meshlets");
@@ -44,49 +44,53 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 			.collect::<Result<Vec<_>, _>>()?
 	};
 
-	let meshes_primitives = {
+	let (meshes, mesh2ids) = {
 		profiling::scope!("meshes");
-		gltf.meshes()
-			.collect::<Vec<_>>()
-			.into_par_iter()
-			.map(|mesh| {
-				let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
-				vec.into_par_iter()
-					.map(|primitive| process_mesh_primitive(gltf, primitive.clone()))
-					.collect::<Result<Vec<_>, _>>()
+		let mesh_primitives = {
+			gltf.meshes()
+				.collect::<Vec<_>>()
+				.into_par_iter()
+				.map(|mesh| {
+					let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
+					vec.into_par_iter()
+						.map(|primitive| process_mesh_primitive(gltf, primitive.clone()))
+						.collect::<Result<Vec<_>, _>>()
+				})
+				.collect::<Result<Vec<_>, _>>()?
+		};
+
+		let mut mesh2ids = Vec::with_capacity(mesh_primitives.len());
+		let mut i = 0;
+		let meshes = mesh_primitives
+			.into_iter()
+			.flat_map(|mesh| {
+				let len = mesh.len() as u32;
+				mesh2ids.push(RangeU32::new(i, i + len));
+				i += len;
+				mesh.into_iter()
 			})
-			.collect::<Result<Vec<_>, _>>()?
+			.collect::<Vec<_>>();
+		(meshes, mesh2ids)
 	};
 
-	let mesh2instance = {
+	let instances = {
 		profiling::scope!("instance transformations");
 		let scene = gltf.default_scene().ok_or(MeshletError::NoDefaultScene)?;
 		let node_transforms = gltf.absolute_node_transformations(&scene, Affine3A::default());
-		let mut mesh2instance = (0..gltf.meshes().len()).map(|_| Vec::new()).collect::<Vec<_>>();
-		for node in gltf.nodes() {
-			if let Some(mesh) = node.mesh() {
-				mesh2instance[mesh.index()].push(MeshletInstanceDisk::new(node_transforms[node.index()]));
-			}
-		}
-		mesh2instance
-	};
-
-	let mesh2instances = meshes_primitives
-		.into_iter()
-		.zip(mesh2instance)
-		.flat_map(|(mesh_primitives, instances)| {
-			mesh_primitives
-				.into_iter()
-				.map(move |primitive| MeshletMesh2InstanceDisk {
-					mesh: primitive,
-					instances: instances.clone(),
+		gltf.nodes()
+			.flat_map(|node| {
+				node.mesh().map(|mesh| MeshletInstanceDisk {
+					transform: node_transforms[node.index()],
+					mesh_ids: mesh2ids[mesh.index()],
 				})
-		})
-		.collect();
+			})
+			.collect::<Vec<_>>()
+	};
 
 	Ok(MeshletSceneDisk {
 		pbr_materials,
-		mesh2instances,
+		meshes,
+		instances,
 	})
 }
 

@@ -93,9 +93,8 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 
 	// model loading
 	let mut scene_selector = SceneSelector::new(init.clone(), sample_scenes(), |scene| {
-		let mut guard = render_pipeline_main.meshlet_task.scenes.lock();
-		guard.clear();
-		guard.push(scene);
+		let mut guard = render_pipeline_main.meshlet_task.scene.lock();
+		*guard = Some(scene);
 	})
 	.await
 	.unwrap();

@@ -1,6 +1,5 @@
 use crate::gltf::{find_gltf_files, Gltf};
 use crate::gltf::{to_mod_hierarchy, GltfFile};
-use crate::meshlet::merge::{merge_meshlets, MergeStrategy};
 use crate::meshlet::process::process_meshlets;
 use anyhow::Context;
 use rayon::prelude::*;
@@ -35,8 +34,6 @@ pub fn build_script(
 					.with_context(|| format!("opening gltf file failed {:?}", model.src_path))?;
 				let disk =
 					process_meshlets(&gltf).with_context(|| format!("processing gltf failed {:?}", model.src_path))?;
-				let disk = merge_meshlets(disk, MergeStrategy::MergeSingleInstance)
-					.with_context(|| format!("merging of meshlets failed {:?}", model.src_path))?;
 				fs::create_dir_all(model.out_path.parent().unwrap())
 					.with_context(|| format!("failed creating output directories for file {:?}", model.out_path))?;
 				let out_file = File::create(&model.out_path)

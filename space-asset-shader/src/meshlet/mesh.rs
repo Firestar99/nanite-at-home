@@ -34,7 +34,7 @@ where
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, Debug, BufferContent)]
 pub struct MeshletMesh<R: DescRef> {
 	pub meshlets: Desc<R, Buffer<[MeshletData]>>,
 	pub draw_vertices: Desc<R, Buffer<[DrawVertex]>>,

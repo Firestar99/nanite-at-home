@@ -1,5 +1,6 @@
 use crate::material::pbr::PbrMaterialDisk;
-use crate::meshlet::mesh2instance::MeshletMesh2InstanceDisk;
+use crate::meshlet::instance::MeshletInstanceDisk;
+use crate::meshlet::mesh::MeshletMeshDisk;
 use rkyv::ser::serializers::{
 	AllocScratch, CompositeSerializer, CompositeSerializerError, FallbackScratch, HeapScratch, SharedSerializeMap,
 	WriteSerializer,
@@ -12,8 +13,9 @@ use std::{fs, io};
 
 #[derive(Clone, Default, Debug, Archive, Serialize, Deserialize)]
 pub struct MeshletSceneDisk {
-	pub mesh2instances: Vec<MeshletMesh2InstanceDisk>,
 	pub pbr_materials: Vec<PbrMaterialDisk>,
+	pub meshes: Vec<MeshletMeshDisk>,
+	pub instances: Vec<MeshletInstanceDisk>,
 }
 
 impl MeshletSceneDisk {
