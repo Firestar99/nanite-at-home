@@ -1,3 +1,4 @@
+use space_asset_disk::material::pbr::PbrVertex;
 use space_asset_disk::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
@@ -67,7 +68,12 @@ fn merge<'a>(
 		assert_eq!(mesh.pbr_material_id, pbr_material_id);
 
 		let pbr_start = out.pbr_material_vertices.len() as u32;
-		out.pbr_material_vertices.extend(mesh.pbr_material_vertices.iter());
+		let normal_transform = instance.transform.matrix3.inverse().transpose();
+		out.pbr_material_vertices
+			.extend(mesh.pbr_material_vertices.iter().map(|v| PbrVertex {
+				normals: normal_transform * v.normals,
+				..*v
+			}));
 
 		let draw_start = out.draw_vertices.len();
 		out.draw_vertices.extend(mesh.draw_vertices.iter().map(|v| DrawVertex {
