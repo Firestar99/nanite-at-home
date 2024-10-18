@@ -1,5 +1,6 @@
 use crate::window::event_loop::EventLoopExecutor;
 use crate::window::window_ref::WindowRef;
+use rust_gpu_bindless::frame_manager::Frame;
 use smallvec::SmallVec;
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 use std::ops::Deref;
@@ -18,7 +19,6 @@ use vulkano::swapchain::{
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::{GpuFuture, Sharing};
 use vulkano::{swapchain, VulkanError};
-use vulkano_bindless::frame_manager::Frame;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
 

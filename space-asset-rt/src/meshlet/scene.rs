@@ -4,6 +4,8 @@ use crate::upload_traits::ToStrong;
 use crate::uploader::{deserialize_infallible, UploadError, Uploader};
 use futures::future::join_all;
 use rayon::prelude::*;
+use rust_gpu_bindless::descriptor::{RCDesc, RCDescExt, RC};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Strong};
 use space_asset_disk::meshlet::scene::ArchivedMeshletSceneDisk;
 use space_asset_disk::range::{ArchivedRangeU32, RangeU32};
 use space_asset_shader::affine_transform::AffineTransform;
@@ -12,8 +14,6 @@ use space_asset_shader::meshlet::instance::MeshInstance;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use vulkano::Validated;
-use vulkano_bindless::descriptor::{RCDesc, RCDescExt, RC};
-use vulkano_bindless_shaders::descriptor::{Buffer, Strong};
 
 #[derive(Clone, Debug)]
 pub struct MeshletSceneCpu {

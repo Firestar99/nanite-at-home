@@ -1,12 +1,12 @@
 use crate::material::pbr::PbrMaterials;
 use crate::upload_traits::ToStrong;
 use crate::uploader::{deserialize_infallible, UploadError, Uploader};
+use rust_gpu_bindless::descriptor::{RCDescExt, RC};
+use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::meshlet::mesh::ArchivedMeshletMeshDisk;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use std::future::Future;
 use vulkano::Validated;
-use vulkano_bindless::descriptor::{RCDescExt, RC};
-use vulkano_bindless_shaders::descriptor::Strong;
 
 impl ToStrong for MeshletMesh<RC> {
 	type StrongType = MeshletMesh<Strong>;

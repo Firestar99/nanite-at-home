@@ -12,8 +12,8 @@ crate-type = ["lib", "dylib"]
 [dependencies]
 # members
 space-asset-shader = { workspace = true }
-vulkano-bindless-macros = { workspace = true }
-vulkano-bindless-shaders = { workspace = true }
+rust-gpu-bindless-macros = { workspace = true }
+rust-gpu-bindless-shaders = { workspace = true }
 
 # rust-gpu
 spirv-std = { workspace = true }

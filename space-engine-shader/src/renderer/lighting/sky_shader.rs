@@ -5,12 +5,12 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
 use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
+use rust_gpu_bindless_macros::{bindless, BufferContent};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 use spirv_std::image::{Image2d, StorageImage2d};
 #[cfg(target_arch = "spirv")]
 use spirv_std::num_traits::Float;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 pub fn saturate(x: f32) -> f32 {
 	x.clamp(0.0, 1.0)

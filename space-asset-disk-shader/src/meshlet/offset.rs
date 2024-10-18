@@ -1,5 +1,5 @@
 use core::fmt::{Debug, Formatter};
-use vulkano_bindless_macros::BufferContentPlain;
+use rust_gpu_bindless_macros::BufferContentPlain;
 
 /// a "slice" into a vertex buffer, or rather the start index and len of the slice
 #[repr(C)]

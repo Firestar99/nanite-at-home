@@ -3,13 +3,13 @@ use crate::renderer::camera::Camera;
 use crate::renderer::frame_data::FrameData;
 use core::ops::Range;
 use glam::UVec3;
+use rust_gpu_bindless_macros::{bindless, BufferContent};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::meshlet::instance::{MeshInstance, MeshletInstance};
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {

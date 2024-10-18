@@ -1,8 +1,8 @@
 use crate::material::pbr::PbrMaterial;
 use crate::meshlet::instance::MeshInstance;
 use crate::meshlet::mesh::MeshletMesh;
-use vulkano_bindless_macros::BufferContent;
-use vulkano_bindless_shaders::descriptor::{Buffer, Desc, DescRef, Strong};
+use rust_gpu_bindless_macros::BufferContent;
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Desc, DescRef, Strong};
 
 #[derive(Copy, Clone, Debug, BufferContent)]
 pub struct MeshletScene<R: DescRef> {

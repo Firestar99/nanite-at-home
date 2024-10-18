@@ -1,6 +1,6 @@
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 use glam::Vec3;
-use vulkano_bindless_macros::BufferContent;
+use rust_gpu_bindless_macros::BufferContent;
 
 #[derive(Copy, Clone, Debug, BufferContent)]
 pub struct Radiance(pub Vec3);

@@ -1,6 +1,6 @@
 use core::ops::Deref;
 use glam::Vec3;
-use vulkano_bindless_macros::{assert_transfer_size, BufferContentPlain};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferContentPlain};
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, BufferContentPlain)]

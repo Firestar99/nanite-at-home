@@ -1,5 +1,5 @@
 use crate::meshlet::offset::MeshletOffset;
-use vulkano_bindless_macros::{assert_transfer_size, BufferContentPlain};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferContentPlain};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, BufferContentPlain)]

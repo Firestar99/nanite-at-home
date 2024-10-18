@@ -10,11 +10,11 @@ members = [
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
-	"vulkano-bindless/vulkano-bindless",
-	"vulkano-bindless/vulkano-bindless-buffer-content",
-	"vulkano-bindless/vulkano-bindless-macros",
-	"vulkano-bindless/vulkano-bindless-shaders",
-	"vulkano-bindless/vulkano-bindless-shader-builder",
+	"rust-gpu-bindless/rust-gpu-bindless",
+	"rust-gpu-bindless/rust-gpu-bindless-buffer-content",
+	"rust-gpu-bindless/rust-gpu-bindless-macros",
+	"rust-gpu-bindless/rust-gpu-bindless-shaders",
+	"rust-gpu-bindless/rust-gpu-bindless-shader-builder",
 ]
 resolver = "2"
 
@@ -41,11 +41,11 @@ space-asset-shader = { path = "space-asset-shader" }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
-vulkano-bindless = { path = "vulkano-bindless/vulkano-bindless" }
-vulkano-bindless-buffer-content = { path = "vulkano-bindless/vulkano-bindless-buffer-content" }
-vulkano-bindless-shaders = { path = "vulkano-bindless/vulkano-bindless-shaders" }
-vulkano-bindless-macros = { path = "vulkano-bindless/vulkano-bindless-macros" }
-vulkano-bindless-shader-builder = { path = "vulkano-bindless/vulkano-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }
+rust-gpu-bindless = { path = "rust-gpu-bindless/rust-gpu-bindless" }
+rust-gpu-bindless-buffer-content = { path = "rust-gpu-bindless/rust-gpu-bindless-buffer-content" }
+rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-shaders" }
+rust-gpu-bindless-macros = { path = "rust-gpu-bindless/rust-gpu-bindless-macros" }
+rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }
 
 # device
 # vulkano 0.35 development

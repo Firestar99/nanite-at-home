@@ -1,6 +1,8 @@
 use crate::renderer::meshlet::meshlet_allocation_buffer::MeshletAllocationBuffer;
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
+use rust_gpu_bindless::descriptor::RCDescExt;
+use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use space_asset_rt::meshlet::scene::MeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::instance_cull::{Params, INSTANCE_CULL_WG_SIZE};
 use std::ops::Deref;
@@ -8,8 +10,6 @@ use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
-use vulkano_bindless::descriptor::RCDescExt;
-use vulkano_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 
 pub struct InstanceCullCompute {
 	pipeline: BindlessComputePipeline<Params<'static>>,

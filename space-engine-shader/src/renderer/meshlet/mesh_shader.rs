@@ -3,6 +3,8 @@ use crate::renderer::allocation_buffer::AllocationBufferReader;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
+use rust_gpu_bindless_macros::{bindless, BufferContent};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::meshlet::instance::MeshletInstance;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
@@ -11,8 +13,6 @@ use spirv_std::arch::{set_mesh_outputs_ext, IndexUnchecked};
 use spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {

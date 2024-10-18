@@ -1,5 +1,6 @@
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
+use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use space_engine_shader::renderer::lighting::lighting_compute::{Params, LIGHTING_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use vulkano::descriptor_set::DescriptorSet;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::PipelineBindPoint;
 use vulkano::pipeline::{Pipeline, PipelineLayout};
-use vulkano_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 
 pub struct LightingPipeline {
 	pipeline: BindlessComputePipeline<Params<'static>>,

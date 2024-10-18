@@ -1,4 +1,8 @@
 use crate::renderer::Init;
+use rust_gpu_bindless::descriptor::{Buffer, TransientDesc};
+use rust_gpu_bindless::frame_in_flight::upload::UploadInFlight;
+use rust_gpu_bindless::frame_in_flight::{FrameInFlight, SeedInFlight};
+use rust_gpu_bindless::frame_manager::{Frame, FrameManager, PrevFrameFuture};
 use smallvec::{smallvec, SmallVec};
 use space_engine_shader::renderer::frame_data::FrameData;
 use static_assertions::assert_not_impl_any;
@@ -11,10 +15,6 @@ use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
 use vulkano::ValidationError;
-use vulkano_bindless::descriptor::{Buffer, TransientDesc};
-use vulkano_bindless::frame_in_flight::upload::UploadInFlight;
-use vulkano_bindless::frame_in_flight::{FrameInFlight, SeedInFlight};
-use vulkano_bindless::frame_manager::{Frame, FrameManager, PrevFrameFuture};
 
 /// `RenderContext` is the main instance of the renderer, talking care of rendering frames and most notable ensuring no
 /// data races when multiple frames are currently in flight.

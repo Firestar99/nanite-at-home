@@ -1,8 +1,8 @@
 use crate::utils::affine::AffineTranspose;
 use bytemuck_derive::AnyBitPattern;
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
+use rust_gpu_bindless_macros::BufferContent;
 use space_asset_shader::affine_transform::AffineTransform;
-use vulkano_bindless_macros::BufferContent;
 
 #[derive(Copy, Clone, BufferContent)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]

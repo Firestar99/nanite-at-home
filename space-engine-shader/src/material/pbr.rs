@@ -3,9 +3,9 @@ use crate::material::radiance::Radiance;
 use core::f32::consts::PI;
 use core::ops::{Deref, DerefMut};
 use glam::{Mat3, Vec2, Vec3, Vec4, Vec4Swizzles};
+use rust_gpu_bindless_shaders::descriptor::{AliveDescRef, Descriptors};
 use space_asset_shader::material::pbr::PbrMaterial;
 use spirv_std::Sampler;
-use vulkano_bindless_shaders::descriptor::{AliveDescRef, Descriptors};
 
 /// camera direction unit vector, relative to fragment position
 #[derive(Copy, Clone)]

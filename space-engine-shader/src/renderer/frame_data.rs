@@ -3,7 +3,7 @@ use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
 use glam::UVec2;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use vulkano_bindless_macros::BufferContent;
+use rust_gpu_bindless_macros::BufferContent;
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]

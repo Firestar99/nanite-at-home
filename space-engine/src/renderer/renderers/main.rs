@@ -3,6 +3,7 @@ use crate::renderer::meshlet::meshlet_render_task::MeshletRenderTask;
 use crate::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
 use crate::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
 use crate::renderer::Init;
+use rust_gpu_bindless::frame_manager::PrevFrameFuture;
 use space_engine_shader::renderer::frame_data::FrameData;
 use std::sync::Arc;
 use vulkano::format::Format;
@@ -12,7 +13,6 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference,
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::sync::future::FenceSignalFuture;
 use vulkano::sync::GpuFuture;
-use vulkano_bindless::frame_manager::PrevFrameFuture;
 
 pub struct RenderPipelineMain {
 	pub init: Arc<Init>,

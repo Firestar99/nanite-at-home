@@ -9,7 +9,7 @@ repository.workspace = true
 [dependencies]
 # members
 space-engine-shader = { workspace = true }
-vulkano-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true }
 space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 

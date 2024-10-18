@@ -1,6 +1,6 @@
 use crate::affine_transform::AffineTransform;
+use rust_gpu_bindless_macros::BufferContent;
 use space_asset_disk_shader::range::RangeU32;
-use vulkano_bindless_macros::BufferContent;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, BufferContent)]

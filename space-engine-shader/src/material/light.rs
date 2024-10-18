@@ -1,6 +1,6 @@
 use crate::material::radiance::Radiance;
 use glam::Vec3;
-use vulkano_bindless_macros::{assert_transfer_size, BufferContent};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferContent};
 
 #[derive(Copy, Clone, Debug, BufferContent)]
 pub struct DirectionalLight {

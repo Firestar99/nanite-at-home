@@ -1,6 +1,6 @@
-use vulkano_bindless_macros::BufferContent;
-use vulkano_bindless_shaders::descriptor::{Desc, DescRef};
-use vulkano_bindless_shaders::spirv_std::image::Image2d;
+use rust_gpu_bindless_macros::BufferContent;
+use rust_gpu_bindless_shaders::descriptor::{Desc, DescRef};
+use rust_gpu_bindless_shaders::spirv_std::image::Image2d;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, BufferContent)]

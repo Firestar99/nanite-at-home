@@ -14,7 +14,7 @@ space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
-vulkano-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true }
 
 # device
 vulkano = { workspace = true }

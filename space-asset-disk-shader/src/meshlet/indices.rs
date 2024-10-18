@@ -3,7 +3,7 @@ use crate::meshlet::MESHLET_INDICES_BITS;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use glam::UVec3;
-use vulkano_bindless_macros::BufferContentPlain;
+use rust_gpu_bindless_macros::BufferContentPlain;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Default, BufferContentPlain)]

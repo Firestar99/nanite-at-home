@@ -1,6 +1,10 @@
 use crate::renderer::meshlet::meshlet_allocation_buffer::MeshletAllocationBuffer;
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
+use rust_gpu_bindless::descriptor::{RCDesc, RCDescExt, Sampler};
+use rust_gpu_bindless::pipeline::mesh_graphics_pipeline::{
+	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
+};
 use space_asset_rt::meshlet::scene::MeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::mesh_shader::Params;
 use std::ops::Deref;
@@ -18,10 +22,6 @@ use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, Pipeline
 use vulkano::pipeline::graphics::viewport::ViewportState;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::{DynamicState, Pipeline, PipelineBindPoint, PipelineLayout};
-use vulkano_bindless::descriptor::{RCDesc, RCDescExt, Sampler};
-use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
-	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
-};
 
 pub struct MeshDrawPipeline {
 	pipeline: BindlessMeshGraphicsPipeline<Params<'static>>,

@@ -1,5 +1,5 @@
 use core::ops::Range;
-use vulkano_bindless_macros::BufferContentPlain;
+use rust_gpu_bindless_macros::BufferContentPlain;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, BufferContentPlain)]

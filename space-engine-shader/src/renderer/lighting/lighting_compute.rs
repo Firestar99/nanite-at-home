@@ -6,10 +6,10 @@ use crate::renderer::lighting::is_skybox;
 use crate::utils::hsv::hsv2rgb_smooth;
 use crate::utils::srgb::linear_to_srgb_alpha;
 use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use rust_gpu_bindless_macros::{bindless, BufferContent};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 use spirv_std::image::{Image2d, StorageImage2d};
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 #[derive(Copy, Clone, BufferContent)]
 pub struct Params<'a> {

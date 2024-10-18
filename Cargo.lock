@@ -1353,6 +1353,7 @@ dependencies = [
  "parking_lot",
  "profiling",
  "puffin_http",
+ "rust-gpu-bindless",
  "smallvec",
  "space-asset-disk",
  "space-asset-rt",
@@ -1361,7 +1362,6 @@ dependencies = [
  "space-engine-shader",
  "static_assertions",
  "vulkano",
- "vulkano-bindless",
  "vulkano-shaders",
  "winit",
 ]
@@ -1999,6 +1999,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-gpu-bindless"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.11",
+ "anyhow",
+ "bytemuck",
+ "bytemuck_derive",
+ "crossbeam-queue",
+ "crossbeam-utils",
+ "futures",
+ "glam",
+ "num-derive",
+ "num-traits",
+ "once_cell",
+ "parking_lot",
+ "profiling",
+ "rand",
+ "rangemap",
+ "rust-gpu-bindless-shaders",
+ "smallvec",
+ "static_assertions",
+ "vulkano",
+]
+
+[[package]]
+name = "rust-gpu-bindless-buffer-content"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "spirv-std",
+ "static_assertions",
+]
+
+[[package]]
+name = "rust-gpu-bindless-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro-crate 3.2.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "rust-gpu-bindless-shader-builder"
+version = "0.1.0"
+dependencies = [
+ "prettyplease",
+ "proc-macro-crate 3.2.0",
+ "proc-macro2",
+ "quote",
+ "smallvec",
+ "spirv-builder",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "rust-gpu-bindless-shaders"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "num-derive",
+ "num-traits",
+ "rust-gpu-bindless-buffer-content",
+ "rust-gpu-bindless-macros",
+ "spirv-std",
+ "static_assertions",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2283,10 +2357,10 @@ dependencies = [
  "profiling",
  "rayon",
  "rkyv",
+ "rust-gpu-bindless-buffer-content",
+ "rust-gpu-bindless-macros",
  "space-asset-disk-shader",
  "static_assertions",
- "vulkano-bindless-buffer-content",
- "vulkano-bindless-macros",
  "zstd",
  "zune-image",
 ]
@@ -2299,9 +2373,9 @@ dependencies = [
  "bytemuck_derive",
  "glam",
  "rkyv",
+ "rust-gpu-bindless-buffer-content",
+ "rust-gpu-bindless-macros",
  "static_assertions",
- "vulkano-bindless-buffer-content",
- "vulkano-bindless-macros",
 ]
 
 [[package]]
@@ -2345,12 +2419,12 @@ dependencies = [
  "profiling",
  "rayon",
  "rkyv",
+ "rust-gpu-bindless",
+ "rust-gpu-bindless-macros",
+ "rust-gpu-bindless-shaders",
  "space-asset-disk",
  "space-asset-shader",
  "vulkano",
- "vulkano-bindless",
- "vulkano-bindless-macros",
- "vulkano-bindless-shaders",
  "zune-image",
 ]
 
@@ -2360,9 +2434,9 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "glam",
+ "rust-gpu-bindless-macros",
+ "rust-gpu-bindless-shaders",
  "space-asset-disk-shader",
- "vulkano-bindless-macros",
- "vulkano-bindless-shaders",
 ]
 
 [[package]]
@@ -2380,6 +2454,7 @@ dependencies = [
  "parking_lot",
  "paste",
  "profiling",
+ "rust-gpu-bindless",
  "smallvec",
  "space-asset-rt",
  "space-asset-shader",
@@ -2387,7 +2462,6 @@ dependencies = [
  "space-engine-shader-builder",
  "static_assertions",
  "vulkano",
- "vulkano-bindless",
  "vulkano-shaders",
  "winit",
 ]
@@ -2403,18 +2477,18 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
+ "rust-gpu-bindless-macros",
+ "rust-gpu-bindless-shaders",
  "space-asset-shader",
  "spirv-std",
  "static_assertions",
- "vulkano-bindless-macros",
- "vulkano-bindless-shaders",
 ]
 
 [[package]]
 name = "space-engine-shader-builder"
 version = "0.1.0"
 dependencies = [
- "vulkano-bindless-shader-builder",
+ "rust-gpu-bindless-shader-builder",
 ]
 
 [[package]]
@@ -2876,80 +2950,6 @@ dependencies = [
  "thread_local",
  "vk-parse",
  "vulkano-macros",
-]
-
-[[package]]
-name = "vulkano-bindless"
-version = "0.1.0"
-dependencies = [
- "ahash 0.8.11",
- "anyhow",
- "bytemuck",
- "bytemuck_derive",
- "crossbeam-queue",
- "crossbeam-utils",
- "futures",
- "glam",
- "num-derive",
- "num-traits",
- "once_cell",
- "parking_lot",
- "profiling",
- "rand",
- "rangemap",
- "smallvec",
- "static_assertions",
- "vulkano",
- "vulkano-bindless-shaders",
-]
-
-[[package]]
-name = "vulkano-bindless-buffer-content"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "bytemuck_derive",
- "glam",
- "spirv-std",
- "static_assertions",
-]
-
-[[package]]
-name = "vulkano-bindless-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro-crate 3.2.0",
- "proc-macro2",
- "quote",
- "syn 2.0.90",
-]
-
-[[package]]
-name = "vulkano-bindless-shader-builder"
-version = "0.1.0"
-dependencies = [
- "prettyplease",
- "proc-macro-crate 3.2.0",
- "proc-macro2",
- "quote",
- "smallvec",
- "spirv-builder",
- "syn 2.0.90",
-]
-
-[[package]]
-name = "vulkano-bindless-shaders"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "bytemuck_derive",
- "glam",
- "num-derive",
- "num-traits",
- "spirv-std",
- "static_assertions",
- "vulkano-bindless-buffer-content",
- "vulkano-bindless-macros",
 ]
 
 [[package]]

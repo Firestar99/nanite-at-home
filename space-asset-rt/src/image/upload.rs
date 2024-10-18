@@ -1,4 +1,7 @@
 use crate::uploader::{UploadError, Uploader, ValidatedFrom};
+use rust_gpu_bindless::descriptor::RC;
+use rust_gpu_bindless::spirv_std::image::Image2d;
+use rust_gpu_bindless_shaders::descriptor::Desc;
 use space_asset_disk::image::{ArchivedImage2DDisk, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression};
 use std::future::Future;
 use vulkano::buffer::Buffer as VBuffer;
@@ -13,9 +16,6 @@ use vulkano::image::{ImageCreateInfo, ImageUsage};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync::GpuFuture;
 use vulkano::{DeviceSize, Validated};
-use vulkano_bindless::descriptor::RC;
-use vulkano_bindless::spirv_std::image::Image2d;
-use vulkano_bindless_shaders::descriptor::Desc;
 
 pub fn upload_image2d_archive<'a, const IMAGE_TYPE: u32>(
 	this: &'a ArchivedImage2DDisk<IMAGE_TYPE>,

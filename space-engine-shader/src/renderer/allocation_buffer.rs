@@ -1,12 +1,12 @@
 use core::marker::PhantomData;
 use core::mem::size_of;
+use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use spirv_std::arch::{
 	atomic_i_add, subgroup_ballot, subgroup_ballot_bit_count, subgroup_ballot_exclusive_bit_count,
 	subgroup_broadcast_first, subgroup_elect,
 };
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::ByteAddressableBuffer;
-use vulkano_bindless_shaders::buffer_content::BufferContent;
 
 pub struct AllocationBufferWriter<'a, T: BufferContent> {
 	buffer: &'a mut [u32],
