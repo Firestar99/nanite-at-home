@@ -1472,6 +1472,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "profiling",
+ "puffin_http",
  "space-asset-disk",
  "space-asset-preprocess",
 ]
