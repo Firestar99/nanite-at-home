@@ -10,6 +10,7 @@ use gltf::Primitive;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
@@ -19,9 +20,26 @@ use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::range::RangeU32;
 
+#[profiling::function]
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
-	profiling::scope!("process_meshlets");
+	let mut pbr_materials = None;
+	let mut meshes_instances = None;
+	rayon::in_place_scope(|scope| {
+		scope.spawn(|_| pbr_materials = Some(process_materials(gltf)));
+		scope.spawn(|_| meshes_instances = Some(process_meshes(gltf)));
+	});
+	let pbr_materials = pbr_materials.unwrap()?;
+	let (meshes, instances) = meshes_instances.unwrap()?;
 
+	Ok(MeshletSceneDisk {
+		pbr_materials,
+		meshes,
+		instances,
+	})
+}
+
+#[profiling::function]
+fn process_materials(gltf: &Gltf) -> anyhow::Result<Vec<PbrMaterialDisk>> {
 	let image_processor = ImageProcessor::new(gltf);
 	let pbr_materials = {
 		profiling::scope!("materials 1");
@@ -44,21 +62,25 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 			.collect::<Result<Vec<_>, _>>()?
 	};
 
-	let (meshes, mesh2ids) = {
-		profiling::scope!("meshes");
-		let mesh_primitives = {
-			gltf.meshes()
-				.collect::<Vec<_>>()
-				.into_par_iter()
-				.map(|mesh| {
-					let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
-					vec.into_par_iter()
-						.map(|primitive| process_mesh_primitive(gltf, primitive.clone()))
-						.collect::<Result<Vec<_>, _>>()
-				})
-				.collect::<Result<Vec<_>, _>>()?
-		};
+	Ok(pbr_materials)
+}
 
+#[profiling::function]
+fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<MeshletInstanceDisk>)> {
+	let mesh_primitives = {
+		gltf.meshes()
+			.collect::<Vec<_>>()
+			.into_par_iter()
+			.map(|mesh| {
+				let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
+				vec.into_par_iter()
+					.map(|primitive| process_mesh_primitive(gltf, primitive.clone()))
+					.collect::<Result<Vec<_>, _>>()
+			})
+			.collect::<Result<Vec<_>, _>>()?
+	};
+
+	let (meshes, mesh2ids) = {
 		let mut mesh2ids = Vec::with_capacity(mesh_primitives.len());
 		let mut i = 0;
 		let meshes = mesh_primitives
@@ -86,16 +108,11 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 			})
 			.collect::<Vec<_>>()
 	};
-
-	Ok(MeshletSceneDisk {
-		pbr_materials,
-		meshes,
-		instances,
-	})
+	Ok((meshes, instances))
 }
 
+#[profiling::function]
 fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMeshDisk> {
-	profiling::scope!("process_mesh_primitive");
 	if primitive.mode() != Mode::Triangles {
 		Err(MeshletError::PrimitiveMustBeTriangleList)?;
 	}
