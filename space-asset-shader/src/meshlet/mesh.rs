@@ -42,6 +42,10 @@ pub struct MeshletMesh<R: DescRef> {
 	pub num_meshlets: u32,
 	pub pbr_material: PbrMaterial<R>,
 	pub pbr_material_vertices: Desc<R, Buffer<[PbrVertex]>>,
+	/// Indices to `meshlets` to only access the meshlets corresponding to a certain LOD level. Lod level N meshlets are
+	/// in the slice of `meshlets[lod_ranges[N]..lod_ranges[N+1]]`, meaning that lod_ranges is always one longer than
+	/// the lowest Lod level of the model.
+	pub lod_ranges: Desc<R, Buffer<[u32]>>,
 }
 
 impl<R: AliveDescRef> MeshletMesh<R> {

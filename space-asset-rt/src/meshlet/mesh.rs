@@ -19,6 +19,7 @@ impl ToStrong for MeshletMesh<RC> {
 			num_meshlets: self.num_meshlets,
 			pbr_material: self.pbr_material.to_strong(),
 			pbr_material_vertices: self.pbr_material_vertices.to_strong(),
+			lod_ranges: self.lod_ranges.to_strong(),
 		}
 	}
 }
@@ -34,6 +35,7 @@ pub fn upload_mesh<'a>(
 	let pbr_material_vertices =
 		uploader.upload_buffer_iter(this.pbr_material_vertices.iter().map(deserialize_infallible));
 	let pbr_material_id: Option<u32> = deserialize_infallible(&this.pbr_material_id);
+	let lod_ranges = uploader.upload_buffer_iter(this.lod_ranges.iter().map(deserialize_infallible));
 	async move {
 		Ok(MeshletMesh {
 			meshlets: meshlets.await?,
@@ -46,6 +48,7 @@ pub fn upload_mesh<'a>(
 				})
 				.clone(),
 			pbr_material_vertices: pbr_material_vertices.await?,
+			lod_ranges: lod_ranges.await?,
 		})
 	}
 }

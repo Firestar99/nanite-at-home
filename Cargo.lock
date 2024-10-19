@@ -1368,9 +1368,9 @@ dependencies = [
 
 [[package]]
 name = "meshopt"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa19b93af545a6bb30e8105b2a1450aa6b23e877f2131c9fb692dca6ec5bd80f"
+checksum = "a0cad96c96b1c198160517f5dc7c247ef36ebb9d49015c0cfca0c0ee8d7d1bbc"
 dependencies = [
  "bitflags 2.6.0",
  "cc",

@@ -182,13 +182,15 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 			triangle_start += m.triangle_count as usize;
 			data
 		})
-		.collect();
+		.collect::<Vec<_>>();
 
+	let lod_ranges = Vec::from([0, meshlets.len() as u32]);
 	Ok(MeshletMeshDisk {
 		draw_vertices,
 		meshlets,
 		triangles,
 		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone(), draw_vertices_len)?,
 		pbr_material_id: primitive.material().index().map(|i| i as u32),
+		lod_ranges,
 	})
 }
