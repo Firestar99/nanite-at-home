@@ -44,6 +44,18 @@ impl BorderTracker {
 		Some(&self.borders[self.adjncy_border_index[adjncy_index] as usize])
 	}
 
+	pub fn xadj(&self) -> &[i32] {
+		&self.xadj
+	}
+
+	pub fn adjncy(&self) -> &[i32] {
+		&self.adjncy
+	}
+
+	pub fn meshlets(&self) -> usize {
+		self.xadj.len() - 1
+	}
+
 	pub fn from_meshlet_mesh(mesh: &MeshletMeshDisk) -> Self {
 		// most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
@@ -138,12 +150,33 @@ impl BorderTracker {
 			borders,
 		}
 	}
+
+	pub fn run_metis(&self) -> Vec<i32> {
+		let mut weights = vec![0; self.adjncy.len()];
+		for meshlet_id in 0..self.xadj.len() - 1 {
+			for adjncy_index in self.xadj[meshlet_id] as usize..self.xadj[meshlet_id + 1] as usize {
+				let border = &self.borders[self.adjncy_border_index[adjncy_index] as usize];
+				weights[adjncy_index] = border.edges.len() as i32;
+			}
+		}
+
+		let meshlet_merge_cnt = 4;
+		let n_partitions = (self.meshlets() as i32 + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
+		let mut partitions = vec![0; self.meshlets()];
+		metis::Graph::new(1, n_partitions, self.xadj(), self.adjncy())
+			.unwrap()
+			.set_adjwgt(&weights)
+			.part_kway(&mut partitions)
+			.unwrap();
+		partitions
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::gltf::Gltf;
+	use crate::meshlet::lod_tree_gen::dist::Dist;
 	use crate::meshlet::process::process_meshlets;
 	use std::path::Path;
 
@@ -158,10 +191,12 @@ mod tests {
 		let scene = process_meshlets(&gltf)?;
 		for mesh in scene.meshes {
 			let tracker = BorderTracker::from_meshlet_mesh(&mesh);
-			println!("xadj {:#?}", tracker.xadj);
-			println!("adjncy {:#?}", tracker.adjncy);
-			println!("adjncy_border_index {:#?}", tracker.adjncy_border_index);
+			// println!("xadj {:#?}", tracker.xadj);
+			// println!("adjncy {:#?}", tracker.adjncy);
+			// println!("adjncy_border_index {:#?}", tracker.adjncy_border_index);
 			// println!("Borders {:#?}", tracker.borders)
+			let part = tracker.run_metis();
+			println!("Partitions dist {:#?}", Dist::new(part.iter()));
 		}
 		Ok(())
 	}
