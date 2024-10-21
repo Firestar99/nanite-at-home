@@ -13,13 +13,16 @@ space-asset-disk = { workspace = true }
 # async
 rayon = { workspace = true }
 
+# image
+zune-image = { workspace = true }
+
 # model loader
 gltf = { workspace = true }
-zune-image = { workspace = true }
-meshopt = { workspace = true }
-intel_tex_2 = { workspace = true }
 base64 = { workspace = true }
 urlencoding = { workspace = true }
+meshopt = { workspace = true }
+metis = { workspace = true }
+intel_tex_2 = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }

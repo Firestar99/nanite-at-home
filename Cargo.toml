@@ -93,6 +93,7 @@ gltf = { version = "1.4.0", default-features = false, features = ["names", "util
 base64 = "0.22"
 urlencoding = "2.1"
 meshopt = "0.3.0"
+metis = "0.2.1"
 intel_tex_2 = "0.4.0"
 
 # profiling

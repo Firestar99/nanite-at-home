@@ -1,6 +1,5 @@
 use crate::meshlet::{MESHLET_INDICES_BITS, MESHLET_TRIANGLES_BITS};
 use core::fmt::{Debug, Formatter};
-use core::ops::{Index, Range};
 use static_assertions::const_assert;
 use vulkano_bindless_macros::BufferContentPlain;
 
@@ -47,11 +46,6 @@ impl MeshletOffset {
 	#[inline]
 	pub fn is_empty(&self) -> bool {
 		self.len() == 0
-	}
-
-	#[inline]
-	pub fn slice<'a, R: Index<Range<usize>>>(&self, slice: &'a R) -> &'a R::Output {
-		slice.index(self.start()..(self.start() + self.len()))
 	}
 }
 
