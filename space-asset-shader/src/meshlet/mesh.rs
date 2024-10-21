@@ -10,12 +10,12 @@ use vulkano_bindless_shaders::descriptor::{AliveDescRef, Buffer, Desc, DescRef, 
 /// not DescStruct as this should never be read or written, only constructed when querying meshlets
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct Meshlet<'a, R: DescRef> {
+pub struct MeshletReader<'a, R: DescRef> {
 	pub data: MeshletData,
 	pub mesh: &'a MeshletMesh<R>,
 }
 
-impl<'a, R: DescRef> Deref for Meshlet<'a, R> {
+impl<'a, R: DescRef> Deref for MeshletReader<'a, R> {
 	type Target = MeshletData;
 
 	fn deref(&self) -> &Self::Target {
@@ -23,10 +23,10 @@ impl<'a, R: DescRef> Deref for Meshlet<'a, R> {
 	}
 }
 
-impl<'a, R: DescRef, T> AsRef<T> for Meshlet<'a, R>
+impl<'a, R: DescRef, T> AsRef<T> for MeshletReader<'a, R>
 where
 	T: ?Sized,
-	<Meshlet<'a, R> as Deref>::Target: AsRef<T>,
+	<MeshletReader<'a, R> as Deref>::Target: AsRef<T>,
 {
 	fn as_ref(&self) -> &T {
 		self.deref().as_ref()
@@ -49,14 +49,14 @@ pub struct MeshletMesh<R: DescRef> {
 }
 
 impl<R: AliveDescRef> MeshletMesh<R> {
-	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> Meshlet<R> {
+	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> MeshletReader<R> {
 		assert!(
 			index < self.num_meshlets as usize,
 			"meshlet index out of bounds: the len is {} but the index is {}",
 			self.num_meshlets as usize,
 			index
 		);
-		Meshlet {
+		MeshletReader {
 			data: self.meshlets.access(descriptors).load(index),
 			mesh: self,
 		}
@@ -64,15 +64,15 @@ impl<R: AliveDescRef> MeshletMesh<R> {
 
 	/// # Safety
 	/// index must be in bounds
-	pub unsafe fn meshlet_unchecked(&self, descriptors: &Descriptors, index: usize) -> Meshlet<R> {
-		Meshlet {
+	pub unsafe fn meshlet_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletReader<R> {
+		MeshletReader {
 			data: unsafe { self.meshlets.access(descriptors).load_unchecked(index) },
 			mesh: self,
 		}
 	}
 }
 
-impl<'a, R: DescRef> Meshlet<'a, R> {
+impl<'a, R: DescRef> MeshletReader<'a, R> {
 	pub fn vertices(&self) -> usize {
 		self.data.draw_vertex_offset.len()
 	}
@@ -82,7 +82,7 @@ impl<'a, R: DescRef> Meshlet<'a, R> {
 	}
 }
 
-impl<'a, R: AliveDescRef> Meshlet<'a, R> {
+impl<'a, R: AliveDescRef> MeshletReader<'a, R> {
 	pub fn load_draw_vertex(&self, descriptors: &Descriptors, index: usize) -> DrawVertex {
 		let len = self.data.draw_vertex_offset.len();
 		assert!(
