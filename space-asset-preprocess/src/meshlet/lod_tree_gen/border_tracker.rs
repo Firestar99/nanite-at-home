@@ -211,6 +211,7 @@ impl<'a> BorderTracker<'a> {
 	pub fn append_simplifed_meshlet_group(&mut self, meshlet_ids: &[MeshletId]) {
 		let mut s_vertices;
 		let mut s_indices;
+		let mut s_remap;
 		{
 			profiling::scope!("simplify make mesh");
 			let meshlets = meshlet_ids
@@ -219,7 +220,7 @@ impl<'a> BorderTracker<'a> {
 				.collect::<SmallVec<[_; 6]>>();
 			let draw_vertex_cnt = meshlets.iter().map(|m| m.draw_vertex_offset.len()).sum();
 			let triangle_cnt: usize = meshlets.iter().map(|m| m.triangle_offset.len()).sum();
-			let mut s_remap = HashMap::with_capacity(draw_vertex_cnt);
+			s_remap = HashMap::with_capacity(draw_vertex_cnt);
 			s_vertices = Vec::with_capacity(draw_vertex_cnt);
 			s_indices = Vec::with_capacity(triangle_cnt * 3);
 			for m in meshlets {
@@ -244,7 +245,7 @@ impl<'a> BorderTracker<'a> {
 					if !meshlet_ids.contains(&oid) {
 						for edge in &self.get_border(IndexPair::new(id, oid)).unwrap().edges {
 							for vtx_id in edge.iter() {
-								s_vertex_lock[*vtx_id as usize] = true;
+								s_vertex_lock[s_remap[&vtx_id] as usize] = true;
 							}
 						}
 					}
@@ -318,7 +319,7 @@ impl<'a> BorderTracker<'a> {
 			let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
 			let triangles_new_len = triangle_indices_write_capacity(indices.len());
 			let triangle_len = self.mesh.triangles.len();
-			triangle_start = triangle_len * INDICES_PER_WORD;
+			triangle_start = triangle_len * INDICES_PER_WORD / 3;
 			self.mesh
 				.triangles
 				.resize(triangle_len + triangles_new_len, CompressedIndices::default());

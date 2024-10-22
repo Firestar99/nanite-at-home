@@ -107,7 +107,9 @@ pub fn triangle_indices_load<T>(
 
 // write
 pub fn triangle_indices_write_capacity(indices_cnt: usize) -> usize {
-	(indices_cnt + INDICES_PER_WORD - 1) / INDICES_PER_WORD
+	let required_words = (indices_cnt + INDICES_PER_WORD - 1) / INDICES_PER_WORD;
+	let padded_next_mul_of_3 = (required_words + 3 - 1) / 3 * 3;
+	padded_next_mul_of_3
 }
 
 pub fn triangle_indices_write<Iter>(src: Iter, dst: &mut [CompressedIndices])
