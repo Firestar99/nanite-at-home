@@ -178,7 +178,17 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn metis_partition(&self) -> Vec<i32> {
+	pub fn simplify(mut self) -> &'a mut MeshletMeshDisk {
+		let groups = self.metis_partition();
+		for group in groups {
+			self.append_simplifed_meshlet_group(&group);
+		}
+		self.mesh.lod_ranges.push(self.mesh.meshlets.len() as u32);
+		self.mesh
+	}
+
+	#[profiling::function]
+	fn metis_partition(&self) -> Vec<SmallVec<[MeshletId; 6]>> {
 		let mut weights;
 		{
 			profiling::scope!("weights");
@@ -191,24 +201,34 @@ impl<'a> BorderTracker<'a> {
 			}
 		}
 
+		let meshlet_merge_cnt = 4;
+		let n_partitions = (self.meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
+
 		let mut partitions;
 		{
 			profiling::scope!("metis partitioning");
-			let meshlet_merge_cnt = 4;
-			let n_partitions = (self.meshlets() as i32 + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
 			partitions = vec![0; self.meshlets()];
-			metis::Graph::new(1, n_partitions, self.xadj(), self.adjncy())
+			metis::Graph::new(1, n_partitions as i32, self.xadj(), self.adjncy())
 				.unwrap()
 				.set_adjwgt(&weights)
 				.part_kway(&mut partitions)
 				.unwrap();
 		}
 
-		partitions
+		let mut groups;
+		{
+			profiling::scope!("meshlet groups");
+			groups = vec![SmallVec::new(); n_partitions];
+			for meshlet_id in 0..self.meshlets() {
+				groups[partitions[meshlet_id] as usize].push(MeshletId(meshlet_id as u32));
+			}
+		}
+
+		groups
 	}
 
 	#[profiling::function]
-	pub fn append_simplifed_meshlet_group(&mut self, meshlet_ids: &[MeshletId]) {
+	fn append_simplifed_meshlet_group(&mut self, meshlet_ids: &[MeshletId]) {
 		let mut s_vertices;
 		let mut s_indices;
 		let mut s_remap;

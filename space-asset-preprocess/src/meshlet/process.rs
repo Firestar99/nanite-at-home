@@ -3,11 +3,12 @@ use crate::image::encode::EncodeSettings;
 use crate::image::image_processor::ImageProcessor;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
+use crate::meshlet::lod_tree_gen::border_tracker::BorderTracker;
 use core::mem::size_of;
 use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
-use meshopt::{Meshlets, VertexDataAdapter};
+use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
@@ -74,7 +75,11 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 			.map(|mesh| {
 				let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
 				vec.into_par_iter()
-					.map(|primitive| process_mesh_primitive(gltf, primitive.clone()))
+					.map(|primitive| {
+						let mut mesh = process_mesh_primitive(gltf, primitive.clone())?;
+						BorderTracker::from_meshlet_mesh(&mut mesh).simplify();
+						Ok::<_, anyhow::Error>(mesh)
+					})
 					.collect::<Result<Vec<_>, _>>()
 			})
 			.collect::<Result<Vec<_>, _>>()?

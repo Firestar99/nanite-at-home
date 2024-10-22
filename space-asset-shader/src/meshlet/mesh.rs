@@ -46,6 +46,7 @@ pub struct MeshletMesh<R: DescRef> {
 	/// in the slice of `meshlets[lod_ranges[N]..lod_ranges[N+1]]`, meaning that lod_ranges is always one longer than
 	/// the lowest Lod level of the model.
 	pub lod_ranges: Desc<R, Buffer<[u32]>>,
+	pub num_lod_ranges: u32,
 }
 
 impl<R: AliveDescRef> MeshletMesh<R> {

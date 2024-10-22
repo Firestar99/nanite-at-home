@@ -20,6 +20,7 @@ impl ToStrong for MeshletMesh<RC> {
 			pbr_material: self.pbr_material.to_strong(),
 			pbr_material_vertices: self.pbr_material_vertices.to_strong(),
 			lod_ranges: self.lod_ranges.to_strong(),
+			num_lod_ranges: self.num_lod_ranges,
 		}
 	}
 }
@@ -49,6 +50,7 @@ pub fn upload_mesh<'a>(
 				.clone(),
 			pbr_material_vertices: pbr_material_vertices.await?,
 			lod_ranges: lod_ranges.await?,
+			num_lod_ranges: this.lod_ranges.len() as u32 - 1,
 		})
 	}
 }

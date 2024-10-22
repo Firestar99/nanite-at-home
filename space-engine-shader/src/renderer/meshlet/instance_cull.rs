@@ -49,7 +49,10 @@ pub fn instance_cull_compute(
 		};
 		for mesh_id in Range::<u32>::from(instance.mesh_ids) {
 			let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(mesh_id as usize);
-			for meshlet_id in 0..mesh.num_meshlets {
+			let lod_ranges = mesh.lod_ranges.access(descriptors);
+			let lod_level = u32::clamp(frame_data.debug_lod_level, 0, mesh.num_lod_ranges - 1) as usize;
+			let meshlet_range = lod_ranges.load(lod_level)..lod_ranges.load(lod_level + 1);
+			for meshlet_id in meshlet_range {
 				let _ = writer.subgroup_write_non_uniform(MeshletInstance {
 					instance_id,
 					mesh_id,

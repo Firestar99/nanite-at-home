@@ -1,6 +1,7 @@
 use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
+use crate::lod_selector::LodSelector;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::{eval_ambient_light, eval_sun};
@@ -102,6 +103,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
 	let mut debug_settings_selector = DebugSettingsSelector::new();
+	let mut lod_selector = LodSelector::new();
 	let mut last_frame = DeltaTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
@@ -112,6 +114,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			camera_controls.handle_input(&event);
 			debug_settings_selector.handle_input(&event);
 			scene_selector.handle_input(&event).await.unwrap();
+			lod_selector.handle_input(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -154,6 +157,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			FrameData {
 				camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
 				debug_settings: debug_settings_selector.get().into(),
+				debug_lod_level: lod_selector.lod_level,
 				viewport_size: out_extent.xy(),
 				sun,
 				ambient_light,
