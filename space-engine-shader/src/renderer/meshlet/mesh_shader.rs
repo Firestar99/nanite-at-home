@@ -84,11 +84,11 @@ pub fn meshlet_mesh(
 			let inbounds = i < vertex_count;
 			let i = if inbounds { i } else { vertex_count - 1 };
 
-			let draw_vertex = meshlet.load_draw_vertex_unchecked(descriptors, i);
+			let draw_vertex = meshlet.load_draw_vertex(descriptors, i);
 			let position = frame_data
 				.camera
 				.transform_vertex(instance.transform, draw_vertex.position);
-			let pbr_vertex = meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id);
+			let pbr_vertex = meshlet.load_pbr_material_vertex(descriptors, draw_vertex.material_vertex_id);
 			let vertex = InterpolationVertex {
 				world_pos: position.world_space,
 				normal: pbr_vertex.normal,
@@ -113,7 +113,7 @@ pub fn meshlet_mesh(
 			let inbounds = i < triangle_count;
 			let i = if inbounds { i } else { triangle_count - 1 };
 
-			let indices = meshlet.load_triangle_unchecked(descriptors, i);
+			let indices = meshlet.load_triangle(descriptors, i);
 
 			if i < triangle_count {
 				*prim_indices.index_unchecked_mut(i) = indices;
