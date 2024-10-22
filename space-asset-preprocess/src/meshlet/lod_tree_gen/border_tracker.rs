@@ -56,89 +56,107 @@ impl BorderTracker {
 		self.xadj.len() - 1
 	}
 
+	#[profiling::function]
 	pub fn from_meshlet_mesh(mesh: &MeshletMeshDisk) -> Self {
-		// most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
+		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
 			size_of::<SmallVec<[MeshletId; 1]>>(),
 			size_of::<SmallVec<[MeshletId; 4]>>()
 		);
 		let mut edge_to_meshlets: HashMap<IndexPair<MaterialVertexId>, SmallVec<[MeshletId; 4]>>;
-		// worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical and HashMap
-		// over allocates a bit anyway
-		edge_to_meshlets = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
 		// Use a SmallVec of cap 6 for adjacency:
 		// small models: 0..2
 		// large models: usually 0..6, sometimes a few meshlets have significantly more
-		let mut meshlet_adj: Vec<SortedSmallVec<[MeshletId; 6]>> = vec![SortedSmallVec::new(); mesh.meshlets.len()];
-		for meshlet_id in 0..mesh.meshlets.len() {
-			let meshlet = mesh.meshlet(meshlet_id);
-			let meshlet_id = MeshletId(meshlet_id as u32);
-			for triangle in 0..meshlet.triangle_offset.len() {
-				let draw_indices = meshlet.load_triangle(triangle);
-				let indices = draw_indices
-					.to_array()
-					.map(|i| meshlet.load_draw_vertex(i as usize).material_vertex_id);
-				let edges = (0..3).map(|i| IndexPair::new(indices[i], indices[(i + 1) % 3]));
-				for edge in edges {
-					// it's not worth optimizing this search for (typically) at most 2 entries, just do a linear scan
-					let vec = edge_to_meshlets.entry(edge).or_insert_with(SmallVec::new);
-					if !vec.is_empty() {
-						if vec.contains(&meshlet_id) {
-							continue;
+		let mut meshlet_adj: Vec<SortedSmallVec<[MeshletId; 6]>>;
+		{
+			profiling::scope!("edge_to_meshlets meshlet_adj");
+			// HashMap capacity: worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical
+			// and HashMap over allocates a bit anyway
+			edge_to_meshlets = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
+			meshlet_adj = vec![SortedSmallVec::new(); mesh.meshlets.len()];
+			for meshlet_id in 0..mesh.meshlets.len() {
+				let meshlet = mesh.meshlet(meshlet_id);
+				let meshlet_id = MeshletId(meshlet_id as u32);
+				for triangle in 0..meshlet.triangle_offset.len() {
+					let draw_indices = meshlet.load_triangle(triangle);
+					let indices = draw_indices
+						.to_array()
+						.map(|i| meshlet.load_draw_vertex(i as usize).material_vertex_id);
+					let edges = (0..3).map(|i| IndexPair::new(indices[i], indices[(i + 1) % 3]));
+					for edge in edges {
+						// it's not worth optimizing this search for (typically) at most 2 entries, just do a linear scan
+						let vec = edge_to_meshlets.entry(edge).or_insert_with(SmallVec::new);
+						if !vec.is_empty() {
+							if vec.contains(&meshlet_id) {
+								continue;
+							}
+							let x = &mut meshlet_adj[*meshlet_id as usize];
+							for other_meshlet_id in vec.iter().copied() {
+								x.insert(other_meshlet_id);
+							}
+							for other_meshlet_id in vec.iter().copied() {
+								meshlet_adj[*other_meshlet_id as usize].insert(meshlet_id);
+							}
 						}
-						let x = &mut meshlet_adj[*meshlet_id as usize];
-						for other_meshlet_id in vec.iter().copied() {
-							x.insert(other_meshlet_id);
-						}
-						for other_meshlet_id in vec.iter().copied() {
-							meshlet_adj[*other_meshlet_id as usize].insert(meshlet_id);
-						}
+						vec.push(meshlet_id);
 					}
-					vec.push(meshlet_id);
 				}
 			}
 		}
 
-		let mut xadj = Vec::with_capacity(mesh.meshlets.len() + 1);
-		let mut adjncy = Vec::new();
-		for i in 0..mesh.meshlets.len() {
+		let mut xadj;
+		let mut adjncy;
+		{
+			profiling::scope!("xadj adjncy");
+			xadj = Vec::with_capacity(mesh.meshlets.len() + 1);
+			adjncy = Vec::new();
+			for i in 0..mesh.meshlets.len() {
+				xadj.push(adjncy.len() as i32);
+				adjncy.extend(meshlet_adj[i].iter().map(|id| id.0 as i32))
+			}
 			xadj.push(adjncy.len() as i32);
-			adjncy.extend(meshlet_adj[i].iter().map(|id| id.0 as i32))
+			assert_eq!(xadj.len(), mesh.meshlets.len() + 1);
+			drop(meshlet_adj);
 		}
-		xadj.push(adjncy.len() as i32);
-		assert_eq!(xadj.len(), mesh.meshlets.len() + 1);
-		drop(meshlet_adj);
 
-		let mut borders = Vec::with_capacity(adjncy.len() / 2);
-		let mut adjncy_border_index = vec![!0; adjncy.len()];
-		for meshlet_id in 0..xadj.len() - 1 {
-			for adjncy_index in xadj[meshlet_id] as usize..xadj[meshlet_id + 1] as usize {
-				let other_meshlet_id = adjncy[adjncy_index];
-				if other_meshlet_id as usize > meshlet_id {
-					let border_index = borders.len() as u32;
-					borders.push(Border::default());
-					adjncy_border_index[adjncy_index] = border_index;
+		let mut borders;
+		let mut adjncy_border_index;
+		{
+			profiling::scope!("adjncy_border_index");
+			borders = Vec::with_capacity(adjncy.len() / 2);
+			adjncy_border_index = vec![!0; adjncy.len()];
+			for meshlet_id in 0..xadj.len() - 1 {
+				for adjncy_index in xadj[meshlet_id] as usize..xadj[meshlet_id + 1] as usize {
+					let other_meshlet_id = adjncy[adjncy_index];
+					if other_meshlet_id as usize > meshlet_id {
+						let border_index = borders.len() as u32;
+						borders.push(Border::default());
+						adjncy_border_index[adjncy_index] = border_index;
 
-					let other_range =
-						xadj[other_meshlet_id as usize] as usize..xadj[other_meshlet_id as usize + 1] as usize;
-					let other_adjncy_index =
-						other_range.start + adjncy[other_range.clone()].binary_search(&(meshlet_id as i32)).unwrap();
-					adjncy_border_index[other_adjncy_index] = border_index;
+						let other_range =
+							xadj[other_meshlet_id as usize] as usize..xadj[other_meshlet_id as usize + 1] as usize;
+						let other_adjncy_index = other_range.start
+							+ adjncy[other_range.clone()].binary_search(&(meshlet_id as i32)).unwrap();
+						adjncy_border_index[other_adjncy_index] = border_index;
+					}
 				}
 			}
 		}
 
-		for (edge, meshlets) in edge_to_meshlets {
-			for a in 0..meshlets.len() {
-				for b in (a + 1)..meshlets.len() {
-					let pair = IndexPair::new(meshlets[a], meshlets[b]);
+		{
+			profiling::scope!("fill borders");
+			for (edge, meshlets) in edge_to_meshlets {
+				for a in 0..meshlets.len() {
+					for b in (a + 1)..meshlets.len() {
+						let pair = IndexPair::new(meshlets[a], meshlets[b]);
 
-					let adjncy_range = xadj[*pair.0 as usize] as usize..xadj[*pair.0 as usize + 1] as usize;
-					let adjncy_index =
-						adjncy_range.start + adjncy[adjncy_range].binary_search(&(*pair.1 as i32)).unwrap();
-					let border = &mut borders[adjncy_border_index[adjncy_index] as usize];
-					border.edges.push(edge);
+						let adjncy_range = xadj[*pair.0 as usize] as usize..xadj[*pair.0 as usize + 1] as usize;
+						let adjncy_index =
+							adjncy_range.start + adjncy[adjncy_range].binary_search(&(*pair.1 as i32)).unwrap();
+						let border = &mut borders[adjncy_border_index[adjncy_index] as usize];
+						border.edges.push(edge);
+					}
 				}
 			}
 		}
@@ -151,23 +169,33 @@ impl BorderTracker {
 		}
 	}
 
+	#[profiling::function]
 	pub fn run_metis(&self) -> Vec<i32> {
-		let mut weights = vec![0; self.adjncy.len()];
-		for meshlet_id in 0..self.xadj.len() - 1 {
-			for adjncy_index in self.xadj[meshlet_id] as usize..self.xadj[meshlet_id + 1] as usize {
-				let border = &self.borders[self.adjncy_border_index[adjncy_index] as usize];
-				weights[adjncy_index] = border.edges.len() as i32;
+		let mut weights;
+		{
+			profiling::scope!("weights");
+			weights = vec![0; self.adjncy.len()];
+			for meshlet_id in 0..self.xadj.len() - 1 {
+				for adjncy_index in self.xadj[meshlet_id] as usize..self.xadj[meshlet_id + 1] as usize {
+					let border = &self.borders[self.adjncy_border_index[adjncy_index] as usize];
+					weights[adjncy_index] = border.edges.len() as i32;
+				}
 			}
 		}
 
-		let meshlet_merge_cnt = 4;
-		let n_partitions = (self.meshlets() as i32 + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
-		let mut partitions = vec![0; self.meshlets()];
-		metis::Graph::new(1, n_partitions, self.xadj(), self.adjncy())
-			.unwrap()
-			.set_adjwgt(&weights)
-			.part_kway(&mut partitions)
-			.unwrap();
+		let mut partitions;
+		{
+			profiling::scope!("metis partitioning");
+			let meshlet_merge_cnt = 4;
+			let n_partitions = (self.meshlets() as i32 + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
+			partitions = vec![0; self.meshlets()];
+			metis::Graph::new(1, n_partitions, self.xadj(), self.adjncy())
+				.unwrap()
+				.set_adjwgt(&weights)
+				.part_kway(&mut partitions)
+				.unwrap();
+		}
+
 		partitions
 	}
 }
