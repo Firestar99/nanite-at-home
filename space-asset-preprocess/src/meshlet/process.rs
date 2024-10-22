@@ -7,7 +7,7 @@ use core::mem::size_of;
 use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
-use meshopt::VertexDataAdapter;
+use meshopt::{Meshlets, VertexDataAdapter};
 use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
@@ -137,17 +137,15 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	}
 
 	let out = {
+		profiling::scope!("meshopt::build_meshlets");
 		let adapter = VertexDataAdapter::new(bytemuck::cast_slice(&draw_vertices), size_of::<Vec3>(), 0).unwrap();
-		let mut out = {
-			profiling::scope!("meshopt::build_meshlets");
-			meshopt::build_meshlets(
-				&indices,
-				&adapter,
-				MESHLET_MAX_VERTICES as usize,
-				MESHLET_MAX_TRIANGLES as usize,
-				0.,
-			)
-		};
+		let mut out = meshopt::build_meshlets(
+			&indices,
+			&adapter,
+			MESHLET_MAX_VERTICES as usize,
+			MESHLET_MAX_TRIANGLES as usize,
+			0.,
+		);
 		// resize vertex buffer appropriately
 		out.vertices.truncate(
 			out.meshlets
@@ -159,7 +157,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	};
 
 	let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
-	let triangles = triangle_indices_write_vec(indices.iter().copied().map(u32::from));
+	let triangles = triangle_indices_write_vec(indices.into_iter().map(u32::from));
 
 	let draw_vertices = out
 		.vertices

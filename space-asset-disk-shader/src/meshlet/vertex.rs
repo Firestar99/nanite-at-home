@@ -4,6 +4,7 @@ use vulkano_bindless_macros::{assert_transfer_size, BufferContentPlain};
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, BufferContentPlain)]
+#[cfg_attr(feature = "disk", derive(bytemuck_derive::Zeroable, bytemuck_derive::Pod))]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MaterialVertexId(pub u32);
 assert_transfer_size!(MaterialVertexId, 4);
@@ -18,6 +19,7 @@ impl Deref for MaterialVertexId {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, BufferContentPlain)]
+#[cfg_attr(feature = "disk", derive(bytemuck_derive::Zeroable, bytemuck_derive::Pod))]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct DrawVertex {
 	pub position: Vec3,

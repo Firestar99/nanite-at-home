@@ -12,6 +12,14 @@ impl<T: Copy + Ord> IndexPair<T> {
 			Self((b, a))
 		}
 	}
+
+	pub fn to_array(&self) -> [T; 2] {
+		[self.0 .0, self.0 .1]
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = T> + '_ {
+		self.to_array().into_iter()
+	}
 }
 
 impl<T: Copy + Ord> Deref for IndexPair<T> {
