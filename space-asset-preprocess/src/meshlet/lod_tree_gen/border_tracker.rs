@@ -1,5 +1,6 @@
 use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
+use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use smallvec::SmallVec;
 use space_asset_disk::meshlet::indices::{
@@ -65,6 +66,17 @@ impl<'a> BorderTracker<'a> {
 
 	#[profiling::function]
 	pub fn from_meshlet_mesh(mesh: &'a mut MeshletMeshDisk) -> Self {
+		let meshlets;
+		{
+			let lod_ranges_len = mesh.lod_ranges.len();
+			assert!(
+				lod_ranges_len >= 2,
+				"Meshlet must have lod_ranges correctly initialized, at least len 2 is expected!"
+			);
+			meshlets = &mesh.meshlets
+				[mesh.lod_ranges[lod_ranges_len - 2] as usize..mesh.lod_ranges[lod_ranges_len - 1] as usize];
+		}
+
 		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
@@ -80,9 +92,9 @@ impl<'a> BorderTracker<'a> {
 			profiling::scope!("edge_to_meshlets meshlet_adj");
 			// HashMap capacity: worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical
 			// and HashMap over allocates a bit anyway
-			edge_to_meshlets = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
-			meshlet_adj = vec![SortedSmallVec::new(); mesh.meshlets.len()];
-			for meshlet_id in 0..mesh.meshlets.len() {
+			edge_to_meshlets = HashMap::with_capacity(meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
+			meshlet_adj = vec![SortedSmallVec::new(); meshlets.len()];
+			for meshlet_id in 0..meshlets.len() {
 				let meshlet = mesh.meshlet(meshlet_id);
 				let meshlet_id = MeshletId(meshlet_id as u32);
 				for triangle in 0..meshlet.triangle_offset.len() {
@@ -116,14 +128,14 @@ impl<'a> BorderTracker<'a> {
 		let mut adjncy;
 		{
 			profiling::scope!("xadj adjncy");
-			xadj = Vec::with_capacity(mesh.meshlets.len() + 1);
+			xadj = Vec::with_capacity(meshlets.len() + 1);
 			adjncy = Vec::new();
-			for i in 0..mesh.meshlets.len() {
+			for i in 0..meshlets.len() {
 				xadj.push(adjncy.len() as i32);
 				adjncy.extend(meshlet_adj[i].iter().map(|id| id.0 as i32))
 			}
 			xadj.push(adjncy.len() as i32);
-			assert_eq!(xadj.len(), mesh.meshlets.len() + 1);
+			assert_eq!(xadj.len(), meshlets.len() + 1);
 			drop(meshlet_adj);
 		}
 
@@ -178,13 +190,15 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn simplify(mut self) -> &'a mut MeshletMeshDisk {
+	pub fn simplify(mut self, lod_level: f32) -> u32 {
 		let groups = self.metis_partition();
 		for group in groups {
-			self.append_simplifed_meshlet_group(&group);
+			self.append_simplifed_meshlet_group(lod_level, &group);
 		}
-		self.mesh.lod_ranges.push(self.mesh.meshlets.len() as u32);
-		self.mesh
+		let meshlets_start = *self.mesh.lod_ranges.last().unwrap();
+		let meshlets_end = self.mesh.meshlets.len() as u32;
+		self.mesh.lod_ranges.push(meshlets_end);
+		meshlets_end - meshlets_start
 	}
 
 	#[profiling::function]
@@ -228,7 +242,7 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	fn append_simplifed_meshlet_group(&mut self, meshlet_ids: &[MeshletId]) {
+	fn append_simplifed_meshlet_group(&mut self, lod_level: f32, meshlet_ids: &[MeshletId]) {
 		let mut s_vertices;
 		let mut s_indices;
 		let mut s_remap;
@@ -243,7 +257,7 @@ impl<'a> BorderTracker<'a> {
 			s_remap = HashMap::with_capacity(draw_vertex_cnt);
 			s_vertices = Vec::with_capacity(draw_vertex_cnt);
 			s_indices = Vec::with_capacity(triangle_cnt * 3);
-			for m in meshlets {
+			for m in &meshlets {
 				for tri in 0..m.triangle_offset.len() {
 					for i in m.load_triangle(tri).to_array() {
 						let draw = m.load_draw_vertex(i as usize);
@@ -274,8 +288,7 @@ impl<'a> BorderTracker<'a> {
 		}
 
 		let target_count = s_indices.len() / 2;
-		// let target_error = f32::lerp(0.01, 0.9, lod_level);
-		let target_error = 0.01;
+		let target_error = f32::lerp(0.01, 0.9, lod_level);
 
 		{
 			profiling::scope!("meshopt::simplify_with_locks");
@@ -293,6 +306,10 @@ impl<'a> BorderTracker<'a> {
 				target_error,
 				SimplifyOptions::empty(),
 			);
+		}
+
+		if s_indices.len() == 0 {
+			return;
 		}
 
 		{

@@ -77,7 +77,14 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 				vec.into_par_iter()
 					.map(|primitive| {
 						let mut mesh = process_mesh_primitive(gltf, primitive.clone())?;
-						BorderTracker::from_meshlet_mesh(&mut mesh).simplify();
+						let lod_levels = 4;
+						for lod_level in 0..lod_levels {
+							let meshlets = BorderTracker::from_meshlet_mesh(&mut mesh)
+								.simplify(lod_level as f32 / (lod_levels - 1) as f32);
+							if meshlets <= 1 {
+								break;
+							}
+						}
 						Ok::<_, anyhow::Error>(mesh)
 					})
 					.collect::<Result<Vec<_>, _>>()
