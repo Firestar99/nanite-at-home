@@ -247,7 +247,7 @@ impl<'a> BorderTracker<'a> {
 				for tri in 0..m.triangle_offset.len() {
 					for i in m.load_triangle(tri).to_array() {
 						let draw = m.load_draw_vertex(i as usize);
-						s_indices.push(*s_remap.entry(draw.material_vertex_id).or_insert({
+						s_indices.push(*s_remap.entry(draw.material_vertex_id).or_insert_with(|| {
 							s_vertices.push(draw);
 							s_vertices.len() as u32 - 1
 						}));
