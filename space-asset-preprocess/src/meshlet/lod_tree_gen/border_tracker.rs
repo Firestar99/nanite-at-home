@@ -395,9 +395,7 @@ impl<'a> BorderTracker<'a> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use crate::gltf::Gltf;
-	use crate::meshlet::lod_tree_gen::dist::Dist;
 	use crate::meshlet::process::process_meshlets;
 	use std::path::Path;
 
@@ -409,16 +407,16 @@ mod tests {
 	#[test]
 	fn test_lantern_gltf() -> anyhow::Result<()> {
 		let gltf = Gltf::open(Path::new(LANTERN_GLTF_PATH))?;
-		let mut scene = process_meshlets(&gltf)?;
-		for mesh in &mut scene.meshes {
-			let tracker = BorderTracker::from_meshlet_mesh(mesh);
-			// println!("xadj {:#?}", tracker.xadj);
-			// println!("adjncy {:#?}", tracker.adjncy);
-			// println!("adjncy_border_index {:#?}", tracker.adjncy_border_index);
-			// println!("Borders {:#?}", tracker.borders)
-			let part = tracker.metis_partition();
-			println!("Partitions dist {:#?}", Dist::new(part.iter()));
-		}
+		let _scene = process_meshlets(&gltf)?;
+		Ok(())
+	}
+
+	const PLANE_GLTF_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../models/models/plane/plane.gltf");
+
+	#[test]
+	fn test_plane_gltf() -> anyhow::Result<()> {
+		let gltf = Gltf::open(Path::new(PLANE_GLTF_PATH))?;
+		let _scene = process_meshlets(&gltf)?;
 		Ok(())
 	}
 }
