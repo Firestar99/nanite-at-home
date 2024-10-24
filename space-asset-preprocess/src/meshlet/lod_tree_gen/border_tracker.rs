@@ -203,6 +203,12 @@ impl<'a> BorderTracker<'a> {
 
 	#[profiling::function]
 	fn metis_partition(&self) -> Vec<SmallVec<[MeshletId; 6]>> {
+		let meshlet_merge_cnt = 4;
+		let n_partitions = (self.meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
+		if n_partitions <= 1 {
+			return Vec::from([(0..self.meshlets()).map(|id| MeshletId(id as u32)).collect()]);
+		}
+
 		let mut weights;
 		{
 			profiling::scope!("weights");
@@ -214,9 +220,6 @@ impl<'a> BorderTracker<'a> {
 				}
 			}
 		}
-
-		let meshlet_merge_cnt = 4;
-		let n_partitions = (self.meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
 
 		let mut partitions;
 		{
