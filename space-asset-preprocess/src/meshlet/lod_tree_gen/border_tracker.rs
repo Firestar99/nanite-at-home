@@ -128,13 +128,13 @@ impl<'a> BorderTracker<'a> {
 		let mut adjncy;
 		{
 			profiling::scope!("xadj adjncy");
-			xadj = Vec::with_capacity(meshlets.len() + 1);
-			adjncy = Vec::new();
+			xadj = vec![0; meshlets.len() + 1];
+			adjncy = Vec::with_capacity(meshlet_adj.iter().map(|s| s.len()).sum());
 			for i in 0..meshlets.len() {
-				xadj.push(adjncy.len() as i32);
+				xadj[i] = adjncy.len() as i32;
 				adjncy.extend(meshlet_adj[i].iter().map(|id| id.0 as i32))
 			}
-			xadj.push(adjncy.len() as i32);
+			xadj[meshlets.len()] = adjncy.len() as i32;
 			assert_eq!(xadj.len(), meshlets.len() + 1);
 			drop(meshlet_adj);
 		}
