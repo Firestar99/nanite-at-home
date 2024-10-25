@@ -1,13 +1,13 @@
 use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
-use crate::meshlet::process::lod_mesh_from_meshopt;
+use crate::meshlet::process::lod_mesh_build_meshlets;
 use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
-use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
+use space_asset_disk::meshlet::MESHLET_MAX_TRIANGLES;
 use static_assertions::const_assert_eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -294,38 +294,10 @@ impl<'a> BorderTracker<'a> {
 			);
 		}
 
-		if s_indices.len() == 0 {
-			return None;
+		if s_indices.len() > 0 {
+			Some(lod_mesh_build_meshlets(s_indices, s_vertices))
+		} else {
+			None
 		}
-
-		{
-			profiling::scope!("meshopt::optimize_vertex_fetch_in_place");
-			let s_vertices_cnt = meshopt::optimize_vertex_fetch_in_place(&mut s_indices, &mut s_vertices);
-			s_vertices.truncate(s_vertices_cnt);
-		}
-
-		{
-			profiling::scope!("meshopt::optimize_vertex_cache_in_place");
-			meshopt::optimize_vertex_cache_in_place(&mut s_indices, s_vertices.len());
-		}
-
-		let out = {
-			profiling::scope!("meshopt::build_meshlets");
-			let adapter = VertexDataAdapter::new(
-				bytemuck::cast_slice::<DrawVertex, u8>(&s_vertices),
-				size_of::<DrawVertex>(),
-				offset_of!(DrawVertex, position),
-			)
-			.unwrap();
-			meshopt::build_meshlets(
-				&s_indices,
-				&adapter,
-				MESHLET_MAX_VERTICES as usize,
-				MESHLET_MAX_TRIANGLES as usize,
-				0.,
-			)
-		};
-
-		Some(lod_mesh_from_meshopt(&out, |i| s_vertices[i as usize]))
 	}
 }
