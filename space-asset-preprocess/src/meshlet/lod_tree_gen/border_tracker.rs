@@ -1,13 +1,11 @@
 use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
+use crate::meshlet::process::lod_mesh_from_meshopt;
 use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
+use rayon::prelude::*;
 use smallvec::SmallVec;
-use space_asset_disk::meshlet::indices::{
-	triangle_indices_write, triangle_indices_write_capacity, CompressedIndices, INDICES_PER_WORD,
-};
-use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
-use space_asset_disk::meshlet::offset::MeshletOffset;
+use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use static_assertions::const_assert_eq;
@@ -18,7 +16,7 @@ use std::mem::{offset_of, size_of};
 #[derive(Debug)]
 pub struct BorderTracker<'a> {
 	/// mesh
-	mesh: &'a mut MeshletMeshDisk,
+	mesh: &'a LodMesh,
 	/// Compressed Sparse Row `xadj` like METIS
 	xadj: Vec<i32>,
 	/// Compressed Sparse Row `adjncy` like METIS, adjacency indices are sorted
@@ -65,18 +63,7 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn from_meshlet_mesh(mesh: &'a mut MeshletMeshDisk) -> Self {
-		let meshlets;
-		{
-			let lod_ranges_len = mesh.lod_ranges.len();
-			assert!(
-				lod_ranges_len >= 2,
-				"Meshlet must have lod_ranges correctly initialized, at least len 2 is expected!"
-			);
-			meshlets = &mesh.meshlets
-				[mesh.lod_ranges[lod_ranges_len - 2] as usize..mesh.lod_ranges[lod_ranges_len - 1] as usize];
-		}
-
+	pub fn from_meshlet_mesh(mesh: &'a LodMesh) -> Self {
 		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
@@ -92,9 +79,9 @@ impl<'a> BorderTracker<'a> {
 			profiling::scope!("edge_to_meshlets meshlet_adj");
 			// HashMap capacity: worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical
 			// and HashMap over allocates a bit anyway
-			edge_to_meshlets = HashMap::with_capacity(meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
-			meshlet_adj = vec![SortedSmallVec::new(); meshlets.len()];
-			for meshlet_id in 0..meshlets.len() {
+			edge_to_meshlets = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
+			meshlet_adj = vec![SortedSmallVec::new(); mesh.meshlets.len()];
+			for meshlet_id in 0..mesh.meshlets.len() {
 				let meshlet = mesh.meshlet(meshlet_id);
 				let meshlet_id = MeshletId(meshlet_id as u32);
 				for triangle in 0..meshlet.triangle_offset.len() {
@@ -128,14 +115,14 @@ impl<'a> BorderTracker<'a> {
 		let mut adjncy;
 		{
 			profiling::scope!("xadj adjncy");
-			xadj = vec![0; meshlets.len() + 1];
+			xadj = vec![0; mesh.meshlets.len() + 1];
 			adjncy = Vec::with_capacity(meshlet_adj.iter().map(|s| s.len()).sum());
-			for i in 0..meshlets.len() {
+			for i in 0..mesh.meshlets.len() {
 				xadj[i] = adjncy.len() as i32;
 				adjncy.extend(meshlet_adj[i].iter().map(|id| id.0 as i32))
 			}
-			xadj[meshlets.len()] = adjncy.len() as i32;
-			assert_eq!(xadj.len(), meshlets.len() + 1);
+			xadj[mesh.meshlets.len()] = adjncy.len() as i32;
+			assert_eq!(xadj.len(), mesh.meshlets.len() + 1);
 			drop(meshlet_adj);
 		}
 
@@ -190,15 +177,11 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn simplify(mut self, lod_level: f32) -> u32 {
-		let groups = self.metis_partition();
-		for group in groups {
-			self.append_simplifed_meshlet_group(lod_level, &group);
-		}
-		let meshlets_start = *self.mesh.lod_ranges.last().unwrap();
-		let meshlets_end = self.mesh.meshlets.len() as u32;
-		self.mesh.lod_ranges.push(meshlets_end);
-		meshlets_end - meshlets_start
+	pub fn simplify(&self, lod_faction: f32) -> LodMesh {
+		self.metis_partition()
+			.par_iter()
+			.filter_map(|group| self.simplify_meshlet_group(lod_faction, &group))
+			.collect::<LodMesh>()
 	}
 
 	#[profiling::function]
@@ -245,7 +228,7 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	fn append_simplifed_meshlet_group(&mut self, lod_level: f32, meshlet_ids: &[MeshletId]) {
+	fn simplify_meshlet_group(&self, lod_faction: f32, meshlet_ids: &[MeshletId]) -> Option<LodMesh> {
 		let mut s_vertices;
 		let mut s_indices;
 		let mut s_remap;
@@ -291,7 +274,7 @@ impl<'a> BorderTracker<'a> {
 		}
 
 		let target_count = s_indices.len() / 2;
-		let target_error = f32::lerp(0.01, 0.9, lod_level);
+		let target_error = f32::lerp(0.01, 0.9, lod_faction);
 
 		{
 			profiling::scope!("meshopt::simplify_with_locks");
@@ -312,7 +295,7 @@ impl<'a> BorderTracker<'a> {
 		}
 
 		if s_indices.len() == 0 {
-			return;
+			return None;
 		}
 
 		{
@@ -326,8 +309,7 @@ impl<'a> BorderTracker<'a> {
 			meshopt::optimize_vertex_cache_in_place(&mut s_indices, s_vertices.len());
 		}
 
-		let out;
-		{
+		let out = {
 			profiling::scope!("meshopt::build_meshlets");
 			let adapter = VertexDataAdapter::new(
 				bytemuck::cast_slice::<DrawVertex, u8>(&s_vertices),
@@ -335,91 +317,15 @@ impl<'a> BorderTracker<'a> {
 				offset_of!(DrawVertex, position),
 			)
 			.unwrap();
-			let mut meshlets = meshopt::build_meshlets(
+			meshopt::build_meshlets(
 				&s_indices,
 				&adapter,
 				MESHLET_MAX_VERTICES as usize,
 				MESHLET_MAX_TRIANGLES as usize,
 				0.,
-			);
-			// resize vertex buffer appropriately
-			meshlets.vertices.truncate(
-				meshlets
-					.meshlets
-					.last()
-					.map(|m| m.vertex_offset as usize + m.vertex_count as usize)
-					.unwrap_or(0),
-			);
-			out = meshlets
-		}
+			)
+		};
 
-		let triangle_start;
-		{
-			profiling::scope!("meshlet indices");
-			let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
-			let triangles_new_len = triangle_indices_write_capacity(indices.len());
-			let triangle_len = self.mesh.triangles.len();
-			triangle_start = triangle_len * INDICES_PER_WORD / 3;
-			self.mesh
-				.triangles
-				.resize(triangle_len + triangles_new_len, CompressedIndices::default());
-			triangle_indices_write(
-				indices.into_iter().map(u32::from),
-				&mut self.mesh.triangles[triangle_len..],
-			);
-		}
-
-		let draw_vertices_start;
-		{
-			profiling::scope!("meshlet draw vertices");
-			draw_vertices_start = self.mesh.draw_vertices.len();
-			self.mesh
-				.draw_vertices
-				.extend(out.vertices.into_iter().map(|i| s_vertices[i as usize]));
-		}
-
-		{
-			profiling::scope!("meshlet data");
-			let mut triangle_start = triangle_start;
-			self.mesh.meshlets.extend(out.meshlets.into_iter().map(|m| {
-				let data = MeshletData {
-					draw_vertex_offset: MeshletOffset::new(
-						draw_vertices_start + m.vertex_offset as usize,
-						m.vertex_count as usize,
-					),
-					triangle_offset: MeshletOffset::new(triangle_start, m.triangle_count as usize),
-				};
-				triangle_start += m.triangle_count as usize;
-				data
-			}));
-		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use crate::gltf::Gltf;
-	use crate::meshlet::process::process_meshlets;
-	use std::path::Path;
-
-	const LANTERN_GLTF_PATH: &str = concat!(
-		env!("CARGO_MANIFEST_DIR"),
-		"/../models/models/Lantern/glTF/Lantern.gltf"
-	);
-
-	#[test]
-	fn test_lantern_gltf() -> anyhow::Result<()> {
-		let gltf = Gltf::open(Path::new(LANTERN_GLTF_PATH))?;
-		let _scene = process_meshlets(&gltf)?;
-		Ok(())
-	}
-
-	const PLANE_GLTF_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../models/models/plane/plane.gltf");
-
-	#[test]
-	fn test_plane_gltf() -> anyhow::Result<()> {
-		let gltf = Gltf::open(Path::new(PLANE_GLTF_PATH))?;
-		let _scene = process_meshlets(&gltf)?;
-		Ok(())
+		Some(lod_mesh_from_meshopt(&out, |i| s_vertices[i as usize]))
 	}
 }

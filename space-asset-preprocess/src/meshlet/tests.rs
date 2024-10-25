@@ -13,3 +13,12 @@ fn test_lantern_gltf() -> anyhow::Result<()> {
 	let _scene = process_meshlets(&gltf)?;
 	Ok(())
 }
+
+const PLANE_GLTF_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../models/models/plane/plane.gltf");
+
+#[test]
+fn test_plane_gltf() -> anyhow::Result<()> {
+	let gltf = Gltf::open(Path::new(PLANE_GLTF_PATH))?;
+	let _scene = process_meshlets(&gltf)?;
+	Ok(())
+}

@@ -2281,6 +2281,7 @@ dependencies = [
  "glam",
  "num_enum",
  "profiling",
+ "rayon",
  "rkyv",
  "space-asset-disk-shader",
  "static_assertions",

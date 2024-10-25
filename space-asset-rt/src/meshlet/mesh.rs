@@ -30,9 +30,9 @@ pub fn upload_mesh<'a>(
 	uploader: &'a Uploader,
 	pbr_materials: &'a PbrMaterials<'a>,
 ) -> impl Future<Output = Result<MeshletMesh<RC>, Validated<UploadError>>> + 'a {
-	let meshlets = uploader.upload_buffer_iter(this.meshlets.iter().map(deserialize_infallible));
-	let draw_vertices = uploader.upload_buffer_iter(this.draw_vertices.iter().map(deserialize_infallible));
-	let triangles = uploader.upload_buffer_iter(this.triangles.iter().map(deserialize_infallible));
+	let meshlets = uploader.upload_buffer_iter(this.lod_mesh.meshlets.iter().map(deserialize_infallible));
+	let draw_vertices = uploader.upload_buffer_iter(this.lod_mesh.draw_vertices.iter().map(deserialize_infallible));
+	let triangles = uploader.upload_buffer_iter(this.lod_mesh.triangles.iter().map(deserialize_infallible));
 	let pbr_material_vertices =
 		uploader.upload_buffer_iter(this.pbr_material_vertices.iter().map(deserialize_infallible));
 	let pbr_material_id: Option<u32> = deserialize_infallible(&this.pbr_material_id);
@@ -42,7 +42,7 @@ pub fn upload_mesh<'a>(
 			meshlets: meshlets.await?,
 			draw_vertices: draw_vertices.await?,
 			triangles: triangles.await?,
-			num_meshlets: this.meshlets.len() as u32,
+			num_meshlets: this.lod_mesh.meshlets.len() as u32,
 			pbr_material: pbr_material_id
 				.map_or(pbr_materials.default_pbr_material, |i| {
 					pbr_materials.pbr_materials.get(i as usize).unwrap()
