@@ -3,6 +3,7 @@ use crate::image::encode::EncodeSettings;
 use crate::image::image_processor::ImageProcessor;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
+use core::mem::size_of;
 use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
@@ -17,7 +18,6 @@ use space_asset_disk::meshlet::offset::MeshletOffset;
 use space_asset_disk::meshlet::scene::MeshletSceneDisk;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
-use std::mem;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	profiling::scope!("process_meshlets");
@@ -97,26 +97,26 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	}
 
 	let reader = primitive.reader(|b| gltf.buffer(b));
-	let vertex_positions: Vec<_> = reader
+	let draw_vertices: Vec<_> = reader
 		.read_positions()
 		.ok_or(MeshletError::NoVertexPositions)?
 		.map(Vec3::from)
 		.collect();
+	let draw_vertices_len = draw_vertices.len();
 
 	let mut indices: Vec<_> = if let Some(indices) = reader.read_indices() {
 		indices.into_u32().collect()
 	} else {
-		(0..vertex_positions.len() as u32).collect()
+		(0..draw_vertices_len as u32).collect()
 	};
 
 	{
 		profiling::scope!("meshopt::optimize_vertex_cache");
-		meshopt::optimize_vertex_cache_in_place(&mut indices, vertex_positions.len());
+		meshopt::optimize_vertex_cache_in_place(&mut indices, draw_vertices.len());
 	}
 
 	let out = {
-		let adapter =
-			VertexDataAdapter::new(bytemuck::cast_slice(&vertex_positions), mem::size_of::<Vec3>(), 0).unwrap();
+		let adapter = VertexDataAdapter::new(bytemuck::cast_slice(&draw_vertices), size_of::<Vec3>(), 0).unwrap();
 		let mut out = {
 			profiling::scope!("meshopt::build_meshlets");
 			meshopt::build_meshlets(
@@ -144,7 +144,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 		.vertices
 		.into_iter()
 		.map(|i| DrawVertex {
-			position: vertex_positions[i as usize],
+			position: draw_vertices[i as usize],
 			material_vertex_id: MaterialVertexId(i),
 		})
 		.collect();
@@ -167,7 +167,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 		draw_vertices,
 		meshlets,
 		triangles,
-		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone())?,
-		pbr_material_id: primitive.material().index().unwrap() as u32,
+		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone(), draw_vertices_len)?,
+		pbr_material_id: primitive.material().index().map(|i| i as u32),
 	})
 }

@@ -8,6 +8,11 @@ use vulkano::Validated;
 use vulkano_bindless::descriptor::{RCDescExt, RC};
 use vulkano_bindless_shaders::descriptor::Strong;
 
+pub struct PbrMaterials<'a> {
+	pub pbr_materials: &'a [PbrMaterial<RC>],
+	pub default_pbr_material: &'a PbrMaterial<RC>,
+}
+
 impl ToStrong for PbrMaterial<RC> {
 	type StrongType = PbrMaterial<Strong>;
 
@@ -46,5 +51,18 @@ pub fn upload_pbr_material<'a>(
 			metallic_factor: this.metallic_factor,
 			roughness_factor: this.roughness_factor,
 		})
+	}
+}
+
+pub fn default_pbr_material(uploader: &Uploader) -> PbrMaterial<RC> {
+	PbrMaterial {
+		base_color: uploader.white_texture(),
+		base_color_factor: [1.; 4],
+		normal: uploader.white_texture(),
+		normal_scale: 1.,
+		omr: uploader.white_texture(),
+		occlusion_strength: 1.,
+		metallic_factor: 1.,
+		roughness_factor: 1.,
 	}
 }

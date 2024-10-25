@@ -1,6 +1,5 @@
 use crate::gltf::Gltf;
 use crate::image::image_processor::{ImageAccessor, ImageProcessor, RequestedImage};
-use crate::meshlet::error::MeshletError;
 use glam::{Vec2, Vec3};
 use gltf::{Material, Primitive};
 use space_asset_disk::image::ImageType;
@@ -8,16 +7,17 @@ use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::material::pbr::PbrVertex;
 
 #[profiling::function]
-pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<Vec<PbrVertex>> {
+pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive, vertex_cnt: usize) -> anyhow::Result<Vec<PbrVertex>> {
 	let reader = primitive.reader(|b| gltf.buffer(b));
-	let vertices = reader
-		.read_tex_coords(0)
-		.ok_or(MeshletError::NoTextureCoords)?
-		.into_f32()
-		.zip(reader.read_normals().ok_or(MeshletError::NoNormals)?)
-		.map(|(tex_coords, normals)| PbrVertex {
-			normals: Vec3::from(normals),
-			tex_coords: Vec2::from(tex_coords),
+	let mut tex_coords = reader.read_tex_coords(0).map(|tex| tex.into_f32());
+	let mut normals = reader.read_normals();
+	let vertices = (0..vertex_cnt)
+		.map(|_| PbrVertex {
+			normals: normals.as_mut().and_then(|n| n.next()).map_or(Vec3::ZERO, Vec3::from),
+			tex_coords: tex_coords
+				.as_mut()
+				.and_then(|tex| tex.next())
+				.map_or(Vec2::ZERO, Vec2::from),
 		})
 		.collect();
 	Ok(vertices)

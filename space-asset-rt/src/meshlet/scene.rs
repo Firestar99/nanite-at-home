@@ -1,4 +1,4 @@
-use crate::material::pbr::upload_pbr_material;
+use crate::material::pbr::{default_pbr_material, upload_pbr_material, PbrMaterials};
 use crate::meshlet::mesh2instance::{upload_mesh_2_instance, MeshletMesh2InstanceCpu};
 use crate::uploader::{UploadError, Uploader};
 use futures::future::join_all;
@@ -29,6 +29,10 @@ pub async fn upload_scene(
 		.await
 		.into_iter()
 		.collect::<Result<_, _>>()?
+	};
+	let pbr_materials = PbrMaterials {
+		pbr_materials: &pbr_materials,
+		default_pbr_material: &default_pbr_material(uploader),
 	};
 
 	let mesh2instances = {
