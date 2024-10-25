@@ -29,7 +29,6 @@ struct InterpolationVertex {
 	world_pos: Vec3,
 	normal: Vec3,
 	tex_coord: Vec2,
-	meshlet_debug_hue: f32,
 }
 
 pub const MESH_WG_SIZE: usize = 32;
@@ -47,9 +46,10 @@ pub fn meshlet_mesh(
 	#[spirv(workgroup_id)] wg_id: UVec3,
 	#[spirv(local_invocation_id)] inv_id: UVec3,
 	#[spirv(primitive_triangle_indices_ext)] prim_indices: &mut [UVec3; MESHLET_MAX_TRIANGLES as usize],
+	#[spirv(per_primitive_ext)] out_debug_hue: &mut [f32; MESHLET_MAX_TRIANGLES as usize],
 	#[spirv(position)] out_positions: &mut [Vec4; MESHLET_MAX_VERTICES as usize],
-	out_mesh_id: &mut [u32; MESHLET_MAX_TRIANGLES as usize],
-	out_vertex: &mut [InterpolationVertex; MESHLET_MAX_TRIANGLES as usize],
+	out_mesh_id: &mut [u32; MESHLET_MAX_VERTICES as usize],
+	out_vertex: &mut [InterpolationVertex; MESHLET_MAX_VERTICES as usize],
 ) {
 	let meshlet_instance_id = wg_id.x;
 	let inv_id = inv_id.x as usize;
@@ -94,13 +94,12 @@ pub fn meshlet_mesh(
 				normal: pbr_vertex.normal,
 				tangent: pbr_vertex.tangent,
 				tex_coord: pbr_vertex.tex_coord,
-				meshlet_debug_hue: GpuRng(meshlet_instance.meshlet_id.wrapping_add(1)).next_f32(),
 			};
 
 			if inbounds {
 				*out_positions.index_unchecked_mut(i) = position.clip_space;
-				*out_vertex.index_unchecked_mut(i) = vertex;
 				*out_mesh_id.index_unchecked_mut(i) = meshlet_instance.mesh_id;
+				*out_vertex.index_unchecked_mut(i) = vertex;
 			}
 		}
 	}
@@ -114,18 +113,32 @@ pub fn meshlet_mesh(
 			let i = if inbounds { i } else { triangle_count - 1 };
 
 			let indices = meshlet.load_triangle(descriptors, i);
+			let debug_hue = debug_hue(frame_data, meshlet_instance.meshlet_id, i as u32);
 
 			if i < triangle_count {
 				*prim_indices.index_unchecked_mut(i) = indices;
+				*out_debug_hue.index_unchecked_mut(i) = debug_hue;
 			}
 		}
 	}
+}
+
+fn debug_hue(frame_data: FrameData, meshlet_id: u32, primitive_id: u32) -> f32 {
+	let offset = match frame_data.debug_settings() {
+		DebugSettings::MeshletIdOverlay | DebugSettings::MeshletId => 0,
+		DebugSettings::TriangleIdOverlay | DebugSettings::TriangleId => primitive_id,
+		_ => {
+			return 0.;
+		}
+	};
+	GpuRng(meshlet_id.wrapping_add(offset).wrapping_add(1)).next_f32()
 }
 
 #[bindless(fragment())]
 pub fn meshlet_fragment_g_buffer(
 	#[bindless(descriptors)] descriptors: &Descriptors,
 	#[bindless(param_constants)] param: &Params<'static>,
+	#[spirv(per_primitive_ext)] out_debug_hue: f32,
 	#[spirv(flat)] out_mesh_id: u32,
 	out_vertex: InterpolationVertex,
 	frag_albedo: &mut Vec4,
@@ -155,6 +168,6 @@ pub fn meshlet_fragment_g_buffer(
 	}
 
 	*frag_albedo = Vec4::from((sampled.albedo, sampled.alpha));
-	*frag_normal = Vec4::from((sampled.normal * 0.5 + 0.5, out_vertex.meshlet_debug_hue));
+	*frag_normal = Vec4::from((sampled.normal * 0.5 + 0.5, out_debug_hue));
 	*frag_roughness_metallic = Vec4::from((sampled.roughness, sampled.metallic, 1., 1.));
 }

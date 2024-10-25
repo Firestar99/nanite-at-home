@@ -10,7 +10,9 @@ use vulkano_bindless_macros::BufferContent;
 pub enum DebugSettings {
 	None,
 	MeshletIdOverlay,
+	TriangleIdOverlay,
 	MeshletId,
+	TriangleId,
 	BaseColor,
 	Normals,
 	VertexNormals,
