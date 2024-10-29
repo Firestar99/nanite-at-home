@@ -1,11 +1,4 @@
 use std::sync::Arc;
-use vulkano::descriptor_set::allocator::{AllocationHandle, DescriptorSetAlloc, DescriptorSetAllocator};
-use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutCreateFlags};
-use vulkano::descriptor_set::pool::{
-	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorSetAllocateInfo,
-};
-use vulkano::device::{Device, DeviceOwned};
-use vulkano::{Validated, VulkanError};
 
 /// A [`DescriptorSetAllocator`] specialized for bindless resource tables. Its implementation is
 /// very basic, only allowing you to allocate descriptor sets with a single variable count binding,

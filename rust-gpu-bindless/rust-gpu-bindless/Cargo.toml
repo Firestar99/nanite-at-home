@@ -11,7 +11,7 @@ repository.workspace = true
 rust-gpu-bindless-shaders = { workspace = true }
 
 # device
-vulkano = { workspace = true }
+ash = { workspace = true }
 
 # async
 futures = { workspace = true }
@@ -31,7 +31,6 @@ parking_lot = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
 once_cell = { workspace = true }
-ahash = { workspace = true }
 crossbeam-queue = { workspace = true }
 crossbeam-utils = { workspace = true }
 rangemap = { workspace = true }

@@ -2002,8 +2002,8 @@ dependencies = [
 name = "rust-gpu-bindless"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.11",
  "anyhow",
+ "ash",
  "bytemuck",
  "bytemuck_derive",
  "crossbeam-queue",
@@ -2020,7 +2020,6 @@ dependencies = [
  "rust-gpu-bindless-shaders",
  "smallvec",
  "static_assertions",
- "vulkano",
 ]
 
 [[package]]

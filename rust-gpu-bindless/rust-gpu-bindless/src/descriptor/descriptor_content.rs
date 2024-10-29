@@ -1,11 +1,6 @@
 use crate::backend::table::RcTableSlot;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use rust_gpu_bindless_shaders::descriptor::DescContent;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use vulkano::descriptor_set::layout::{DescriptorBindingFlags, DescriptorSetLayoutBinding};
-use vulkano::device::physical::PhysicalDevice;
-use vulkano::shader::ShaderStages;
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.
 pub trait DescContentCpu: DescContent {
@@ -21,18 +16,20 @@ pub trait DescContentCpu: DescContent {
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
 pub trait DescTable: Sized {
-	/// internal non-generic type used within the resource table
-	type Slot;
+	fn layout_binding(count: DescriptorCounts) -> impl Iterator<Item = DescriptorBinding>;
+}
 
-	fn max_update_after_bind_descriptors(physical_device: &Arc<PhysicalDevice>) -> u32;
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum VulkanDescriptorType {
+	Buffer,
+	SampledImage,
+	StorageImage,
+	Sampler,
+}
 
-	const BINDING_FLAGS: DescriptorBindingFlags = DescriptorBindingFlags::UPDATE_AFTER_BIND
-		.union(DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING)
-		.union(DescriptorBindingFlags::PARTIALLY_BOUND);
-
-	fn layout_binding(
-		stages: ShaderStages,
-		count: DescriptorCounts,
-		out: &mut BTreeMap<u32, DescriptorSetLayoutBinding>,
-	);
+#[derive(Copy, Clone, Debug)]
+pub struct DescriptorBinding {
+	pub ty: VulkanDescriptorType,
+	pub binding: u32,
+	pub count: u32,
 }

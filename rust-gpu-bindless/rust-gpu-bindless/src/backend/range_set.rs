@@ -1,77 +1,109 @@
+use crate::backend::table::{Table, TableInterface};
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::descriptor::DescriptorIndex;
-use std::ops::{Deref, DerefMut, Range};
+use std::ops::Range;
 
 pub fn range_to_descriptor_index(range: Range<DescriptorIndex>) -> impl Iterator<Item = DescriptorIndex> {
 	(range.start.to_u32()..range.end.to_u32()).map(|i| unsafe { DescriptorIndex::new(i).unwrap() })
 }
 
-#[derive(Clone, Debug)]
-pub struct DescriptorIndexRangeSet(pub RangeSet<DescriptorIndex>);
-
-impl Default for DescriptorIndexRangeSet {
-	fn default() -> Self {
-		Self::new()
-	}
+pub(crate) unsafe fn descriptor_index_to_range(index: DescriptorIndex) -> Range<DescriptorIndex> {
+	index..DescriptorIndex::new(index.to_u32() + 1).unwrap()
 }
 
-impl DescriptorIndexRangeSet {
-	pub fn new() -> Self {
-		Self(RangeSet::new())
-	}
+pub trait DescriptorIndexIterator<'a, I: TableInterface> {
+	fn into_inner(self) -> (&'a Table<I>, impl Iterator<Item = DescriptorIndex>);
 
-	pub fn insert(&mut self, index: DescriptorIndex) {
-		let next = unsafe { DescriptorIndex::new(index.to_u32() + 1).unwrap() };
-		self.0.insert(index..next);
-	}
-
-	pub fn into_inner(self) -> RangeSet<DescriptorIndex> {
-		self.0
-	}
-
-	pub fn iter_ranges(&self) -> impl Iterator<Item = Range<DescriptorIndex>> + '_ {
-		self.0.iter().cloned()
-	}
-
-	pub fn iter(&self) -> impl Iterator<Item = DescriptorIndex> + '_ {
-		self.iter_ranges().flat_map(range_to_descriptor_index)
-	}
-}
-
-impl From<RangeSet<DescriptorIndex>> for DescriptorIndexRangeSet {
-	fn from(value: RangeSet<DescriptorIndex>) -> Self {
-		Self(value)
-	}
-}
-
-impl Deref for DescriptorIndexRangeSet {
-	type Target = RangeSet<DescriptorIndex>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl DerefMut for DescriptorIndexRangeSet {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use crate::backend::range_set::DescriptorIndexRangeSet;
-	use rust_gpu_bindless_shaders::descriptor::DescriptorIndex;
-
-	#[test]
-	fn test_range_set() {
+	fn into_iter(self) -> impl Iterator<Item = (DescriptorIndex, &'a I::Slot)> {
+		// Safety: indices are guaranteed to be alive by constructor
 		unsafe {
-			let indices = [1, 2, 3, 4, 6, 7, 9, 42, 69];
-			let mut set = DescriptorIndexRangeSet::new();
-			for i in indices {
-				set.insert(DescriptorIndex::new(i).unwrap());
-			}
-			assert_eq!(&indices[..], set.iter().map(|i| i.to_u32()).collect::<Vec<_>>());
+			let (table, iter) = self.into_inner();
+			iter.map(|i| (i, table.get_slot_unchecked(i)))
 		}
+	}
+
+	fn into_vec(self) -> Vec<(DescriptorIndex, &'a I::Slot)> {
+		self.into_iter().collect()
+	}
+
+	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, I> {
+		// Safety: indices are guaranteed to be alive by constructor
+		unsafe {
+			let (table, iter) = self.into_inner();
+			DescriptorIndexRangeSet {
+				range_set: iter.map(descriptor_index_to_range).collect(),
+				table,
+			}
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct DescriptorIndexRangeSet<'a, T> {
+	range_set: RangeSet<DescriptorIndex>,
+	table: &'a T,
+}
+
+impl<'a, T> DescriptorIndexRangeSet<'a, T> {
+	/// # Safety
+	/// indices must be alive and match the table
+	pub unsafe fn from(table: &'a T, iter: impl Iterator<Item = DescriptorIndex>) -> Self {
+		unsafe {
+			Self {
+				range_set: iter.map(descriptor_index_to_range).collect(),
+				table,
+			}
+		}
+	}
+
+	/// # Safety
+	/// indices must be alive and match the table
+	pub unsafe fn new(table: &'a T, range_set: RangeSet<DescriptorIndex>) -> Self {
+		Self { table, range_set }
+	}
+
+	pub fn table(&self) -> &'a T {
+		self.table
+	}
+
+	pub fn into_range_set(self) -> RangeSet<DescriptorIndex> {
+		self.range_set
+	}
+}
+
+impl<'a, I: TableInterface> DescriptorIndexRangeSet<'a, Table<I>> {
+	pub fn iter_ranges(
+		&self,
+	) -> impl Iterator<Item = (Range<DescriptorIndex>, impl Iterator<Item = (DescriptorIndex, I::Slot)>)> + '_ {
+		// Safety: indices are guaranteed to be alive by constructor
+		unsafe {
+			self.range_set.iter().map(|range| {
+				(
+					range.clone(),
+					range_to_descriptor_index(range.clone()).map(|i| (i, self.table.get_slot_unchecked(i))),
+				)
+			})
+		}
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = (DescriptorIndex, I::Slot)> + '_ {
+		// Safety: indices are guaranteed to be alive by constructor
+		unsafe {
+			self.range_set
+				.iter()
+				.cloned()
+				.flat_map(range_to_descriptor_index)
+				.map(|i| (i, self.table.get_slot_unchecked(i)))
+		}
+	}
+}
+
+impl<'a, I: TableInterface> DescriptorIndexIterator<'a, I> for DescriptorIndexRangeSet<'a, Table<I>> {
+	fn into_inner(self) -> (&'a Table<I>, impl Iterator<Item = DescriptorIndex>) {
+		(self.table, self.range_set.into_iter())
+	}
+
+	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, I> {
+		self
 	}
 }

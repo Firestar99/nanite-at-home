@@ -1,5 +1,5 @@
 use crate::backend::ab::{ABArray, AB};
-use crate::backend::range_set::DescriptorIndexRangeSet;
+use crate::backend::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
 use crate::backend::slot_array::SlotArray;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
@@ -20,8 +20,8 @@ use std::sync::{Arc, Weak};
 
 pub trait TableInterface: Sized + 'static {
 	type Slot;
-	fn drop_slots(&self, indices: &DescriptorIndexRangeSet);
-	fn flush(&self, flush_queue: DrainFlushQueue<'_, Self>);
+	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>);
+	fn flush<'a>(&self, flush_queue: impl DescriptorIndexIterator<'a, Self>);
 }
 
 pub const TABLE_COUNT: u32 = 1 << ID_TYPE_BITS;
@@ -33,7 +33,8 @@ pub struct TableSync {
 	frame_mutex: CachePadded<Mutex<ABArray<u32>>>,
 	table_next_free: CachePadded<AtomicU32>,
 	write_queue_ab: CachePadded<AtomicU32>,
-	flush_mutex: CachePadded<Mutex<()>>,
+	/// Mutex for both flushing ang gc. Ensures multiple flushes do not race and prevents gc-ing while flushing.
+	flush_and_gc_mutex: CachePadded<Mutex<()>>,
 }
 
 unsafe impl Send for TableSync {}
@@ -62,7 +63,7 @@ impl TableSync {
 			table_next_free: CachePadded::new(AtomicU32::new(0)),
 			frame_mutex: CachePadded::new(Mutex::new(ABArray::new(|| 0))),
 			write_queue_ab: CachePadded::new(AtomicU32::new(AB::B.to_u32())),
-			flush_mutex: CachePadded::new(Mutex::new(())),
+			flush_and_gc_mutex: CachePadded::new(Mutex::new(())),
 		})
 	}
 
@@ -141,6 +142,7 @@ impl TableSync {
 	#[cold]
 	#[inline(never)]
 	fn gc_queue(&self, guard: MutexGuard<ABArray<u32>>, dropped_frame_ab: AB) {
+		let _guard2 = self.flush_and_gc_mutex.lock();
 		let table_gc_indices;
 		{
 			let gc_queue = !dropped_frame_ab;
@@ -174,7 +176,7 @@ impl TableSync {
 	}
 
 	pub fn flush(&self) {
-		let _guard = self.flush_mutex.lock();
+		let _guard = self.flush_and_gc_mutex.lock();
 		for table_lock in &self.tables {
 			if let Some(table) = table_lock.read().as_ref() {
 				table.flush();
@@ -254,8 +256,8 @@ trait AbstractTable: Any + Send + Sync + 'static {
 	fn as_any(&self) -> &dyn Any;
 	fn ref_inc(&self, id: DescriptorId);
 	fn ref_dec(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
-	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet;
-	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet);
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<()>;
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<()>);
 	fn flush(&self);
 	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
 }
@@ -283,19 +285,20 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 		}
 	}
 
-	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet {
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<()> {
 		let reaper_queue = &self.reaper_queue[gc_queue];
-		let mut set = DescriptorIndexRangeSet::new();
-		while let Some(index) = reaper_queue.pop() {
-			set.insert(index);
-		}
+		let mut set = unsafe {
+			DescriptorIndexRangeSet::from(&(), (0..).map(|_| reaper_queue.pop()).take_while(Option::is_some))
+		};
 		set
 	}
 
-	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet) {
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<()>) {
+		let gc_indices = unsafe { DescriptorIndexRangeSet::new(self, gc_indices.into_range_set()) };
+
 		self.interface.drop_slots(&gc_indices);
 
-		for i in gc_indices.iter() {
+		for (i, _) in gc_indices.iter() {
 			// Safety: we have exclusive access to the previously initialized slot
 			let valid_version = unsafe {
 				(*self.slots.index(i).get()).assume_init_drop();
@@ -468,11 +471,19 @@ impl Drop for FrameGuard {
 
 pub struct DrainFlushQueue<'a, I: TableInterface>(&'a Table<I>);
 
+impl<'a, I: TableInterface> DescriptorIndexIterator<'a, I> for &mut DrainFlushQueue<'a, I> {
+	fn into_inner(self) -> (&'a Table<I>, impl Iterator<Item = DescriptorIndex>) {
+		(self.0, self)
+	}
+}
+
 impl<'a, I: TableInterface> Iterator for DrainFlushQueue<'a, I> {
-	type Item = RcTableSlot;
+	type Item = DescriptorIndex;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.0.flush_queue.pop()
+		let slot = self.0.flush_queue.pop()?;
+		Some(slot.id.index())
+		// drops slot, but slot can't be gc-ed until flushing finishes, as ensured by `flush_and_gc_mutex`
 	}
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
@@ -520,6 +531,7 @@ impl Display for SlotAllocationError {
 mod tests {
 	use super::*;
 	use crate::backend::ab::AB::*;
+	use rangemap::RangeSet;
 	use std::mem::take;
 
 	struct DummyInterface;
@@ -527,15 +539,15 @@ mod tests {
 	impl TableInterface for DummyInterface {
 		type Slot = Arc<u32>;
 
-		fn drop_slots(&self, _indices: &DescriptorIndexRangeSet) {}
+		fn drop_slots(&self, indices: impl DescriptorIndexIterator<'_, Self>) {}
 
-		fn flush(&self, flush_queue: DrainFlushQueue<'_, Self>) {
+		fn flush(&self, flush_queue: impl DescriptorIndexIterator<'_, Self>) {
 			for _ in flush_queue {}
 		}
 	}
 
 	struct SimpleInterface {
-		drops: Mutex<Vec<DescriptorIndexRangeSet>>,
+		drops: Mutex<Vec<RangeSet<DescriptorIndex>>>,
 	}
 
 	impl SimpleInterface {
@@ -556,11 +568,11 @@ mod tests {
 	impl TableInterface for SimpleInterface {
 		type Slot = Arc<u32>;
 
-		fn drop_slots(&self, indices: &DescriptorIndexRangeSet) {
-			self.drops.lock().push(indices.clone());
+		fn drop_slots(&self, indices: impl DescriptorIndexIterator<'_, Self>) {
+			self.drops.lock().push(indices.into_range_set().into_range_set());
 		}
 
-		fn flush(&self, flush_queue: DrainFlushQueue<'_, Self>) {
+		fn flush(&self, flush_queue: impl DescriptorIndexIterator<'_, Self>) {
 			for _ in flush_queue {}
 		}
 	}

@@ -19,6 +19,7 @@ pub mod descriptor;
 pub mod frame_in_flight;
 pub mod frame_manager;
 pub mod pipeline;
+pub mod platform;
 pub mod required_features;
 
 pub use rust_gpu_bindless_shaders::buffer_content;

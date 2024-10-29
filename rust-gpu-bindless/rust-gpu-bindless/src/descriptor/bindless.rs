@@ -5,6 +5,7 @@ use crate::descriptor::descriptor_content::DescTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
+use crate::platform::interface::BindlessPlatform;
 use parking_lot::Mutex;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::PushConstant;
@@ -25,8 +26,8 @@ use vulkano::shader::ShaderStages;
 
 pub const BINDLESS_MAX_PUSH_CONSTANT_WORDS: usize = 4;
 
-pub struct Bindless {
-	pub device: Arc<Device>,
+pub struct Bindless<P: BindlessPlatform> {
+	pub device: P::Device,
 	pub stages: ShaderStages,
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],
@@ -34,7 +35,7 @@ pub struct Bindless {
 	pub table_sync: Arc<TableSync>,
 	pub(super) buffer: BufferTable,
 	pub(super) image: ImageTable,
-	pub(super) sampler: SamplerTable,
+	pub(super) sampler: SamplerTable<P>,
 	flush_lock: Mutex<()>,
 }
 
