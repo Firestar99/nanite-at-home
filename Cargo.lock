@@ -994,6 +994,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpu-allocator"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
+dependencies = [
+ "ash",
+ "log",
+ "presser",
+ "thiserror",
+ "windows",
+]
+
+[[package]]
 name = "half"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1677,6 +1690,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "presser"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
+
+[[package]]
 name = "prettyplease"
 version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2010,6 +2029,7 @@ dependencies = [
  "crossbeam-utils",
  "futures",
  "glam",
+ "gpu-allocator",
  "num-derive",
  "num-traits",
  "once_cell",

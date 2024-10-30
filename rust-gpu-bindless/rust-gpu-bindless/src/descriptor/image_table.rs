@@ -52,6 +52,7 @@ impl<P: BindlessPlatform> DescTable for ImageTable<P> {
 pub struct ImageSlot<P: BindlessPlatform> {
 	image: P::Image,
 	imageview: P::ImageView,
+	memory_allocation: P::MemoryAllocation,
 }
 
 pub struct ImageTable<P: BindlessPlatform> {
@@ -98,11 +99,11 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 	/// ImageView is transferred to this table. You may not access or drop it afterward, except by going though the
 	/// returned `RCDesc`.
 	#[inline]
-	pub unsafe fn alloc_slot_2d(&self, image: P::Image, imageview: P::ImageView) -> RCDesc<Image2d> {
+	pub unsafe fn alloc_slot_2d(&self, image: ImageSlot<P>) -> RCDesc<Image2d> {
 		unsafe {
 			RCDesc::new(
 				self.table
-					.alloc_slot(ImageSlot { image, imageview })
+					.alloc_slot(image)
 					.map_err(|a| format!("ImageTable: {}", a))
 					.unwrap(),
 			)
@@ -155,7 +156,7 @@ impl<P: BindlessPlatform> TableInterface for ImageInterface<P> {
 			P::destroy_images(
 				&self.device,
 				&self.global_descriptor_set,
-				indices.into_iter().map(|(_, s)| (&s.image, &s.imageview)),
+				indices.into_iter().map(|(_, s)| &s),
 			);
 		}
 	}

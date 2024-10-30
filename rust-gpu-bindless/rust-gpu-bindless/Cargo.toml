@@ -12,6 +12,7 @@ rust-gpu-bindless-shaders = { workspace = true }
 
 # device
 ash = { workspace = true }
+gpu-allocator = { workspace = true }
 
 # async
 futures = { workspace = true }

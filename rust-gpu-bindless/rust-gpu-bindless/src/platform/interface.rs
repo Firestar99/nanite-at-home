@@ -1,4 +1,4 @@
-use crate::descriptor::DescriptorCounts;
+use crate::descriptor::{BufferSlot, DescriptorCounts, ImageSlot};
 
 /// public interface for a Graphics API. Feel free to use as a base template for other traits.
 pub unsafe trait Platform: 'static {
@@ -6,6 +6,8 @@ pub unsafe trait Platform: 'static {
 	type Instance: 'static;
 	type PhysicalDevice: 'static;
 	type Device: Clone + 'static;
+	type MemoryAllocator: 'static;
+	type MemoryAllocation: 'static;
 	type Buffer: 'static;
 	type TypedBuffer<T: Send + Sync + ?Sized + 'static>: 'static;
 	type Image: 'static;
@@ -23,19 +25,19 @@ pub unsafe trait BindlessPlatform: Platform {
 
 	unsafe fn destroy_buffers<'a>(
 		device: &Self::Device,
-		global_descriptor_set: Self::DescriptorSet,
-		buffers: impl Iterator<Item = &'a Self::Buffer>,
+		global_descriptor_set: &Self::DescriptorSet,
+		buffers: impl Iterator<Item = &'a BufferSlot<Self>>,
 	);
 
 	unsafe fn destroy_images<'a>(
 		device: &Self::Device,
-		global_descriptor_set: Self::DescriptorSet,
-		images: impl Iterator<Item = (&'a Self::Image, &'a Self::ImageView)>,
+		global_descriptor_set: &Self::DescriptorSet,
+		images: impl Iterator<Item = ImageSlot<Self>>,
 	);
 
 	unsafe fn destroy_samplers<'a>(
 		device: &Self::Device,
-		global_descriptor_set: Self::DescriptorSet,
+		global_descriptor_set: &Self::DescriptorSet,
 		samplers: impl Iterator<Item = &'a Self::Sampler>,
 	);
 }

@@ -15,19 +15,14 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::{array, mem};
-use vulkano::descriptor_set::layout::{
-	DescriptorSetLayout, DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo,
-};
-use vulkano::descriptor_set::DescriptorSet;
-use vulkano::device::Device;
-use vulkano::pipeline::layout::{PipelineLayoutCreateInfo, PushConstantRange};
-use vulkano::pipeline::PipelineLayout;
-use vulkano::shader::ShaderStages;
 
 pub const BINDLESS_MAX_PUSH_CONSTANT_WORDS: usize = 4;
 
 pub struct Bindless<P: BindlessPlatform> {
+	pub instance: P::Instance,
+	pub physical_device: P::PhysicalDevice,
 	pub device: P::Device,
+	pub memory_allocator: P::MemoryAllocator,
 	pub stages: ShaderStages,
 	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
 	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],

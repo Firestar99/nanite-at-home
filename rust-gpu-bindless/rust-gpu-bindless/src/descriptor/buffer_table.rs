@@ -34,8 +34,9 @@ impl<P: BindlessPlatform> DescTable for BufferTable<P> {
 }
 
 pub struct BufferSlot<P: BindlessPlatform> {
-	buffer: P::Buffer,
-	_strong_refs: StrongBackingRefs,
+	pub buffer: P::Buffer,
+	pub memory_allocation: P::MemoryAllocation,
+	pub _strong_refs: StrongBackingRefs,
 }
 
 pub struct BufferTable<P: BindlessPlatform> {
@@ -76,18 +77,11 @@ impl<'a, P: BindlessPlatform> Deref for BufferTableAccess<'a, P> {
 
 impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	#[inline]
-	pub fn alloc_slot<T: BufferContent + ?Sized>(
-		&self,
-		buffer: P::Buffer,
-		strong_refs: StrongBackingRefs,
-	) -> RCDesc<Buffer<T>> {
+	pub fn alloc_slot<T: BufferContent + ?Sized>(&self, buffer: BufferSlot<P>) -> RCDesc<Buffer<T>> {
 		unsafe {
 			RCDesc::new(
 				self.table
-					.alloc_slot(BufferSlot {
-						buffer: buffer.into_bytes(),
-						_strong_refs: strong_refs,
-					})
+					.alloc_slot(buffer)
 					.map_err(|a| format!("BufferTable: {}", a))
 					.unwrap(),
 			)
@@ -130,12 +124,12 @@ impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
 			P::destroy_buffers(
 				&self.device,
 				&self.global_descriptor_set,
-				indices.into_iter().map(|(_, s)| &s.buffer),
+				indices.into_iter().map(|(_, s)| &s),
 			);
 		}
 	}
 
-	fn flush<'a>(&self, flush_queue: impl DescriptorIndexIterator<'a, Self>) {
+	fn flush<'a>(&self, _flush_queue: impl DescriptorIndexIterator<'a, Self>) {
 		// do nothing, flushing of descriptors is handled differently
 	}
 }
