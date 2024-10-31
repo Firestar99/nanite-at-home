@@ -11,7 +11,7 @@ pub(crate) unsafe fn descriptor_index_to_range(index: DescriptorIndex) -> Range<
 	index..DescriptorIndex::new(index.to_u32() + 1).unwrap()
 }
 
-pub trait DescriptorIndexIterator<'a, I: TableInterface> {
+pub trait DescriptorIndexIterator<'a, I: TableInterface>: Sized {
 	fn into_inner(self) -> (&'a Table<I>, impl Iterator<Item = DescriptorIndex>);
 
 	fn into_iter(self) -> impl Iterator<Item = (DescriptorIndex, &'a I::Slot)> {
@@ -74,7 +74,12 @@ impl<'a, T> DescriptorIndexRangeSet<'a, T> {
 impl<'a, I: TableInterface> DescriptorIndexRangeSet<'a, Table<I>> {
 	pub fn iter_ranges(
 		&self,
-	) -> impl Iterator<Item = (Range<DescriptorIndex>, impl Iterator<Item = (DescriptorIndex, I::Slot)>)> + '_ {
+	) -> impl Iterator<
+		Item = (
+			Range<DescriptorIndex>,
+			impl Iterator<Item = (DescriptorIndex, &I::Slot)>,
+		),
+	> + '_ {
 		// Safety: indices are guaranteed to be alive by constructor
 		unsafe {
 			self.range_set.iter().map(|range| {
@@ -86,7 +91,7 @@ impl<'a, I: TableInterface> DescriptorIndexRangeSet<'a, Table<I>> {
 		}
 	}
 
-	pub fn iter(&self) -> impl Iterator<Item = (DescriptorIndex, I::Slot)> + '_ {
+	pub fn iter(&self) -> impl Iterator<Item = (DescriptorIndex, &I::Slot)> + '_ {
 		// Safety: indices are guaranteed to be alive by constructor
 		unsafe {
 			self.range_set
@@ -100,7 +105,10 @@ impl<'a, I: TableInterface> DescriptorIndexRangeSet<'a, Table<I>> {
 
 impl<'a, I: TableInterface> DescriptorIndexIterator<'a, I> for DescriptorIndexRangeSet<'a, Table<I>> {
 	fn into_inner(self) -> (&'a Table<I>, impl Iterator<Item = DescriptorIndex>) {
-		(self.table, self.range_set.into_iter())
+		(
+			self.table,
+			self.range_set.into_iter().flat_map(range_to_descriptor_index),
+		)
 	}
 
 	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, I> {

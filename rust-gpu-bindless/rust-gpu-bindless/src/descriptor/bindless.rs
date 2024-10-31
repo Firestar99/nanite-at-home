@@ -1,7 +1,5 @@
 use crate::backend::table::{FrameGuard, TableSync};
-use crate::descriptor::bindless_descriptor_allocator::BindlessDescriptorSetAllocator;
 use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
-use crate::descriptor::descriptor_content::DescTable;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
@@ -10,101 +8,112 @@ use parking_lot::Mutex;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::PushConstant;
 use smallvec::SmallVec;
-use static_assertions::assert_impl_all;
-use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
+use std::mem;
+use std::ops::Deref;
 use std::sync::Arc;
-use std::{array, mem};
 
 pub const BINDLESS_MAX_PUSH_CONSTANT_WORDS: usize = 4;
 
-pub struct Bindless<P: BindlessPlatform> {
+pub struct BindlessCreateInfo<P: BindlessPlatform> {
 	pub instance: P::Instance,
 	pub physical_device: P::PhysicalDevice,
 	pub device: P::Device,
 	pub memory_allocator: P::MemoryAllocator,
-	pub stages: ShaderStages,
-	pub descriptor_set_layout: Arc<DescriptorSetLayout>,
-	pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],
-	pub descriptor_set: Arc<DescriptorSet>,
+	pub counts: DescriptorCounts,
+}
+
+pub struct Bindless<P: BindlessPlatform> {
+	ci: Arc<BindlessCreateInfo<P>>,
+	// pub stages: ShaderStages,
+	// pub descriptor_set_layout: Arc<DescriptorSetLayout>,
+	// pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],
+	// pub descriptor_set: Arc<DescriptorSet>,
 	pub table_sync: Arc<TableSync>,
-	pub(super) buffer: BufferTable,
-	pub(super) image: ImageTable,
+	pub(super) buffer: BufferTable<P>,
+	pub(super) image: ImageTable<P>,
 	pub(super) sampler: SamplerTable<P>,
 	flush_lock: Mutex<()>,
 }
 
-assert_impl_all!(Bindless: Send, Sync);
+impl<P: BindlessPlatform> Deref for Bindless<P> {
+	type Target = BindlessCreateInfo<P>;
 
-impl Bindless {
+	fn deref(&self) -> &Self::Target {
+		&self.ci
+	}
+}
+
+impl<P: BindlessPlatform> Bindless<P> {
 	/// Creates a new Descriptors instance with which to allocate descriptors.
 	///
 	/// # Safety
 	/// * There must only be one global Bindless instance for each [`Device`].
 	/// * The [general bindless safety requirements](crate#safety) apply
-	pub unsafe fn new(device: Arc<Device>, stages: ShaderStages, counts: DescriptorCounts) -> Arc<Self> {
-		let limit = DescriptorCounts::limits(device.physical_device());
+	pub unsafe fn new(ci: BindlessCreateInfo<P>) -> Arc<Self> {
+		let ci = Arc::new(ci);
+		let limit = DescriptorCounts::limits(&ci);
 		assert!(
-			counts.is_within_limit(limit),
+			ci.counts.is_within_limit(limit),
 			"counts {:?} must be within limit {:?}",
-			counts,
+			ci.counts,
 			limit
 		);
 
-		let mut bindings = BTreeMap::new();
-		BufferTable::layout_binding(stages, counts, &mut bindings);
-		SamplerTable::layout_binding(stages, counts, &mut bindings);
-		ImageTable::layout_binding(stages, counts, &mut bindings);
-
-		let descriptor_set_layout = DescriptorSetLayout::new(
-			device.clone(),
-			DescriptorSetLayoutCreateInfo {
-				flags: DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
-				bindings,
-				..DescriptorSetLayoutCreateInfo::default()
-			},
-		)
-		.unwrap();
-		let allocator = BindlessDescriptorSetAllocator::new(device.clone());
-		let descriptor_set = DescriptorSet::new(allocator, descriptor_set_layout.clone(), [], []).unwrap();
-
-		let pipeline_layouts = array::from_fn(|i| {
-			PipelineLayout::new(
-				device.clone(),
-				PipelineLayoutCreateInfo {
-					set_layouts: Vec::from([descriptor_set_layout.clone()]),
-					push_constant_ranges: Self::get_push_constant_inner(stages, i),
-					..PipelineLayoutCreateInfo::default()
-				},
-			)
-			.unwrap()
-		});
+		// let mut bindings = BTreeMap::new();
+		// BufferTable::layout_binding(stages, counts, &mut bindings);
+		// SamplerTable::layout_binding(stages, counts, &mut bindings);
+		// ImageTable::layout_binding(stages, counts, &mut bindings);
+		//
+		// let descriptor_set_layout = DescriptorSetLayout::new(
+		// 	device.clone(),
+		// 	DescriptorSetLayoutCreateInfo {
+		// 		flags: DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL,
+		// 		bindings,
+		// 		..DescriptorSetLayoutCreateInfo::default()
+		// 	},
+		// )
+		// .unwrap();
+		// let allocator = BindlessDescriptorSetAllocator::new(device.clone());
+		// let descriptor_set = DescriptorSet::new(allocator, descriptor_set_layout.clone(), [], []).unwrap();
+		//
+		// let pipeline_layouts = array::from_fn(|i| {
+		// 	PipelineLayout::new(
+		// 		device.clone(),
+		// 		PipelineLayoutCreateInfo {
+		// 			set_layouts: Vec::from([descriptor_set_layout.clone()]),
+		// 			push_constant_ranges: Self::get_push_constant_inner(stages, i),
+		// 			..PipelineLayoutCreateInfo::default()
+		// 		},
+		// 	)
+		// 	.unwrap()
+		// });
+		let descriptor_set = todo!();
 
 		let table_sync = TableSync::new();
-
 		Arc::new(Self {
-			buffer: BufferTable::new(&table_sync, descriptor_set.clone(), counts.buffers),
-			image: ImageTable::new(&table_sync, descriptor_set.clone(), counts.image),
-			sampler: SamplerTable::new(&table_sync, descriptor_set.clone(), counts.samplers),
+			buffer: BufferTable::new(&table_sync, ci.clone(), descriptor_set.clone()),
+			image: ImageTable::new(&table_sync, ci.clone(), descriptor_set.clone()),
+			sampler: SamplerTable::new(&table_sync, ci.clone(), descriptor_set.clone()),
+			ci,
 			table_sync,
-			descriptor_set_layout,
-			pipeline_layouts,
-			descriptor_set,
-			stages,
-			device,
+			// descriptor_set_layout,
+			// pipeline_layouts,
+			// descriptor_set,
+			// stages,
 			flush_lock: Mutex::new(()),
 		})
 	}
 
-	pub fn buffer<'a>(self: &'a Arc<Self>) -> BufferTableAccess<'a> {
+	pub fn buffer<'a>(self: &'a Arc<Self>) -> BufferTableAccess<'a, P> {
 		BufferTableAccess(self)
 	}
 
-	pub fn image<'a>(self: &'a Arc<Self>) -> ImageTableAccess<'a> {
+	pub fn image<'a>(self: &'a Arc<Self>) -> ImageTableAccess<'a, P> {
 		ImageTableAccess(self)
 	}
 
-	pub fn sampler<'a>(self: &'a Arc<Self>) -> SamplerTableAccess<'a> {
+	pub fn sampler<'a>(self: &'a Arc<Self>) -> SamplerTableAccess<'a, P> {
 		SamplerTableAccess(self)
 	}
 

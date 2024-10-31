@@ -53,17 +53,14 @@ impl<'a, C: DescContent> TransientDesc<'a, C> {
 	}
 }
 
-unsafe impl<'a> DescStructRef for Transient<'a> {
+unsafe impl<'a, C: DescContent> DescStructRef<Desc<Self, C>> for Transient<'a> {
 	type TransferDescStruct = TransferTransient;
 
-	unsafe fn desc_write_cpu<C: DescContent>(
-		desc: Desc<Self, C>,
-		_meta: &mut impl MetadataCpuInterface,
-	) -> Self::TransferDescStruct {
+	unsafe fn desc_write_cpu(desc: Desc<Self, C>, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
 		Self::TransferDescStruct { id: desc.r.id }
 	}
 
-	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
+	unsafe fn desc_read(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
 		unsafe { TransientDesc::new(from.id, _meta.fake_fif()) }
 	}
 }

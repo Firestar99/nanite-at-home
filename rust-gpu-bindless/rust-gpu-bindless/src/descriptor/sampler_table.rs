@@ -2,19 +2,19 @@ use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::{RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::{Bindless, DescriptorBinding, RCDescExt, VulkanDescriptorType};
+use crate::descriptor::rc::RCDesc;
+use crate::descriptor::{Bindless, BindlessCreateInfo, DescriptorBinding, RCDescExt, VulkanDescriptorType};
 use crate::platform::interface::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::Sampler;
 use rust_gpu_bindless_shaders::descriptor::BINDING_SAMPLER;
 use std::ops::Deref;
 use std::sync::Arc;
 
-impl<P: BindlessPlatform> DescContentCpu for Sampler {
-	type DescTable = SamplerTable<P>;
-	type VulkanType = P::Sampler;
+impl DescContentCpu for Sampler {
+	type DescTable<P: BindlessPlatform> = SamplerTable<P>;
+	type VulkanType<P: BindlessPlatform> = P::Sampler;
 
-	fn deref_table(slot: &RcTableSlot) -> &Self::VulkanType {
+	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P> {
 		slot.try_deref::<SamplerInterface<P>>().unwrap()
 	}
 }
@@ -37,20 +37,16 @@ pub struct SamplerTable<P: BindlessPlatform> {
 impl<P: BindlessPlatform> SamplerTable<P> {
 	pub fn new(
 		table_sync: &Arc<TableSync>,
-		device: P::Device,
+		ci: Arc<BindlessCreateInfo<P>>,
 		global_descriptor_set: P::DescriptorSet,
-		count: u32,
 	) -> Self {
+		let counts = ci.counts.samplers;
+		let interface = SamplerInterface {
+			ci,
+			global_descriptor_set,
+		};
 		Self {
-			table: table_sync
-				.register(
-					count,
-					SamplerInterface {
-						device,
-						global_descriptor_set,
-					},
-				)
-				.unwrap(),
+			table: table_sync.register(counts, interface).unwrap(),
 		}
 	}
 }
@@ -73,7 +69,7 @@ impl<'a, P: BindlessPlatform> SamplerTableAccess<'a, P> {
 	/// Sampler's device must be the same as the bindless device. Ownership of the sampler is transferred to this table.
 	/// You may not access or drop it afterward, except by going though the returned `RCDesc`.
 	#[inline]
-	pub unsafe fn alloc_slot(&self, sampler: P::Sampler) -> RCDesc<Sampler> {
+	pub unsafe fn alloc_slot(&self, sampler: P::Sampler) -> RCDesc<P, Sampler> {
 		unsafe {
 			RCDesc::new(
 				self.table
@@ -107,7 +103,7 @@ impl<'a, P: BindlessPlatform> SamplerTableAccess<'a, P> {
 }
 
 pub struct SamplerInterface<P: BindlessPlatform> {
-	device: P::Device,
+	ci: Arc<BindlessCreateInfo<P>>,
 	global_descriptor_set: P::DescriptorSet,
 }
 
@@ -116,11 +112,7 @@ impl<P: BindlessPlatform> TableInterface for SamplerInterface<P> {
 
 	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 		unsafe {
-			P::destroy_samplers(
-				&self.device,
-				&self.global_descriptor_set,
-				indices.into_iter().map(|(_, s)| s),
-			);
+			P::destroy_samplers(&self.ci, &self.global_descriptor_set, indices);
 		}
 	}
 

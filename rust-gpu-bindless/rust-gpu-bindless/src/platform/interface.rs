@@ -1,7 +1,8 @@
-use crate::descriptor::{BufferSlot, DescriptorCounts, ImageSlot};
+use crate::backend::range_set::DescriptorIndexIterator;
+use crate::descriptor::{BindlessCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface};
 
 /// public interface for a Graphics API. Feel free to use as a base template for other traits.
-pub unsafe trait Platform: 'static {
+pub unsafe trait Platform: Sized + Send + Sync + 'static {
 	type Entry: 'static;
 	type Instance: 'static;
 	type PhysicalDevice: 'static;
@@ -13,31 +14,29 @@ pub unsafe trait Platform: 'static {
 	type Image: 'static;
 	type ImageView: 'static;
 	type Sampler: 'static;
+	type AllocationError: 'static;
 	type DescriptorSet: Clone + 'static;
 }
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Platform {
-	unsafe fn update_after_bind_descriptor_limits(
-		instance: &Self::Instance,
-		phy: &Self::PhysicalDevice,
-	) -> DescriptorCounts;
+	unsafe fn update_after_bind_descriptor_limits(ci: &BindlessCreateInfo<Self>) -> DescriptorCounts;
 
 	unsafe fn destroy_buffers<'a>(
-		device: &Self::Device,
+		ci: &BindlessCreateInfo<Self>,
 		global_descriptor_set: &Self::DescriptorSet,
-		buffers: impl Iterator<Item = &'a BufferSlot<Self>>,
+		buffers: impl DescriptorIndexIterator<'a, BufferInterface<Self>>,
 	);
 
 	unsafe fn destroy_images<'a>(
-		device: &Self::Device,
+		ci: &BindlessCreateInfo<Self>,
 		global_descriptor_set: &Self::DescriptorSet,
-		images: impl Iterator<Item = ImageSlot<Self>>,
+		images: impl DescriptorIndexIterator<'a, ImageInterface<Self>>,
 	);
 
 	unsafe fn destroy_samplers<'a>(
-		device: &Self::Device,
+		ci: &BindlessCreateInfo<Self>,
 		global_descriptor_set: &Self::DescriptorSet,
-		samplers: impl Iterator<Item = &'a Self::Sampler>,
+		samplers: impl DescriptorIndexIterator<'a, SamplerInterface<Self>>,
 	);
 }

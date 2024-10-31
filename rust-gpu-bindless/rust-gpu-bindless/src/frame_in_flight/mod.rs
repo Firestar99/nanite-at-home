@@ -22,7 +22,7 @@
 //!
 
 pub mod resource;
-pub mod upload;
+// pub mod upload;
 
 pub use resource::*;
 pub use rust_gpu_bindless_shaders::frame_in_flight::*;

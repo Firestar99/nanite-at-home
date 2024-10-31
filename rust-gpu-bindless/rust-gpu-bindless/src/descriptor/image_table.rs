@@ -2,8 +2,8 @@ use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::{RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::{Bindless, DescriptorBinding, Image, RCDescExt, VulkanDescriptorType};
+use crate::descriptor::mutable::{MutDesc, MutDescExt};
+use crate::descriptor::{Bindless, BindlessCreateInfo, DescriptorBinding, Image, VulkanDescriptorType};
 use crate::platform::interface::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::SampleType;
 use rust_gpu_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
@@ -20,13 +20,12 @@ impl<
 		const SAMPLED: u32,
 		const FORMAT: u32,
 		const COMPONENTS: u32,
-		P: BindlessPlatform,
 	> DescContentCpu for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
 {
-	type DescTable = ImageTable<P>;
-	type VulkanType = ImageSlot<P>;
+	type DescTable<P: BindlessPlatform> = ImageTable<P>;
+	type VulkanType<P: BindlessPlatform> = ImageSlot<P>;
 
-	fn deref_table(slot: &RcTableSlot) -> &Self::VulkanType {
+	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P> {
 		slot.try_deref::<ImageInterface<P>>().unwrap()
 	}
 }
@@ -50,9 +49,9 @@ impl<P: BindlessPlatform> DescTable for ImageTable<P> {
 }
 
 pub struct ImageSlot<P: BindlessPlatform> {
-	image: P::Image,
-	imageview: P::ImageView,
-	memory_allocation: P::MemoryAllocation,
+	pub image: P::Image,
+	pub imageview: P::ImageView,
+	pub memory_allocation: P::MemoryAllocation,
 }
 
 pub struct ImageTable<P: BindlessPlatform> {
@@ -62,20 +61,16 @@ pub struct ImageTable<P: BindlessPlatform> {
 impl<P: BindlessPlatform> ImageTable<P> {
 	pub fn new(
 		table_sync: &Arc<TableSync>,
-		device: P::Device,
+		ci: Arc<BindlessCreateInfo<P>>,
 		global_descriptor_set: P::DescriptorSet,
-		count: u32,
 	) -> Self {
+		let counts = ci.counts.image;
+		let interface = ImageInterface {
+			ci,
+			global_descriptor_set,
+		};
 		Self {
-			table: table_sync
-				.register(
-					count,
-					ImageInterface {
-						device,
-						global_descriptor_set,
-					},
-				)
-				.unwrap(),
+			table: table_sync.register(counts, interface).unwrap(),
 		}
 	}
 }
@@ -99,9 +94,9 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 	/// ImageView is transferred to this table. You may not access or drop it afterward, except by going though the
 	/// returned `RCDesc`.
 	#[inline]
-	pub unsafe fn alloc_slot_2d(&self, image: ImageSlot<P>) -> RCDesc<Image2d> {
+	pub unsafe fn alloc_slot_2d(&self, image: ImageSlot<P>) -> MutDesc<P, Image2d> {
 		unsafe {
-			RCDesc::new(
+			MutDesc::new(
 				self.table
 					.alloc_slot(image)
 					.map_err(|a| format!("ImageTable: {}", a))
@@ -144,7 +139,7 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 }
 
 pub struct ImageInterface<P: BindlessPlatform> {
-	device: P::Device,
+	ci: Arc<BindlessCreateInfo<P>>,
 	global_descriptor_set: P::DescriptorSet,
 }
 
@@ -153,11 +148,7 @@ impl<P: BindlessPlatform> TableInterface for ImageInterface<P> {
 
 	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 		unsafe {
-			P::destroy_images(
-				&self.device,
-				&self.global_descriptor_set,
-				indices.into_iter().map(|(_, s)| &s),
-			);
+			P::destroy_images(&self.ci, &self.global_descriptor_set, indices);
 		}
 	}
 

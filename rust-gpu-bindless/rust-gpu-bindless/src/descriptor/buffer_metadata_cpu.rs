@@ -1,28 +1,29 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
 use crate::descriptor::{AnyRCDesc, AnyRCDescExt, Bindless};
-use ahash::{HashMap, HashMapExt};
+use crate::platform::interface::BindlessPlatform;
 use rust_gpu_bindless_shaders::buffer_content::{Metadata, MetadataCpuInterface};
 use rust_gpu_bindless_shaders::descriptor::StrongDesc;
 use rust_gpu_bindless_shaders::descriptor::{DescContent, DescriptorId};
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
 /// Use as Metadata in [`DescStruct::write_cpu`] to figure out all [`StrongDesc`] contained within.
 #[allow(dead_code)]
-pub struct StrongMetadataCpu<'a> {
-	bindless: &'a Arc<Bindless>,
+pub struct StrongMetadataCpu<'a, P: BindlessPlatform> {
+	bindless: &'a Arc<Bindless<P>>,
 	metadata: Metadata,
-	refs: Result<HashMap<DescriptorId, AnyRCDesc>, BackingRefsError>,
+	refs: Result<HashMap<DescriptorId, AnyRCDesc<P>>, BackingRefsError>,
 }
 
-impl<'a> StrongMetadataCpu<'a> {
+impl<'a, P: BindlessPlatform> StrongMetadataCpu<'a, P> {
 	/// See [`Self`]
 	///
 	/// # Safety
 	/// You must call [`Self::into_backing_refs`] to actually retrieve the [`StrongBackingRefs`] before dropping this
-	pub unsafe fn new(bindless: &'a Arc<Bindless>, metadata: Metadata) -> Self {
+	pub unsafe fn new(bindless: &'a Arc<Bindless<P>>, metadata: Metadata) -> Self {
 		Self {
 			bindless,
 			metadata,
@@ -30,12 +31,12 @@ impl<'a> StrongMetadataCpu<'a> {
 		}
 	}
 
-	pub fn into_backing_refs(self) -> Result<StrongBackingRefs, BackingRefsError> {
+	pub fn into_backing_refs(self) -> Result<StrongBackingRefs<P>, BackingRefsError> {
 		Ok(StrongBackingRefs(self.refs?.into_values().collect()))
 	}
 }
 
-unsafe impl<'a> MetadataCpuInterface for StrongMetadataCpu<'a> {
+unsafe impl<'a, P: BindlessPlatform> MetadataCpuInterface for StrongMetadataCpu<'a, P> {
 	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>) {
 		if let Ok(refs) = &mut self.refs {
 			let id = desc.id();
@@ -53,7 +54,7 @@ unsafe impl<'a> MetadataCpuInterface for StrongMetadataCpu<'a> {
 	}
 }
 
-impl<'a> Deref for StrongMetadataCpu<'a> {
+impl<'a, P: BindlessPlatform> Deref for StrongMetadataCpu<'a, P> {
 	type Target = Metadata;
 
 	fn deref(&self) -> &Self::Target {

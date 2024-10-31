@@ -1,32 +1,50 @@
-use crate::descriptor::{BufferSlot, DescriptorCounts, ImageSlot};
+use crate::backend::range_set::DescriptorIndexIterator;
+use crate::descriptor::{
+	Bindless, BindlessCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface,
+};
 use crate::platform::interface::{BindlessPlatform, Platform};
-use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
+use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Features, PhysicalDeviceVulkan12Properties};
+use gpu_allocator::vulkan::{Allocation, Allocator};
+use parking_lot::Mutex;
+use static_assertions::assert_impl_all;
+
+pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
+	PhysicalDeviceVulkan12Features::default()
+		.vulkan_memory_model(true)
+		.runtime_descriptor_array(true)
+		.descriptor_binding_update_unused_while_pending(true)
+		.descriptor_binding_partially_bound(true)
+		.descriptor_binding_storage_buffer_update_after_bind(true)
+		.descriptor_binding_sampled_image_update_after_bind(true)
+		.descriptor_binding_storage_image_update_after_bind(true)
+		.descriptor_binding_uniform_buffer_update_after_bind(true)
+}
 
 pub struct Ash;
+assert_impl_all!(Bindless<Ash>: Send, Sync);
 
 unsafe impl Platform for Ash {
 	type Entry = ash::Entry;
 	type Instance = ash::Instance;
 	type PhysicalDevice = ash::vk::PhysicalDevice;
 	type Device = ash::Device;
-	type MemoryAllocator = gpu_allocator::vulkan::Allocator;
-	type MemoryAllocation = gpu_allocator::vulkan::Allocation;
+	type MemoryAllocator = Mutex<Allocator>;
+	type MemoryAllocation = Allocation;
 	type Buffer = ash::vk::Buffer;
 	type TypedBuffer<T: Send + Sync + ?Sized + 'static> = Self::Buffer;
 	type Image = ash::vk::Image;
 	type ImageView = ash::vk::ImageView;
 	type Sampler = ash::vk::Sampler;
+	type AllocationError = ();
 	type DescriptorSet = ash::vk::DescriptorSet;
 }
 
 unsafe impl BindlessPlatform for Ash {
-	unsafe fn update_after_bind_descriptor_limits(
-		instance: &Self::Instance,
-		phy: &Self::PhysicalDevice,
-	) -> DescriptorCounts {
+	unsafe fn update_after_bind_descriptor_limits(ci: &BindlessCreateInfo<Self>) -> DescriptorCounts {
 		let mut vulkan12properties = PhysicalDeviceVulkan12Properties::default();
 		let mut properties2 = PhysicalDeviceProperties2::default().push_next(&mut vulkan12properties);
-		instance.get_physical_device_properties2(*phy, &mut properties2);
+		ci.instance
+			.get_physical_device_properties2(*ci.physical_device, &mut properties2);
 		DescriptorCounts {
 			buffers: vulkan12properties.max_descriptor_set_update_after_bind_storage_buffers,
 			image: u32::min(
@@ -38,54 +56,61 @@ unsafe impl BindlessPlatform for Ash {
 	}
 
 	unsafe fn destroy_buffers<'a>(
-		device: &Self::Device,
+		ci: &BindlessCreateInfo<Self>,
 		_global_descriptor_set: &Self::DescriptorSet,
-		buffers: impl Iterator<Item = &'a BufferSlot<Self>>,
+		buffers: impl DescriptorIndexIterator<'a, BufferInterface<Self>>,
 	) {
-		for buffer in buffers {
-			device.destroy_buffer(*buffer, None);
+		let mut allocator = ci.memory_allocator.lock();
+		for (_, buffer) in buffers.into_iter() {
+			allocator.free(buffer.memory_allocation.clone()).unwrap();
+			ci.device.destroy_buffer(buffer.buffer, None);
 		}
 	}
 
 	unsafe fn destroy_images<'a>(
-		device: &Self::Device,
+		ci: &BindlessCreateInfo<Self>,
 		_global_descriptor_set: &Self::DescriptorSet,
-		images: impl Iterator<Item = ImageSlot<Self>>,
+		images: impl DescriptorIndexIterator<'a, ImageInterface<Self>>,
 	) {
-		for image in images {
-			device.destroy_image(*image, None);
+		let mut allocator = ci.memory_allocator.lock();
+		for (_, image) in images.into_iter() {
+			allocator.free(image.memory_allocation.clone()).unwrap();
+			ci.device.destroy_image_view(image.imageview, None);
+			ci.device.destroy_image(image.image, None);
 		}
 	}
 
 	unsafe fn destroy_samplers<'a>(
-		device: &Self::Device,
+		ci: &BindlessCreateInfo<Self>,
 		_global_descriptor_set: &Self::DescriptorSet,
-		samplers: impl Iterator<Item = &'a Self::Sampler>,
+		samplers: impl DescriptorIndexIterator<'a, SamplerInterface<Self>>,
 	) {
-		for sampler in samplers {
-			device.destroy_sampler(*sampler, None);
+		for (_, sampler) in samplers.into_iter() {
+			ci.device.destroy_sampler(*sampler, None);
 		}
 	}
 }
 
 pub mod extension {
-	use crate::descriptor::{
-		AllocFromError, BufferSlot, BufferTableAccess, RCDesc, Sampler, SamplerTableAccess, StrongBackingRefs,
-	};
+	use crate::descriptor::mutable::MutDesc;
+	use crate::descriptor::{BufferSlot, BufferTableAccess, RCDesc, Sampler, SamplerTableAccess, StrongBackingRefs};
 	use crate::platform::ash::Ash;
 	use ash::prelude::VkResult;
-	use ash::vk::{BufferCreateInfo, DeviceSize, SamplerCreateInfo};
-	use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme, AllocatorCreateDesc};
-	use gpu_allocator::MemoryLocation;
+	use ash::vk::{BufferUsageFlags, DeviceSize, SamplerCreateInfo};
+	use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
+	use gpu_allocator::{AllocationError, MemoryLocation};
 	use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 	use rust_gpu_bindless_shaders::descriptor::Buffer;
+	use std::error::Error;
+	use std::fmt::{Display, Formatter};
+	use std::mem::size_of;
 
 	impl<'a> SamplerTableAccess<'a, Ash> {
 		pub fn alloc(
 			&self,
 			device: &ash::Device,
 			sampler_create_info: &SamplerCreateInfo,
-		) -> VkResult<RCDesc<Sampler>> {
+		) -> VkResult<RCDesc<Ash, Sampler>> {
 			unsafe {
 				let sampler = device.create_sampler(&sampler_create_info, None)?;
 				Ok(self.alloc_slot(sampler))
@@ -93,7 +118,10 @@ pub mod extension {
 		}
 	}
 
-	pub struct BufferAllocationCreateInfo<'a> {
+	// FIXME Mut vs Mapped MutRef, requires custom MemoryLocation and AllocationScheme
+	pub struct BindlessBufferCreateInfo<'a> {
+		/// allowed buffer usages
+		pub usage: BufferUsageFlags,
 		/// Name of the allocation, for tracking and debugging purposes
 		pub name: &'a str,
 		/// Location where the memory allocation should be stored
@@ -102,13 +130,32 @@ pub mod extension {
 		pub allocation_scheme: AllocationScheme,
 	}
 
-	impl<'a> From<&AllocationCreateDesc<'a>> for BufferAllocationCreateInfo<'a> {
-		fn from(value: &AllocationCreateDesc<'a>) -> Self {
-			Self {
-				name: value.name,
-				location: value.location,
-				allocation_scheme: value.allocation_scheme,
+	#[derive(Debug)]
+	pub enum BindlessAllocationError {
+		Vk(ash::vk::Result),
+		Allocator(AllocationError),
+	}
+
+	impl Display for BindlessAllocationError {
+		fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+			match self {
+				BindlessAllocationError::Vk(e) => Display::fmt(e, f),
+				BindlessAllocationError::Allocator(e) => Display::fmt(e, f),
 			}
+		}
+	}
+
+	impl Error for BindlessAllocationError {}
+
+	impl From<ash::vk::Result> for BindlessAllocationError {
+		fn from(value: ash::vk::Result) -> Self {
+			Self::Vk(value)
+		}
+	}
+
+	impl From<AllocationError> for BindlessAllocationError {
+		fn from(value: AllocationError) -> Self {
+			Self::Allocator(value)
 		}
 	}
 
@@ -154,20 +201,26 @@ pub mod extension {
 		// 	}
 		// }
 
-		pub unsafe fn create(
+		/// Create a new buffer directly from an ash's [`BufferCreateInfo`]. Ignores the [`BufferUsageFlags`] from
+		/// [`BindlessBufferCreateInfo`].
+		///
+		/// # Safety
+		/// Size must be sufficient to store `T`. If `T` is a slice, `len` must be its length, otherwise it must be 1.
+		/// Returned buffer will be uninitialized.
+		pub unsafe fn create_ash<T: BufferContent + ?Sized>(
 			&self,
-			create_info: &BufferCreateInfo,
-			allocation_info: &BufferAllocationCreateInfo,
-			strong_refs: StrongBackingRefs,
-		) -> VkResult<RCDesc<Buffer<[u8]>>> {
+			create_info: &BindlessBufferCreateInfo,
+			ash_create_info: &ash::vk::BufferCreateInfo,
+			len: DeviceSize,
+		) -> Result<MutDesc<Ash, Buffer<T>>, BindlessAllocationError> {
 			unsafe {
-				let buffer = self.0.device.create_buffer(create_info, None)?;
+				let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
 				let requirements = self.0.device.get_buffer_memory_requirements(buffer);
-				let memory_allocation = self.0.memory_allocator.allocate(&AllocationCreateDesc {
+				let memory_allocation = self.0.memory_allocator.lock().allocate(&AllocationCreateDesc {
 					requirements,
-					name: allocation_info.name,
-					location: allocation_info.location,
-					allocation_scheme: allocation_info.allocation_scheme,
+					name: create_info.name,
+					location: create_info.location,
+					allocation_scheme: create_info.allocation_scheme,
 					linear: true,
 				})?;
 				self.0
@@ -175,40 +228,47 @@ pub mod extension {
 					.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
 				Ok(self.alloc_slot(BufferSlot {
 					buffer,
+					len,
 					memory_allocation,
-					_strong_refs: strong_refs,
+					_strong_refs: StrongBackingRefs::default(),
 				}))
 			}
 		}
 
-		pub unsafe fn alloc_sized<T: BufferStruct>(
+		pub fn alloc_sized<T: BufferStruct>(
 			&self,
-			create_info: &BufferCreateInfo,
-			allocation_info: &BufferAllocationCreateInfo,
-			strong_refs: StrongBackingRefs,
-		) -> VkResult<RCDesc<Buffer<T>>> {
+			create_info: &BindlessBufferCreateInfo,
+		) -> Result<MutDesc<Ash, Buffer<T>>, BindlessAllocationError> {
+			unsafe {
+				let len = 1;
+				self.create_ash(
+					create_info,
+					&ash::vk::BufferCreateInfo {
+						usage: create_info.usage,
+						size: size_of::<T>() as DeviceSize * len,
+						..Default::default()
+					},
+					len,
+				)
+			}
 		}
 
 		pub fn alloc_slice<T: BufferStruct>(
 			&self,
-			create_info: &BufferCreateInfo,
-			allocation_info: &BufferAllocationCreateInfo,
+			create_info: &BindlessBufferCreateInfo,
 			len: DeviceSize,
-			strong_refs: StrongBackingRefs,
-		) -> VkResult<RCDesc<Buffer<T>>> {
-			// let buffer = VBuffer::new_slice::<T::Transfer>(allocator, create_info, allocation_info, len)?;
-			// Ok(self.alloc_slot(buffer, strong_refs))
-		}
-
-		pub fn alloc_unsized<T: BufferContent + ?Sized>(
-			&self,
-			create_info: &BufferCreateInfo,
-			allocation_info: &BufferAllocationCreateInfo,
-			len: DeviceSize,
-			strong_refs: StrongBackingRefs,
-		) -> VkResult<RCDesc<Buffer<T>>> {
-			// let buffer = VBuffer::new_unsized::<T::Transfer>(allocator, create_info, allocation_info, len)?;
-			// Ok(self.alloc_slot(buffer, strong_refs))
+		) -> Result<MutDesc<Ash, Buffer<[T]>>, BindlessAllocationError> {
+			unsafe {
+				self.create_ash(
+					create_info,
+					&ash::vk::BufferCreateInfo {
+						usage: create_info.usage,
+						size: size_of::<T>() as DeviceSize * len,
+						..Default::default()
+					},
+					len,
+				)
+			}
 		}
 	}
 }

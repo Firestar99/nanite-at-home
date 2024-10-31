@@ -1,5 +1,5 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
-use crate::descriptor::rc_reference::RCDescExt;
+use crate::descriptor::rc::RCDescExt;
 use crate::descriptor::{Bindless, RCDesc};
 use crate::frame_in_flight::{FrameInFlight, ResourceInFlight, SeedInFlight};
 use rust_gpu_bindless_shaders::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};

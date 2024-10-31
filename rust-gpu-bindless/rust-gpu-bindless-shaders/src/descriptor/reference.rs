@@ -7,14 +7,18 @@ use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ops::Deref;
 
-/// See [`Desc`].
+/// A shared read-only [`Desc`].
 pub trait DescRef: Sized + Send + Sync {}
+
+/// A mutable [`Desc`].
+pub trait MutDescRef: DescRef {}
 
 /// A generic Descriptor.
 ///
 /// The T generic describes the type of descriptor this is. Think of it as representing the type of smart pointer you
 /// want to use, implemented by types similar to [`Rc`] or [`Arc`]. But it may also control when you'll have access to
-/// it, as similar to a [`Weak`] pointer the backing object could have deallocated.
+/// it, similar to a [`Weak`] pointer the backing object could have deallocated. And what kind of access you have,
+/// whether this is a read-only shared resource or a mutable resource.
 ///
 /// The C generic describes the Contents that this pointer is pointing to. This may plainly be a typed [`Buffer<R>`],
 /// but could also be a `UniformConstant` like an [`Image`], [`Sampler`] or others.
@@ -78,13 +82,13 @@ impl<R: DescRef + PartialEq, C: DescContent> PartialEq for Desc<R, C> {
 impl<R: DescRef + Eq, C: DescContent> Eq for Desc<R, C> {}
 
 // desc extra traits
-pub trait DerefDescRef<C: DescContent>: DescRef {
+pub trait DerefDescRef<D> {
 	type Target;
 
-	fn deref(desc: &Desc<Self, C>) -> &Self::Target;
+	fn deref(desc: &D) -> &Self::Target;
 }
 
-impl<R: DerefDescRef<C>, C: DescContent> Deref for Desc<R, C> {
+impl<R: DescRef + DerefDescRef<Self>, C: DescContent> Deref for Desc<R, C> {
 	type Target = R::Target;
 
 	fn deref(&self) -> &Self::Target {
@@ -97,18 +101,15 @@ impl<R: DerefDescRef<C>, C: DescContent> Deref for Desc<R, C> {
 /// # Safety
 /// see [`BufferStruct`]
 #[allow(clippy::missing_safety_doc)]
-pub unsafe trait DescStructRef: DescRef + Copy {
+pub unsafe trait DescStructRef<D>: Copy {
 	type TransferDescStruct: bytemuck::AnyBitPattern + Send + Sync;
 
-	unsafe fn desc_write_cpu<C: DescContent>(
-		desc: Desc<Self, C>,
-		meta: &mut impl MetadataCpuInterface,
-	) -> Self::TransferDescStruct;
+	unsafe fn desc_write_cpu(desc: D, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct;
 
-	unsafe fn desc_read<C: DescContent>(from: Self::TransferDescStruct, meta: Metadata) -> Desc<Self, C>;
+	unsafe fn desc_read(from: Self::TransferDescStruct, meta: Metadata) -> D;
 }
 
-unsafe impl<R: DescStructRef, C: DescContent> BufferStruct for Desc<R, C> {
+unsafe impl<R: DescRef + DescStructRef<Self>, C: DescContent> BufferStruct for Desc<R, C> {
 	type Transfer = R::TransferDescStruct;
 
 	#[inline]

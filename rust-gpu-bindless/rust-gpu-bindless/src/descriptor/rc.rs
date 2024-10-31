@@ -1,54 +1,61 @@
 use crate::backend::table::RcTableSlot;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef};
 use crate::frame_in_flight::FrameInFlight;
+use crate::platform::interface::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescriptorId, StrongDesc, TransientDesc, WeakDesc};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::ops::Deref;
 
 #[derive(Clone)]
-pub struct RC(RcTableSlot);
+pub struct RC<P: BindlessPlatform> {
+	slot: RcTableSlot,
+	_phantom: PhantomData<P>,
+}
 
-impl DescRef for RC {}
+impl<P: BindlessPlatform> DescRef for RC<P> {}
 
-impl AliveDescRef for RC {
+impl<P: BindlessPlatform> AliveDescRef for RC<P> {
 	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
-		desc.r.0.id()
+		desc.r.slot.id()
 	}
 }
 
-impl<C: DescContentCpu> DerefDescRef<C> for RC {
-	type Target = C::VulkanType;
+impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<RCDesc<P, C>> for RC<P> {
+	type Target = C::VulkanType<P>;
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
-		C::deref_table(&desc.r.0)
+		C::deref_table(&desc.r.slot)
 	}
 }
 
-impl Debug for RC {
+impl<P: BindlessPlatform> Debug for RC<P> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-		f.debug_tuple("RC").field(&self.0.id()).finish()
+		f.debug_tuple("RC").field(&self.slot.id()).finish()
 	}
 }
 
-impl PartialEq<Self> for RC {
+impl<P: BindlessPlatform> PartialEq<Self> for RC<P> {
 	fn eq(&self, other: &Self) -> bool {
-		self.0.id() == other.0.id()
+		self.slot.id() == other.slot.id()
 	}
 }
 
-impl Eq for RC {}
+impl<P: BindlessPlatform> Eq for RC<P> {}
 
-impl Hash for RC {
+impl<P: BindlessPlatform> Hash for RC<P> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.0.id().hash(state)
+		self.slot.id().hash(state)
 	}
 }
 
-pub type RCDesc<C> = Desc<RC, C>;
+pub type RCDesc<P, C> = Desc<RC<P>, C>;
 
-pub trait RCDescExt<C: DescContentCpu>: Sized + Hash + Eq + Deref<Target = C::VulkanType> {
+pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>:
+	Sized + Hash + Eq + Deref<Target = C::VulkanType<P>>
+{
 	/// Create a new RCDesc
 	///
 	/// # Safety
@@ -76,32 +83,38 @@ pub trait RCDescExt<C: DescContentCpu>: Sized + Hash + Eq + Deref<Target = C::Vu
 		unsafe { StrongDesc::new(self.id()) }
 	}
 
-	fn into_any(self) -> AnyRCDesc;
+	fn into_any(self) -> AnyRCDesc<P>;
 }
 
-impl<C: DescContentCpu> RCDescExt<C> for RCDesc<C> {
+impl<P: BindlessPlatform, C: DescContentCpu> RCDescExt<P, C> for RCDesc<P, C> {
 	unsafe fn new(slot: RcTableSlot) -> Self {
-		Desc::new_inner(RC(slot))
+		Desc::new_inner(RC {
+			slot,
+			_phantom: PhantomData {},
+		})
 	}
 
 	fn id(&self) -> DescriptorId {
-		self.r.0.id()
+		self.r.slot.id()
 	}
 
 	#[inline]
-	fn into_any(self) -> AnyRCDesc {
+	fn into_any(self) -> AnyRCDesc<P> {
 		AnyRCDesc::new_inner(self.r)
 	}
 }
 
-pub type AnyRCDesc = AnyDesc<RC>;
+pub type AnyRCDesc<P> = AnyDesc<RC<P>>;
 
 pub trait AnyRCDescExt {
 	fn new(slot: RcTableSlot) -> Self;
 }
 
-impl AnyRCDescExt for AnyRCDesc {
+impl<P: BindlessPlatform> AnyRCDescExt for AnyRCDesc<P> {
 	fn new(slot: RcTableSlot) -> Self {
-		AnyDesc::new_inner(RC(slot))
+		AnyDesc::new_inner(RC {
+			slot,
+			_phantom: PhantomData {},
+		})
 	}
 }

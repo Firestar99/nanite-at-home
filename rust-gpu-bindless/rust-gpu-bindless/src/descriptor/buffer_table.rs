@@ -1,23 +1,22 @@
 use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::{RcTableSlot, Table, TableInterface, TableSync};
-use crate::descriptor::buffer_metadata_cpu::BackingRefsError;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::descriptor::rc_reference::RCDesc;
-use crate::descriptor::{AnyRCDesc, Bindless, DescriptorBinding, RCDescExt, VulkanDescriptorType};
+use crate::descriptor::mutable::{MutDesc, MutDescExt};
+use crate::descriptor::{AnyRCDesc, Bindless, BindlessCreateInfo, DescriptorBinding, VulkanDescriptorType};
 use crate::platform::interface::BindlessPlatform;
-use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use ash::vk::DeviceSize;
+use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, BINDING_BUFFER};
 use smallvec::SmallVec;
-use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
-impl<T: BufferContent + ?Sized, P: BindlessPlatform> DescContentCpu for Buffer<T> {
-	type DescTable = BufferTable<P>;
-	type VulkanType = P::TypedBuffer<T::Transfer>;
+impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
+	type DescTable<P: BindlessPlatform> = BufferTable<P>;
+	type VulkanType<P: BindlessPlatform> = P::TypedBuffer<T::Transfer>;
 
-	fn deref_table(slot: &RcTableSlot) -> &Self::VulkanType {
+	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P> {
 		slot.try_deref::<BufferInterface<P>>().unwrap().buffer.reinterpret_ref()
 	}
 }
@@ -35,8 +34,9 @@ impl<P: BindlessPlatform> DescTable for BufferTable<P> {
 
 pub struct BufferSlot<P: BindlessPlatform> {
 	pub buffer: P::Buffer,
+	pub len: DeviceSize,
 	pub memory_allocation: P::MemoryAllocation,
-	pub _strong_refs: StrongBackingRefs,
+	pub _strong_refs: StrongBackingRefs<P>,
 }
 
 pub struct BufferTable<P: BindlessPlatform> {
@@ -46,20 +46,16 @@ pub struct BufferTable<P: BindlessPlatform> {
 impl<P: BindlessPlatform> BufferTable<P> {
 	pub fn new(
 		table_sync: &Arc<TableSync>,
-		device: P::Device,
+		ci: Arc<BindlessCreateInfo<P>>,
 		global_descriptor_set: P::DescriptorSet,
-		count: u32,
 	) -> Self {
+		let count = ci.counts.buffers;
+		let interface = BufferInterface {
+			ci,
+			global_descriptor_set,
+		};
 		Self {
-			table: table_sync
-				.register(
-					count,
-					BufferInterface {
-						device,
-						global_descriptor_set,
-					},
-				)
-				.unwrap(),
+			table: table_sync.register(count, interface).unwrap(),
 		}
 	}
 }
@@ -76,10 +72,16 @@ impl<'a, P: BindlessPlatform> Deref for BufferTableAccess<'a, P> {
 }
 
 impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
+	/// Allocates a new slot for the supplied buffer
+	///
+	/// # Safety
+	/// The Buffer's device must be the same as the bindless device. Ownership of the buffer is transferred to this
+	/// table. You may not access or drop it afterward, except by going though the returned `RCDesc`.
+	/// The generic T must match the contents of the Buffer and the size of the buffer must not be smaller than T.
 	#[inline]
-	pub fn alloc_slot<T: BufferContent + ?Sized>(&self, buffer: BufferSlot<P>) -> RCDesc<Buffer<T>> {
+	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(&self, buffer: BufferSlot<P>) -> MutDesc<P, Buffer<T>> {
 		unsafe {
-			RCDesc::new(
+			MutDesc::new(
 				self.table
 					.alloc_slot(buffer)
 					.map_err(|a| format!("BufferTable: {}", a))
@@ -112,7 +114,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 }
 
 pub struct BufferInterface<P: BindlessPlatform> {
-	device: P::Device,
+	ci: Arc<BindlessCreateInfo<P>>,
 	global_descriptor_set: P::DescriptorSet,
 }
 
@@ -121,11 +123,7 @@ impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
 
 	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 		unsafe {
-			P::destroy_buffers(
-				&self.device,
-				&self.global_descriptor_set,
-				indices.into_iter().map(|(_, s)| &s),
-			);
+			P::destroy_buffers(&self.ci, &self.global_descriptor_set, indices);
 		}
 	}
 
@@ -136,18 +134,4 @@ impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
 
 /// Stores [`RC`] to various resources, to which [`StrongDesc`] contained in some resource may refer to.
 #[derive(Clone, Default)]
-pub struct StrongBackingRefs(pub SmallVec<[AnyRCDesc; 5]>);
-
-pub enum AllocFromError {
-	AllocateBufferError(VkError),
-	BackingRefsError(BackingRefsError),
-}
-
-impl Display for AllocFromError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		match self {
-			AllocFromError::AllocateBufferError(e) => e.fmt(f),
-			AllocFromError::BackingRefsError(e) => e.fmt(f),
-		}
-	}
-}
+pub struct StrongBackingRefs<P: BindlessPlatform>(pub SmallVec<[AnyRCDesc<P>; 5]>);
