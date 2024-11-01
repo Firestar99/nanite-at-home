@@ -44,7 +44,7 @@ unsafe impl BindlessPlatform for Ash {
 		let mut vulkan12properties = PhysicalDeviceVulkan12Properties::default();
 		let mut properties2 = PhysicalDeviceProperties2::default().push_next(&mut vulkan12properties);
 		ci.instance
-			.get_physical_device_properties2(*ci.physical_device, &mut properties2);
+			.get_physical_device_properties2(ci.physical_device, &mut properties2);
 		DescriptorCounts {
 			buffers: vulkan12properties.max_descriptor_set_update_after_bind_storage_buffers,
 			image: u32::min(
@@ -53,6 +53,10 @@ unsafe impl BindlessPlatform for Ash {
 			),
 			samplers: vulkan12properties.max_descriptor_set_update_after_bind_samplers,
 		}
+	}
+
+	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T> {
+		buffer
 	}
 
 	unsafe fn destroy_buffers<'a>(

@@ -1,5 +1,5 @@
 use crate::backend::table::RcTableSlot;
-use crate::descriptor::{Desc, DescContentCpu, RCDesc};
+use crate::descriptor::{Desc, DescContentCpu, RCDesc, RCDescExt};
 use crate::platform::interface::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{DerefDescRef, DescRef, DescriptorId, MutDescRef};
 use std::fmt::{Debug, Formatter};
@@ -7,7 +7,6 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-#[derive(Clone)]
 pub struct Mut<P: BindlessPlatform> {
 	slot: RcTableSlot,
 	_phantom: PhantomData<P>,
@@ -21,7 +20,16 @@ impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<MutDesc<P, C>> for Mut
 	type Target = C::VulkanType<P>;
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
-		C::deref_table(&desc.r.0)
+		C::deref_table(&desc.r.slot)
+	}
+}
+
+impl<P: BindlessPlatform> Clone for Mut<P> {
+	fn clone(&self) -> Self {
+		Self {
+			slot: self.slot.clone(),
+			_phantom: PhantomData {},
+		}
 	}
 }
 
@@ -75,6 +83,6 @@ impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> 
 	}
 
 	fn into_shared(self) -> RCDesc<P, C> {
-		unsafe { Desc::new(self.r) }
+		unsafe { RCDesc::new(self.r.slot) }
 	}
 }

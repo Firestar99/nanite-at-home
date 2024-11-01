@@ -17,7 +17,7 @@ impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	type VulkanType<P: BindlessPlatform> = P::TypedBuffer<T::Transfer>;
 
 	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P> {
-		slot.try_deref::<BufferInterface<P>>().unwrap().buffer.reinterpret_ref()
+		unsafe { P::reinterpet_ref_buffer(&slot.try_deref::<BufferInterface<P>>().unwrap().buffer) }
 	}
 }
 
@@ -133,5 +133,16 @@ impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
 }
 
 /// Stores [`RC`] to various resources, to which [`StrongDesc`] contained in some resource may refer to.
-#[derive(Clone, Default)]
 pub struct StrongBackingRefs<P: BindlessPlatform>(pub SmallVec<[AnyRCDesc<P>; 5]>);
+
+impl<P: BindlessPlatform> Clone for StrongBackingRefs<P> {
+	fn clone(&self) -> Self {
+		Self { 0: self.0.clone() }
+	}
+}
+
+impl<P: BindlessPlatform> Default for StrongBackingRefs<P> {
+	fn default() -> Self {
+		Self(SmallVec::default())
+	}
+}

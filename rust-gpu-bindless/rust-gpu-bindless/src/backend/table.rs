@@ -287,10 +287,7 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 
 	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<()> {
 		let reaper_queue = &self.reaper_queue[gc_queue];
-		let mut set = unsafe {
-			DescriptorIndexRangeSet::from(&(), (0..).map(|_| reaper_queue.pop()).take_while(Option::is_some))
-		};
-		set
+		unsafe { DescriptorIndexRangeSet::from(&(), (0..).map_while(|_| reaper_queue.pop())) }
 	}
 
 	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<()>) {

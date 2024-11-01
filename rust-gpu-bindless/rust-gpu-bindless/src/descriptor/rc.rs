@@ -8,7 +8,6 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-#[derive(Clone)]
 pub struct RC<P: BindlessPlatform> {
 	slot: RcTableSlot,
 	_phantom: PhantomData<P>,
@@ -28,6 +27,15 @@ impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<RCDesc<P, C>> for RC<P
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
 		C::deref_table(&desc.r.slot)
+	}
+}
+
+impl<P: BindlessPlatform> Clone for RC<P> {
+	fn clone(&self) -> Self {
+		Self {
+			slot: self.slot.clone(),
+			_phantom: PhantomData {},
+		}
 	}
 }
 

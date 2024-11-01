@@ -7,8 +7,8 @@ pub fn range_to_descriptor_index(range: Range<DescriptorIndex>) -> impl Iterator
 	(range.start.to_u32()..range.end.to_u32()).map(|i| unsafe { DescriptorIndex::new(i).unwrap() })
 }
 
-pub(crate) unsafe fn descriptor_index_to_range(index: DescriptorIndex) -> Range<DescriptorIndex> {
-	index..DescriptorIndex::new(index.to_u32() + 1).unwrap()
+pub(crate) fn descriptor_index_to_range(index: DescriptorIndex) -> Range<DescriptorIndex> {
+	unsafe { index..DescriptorIndex::new(index.to_u32() + 1).unwrap() }
 }
 
 pub trait DescriptorIndexIterator<'a, I: TableInterface>: Sized {
@@ -26,14 +26,12 @@ pub trait DescriptorIndexIterator<'a, I: TableInterface>: Sized {
 		self.into_iter().collect()
 	}
 
-	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, I> {
+	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, Table<I>> {
 		// Safety: indices are guaranteed to be alive by constructor
-		unsafe {
-			let (table, iter) = self.into_inner();
-			DescriptorIndexRangeSet {
-				range_set: iter.map(descriptor_index_to_range).collect(),
-				table,
-			}
+		let (table, iter) = self.into_inner();
+		DescriptorIndexRangeSet {
+			range_set: iter.map(descriptor_index_to_range).collect(),
+			table,
 		}
 	}
 }
@@ -48,11 +46,9 @@ impl<'a, T> DescriptorIndexRangeSet<'a, T> {
 	/// # Safety
 	/// indices must be alive and match the table
 	pub unsafe fn from(table: &'a T, iter: impl Iterator<Item = DescriptorIndex>) -> Self {
-		unsafe {
-			Self {
-				range_set: iter.map(descriptor_index_to_range).collect(),
-				table,
-			}
+		Self {
+			range_set: iter.map(descriptor_index_to_range).collect(),
+			table,
 		}
 	}
 
@@ -111,7 +107,7 @@ impl<'a, I: TableInterface> DescriptorIndexIterator<'a, I> for DescriptorIndexRa
 		)
 	}
 
-	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, I> {
+	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, Table<I>> {
 		self
 	}
 }
