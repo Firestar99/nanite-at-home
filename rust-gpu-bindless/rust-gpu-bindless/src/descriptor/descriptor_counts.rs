@@ -1,5 +1,6 @@
 use crate::descriptor::BindlessCreateInfo;
 use crate::platform::BindlessPlatform;
+use std::sync::Arc;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DescriptorCounts {
@@ -9,7 +10,7 @@ pub struct DescriptorCounts {
 }
 
 impl DescriptorCounts {
-	pub fn limits<P: BindlessPlatform>(ci: &BindlessCreateInfo<P>) -> Self {
+	pub fn limits<P: BindlessPlatform>(ci: &Arc<BindlessCreateInfo<P>>) -> Self {
 		unsafe { P::update_after_bind_descriptor_limits(ci) }
 	}
 
@@ -19,7 +20,7 @@ impl DescriptorCounts {
 		samplers: 400,
 	};
 
-	pub fn reasonable_defaults<P: BindlessPlatform>(ci: &BindlessCreateInfo<P>) -> Self {
+	pub fn reasonable_defaults<P: BindlessPlatform>(ci: &Arc<BindlessCreateInfo<P>>) -> Self {
 		Self::REASONABLE_DEFAULTS.min(Self::limits(ci))
 	}
 

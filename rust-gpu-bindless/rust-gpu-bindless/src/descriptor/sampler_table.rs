@@ -1,12 +1,10 @@
 use crate::backend::range_set::DescriptorIndexIterator;
-use crate::backend::table::{RcTableSlot, Table, TableInterface, TableSync};
+use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::rc::RCDesc;
-use crate::descriptor::{Bindless, BindlessCreateInfo, DescriptorBinding, RCDescExt, VulkanDescriptorType};
+use crate::descriptor::{Bindless, BindlessCreateInfo, RCDescExt};
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::Sampler;
-use rust_gpu_bindless_shaders::descriptor::BINDING_SAMPLER;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -19,16 +17,7 @@ impl DescContentCpu for Sampler {
 	}
 }
 
-impl<P: BindlessPlatform> DescTable for SamplerTable<P> {
-	fn layout_binding(count: DescriptorCounts) -> impl Iterator<Item = DescriptorBinding> {
-		[DescriptorBinding {
-			ty: VulkanDescriptorType::Sampler,
-			binding: BINDING_SAMPLER,
-			count: count.samplers,
-		}]
-		.into_iter()
-	}
-}
+impl<P: BindlessPlatform> DescTable for SamplerTable<P> {}
 
 pub struct SamplerTable<P: BindlessPlatform> {
 	table: Arc<Table<SamplerInterface<P>>>,
@@ -38,7 +27,7 @@ impl<P: BindlessPlatform> SamplerTable<P> {
 	pub fn new(
 		table_sync: &Arc<TableSync>,
 		ci: Arc<BindlessCreateInfo<P>>,
-		global_descriptor_set: P::DescriptorSet,
+		global_descriptor_set: P::BindlessDescriptorSet,
 	) -> Self {
 		let counts = ci.counts.samplers;
 		let interface = SamplerInterface {
@@ -80,31 +69,14 @@ impl<'a, P: BindlessPlatform> SamplerTableAccess<'a, P> {
 		}
 	}
 
-	// pub(crate) fn flush_descriptors(
-	// 	&self,
-	// 	delay_drop: &mut Vec<RcTableSlot>,
-	// 	mut writes: impl FnMut(WriteDescriptorSet),
-	// ) {
-	// 	let flush_queue = self.table.drain_flush_queue();
-	// 	let mut set = DescriptorIndexRangeSet::from();
-	// 	delay_drop.reserve(flush_queue.size_hint().0);
-	// 	for x in flush_queue {
-	// 		set.insert(x.id().index());
-	// 		delay_drop.push(x);
-	// 	}
-	// 	for range in set.iter_ranges() {
-	// 		writes(WriteDescriptorSet::sampler_array(
-	// 			BINDING_SAMPLER,
-	// 			range.start.to_u32(),
-	// 			range_to_descriptor_index(range).map(|index| unsafe { self.table.get_slot_unchecked(index).clone() }),
-	// 		));
-	// 	}
-	// }
+	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, SamplerInterface<P>> {
+		self.table.drain_flush_queue()
+	}
 }
 
 pub struct SamplerInterface<P: BindlessPlatform> {
 	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::DescriptorSet,
+	global_descriptor_set: P::BindlessDescriptorSet,
 }
 
 impl<P: BindlessPlatform> TableInterface for SamplerInterface<P> {

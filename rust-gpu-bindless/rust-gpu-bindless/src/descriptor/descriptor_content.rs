@@ -1,5 +1,4 @@
 use crate::backend::table::RcTableSlot;
-use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::DescContent;
 
@@ -16,21 +15,4 @@ pub trait DescContentCpu: DescContent {
 }
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.
-pub trait DescTable: Sized {
-	fn layout_binding(count: DescriptorCounts) -> impl Iterator<Item = DescriptorBinding>;
-}
-
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum VulkanDescriptorType {
-	Buffer,
-	SampledImage,
-	StorageImage,
-	Sampler,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct DescriptorBinding {
-	pub ty: VulkanDescriptorType,
-	pub binding: u32,
-	pub count: u32,
-}
+pub trait DescTable: Sized {}

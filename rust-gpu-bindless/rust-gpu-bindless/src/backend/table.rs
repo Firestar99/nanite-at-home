@@ -175,15 +175,6 @@ impl TableSync {
 		}
 	}
 
-	pub fn flush(&self) {
-		let _guard = self.flush_and_gc_mutex.lock();
-		for table_lock in &self.tables {
-			if let Some(table) = table_lock.read().as_ref() {
-				table.flush();
-			}
-		}
-	}
-
 	pub fn try_recover(self: &Arc<Self>, id: DescriptorId) -> Option<RcTableSlot> {
 		let table = self.tables[id.desc_type().to_usize()].read();
 		if let Some(table) = table.as_ref() {
@@ -192,6 +183,34 @@ impl TableSync {
 				.then(|| unsafe { RcTableSlot::new(Arc::as_ptr(self), id) })
 		} else {
 			None
+		}
+	}
+
+	/// Flush all tables
+	pub fn flush(&self) {
+		self.flush_lock().flush();
+	}
+
+	/// Acquire the [`FlushGuard`] that may be used to flush tables and allows building manual flushing algorithms.
+	pub fn flush_lock(&self) -> FlushGuard<'_> {
+		FlushGuard {
+			table_sync: self,
+			_guard: self.flush_and_gc_mutex.lock(),
+		}
+	}
+}
+
+pub struct FlushGuard<'a> {
+	table_sync: &'a TableSync,
+	_guard: MutexGuard<'a, ()>,
+}
+
+impl<'a> FlushGuard<'a> {
+	pub fn flush(&self) {
+		for table_lock in &self.table_sync.tables {
+			if let Some(table) = table_lock.read().as_ref() {
+				table.flush();
+			}
 		}
 	}
 }
@@ -256,8 +275,8 @@ trait AbstractTable: Any + Send + Sync + 'static {
 	fn as_any(&self) -> &dyn Any;
 	fn ref_inc(&self, id: DescriptorId);
 	fn ref_dec(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
-	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<()>;
-	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<()>);
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<'static, ()>;
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<'static, ()>);
 	fn flush(&self);
 	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
 }
@@ -285,12 +304,12 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 		}
 	}
 
-	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<()> {
+	fn gc_collect(&self, gc_queue: AB) -> DescriptorIndexRangeSet<'static, ()> {
 		let reaper_queue = &self.reaper_queue[gc_queue];
 		unsafe { DescriptorIndexRangeSet::from(&(), (0..).map_while(|_| reaper_queue.pop())) }
 	}
 
-	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<()>) {
+	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<'static, ()>) {
 		let gc_indices = unsafe { DescriptorIndexRangeSet::new(self, gc_indices.into_range_set()) };
 
 		self.interface.drop_slots(&gc_indices);
@@ -312,7 +331,7 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 	}
 
 	fn flush(&self) {
-		self.interface.flush(self.drain_flush_queue())
+		self.interface.flush(&mut self.drain_flush_queue())
 	}
 
 	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool {

@@ -1,12 +1,11 @@
 use crate::backend::range_set::DescriptorIndexIterator;
-use crate::backend::table::{RcTableSlot, Table, TableInterface, TableSync};
+use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
-use crate::descriptor::{Bindless, BindlessCreateInfo, DescriptorBinding, Image, VulkanDescriptorType};
+use crate::descriptor::{Bindless, BindlessCreateInfo, Image};
 use crate::platform::BindlessPlatform;
+use ash::vk::ImageUsageFlags;
 use rust_gpu_bindless_shaders::descriptor::SampleType;
-use rust_gpu_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
 use rust_gpu_bindless_shaders::spirv_std::image::Image2d;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -30,28 +29,13 @@ impl<
 	}
 }
 
-impl<P: BindlessPlatform> DescTable for ImageTable<P> {
-	fn layout_binding(count: DescriptorCounts) -> impl Iterator<Item = DescriptorBinding> {
-		[
-			DescriptorBinding {
-				ty: VulkanDescriptorType::StorageImage,
-				binding: BINDING_STORAGE_IMAGE,
-				count: count.image,
-			},
-			DescriptorBinding {
-				ty: VulkanDescriptorType::SampledImage,
-				binding: BINDING_SAMPLED_IMAGE,
-				count: count.image,
-			},
-		]
-		.into_iter()
-	}
-}
+impl<P: BindlessPlatform> DescTable for ImageTable<P> {}
 
 pub struct ImageSlot<P: BindlessPlatform> {
 	pub image: P::Image,
 	pub imageview: P::ImageView,
 	pub memory_allocation: P::MemoryAllocation,
+	pub usage: ImageUsageFlags,
 }
 
 pub struct ImageTable<P: BindlessPlatform> {
@@ -62,7 +46,7 @@ impl<P: BindlessPlatform> ImageTable<P> {
 	pub fn new(
 		table_sync: &Arc<TableSync>,
 		ci: Arc<BindlessCreateInfo<P>>,
-		global_descriptor_set: P::DescriptorSet,
+		global_descriptor_set: P::BindlessDescriptorSet,
 	) -> Self {
 		let counts = ci.counts.image;
 		let interface = ImageInterface {
@@ -105,42 +89,14 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 		}
 	}
 
-	// pub(crate) fn flush_descriptors(
-	// 	&self,
-	// 	delay_drop: &mut Vec<RcTableSlot>,
-	// 	mut writes: impl FnMut(WriteDescriptorSet),
-	// ) {
-	// 	let flush_queue = self.table.drain_flush_queue();
-	// 	let mut storage = DescriptorIndexRangeSet::from();
-	// 	let mut sampled = DescriptorIndexRangeSet::from();
-	// 	delay_drop.reserve(flush_queue.size_hint().0);
-	// 	for x in flush_queue {
-	// 		let image = unsafe { self.table.get_slot_unchecked(x.id().index()) };
-	// 		if image.usage().contains(ImageUsage::STORAGE) {
-	// 			storage.insert(x.id().index());
-	// 		}
-	// 		if image.usage().contains(ImageUsage::SAMPLED) {
-	// 			sampled.insert(x.id().index());
-	// 		}
-	// 		delay_drop.push(x);
-	// 	}
-	//
-	// 	for (binding, range_set) in [(BINDING_STORAGE_IMAGE, storage), (BINDING_SAMPLED_IMAGE, sampled)] {
-	// 		for range in range_set.iter_ranges() {
-	// 			writes(WriteDescriptorSet::image_view_array(
-	// 				binding,
-	// 				range.start.to_u32(),
-	// 				range_to_descriptor_index(range)
-	// 					.map(|index| unsafe { self.table.get_slot_unchecked(index).clone() }),
-	// 			));
-	// 		}
-	// 	}
-	// }
+	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, ImageInterface<P>> {
+		self.table.drain_flush_queue()
+	}
 }
 
 pub struct ImageInterface<P: BindlessPlatform> {
 	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::DescriptorSet,
+	global_descriptor_set: P::BindlessDescriptorSet,
 }
 
 impl<P: BindlessPlatform> TableInterface for ImageInterface<P> {

@@ -1,13 +1,12 @@
 use crate::backend::range_set::DescriptorIndexIterator;
-use crate::backend::table::{RcTableSlot, Table, TableInterface, TableSync};
+use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
-use crate::descriptor::{AnyRCDesc, Bindless, BindlessCreateInfo, DescriptorBinding, VulkanDescriptorType};
+use crate::descriptor::{AnyRCDesc, Bindless, BindlessCreateInfo};
 use crate::platform::BindlessPlatform;
 use ash::vk::DeviceSize;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
-use rust_gpu_bindless_shaders::descriptor::{Buffer, BINDING_BUFFER};
+use rust_gpu_bindless_shaders::descriptor::Buffer;
 use smallvec::SmallVec;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -21,20 +20,14 @@ impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	}
 }
 
-impl<P: BindlessPlatform> DescTable for BufferTable<P> {
-	fn layout_binding(count: DescriptorCounts) -> impl Iterator<Item = DescriptorBinding> {
-		[DescriptorBinding {
-			ty: VulkanDescriptorType::Buffer,
-			binding: BINDING_BUFFER,
-			count: count.buffers,
-		}]
-		.into_iter()
-	}
-}
+impl<P: BindlessPlatform> DescTable for BufferTable<P> {}
 
 pub struct BufferSlot<P: BindlessPlatform> {
 	pub buffer: P::Buffer,
+	/// len in T's if this is a slice, otherwise 1
 	pub len: DeviceSize,
+	/// the total size of this buffer in bytes
+	pub size: DeviceSize,
 	pub memory_allocation: P::MemoryAllocation,
 	pub _strong_refs: StrongBackingRefs<P>,
 }
@@ -47,7 +40,7 @@ impl<P: BindlessPlatform> BufferTable<P> {
 	pub fn new(
 		table_sync: &Arc<TableSync>,
 		ci: Arc<BindlessCreateInfo<P>>,
-		global_descriptor_set: P::DescriptorSet,
+		global_descriptor_set: P::BindlessDescriptorSet,
 	) -> Self {
 		let count = ci.counts.buffers;
 		let interface = BufferInterface {
@@ -90,32 +83,14 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		}
 	}
 
-	// pub(crate) fn flush_descriptors(
-	// 	&self,
-	// 	delay_drop: &mut Vec<RcTableSlot>,
-	// 	mut writes: impl FnMut(WriteDescriptorSet),
-	// ) {
-	// 	let flush_queue = self.table.drain_flush_queue();
-	// 	let mut set = DescriptorIndexRangeSet::from();
-	// 	delay_drop.reserve(flush_queue.size_hint().0);
-	// 	for x in flush_queue {
-	// 		set.insert(x.id().index());
-	// 		delay_drop.push(x);
-	// 	}
-	// 	for range in set.iter_ranges() {
-	// 		writes(WriteDescriptorSet::buffer_array(
-	// 			BINDING_BUFFER,
-	// 			range.start.to_u32(),
-	// 			range_to_descriptor_index(range)
-	// 				.map(|index| unsafe { self.table.get_slot_unchecked(index).buffer.clone() }),
-	// 		));
-	// 	}
-	// }
+	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, BufferInterface<P>> {
+		self.table.drain_flush_queue()
+	}
 }
 
 pub struct BufferInterface<P: BindlessPlatform> {
 	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::DescriptorSet,
+	global_descriptor_set: P::BindlessDescriptorSet,
 }
 
 impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {

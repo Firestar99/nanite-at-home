@@ -17,5 +17,5 @@ pub unsafe trait Platform: Sized + Send + Sync + 'static {
 	type ImageView: 'static;
 	type Sampler: 'static;
 	type AllocationError: 'static;
-	type DescriptorSet: Clone + 'static;
+	type BindlessDescriptorSet: Clone + 'static;
 }

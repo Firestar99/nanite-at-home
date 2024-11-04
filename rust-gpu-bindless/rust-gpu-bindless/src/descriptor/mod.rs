@@ -1,5 +1,4 @@
 pub mod bindless;
-pub mod bindless_descriptor_allocator;
 pub mod buffer_metadata_cpu;
 pub mod buffer_table;
 pub mod descriptor_content;

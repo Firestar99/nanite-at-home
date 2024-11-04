@@ -36,10 +36,19 @@ pub trait DescriptorIndexIterator<'a, I: TableInterface>: Sized {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DescriptorIndexRangeSet<'a, T> {
 	range_set: RangeSet<DescriptorIndex>,
 	table: &'a T,
+}
+
+impl<'a, T> Clone for DescriptorIndexRangeSet<'a, T> {
+	fn clone(&self) -> Self {
+		Self {
+			table: self.table,
+			range_set: self.range_set.clone(),
+		}
+	}
 }
 
 impl<'a, T> DescriptorIndexRangeSet<'a, T> {
@@ -56,6 +65,12 @@ impl<'a, T> DescriptorIndexRangeSet<'a, T> {
 	/// indices must be alive and match the table
 	pub unsafe fn new(table: &'a T, range_set: RangeSet<DescriptorIndex>) -> Self {
 		Self { table, range_set }
+	}
+
+	/// # Safety
+	/// indices must be alive and match the table
+	pub unsafe fn insert(&mut self, index: DescriptorIndex) {
+		self.range_set.insert(descriptor_index_to_range(index));
 	}
 
 	pub fn table(&self) -> &'a T {
@@ -109,5 +124,18 @@ impl<'a, I: TableInterface> DescriptorIndexIterator<'a, I> for DescriptorIndexRa
 
 	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, Table<I>> {
 		self
+	}
+}
+
+impl<'a, I: TableInterface> DescriptorIndexIterator<'a, I> for &DescriptorIndexRangeSet<'a, Table<I>> {
+	fn into_inner(self) -> (&'a Table<I>, impl Iterator<Item = DescriptorIndex>) {
+		(
+			self.table,
+			self.range_set.iter().cloned().flat_map(range_to_descriptor_index),
+		)
+	}
+
+	fn into_range_set(self) -> DescriptorIndexRangeSet<'a, Table<I>> {
+		self.clone()
 	}
 }
