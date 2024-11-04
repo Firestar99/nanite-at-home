@@ -1,7 +1,7 @@
 use crate::backend::table::RcTableSlot;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef};
 use crate::frame_in_flight::FrameInFlight;
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescriptorId, StrongDesc, TransientDesc, WeakDesc};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};

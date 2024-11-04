@@ -1,6 +1,6 @@
 use crate::descriptor::buffer_table::StrongBackingRefs;
 use crate::descriptor::{AnyRCDesc, AnyRCDescExt, Bindless};
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::buffer_content::{Metadata, MetadataCpuInterface};
 use rust_gpu_bindless_shaders::descriptor::StrongDesc;
 use rust_gpu_bindless_shaders::descriptor::{DescContent, DescriptorId};

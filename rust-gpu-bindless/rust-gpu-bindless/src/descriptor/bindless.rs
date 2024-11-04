@@ -3,7 +3,7 @@ use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use parking_lot::Mutex;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::PushConstant;

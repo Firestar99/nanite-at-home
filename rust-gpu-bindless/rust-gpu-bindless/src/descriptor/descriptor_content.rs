@@ -1,6 +1,6 @@
 use crate::backend::table::RcTableSlot;
 use crate::descriptor::descriptor_counts::DescriptorCounts;
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::DescContent;
 
 /// A descriptor type to some resource, that may have generic arguments to specify its contents.

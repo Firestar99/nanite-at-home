@@ -4,7 +4,7 @@ use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
 use crate::descriptor::{Bindless, BindlessCreateInfo, DescriptorBinding, Image, VulkanDescriptorType};
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::SampleType;
 use rust_gpu_bindless_shaders::descriptor::{BINDING_SAMPLED_IMAGE, BINDING_STORAGE_IMAGE};
 use rust_gpu_bindless_shaders::spirv_std::image::Image2d;

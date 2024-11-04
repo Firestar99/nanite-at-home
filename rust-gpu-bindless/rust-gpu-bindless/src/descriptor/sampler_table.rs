@@ -4,7 +4,7 @@ use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::rc::RCDesc;
 use crate::descriptor::{Bindless, BindlessCreateInfo, DescriptorBinding, RCDescExt, VulkanDescriptorType};
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::Sampler;
 use rust_gpu_bindless_shaders::descriptor::BINDING_SAMPLER;
 use std::ops::Deref;

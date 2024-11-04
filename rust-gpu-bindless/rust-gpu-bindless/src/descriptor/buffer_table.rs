@@ -4,7 +4,7 @@ use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
 use crate::descriptor::{AnyRCDesc, Bindless, BindlessCreateInfo, DescriptorBinding, VulkanDescriptorType};
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 use ash::vk::DeviceSize;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, BINDING_BUFFER};

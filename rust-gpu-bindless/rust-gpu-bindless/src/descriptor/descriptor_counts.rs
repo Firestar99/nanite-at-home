@@ -1,5 +1,5 @@
 use crate::descriptor::BindlessCreateInfo;
-use crate::platform::interface::BindlessPlatform;
+use crate::platform::BindlessPlatform;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DescriptorCounts {
