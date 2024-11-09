@@ -47,6 +47,12 @@ pub fn process_pbr_material<'a>(
 		omr: material
 			.pbr_metallic_roughness()
 			.metallic_roughness_texture()
+			// if metallic_roughness_texture is missing, try to use specular_texture. This fixes Bistro.
+			.or_else(|| {
+				material
+					.specular()
+					.and_then(|s| s.specular_texture().or(s.specular_color_texture()))
+			})
 			.map(|tex| image_processor.image::<{ ImageType::RGBA_LINEAR as u32 }>(tex.texture().source())),
 		material,
 	})

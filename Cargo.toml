@@ -89,7 +89,7 @@ zstd = { version = "0.13" }
 zune-image = { version = "0.5.0-rc0", default-features = false, features = ["png", "jpeg", "simd"] }
 
 # model loader
-gltf = { version = "1.4.0", default-features = false, features = ["names", "utils", "import", "KHR_lights_punctual"] }
+gltf = { version = "1.4.0", default-features = false, features = ["names", "utils", "import", "KHR_lights_punctual", "KHR_materials_specular"] }
 base64 = "0.22"
 urlencoding = "2.1"
 meshopt = "0.2.1"
