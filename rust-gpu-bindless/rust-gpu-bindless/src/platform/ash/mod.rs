@@ -36,6 +36,6 @@ unsafe impl Platform for Ash {
 	type Image = ash::vk::Image;
 	type ImageView = ash::vk::ImageView;
 	type Sampler = ash::vk::Sampler;
-	type AllocationError = BindlessAllocationError;
+	type AllocationError = AshAllocationError;
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
 }

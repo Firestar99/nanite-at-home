@@ -1,7 +1,11 @@
 use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::DrainFlushQueue;
-use crate::descriptor::{BindlessCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface};
+use crate::descriptor::{
+	BindlessBufferCreateInfo, BindlessCreateInfo, BufferInterface, BufferSlot, DescriptorCounts, ImageInterface,
+	SamplerInterface,
+};
 use crate::platform::Platform;
+use std::ffi::c_void;
 use std::sync::Arc;
 
 /// Internal interface for bindless API calls, may change at any time!
@@ -26,6 +30,17 @@ pub unsafe trait BindlessPlatform: Platform {
 	);
 
 	unsafe fn destroy_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>, set: Self::BindlessDescriptorSet);
+
+	unsafe fn alloc_buffer(
+		ci: &Arc<BindlessCreateInfo<Self>>,
+		create_info: &BindlessBufferCreateInfo,
+		size: u64,
+	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError>;
+
+	unsafe fn map_buffer(
+		ci: &Arc<BindlessCreateInfo<Self>>,
+		buffer: BufferSlot<Self>,
+	) -> Result<*mut c_void, Self::AllocationError>;
 
 	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T>;
 

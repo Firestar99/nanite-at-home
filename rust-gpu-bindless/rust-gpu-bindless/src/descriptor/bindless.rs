@@ -21,7 +21,7 @@ pub struct BindlessCreateInfo<P: BindlessPlatform> {
 }
 
 pub struct Bindless<P: BindlessPlatform> {
-	ci: Arc<BindlessCreateInfo<P>>,
+	pub ci: Arc<BindlessCreateInfo<P>>,
 	/// always Some, Option is only needed for clean drop
 	descriptor_set: Option<P::BindlessDescriptorSet>,
 	// pipeline_layouts: [Arc<PipelineLayout>; BINDLESS_MAX_PUSH_CONSTANT_WORDS + 1],

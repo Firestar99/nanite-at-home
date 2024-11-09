@@ -2074,6 +2074,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ash",
+ "bitflags 2.6.0",
  "bytemuck",
  "bytemuck_derive",
  "crossbeam-queue",

@@ -2,8 +2,9 @@ use crate::backend::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet
 use crate::backend::table::DrainFlushQueue;
 use crate::descriptor::mutable::MutDesc;
 use crate::descriptor::{
-	BindlessCreateInfo, BufferInterface, BufferSlot, BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc,
-	Sampler, SamplerInterface, SamplerTableAccess, StrongBackingRefs,
+	BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessCreateInfo, BufferInterface,
+	BufferSlot, BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface,
+	SamplerTableAccess, StrongBackingRefs,
 };
 use crate::platform::ash::Ash;
 use crate::platform::BindlessPlatform;
@@ -11,20 +12,20 @@ use ash::prelude::VkResult;
 use ash::vk::{
 	BufferUsageFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool, DescriptorPoolCreateFlags,
 	DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo, DescriptorSetLayout,
-	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, DeviceSize, ImageLayout,
-	ImageUsageFlags, SamplerCreateInfo, WriteDescriptorSet,
+	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageUsageFlags,
+	MemoryMapFlags, SamplerCreateInfo, WriteDescriptorSet,
 };
 use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
 use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
 use gpu_allocator::{AllocationError, MemoryLocation};
 use rangemap::RangeSet;
-use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
 	Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
 use std::error::Error;
+use std::ffi::c_void;
 use std::fmt::{Display, Formatter};
-use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -236,6 +237,44 @@ unsafe impl BindlessPlatform for Ash {
 		ci.device.destroy_descriptor_set_layout(set.layout, None);
 	}
 
+	unsafe fn alloc_buffer(
+		ci: &Arc<BindlessCreateInfo<Self>>,
+		create_info: &BindlessBufferCreateInfo,
+		size: u64,
+	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError> {
+		let buffer = ci.device.create_buffer(
+			&ash::vk::BufferCreateInfo {
+				usage: create_info.usage.to_ash_buffer_usage_flags(),
+				size,
+				..Default::default()
+			},
+			None,
+		)?;
+		let requirements = ci.device.get_buffer_memory_requirements(buffer);
+		let memory_allocation = ci.memory_allocator.lock().allocate(&AllocationCreateDesc {
+			requirements,
+			name: create_info.name,
+			location: create_info.usage.to_gpu_allocator_memory_location(),
+			allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_buffer(buffer),
+			linear: true,
+		})?;
+		ci.device
+			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
+		Ok((buffer, memory_allocation))
+	}
+
+	unsafe fn map_buffer(
+		ci: &Arc<BindlessCreateInfo<Self>>,
+		buffer: BufferSlot<Self>,
+	) -> Result<*mut c_void, Self::AllocationError> {
+		Ok(ci.device.map_memory(
+			buffer.memory_allocation.memory(),
+			buffer.memory_allocation.offset(),
+			buffer.memory_allocation.size(),
+			MemoryMapFlags::empty(),
+		)?)
+	}
+
 	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T> {
 		buffer
 	}
@@ -291,8 +330,37 @@ impl Deref for AshBindlessDescriptorSet {
 	}
 }
 
+#[derive(Debug)]
+pub enum AshAllocationError {
+	Vk(ash::vk::Result),
+	Allocator(AllocationError),
+}
+
+impl Display for AshAllocationError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			AshAllocationError::Vk(e) => Display::fmt(e, f),
+			AshAllocationError::Allocator(e) => Display::fmt(e, f),
+		}
+	}
+}
+
+impl Error for AshAllocationError {}
+
+impl From<ash::vk::Result> for AshAllocationError {
+	fn from(value: ash::vk::Result) -> Self {
+		Self::Vk(value)
+	}
+}
+
+impl From<AllocationError> for AshAllocationError {
+	fn from(value: AllocationError) -> Self {
+		Self::Allocator(value)
+	}
+}
+
 impl<'a> SamplerTableAccess<'a, Ash> {
-	pub fn alloc(
+	pub fn alloc_ash(
 		&self,
 		device: &ash::Device,
 		sampler_create_info: &SamplerCreateInfo,
@@ -304,109 +372,85 @@ impl<'a> SamplerTableAccess<'a, Ash> {
 	}
 }
 
-// FIXME Mut vs Mapped MutRef, requires custom MemoryLocation and AllocationScheme
-pub struct BindlessBufferCreateInfo<'a> {
-	/// allowed buffer usages
-	pub usage: BufferUsageFlags,
-	/// Name of the allocation, for tracking and debugging purposes
-	pub name: &'a str,
-	/// Location where the memory allocation should be stored
-	pub location: MemoryLocation,
-	/// Determines how this allocation should be managed.
-	pub allocation_scheme: AllocationScheme,
-}
-
-#[derive(Debug)]
-pub enum BindlessAllocationError {
-	Vk(ash::vk::Result),
-	Allocator(AllocationError),
-}
-
-impl Display for BindlessAllocationError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl BindlessAllocationScheme {
+	pub fn to_gpu_allocator_buffer(&self, buffer: ash::vk::Buffer) -> AllocationScheme {
 		match self {
-			BindlessAllocationError::Vk(e) => Display::fmt(e, f),
-			BindlessAllocationError::Allocator(e) => Display::fmt(e, f),
+			BindlessAllocationScheme::Dedicated => AllocationScheme::DedicatedBuffer(buffer),
+			BindlessAllocationScheme::AllocatorManaged => AllocationScheme::GpuAllocatorManaged,
+		}
+	}
+
+	pub fn to_gpu_allocator_image(&self, image: ash::vk::Image) -> AllocationScheme {
+		match self {
+			BindlessAllocationScheme::Dedicated => AllocationScheme::DedicatedImage(image),
+			BindlessAllocationScheme::AllocatorManaged => AllocationScheme::GpuAllocatorManaged,
 		}
 	}
 }
 
-impl Error for BindlessAllocationError {}
-
-impl From<ash::vk::Result> for BindlessAllocationError {
-	fn from(value: ash::vk::Result) -> Self {
-		Self::Vk(value)
+impl BindlessBufferUsage {
+	pub fn to_ash_buffer_usage_flags(&self) -> BufferUsageFlags {
+		let mut out = BufferUsageFlags::empty();
+		if self.contains(BindlessBufferUsage::TRANSFER_SRC) {
+			out |= BufferUsageFlags::TRANSFER_SRC;
+		}
+		if self.contains(BindlessBufferUsage::TRANSFER_DST) {
+			out |= BufferUsageFlags::TRANSFER_DST;
+		}
+		if self.contains(BindlessBufferUsage::UNIFORM_BUFFER) {
+			out |= BufferUsageFlags::UNIFORM_BUFFER;
+		}
+		if self.contains(BindlessBufferUsage::STORAGE_BUFFER) {
+			out |= BufferUsageFlags::STORAGE_BUFFER;
+		}
+		if self.contains(BindlessBufferUsage::INDEX_BUFFER) {
+			out |= BufferUsageFlags::INDEX_BUFFER;
+		}
+		if self.contains(BindlessBufferUsage::VERTEX_BUFFER) {
+			out |= BufferUsageFlags::VERTEX_BUFFER;
+		}
+		if self.contains(BindlessBufferUsage::INDIRECT_BUFFER) {
+			out |= BufferUsageFlags::INDIRECT_BUFFER;
+		}
+		out
 	}
-}
 
-impl From<AllocationError> for BindlessAllocationError {
-	fn from(value: AllocationError) -> Self {
-		Self::Allocator(value)
+	/// prioritizes MAP_WRITE over MAP_READ
+	pub fn to_gpu_allocator_memory_location(&self) -> MemoryLocation {
+		if self.contains(BindlessBufferUsage::MAP_WRITE) {
+			MemoryLocation::CpuToGpu
+		} else if self.contains(BindlessBufferUsage::MAP_READ) {
+			MemoryLocation::GpuToCpu
+		} else {
+			MemoryLocation::GpuOnly
+		}
 	}
 }
 
 impl<'a> BufferTableAccess<'a, Ash> {
-	// pub fn alloc_from_data<T: BufferStruct>(
-	// 	&self,
-	// 	allocator: Arc<dyn MemoryAllocator>,
-	// 	create_info: BufferCreateInfo,
-	// 	allocation_info: AllocationCreateInfo,
-	// 	data: T,
-	// ) -> VkResult<RCDesc<Buffer<T>>> {
-	// 	unsafe {
-	// 		let mut meta = StrongMetadataCpu::new(self.0, Metadata);
-	// 		let buffer = VBuffer::from_data(allocator, create_info, allocation_info, T::write_cpu(data, &mut meta))
-	// 			.map_err(AllocFromError::from_validated_alloc)?;
-	// 		Ok(self.alloc_slot(
-	// 			buffer,
-	// 			meta.into_backing_refs().map_err(AllocFromError::from_backing_refs)?,
-	// 		))
-	// 	}
-	// }
-	//
-	// pub fn alloc_from_iter<T: BufferStruct, I>(
-	// 	&self,
-	// 	allocator: Arc<dyn MemoryAllocator>,
-	// 	create_info: BufferCreateInfo,
-	// 	allocation_info: AllocationCreateInfo,
-	// 	iter: I,
-	// ) -> VkResult<RCDesc<Buffer<T>>>
-	// where
-	// 	I: IntoIterator<Item = T>,
-	// 	I::IntoIter: ExactSizeIterator,
-	// {
-	// 	unsafe {
-	// 		let mut meta = StrongMetadataCpu::new(self.0, Metadata);
-	// 		let iter = iter.into_iter().map(|i| T::write_cpu(i, &mut meta));
-	// 		let buffer = VBuffer::from_iter(allocator, create_info, allocation_info, iter)
-	// 			.map_err(AllocFromError::AllocateBufferError)?;
-	// 		Ok(self.alloc_slot(
-	// 			buffer,
-	// 			meta.into_backing_refs().map_err(AllocFromError::BackingRefsError)?,
-	// 		))
-	// 	}
-	// }
-
-	/// Create a new buffer directly from an ash's [`BufferCreateInfo`]. Ignores the [`BufferUsageFlags`] from
-	/// [`BindlessBufferCreateInfo`].
+	/// Create a new buffer directly from an ash's [`BufferCreateInfo`] and the flattened members of GpuAllocator's
+	/// [`AllocationCreateDesc`] to allow for maximum customizability.
 	///
 	/// # Safety
 	/// Size must be sufficient to store `T`. If `T` is a slice, `len` must be its length, otherwise it must be 1.
 	/// Returned buffer will be uninitialized.
-	pub unsafe fn create_ash<T: BufferContent + ?Sized>(
+	pub unsafe fn alloc_ash<T: BufferContent + ?Sized>(
 		&self,
-		create_info: &BindlessBufferCreateInfo,
 		ash_create_info: &ash::vk::BufferCreateInfo,
-		len: DeviceSize,
-	) -> Result<MutDesc<Ash, Buffer<T>>, BindlessAllocationError> {
+		usage: BindlessBufferUsage,
+		location: MemoryLocation,
+		allocation_scheme: BindlessAllocationScheme,
+		len: usize,
+		name: &str,
+	) -> Result<MutDesc<Ash, Buffer<T>>, AshAllocationError> {
 		unsafe {
 			let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
 			let requirements = self.0.device.get_buffer_memory_requirements(buffer);
 			let memory_allocation = self.0.memory_allocator.lock().allocate(&AllocationCreateDesc {
 				requirements,
-				name: create_info.name,
-				location: create_info.location,
-				allocation_scheme: create_info.allocation_scheme,
+				name,
+				location,
+				allocation_scheme: allocation_scheme.to_gpu_allocator_buffer(buffer),
 				linear: true,
 			})?;
 			self.0
@@ -416,44 +460,34 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				buffer,
 				len,
 				size: ash_create_info.size,
+				usage,
 				memory_allocation,
 				_strong_refs: StrongBackingRefs::default(),
 			}))
 		}
 	}
+}
 
-	pub fn alloc_sized<T: BufferStruct>(
-		&self,
-		create_info: &BindlessBufferCreateInfo,
-	) -> Result<MutDesc<Ash, Buffer<T>>, BindlessAllocationError> {
-		unsafe {
-			let len = 1;
-			self.create_ash(
-				create_info,
-				&ash::vk::BufferCreateInfo {
-					usage: create_info.usage,
-					size: size_of::<T>() as DeviceSize * len,
-					..Default::default()
-				},
-				len,
-			)
-		}
-	}
+#[cfg(test)]
+mod tests {
+	use super::*;
 
-	pub fn alloc_slice<T: BufferStruct>(
-		&self,
-		create_info: &BindlessBufferCreateInfo,
-		len: DeviceSize,
-	) -> Result<MutDesc<Ash, Buffer<[T]>>, BindlessAllocationError> {
-		unsafe {
-			self.create_ash(
-				create_info,
-				&ash::vk::BufferCreateInfo {
-					usage: create_info.usage,
-					size: size_of::<T>() as DeviceSize * len,
-					..Default::default()
-				},
-				len,
+	/// we want our [`BindlessBufferUsage`] bits to equal ash's [`BufferUsageFlags`] so the conversion can mostly be
+	/// optimized away
+	#[test]
+	fn test_buffer_usage_to_ash_same_bits() {
+		for usage in [
+			BindlessBufferUsage::TRANSFER_SRC,
+			BindlessBufferUsage::TRANSFER_DST,
+			BindlessBufferUsage::UNIFORM_BUFFER,
+			BindlessBufferUsage::STORAGE_BUFFER,
+			BindlessBufferUsage::INDEX_BUFFER,
+			BindlessBufferUsage::VERTEX_BUFFER,
+			BindlessBufferUsage::INDIRECT_BUFFER,
+		] {
+			assert_eq!(
+				Some(usage),
+				BindlessBufferUsage::from_bits(usage.to_ash_buffer_usage_flags().as_raw() as u64)
 			)
 		}
 	}

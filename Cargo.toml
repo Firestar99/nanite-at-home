@@ -48,7 +48,7 @@ rust-gpu-bindless-macros = { path = "rust-gpu-bindless/rust-gpu-bindless-macros"
 rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }
 
 # device
-ash = "0.38.0+1.3.281"
+ash = "0.38.0"
 gpu-allocator = { git = "https://github.com/Firestar99/gpu-allocator.git", rev = "02ffcb61e03c088435a8805fe855c1e852017820", features = ["vulkan"] }
 # vulkano 0.35 development
 vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "40d6e615a3fb59e4bf3b94726eb60520b573d0ec" }
@@ -118,6 +118,7 @@ rangemap = "1.5.1"
 walkdir = "2.5.0"
 anyhow = "1.0"
 num_enum = { version = "0.7.2", default-features = false }
+bitflags = "2.6.0"
 
 [patch.crates-io]
 glam = { git = "https://github.com/Firestar99/glam-rs.git", rev = "27649a451790a3fc8a34f021937ea3fcb45b5ff5" }
