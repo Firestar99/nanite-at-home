@@ -66,7 +66,7 @@ impl LightingRenderTask {
 		frame_context: &FrameContext,
 		g_albedo: &Arc<ImageView>,
 		g_normal: &Arc<ImageView>,
-		g_rm: &Arc<ImageView>,
+		g_roughness_metallic: &Arc<ImageView>,
 		depth_image: &Arc<ImageView>,
 		output_image: &Arc<ImageView>,
 		future: impl GpuFuture,
@@ -80,7 +80,7 @@ impl LightingRenderTask {
 			[
 				WriteDescriptorSet::image_view(0, g_albedo.clone()),
 				WriteDescriptorSet::image_view(1, g_normal.clone()),
-				WriteDescriptorSet::image_view(2, g_rm.clone()),
+				WriteDescriptorSet::image_view(2, g_roughness_metallic.clone()),
 				WriteDescriptorSet::image_view(3, depth_image.clone()),
 				WriteDescriptorSet::image_view(4, output_image.clone()),
 			],

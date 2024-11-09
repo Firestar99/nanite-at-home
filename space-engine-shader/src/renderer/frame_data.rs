@@ -13,7 +13,7 @@ pub enum DebugSettings {
 	MeshletId,
 	BaseColor,
 	Normals,
-	Omr,
+	RoughnessMetallic,
 	ReconstructedPosition,
 }
 

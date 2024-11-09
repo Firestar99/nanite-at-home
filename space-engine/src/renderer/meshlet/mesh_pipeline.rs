@@ -32,7 +32,7 @@ impl MeshDrawPipeline {
 		init: &Arc<Init>,
 		g_albedo_format_srgb: Format,
 		g_normal_format: Format,
-		g_rm_format: Format,
+		g_roughness_metallic_format: Format,
 		depth_format: Format,
 	) -> Self {
 		let pipeline = BindlessMeshGraphicsPipeline::new_task(
@@ -73,7 +73,7 @@ impl MeshDrawPipeline {
 					color_attachment_formats: vec![
 						Some(g_albedo_format_srgb),
 						Some(g_normal_format),
-						Some(g_rm_format),
+						Some(g_roughness_metallic_format),
 					],
 					depth_attachment_format: Some(depth_format),
 					..PipelineRenderingCreateInfo::default()

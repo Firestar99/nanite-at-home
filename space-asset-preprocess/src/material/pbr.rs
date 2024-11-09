@@ -27,7 +27,7 @@ pub struct ProcessedPbrMaterial<'a> {
 	material: Material<'a>,
 	base_color: Option<RequestedImage<{ ImageType::RGBA_COLOR as u32 }>>,
 	normal: Option<RequestedImage<{ ImageType::RG_VALUES as u32 }>>,
-	omr: Option<RequestedImage<{ ImageType::RGBA_LINEAR as u32 }>>,
+	occlusion_roughness_metallic: Option<RequestedImage<{ ImageType::RGBA_LINEAR as u32 }>>,
 }
 
 #[profiling::function]
@@ -44,7 +44,7 @@ pub fn process_pbr_material<'a>(
 		normal: material
 			.normal_texture()
 			.map(|tex| image_processor.image::<{ ImageType::RG_VALUES as u32 }>(tex.texture().source())),
-		omr: material
+		occlusion_roughness_metallic: material
 			.pbr_metallic_roughness()
 			.metallic_roughness_texture()
 			// if metallic_roughness_texture is missing, try to use specular_texture. This fixes Bistro.
@@ -65,7 +65,7 @@ impl<'a> ProcessedPbrMaterial<'a> {
 			base_color_factor: self.material.pbr_metallic_roughness().base_color_factor(),
 			normal: self.normal.map(|tex| tex.get(image_accessor)),
 			normal_scale: self.material.normal_texture().map_or(1., |n| n.scale()),
-			omr: self.omr.map(|tex| tex.get(image_accessor)),
+			occlusion_roughness_metallic: self.occlusion_roughness_metallic.map(|tex| tex.get(image_accessor)),
 			occlusion_strength: 0.,
 			roughness_factor: self.material.pbr_metallic_roughness().roughness_factor(),
 			metallic_factor: self.material.pbr_metallic_roughness().metallic_factor(),

@@ -59,8 +59,8 @@ pub struct SampledMaterial {
 	pub albedo: Vec3,
 	pub alpha: f32,
 	pub normal: Vec3,
-	pub metallic: f32,
 	pub roughness: f32,
+	pub metallic: f32,
 }
 
 pub trait PbrMaterialSample {
@@ -79,10 +79,13 @@ impl<R: AliveDescRef> PbrMaterialSample for PbrMaterial<R> {
 		// not yet using normal map
 		let normal = loc.normal;
 
-		let omr: Vec4 = self.omr.access(descriptors).sample(sampler, loc.tex_coords);
-		// let ao = omr.x * pbr_material.occlusion_strength;
-		let metallic = omr.y * self.metallic_factor;
-		let roughness = omr.z * self.roughness_factor;
+		let orm: Vec4 = self
+			.occlusion_roughness_metallic
+			.access(descriptors)
+			.sample(sampler, loc.tex_coords);
+		// let ao = orm.x * pbr_material.occlusion_strength;
+		let roughness = orm.y * self.roughness_factor;
+		let metallic = orm.z * self.metallic_factor;
 
 		SampledMaterial {
 			world_pos: loc.world_pos,
@@ -90,8 +93,8 @@ impl<R: AliveDescRef> PbrMaterialSample for PbrMaterial<R> {
 			albedo,
 			alpha,
 			normal,
-			metallic,
 			roughness,
+			metallic,
 		}
 	}
 }

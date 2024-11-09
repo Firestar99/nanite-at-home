@@ -15,7 +15,7 @@ use vulkano::sync::GpuFuture;
 
 pub struct MeshletRenderTask {
 	init: Arc<Init>,
-	pipeline_mesh: MeshDrawPipeline,
+	mesh_pipeline: MeshDrawPipeline,
 	pub scenes: Mutex<Vec<Arc<MeshletSceneCpu>>>,
 }
 
@@ -24,15 +24,20 @@ impl MeshletRenderTask {
 		init: &Arc<Init>,
 		g_albedo_format_srgb: Format,
 		g_normal_format: Format,
-		g_rm_format: Format,
+		g_roughness_metallic_format: Format,
 		depth_format: Format,
 	) -> Self {
-		let pipeline_mesh =
-			MeshDrawPipeline::new(init, g_albedo_format_srgb, g_normal_format, g_rm_format, depth_format);
+		let mesh_pipeline = MeshDrawPipeline::new(
+			init,
+			g_albedo_format_srgb,
+			g_normal_format,
+			g_roughness_metallic_format,
+			depth_format,
+		);
 
 		Self {
 			init: init.clone(),
-			pipeline_mesh,
+			mesh_pipeline,
 			scenes: Mutex::new(Vec::new()),
 		}
 	}
@@ -43,7 +48,7 @@ impl MeshletRenderTask {
 		frame_context: &FrameContext,
 		g_albedo: &Arc<ImageView>,
 		g_normal: &Arc<ImageView>,
-		g_rm: &Arc<ImageView>,
+		g_roughness_metallic: &Arc<ImageView>,
 		depth_image: &Arc<ImageView>,
 		future: impl GpuFuture,
 	) -> impl GpuFuture {
@@ -78,7 +83,7 @@ impl MeshletRenderTask {
 					load_op: AttachmentLoadOp::Clear,
 					store_op: AttachmentStoreOp::Store,
 					clear_value: Some(ClearValue::Float([0.0f32; 4])),
-					..RenderingAttachmentInfo::image_view(g_rm.clone())
+					..RenderingAttachmentInfo::image_view(g_roughness_metallic.clone())
 				}),
 			],
 			depth_attachment: Some(RenderingAttachmentInfo {
@@ -96,7 +101,7 @@ impl MeshletRenderTask {
 		for (_id, scene) in scenes.iter().enumerate() {
 			profiling::scope!("draw scene", _id.to_string());
 			for mesh2instance in &scene.mesh2instances {
-				self.pipeline_mesh.draw(frame_context, &mut cmd, mesh2instance);
+				self.mesh_pipeline.draw(frame_context, &mut cmd, mesh2instance);
 			}
 		}
 		cmd.end_rendering().unwrap();

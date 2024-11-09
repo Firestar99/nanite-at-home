@@ -155,6 +155,7 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			let sun = {
 				const SUN_MAX_ALTITUDE_DEGREE: f32 = 25.;
 				const SUN_INCLINATION_SPEED: f32 = 0.5;
+				const SUN_INCLINATION_START: f32 = 1.7;
 				const SUN_INCLINATION_CURVE: AnimatedSegment<f32> = AnimatedSegment::new(&[
 					Segment::new(0., 0.),
 					Segment::new(0.2, 0.05),
@@ -173,7 +174,8 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 				]);
 
 				let sun_dir = vec3(0., 1., 0.);
-				let inclination = SUN_INCLINATION_CURVE.lerp(delta_time.since_start * SUN_INCLINATION_SPEED);
+				let inclination =
+					SUN_INCLINATION_CURVE.lerp(delta_time.since_start * SUN_INCLINATION_SPEED + SUN_INCLINATION_START);
 				let sun_dir = Mat3::from_axis_angle(vec3(1., 0., 0.), inclination * 2. * PI) * sun_dir;
 				let sun_dir =
 					Mat3::from_axis_angle(vec3(0., 0., 1.), f32::to_radians(SUN_MAX_ALTITUDE_DEGREE)) * sun_dir;

@@ -9,7 +9,7 @@ pub struct PbrMaterial<R: DescRef> {
 	pub base_color_factor: [f32; 4],
 	pub normal: Desc<R, Image2d>,
 	pub normal_scale: f32,
-	pub omr: Desc<R, Image2d>,
+	pub occlusion_roughness_metallic: Desc<R, Image2d>,
 	pub occlusion_strength: f32,
 	pub metallic_factor: f32,
 	pub roughness_factor: f32,
