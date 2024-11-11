@@ -82,7 +82,7 @@ fn lighting_inner(
 		),
 		DebugSettings::MeshletId => meshlet_debug_color(meshlet_debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
-		DebugSettings::Normals => sampled.normal,
+		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
 		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),
 		DebugSettings::ReconstructedPosition => {
 			if sampled.alpha < 0.001 {

@@ -45,11 +45,17 @@ pub fn upload_pbr_material<'a>(
 		.map(|tex| upload_image2d_archive(tex, uploader));
 	async {
 		Ok(PbrMaterial {
-			base_color: uploader.await_or_white_texture(base_color).await?,
+			base_color: uploader
+				.await_or_default_texture(base_color, Uploader::default_white_texture)
+				.await?,
 			base_color_factor: this.base_color_factor,
-			normal: uploader.await_or_white_texture(normal).await?,
+			normal: uploader
+				.await_or_default_texture(normal, Uploader::default_normal_texture)
+				.await?,
 			normal_scale: this.normal_scale,
-			occlusion_roughness_metallic: uploader.await_or_white_texture(occlusion_roughness_metallic).await?,
+			occlusion_roughness_metallic: uploader
+				.await_or_default_texture(occlusion_roughness_metallic, Uploader::default_white_texture)
+				.await?,
 			occlusion_strength: this.occlusion_strength,
 			metallic_factor: this.metallic_factor,
 			roughness_factor: this.roughness_factor,
@@ -59,11 +65,11 @@ pub fn upload_pbr_material<'a>(
 
 pub fn default_pbr_material(uploader: &Uploader) -> PbrMaterial<RC> {
 	PbrMaterial {
-		base_color: uploader.white_texture(),
+		base_color: uploader.default_white_texture(),
 		base_color_factor: [1.; 4],
-		normal: uploader.white_texture(),
+		normal: uploader.default_normal_texture(),
 		normal_scale: 1.,
-		occlusion_roughness_metallic: uploader.white_texture(),
+		occlusion_roughness_metallic: uploader.default_white_texture(),
 		occlusion_strength: 1.,
 		metallic_factor: 1.,
 		roughness_factor: 1.,

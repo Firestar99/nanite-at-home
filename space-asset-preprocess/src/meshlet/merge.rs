@@ -71,7 +71,7 @@ fn merge<'a>(
 		let normal_transform = instance.transform.matrix3.inverse().transpose();
 		out.pbr_material_vertices
 			.extend(mesh.pbr_material_vertices.iter().map(|v| PbrVertex {
-				normals: normal_transform * v.normals,
+				normal: normal_transform * v.normal,
 				..*v
 			}));
 
