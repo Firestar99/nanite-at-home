@@ -12,7 +12,7 @@ use std::any::Any;
 use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::mem::MaybeUninit;
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ops::{Deref, Index};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::atomic::{fence, AtomicU32};
@@ -415,6 +415,16 @@ impl RcTableSlot {
 	#[inline]
 	pub fn table_sync(&self) -> &TableSync {
 		unsafe { &*self.table }
+	}
+
+	#[inline]
+	pub fn table_sync_arc(&self) -> Arc<TableSync> {
+		unsafe {
+			// don't touch the ref count, even if we panic
+			let arc = ManuallyDrop::new(Arc::from_raw(self.table));
+			// only after the clone we may access the plain Arc without ManuallyDrop wrapping
+			ManuallyDrop::into_inner(arc.clone())
+		}
 	}
 
 	#[inline]

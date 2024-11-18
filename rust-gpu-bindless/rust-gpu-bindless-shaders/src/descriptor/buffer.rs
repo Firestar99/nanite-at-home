@@ -4,11 +4,11 @@ use core::marker::PhantomData;
 use core::mem;
 use spirv_std::ByteAddressableBuffer;
 
-pub struct Buffer<T: ?Sized + Send + Sync + 'static> {
+pub struct Buffer<T: BufferContent + ?Sized + 'static> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: ?Sized + Send + Sync + 'static> DescContent for Buffer<T> {
+impl<T: BufferContent + ?Sized + 'static> DescContent for Buffer<T> {
 	type AccessType<'a> = BufferSlice<'a, T>;
 }
 

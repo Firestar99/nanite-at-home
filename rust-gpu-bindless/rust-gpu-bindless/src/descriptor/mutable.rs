@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 
 pub struct Mut<P: BindlessPlatform> {
-	slot: RcTableSlot,
+	pub(crate) slot: RcTableSlot,
 	_phantom: PhantomData<P>,
 }
 

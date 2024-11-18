@@ -1,12 +1,16 @@
 use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
+use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
 use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, BindlessCreateInfo};
 use crate::platform::BindlessPlatform;
+use parking_lot::Mutex;
+use rust_gpu_bindless_shaders::buffer_content::Metadata;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::Buffer;
 use smallvec::SmallVec;
+use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -30,7 +34,7 @@ pub struct BufferSlot<P: BindlessPlatform> {
 	pub size: u64,
 	pub usage: BindlessBufferUsage,
 	pub memory_allocation: P::MemoryAllocation,
-	pub _strong_refs: StrongBackingRefs<P>,
+	pub strong_refs: Mutex<StrongBackingRefs<P>>,
 }
 
 pub struct BufferTable<P: BindlessPlatform> {
@@ -51,6 +55,25 @@ impl<P: BindlessPlatform> BufferTable<P> {
 		Self {
 			table: table_sync.register(count, interface).unwrap(),
 		}
+	}
+}
+
+pub struct BufferInterface<P: BindlessPlatform> {
+	ci: Arc<BindlessCreateInfo<P>>,
+	global_descriptor_set: P::BindlessDescriptorSet,
+}
+
+impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
+	type Slot = BufferSlot<P>;
+
+	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
+		unsafe {
+			P::destroy_buffers(&self.ci, &self.global_descriptor_set, indices);
+		}
+	}
+
+	fn flush<'a>(&self, _flush_queue: impl DescriptorIndexIterator<'a, Self>) {
+		// do nothing, flushing of descriptors is handled differently
 	}
 }
 
@@ -142,7 +165,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				size,
 				usage: create_info.usage,
 				memory_allocation,
-				_strong_refs: StrongBackingRefs::default(),
+				strong_refs: Default::default(),
 			}))
 		}
 	}
@@ -161,54 +184,157 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				size,
 				usage: create_info.usage,
 				memory_allocation,
-				_strong_refs: StrongBackingRefs::default(),
+				strong_refs: Default::default(),
 			}))
 		}
 	}
 
-	// TODO implement mapping
-	// pub fn alloc_from_data<T: BufferStruct>(
-	// 	&self,
-	// 	create_info: &BindlessBufferCreateInfo,
-	// 	data: T,
-	// ) -> Result<MutDesc<P, Buffer<T>>, BindlessAllocationError> {
-	// 	let buffer = self.alloc_sized(create_info)?;
-	// 	buffer.mapped();
-	// 	Ok(buffer)
-	// }
-	//
-	// pub fn alloc_from_iter<T: BufferStruct, I>(
-	// 	&self,
-	// 	create_info: &BindlessBufferCreateInfo,
-	// 	iter: I,
-	// ) -> Result<MutDesc<P, Buffer<T>>, BindlessAllocationError>
-	// where
-	// 	I: IntoIterator<Item = T>,
-	// 	I::IntoIter: ExactSizeIterator,
-	// {
-	// 	let iter = iter.into_iter();
-	// 	let buffer = self.alloc_slice(create_info, iter.len() as DeviceSize)?;
-	// 	buffer.mapped();
-	// 	Ok(buffer)
-	// }
+	pub fn alloc_from_data<T: BufferStruct>(
+		&self,
+		create_info: &BindlessBufferCreateInfo,
+		data: T,
+	) -> Result<MutDesc<P, Buffer<T>>, P::AllocationError> {
+		let mut buffer = self.alloc_sized(create_info)?;
+		buffer.mapped().write_data(data);
+		Ok(buffer)
+	}
+
+	pub fn alloc_from_iter<T: BufferStruct, I>(
+		&self,
+		create_info: &BindlessBufferCreateInfo,
+		iter: I,
+	) -> Result<MutDesc<P, Buffer<[T]>>, P::AllocationError>
+	where
+		I: IntoIterator<Item = T>,
+		I::IntoIter: ExactSizeIterator,
+	{
+		let iter = iter.into_iter();
+		let mut buffer = self.alloc_slice(create_info, iter.len())?;
+		buffer.mapped().overwrite_from_iter_exact(iter);
+		Ok(buffer)
+	}
 }
 
-pub struct BufferInterface<P: BindlessPlatform> {
-	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::BindlessDescriptorSet,
+pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
+	fn mapped(&mut self) -> MappedBuffer<P, T>;
 }
 
-impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
-	type Slot = BufferSlot<P>;
+impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for MutDesc<P, Buffer<T>> {
+	fn mapped(&mut self) -> MappedBuffer<P, T> {
+		MappedBuffer {
+			table_sync: self.r.slot.table_sync_arc(),
+			slot: self.r.slot.try_deref::<BufferInterface<P>>().unwrap(),
+			_phantom: PhantomData,
+		}
+	}
+}
 
-	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
+pub struct MappedBuffer<'a, P: BindlessPlatform, T: BufferContent + ?Sized> {
+	table_sync: Arc<TableSync>,
+	slot: &'a BufferSlot<P>,
+	_phantom: PhantomData<T>,
+}
+
+impl<'a, P: BindlessPlatform, T: BufferContent> MappedBuffer<'a, P, T> {
+	/// Assume that the **following** operations will completely overwrite the buffer.
+	///
+	/// # Safety
+	/// Failing to completely overwrite the buffer may allow the shader to read dangling [`StrongDesc`], potentially
+	/// causing memory errors.
+	pub unsafe fn assume_will_overwrite_completely(&self) {
+		*self.slot.strong_refs.lock() = StrongBackingRefs::default();
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, T> {
+	/// Copy data `T` to buffer. Implicitly, it will fully overwrite the buffer.
+	pub fn write_data(&mut self, t: T) {
 		unsafe {
-			P::destroy_buffers(&self.ci, &self.global_descriptor_set, indices);
+			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let record = presser::copy_from_slice_to_offset(&[T::write_cpu(t, &mut meta)], slab, 0).unwrap();
+			assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
+			*self.slot.strong_refs.lock() = meta.into_backing_refs();
+		}
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
+	pub fn len(&self) -> usize {
+		self.slot.len
+	}
+
+	/// Copy from `iter` of `T` into the Buffer slice.
+	/// The iterator must yield exactly [`Self::len`] amount of elements to fully overwrite the buffer, otherwise this
+	/// function panics.
+	pub fn overwrite_from_iter_exact(&mut self, iter: impl Iterator<Item = T>) {
+		unsafe {
+			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let mut written = 0;
+			let record = presser::copy_from_iter_to_offset_with_align_packed(
+				iter.map(|i| {
+					written += 1;
+					T::write_cpu(i, &mut meta)
+				}),
+				slab,
+				0,
+				1,
+			);
+			assert_eq!(
+				written, self.slot.len,
+				"Iterator did not yield exactly {} elements!",
+				self.slot.len
+			);
+			if let Some(record) = record.unwrap() {
+				assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
+			}
+			*self.slot.strong_refs.lock() = meta.into_backing_refs();
 		}
 	}
 
-	fn flush<'a>(&self, _flush_queue: impl DescriptorIndexIterator<'a, Self>) {
-		// do nothing, flushing of descriptors is handled differently
+	/// Copy from `iter` of `T` into the Buffer slice.
+	/// If the iterator yields too few elements to fill the buffer, the remaining elements are filled
+	pub fn overwrite_from_iter_and_fill_with(&mut self, iter: impl Iterator<Item = T>, fill: impl FnMut() -> T) {
+		self.overwrite_from_iter_exact(iter.chain(std::iter::repeat_with(fill)).take(self.slot.len))
+	}
+
+	/// Write `t` at a certain `index` in this slice.
+	///
+	/// # StrongRefs
+	/// Note that any `StrongDesc` previously referenced from this `index`'s `T` will **NOT** be deallocated
+	/// until you use any of the `overwrite*` functions to fully reinitialize this buffer. You can also use the unsafe
+	/// [`Self::assume_will_overwrite_completely`] to invalidate all previous `StrongDesc` within the buffer.
+	pub fn write_offset(&mut self, index: usize, t: T) {
+		unsafe {
+			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let record = presser::copy_from_slice_to_offset(
+				&[T::write_cpu(t, &mut meta)],
+				slab,
+				index * size_of::<T::Transfer>(),
+			)
+			.unwrap();
+			assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
+			self.slot.strong_refs.lock().merge(meta.into_backing_refs());
+		}
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStruct + Clone> MappedBuffer<'a, P, [T]> {
+	/// Copy from `iter` of `T` into the Buffer slice.
+	/// If the iterator yields too few elements to fill the buffer, the remaining elements are filled
+	pub fn overwrite_from_iter_and_fill(&mut self, iter: impl Iterator<Item = T>, fill: T) {
+		self.overwrite_from_iter_exact(iter.chain(std::iter::repeat(fill)).take(self.slot.len))
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStruct + Default> MappedBuffer<'a, P, [T]> {
+	/// Copy from `iter` of `T` into the Buffer slice.
+	/// If the iterator yields too few elements to fill the buffer, the remaining elements are filled with
+	/// [`Default::default`]
+	pub fn overwrite_from_iter_and_fill_default(&mut self, iter: impl Iterator<Item = T>) {
+		self.overwrite_from_iter_and_fill_with(iter, Default::default)
 	}
 }
 

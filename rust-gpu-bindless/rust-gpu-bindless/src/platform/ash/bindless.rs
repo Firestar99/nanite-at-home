@@ -4,7 +4,7 @@ use crate::descriptor::mutable::MutDesc;
 use crate::descriptor::{
 	BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessCreateInfo, BufferInterface,
 	BufferSlot, BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface,
-	SamplerTableAccess, StrongBackingRefs,
+	SamplerTableAccess,
 };
 use crate::platform::ash::Ash;
 use crate::platform::BindlessPlatform;
@@ -13,7 +13,7 @@ use ash::vk::{
 	BufferUsageFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool, DescriptorPoolCreateFlags,
 	DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo, DescriptorSetLayout,
 	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageUsageFlags,
-	MemoryMapFlags, SamplerCreateInfo, WriteDescriptorSet,
+	SamplerCreateInfo, WriteDescriptorSet,
 };
 use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
 use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
@@ -23,9 +23,10 @@ use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
 	Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
+use std::cell::UnsafeCell;
 use std::error::Error;
-use std::ffi::c_void;
 use std::fmt::{Display, Formatter};
+use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -260,19 +261,13 @@ unsafe impl BindlessPlatform for Ash {
 		})?;
 		ci.device
 			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
-		Ok((buffer, memory_allocation))
+		Ok((buffer, UnsafeCell::new(MaybeUninit::new(memory_allocation))))
 	}
 
-	unsafe fn map_buffer(
-		ci: &Arc<BindlessCreateInfo<Self>>,
-		buffer: BufferSlot<Self>,
-	) -> Result<*mut c_void, Self::AllocationError> {
-		Ok(ci.device.map_memory(
-			buffer.memory_allocation.memory(),
-			buffer.memory_allocation.offset(),
-			buffer.memory_allocation.size(),
-			MemoryMapFlags::empty(),
-		)?)
+	unsafe fn memory_allocation_to_slab<'a>(
+		memory_allocation: &'a Self::MemoryAllocation,
+	) -> &'a mut (impl presser::Slab + 'a) {
+		unsafe { &mut *memory_allocation.get() }.assume_init_mut()
 	}
 
 	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T> {
@@ -286,7 +281,11 @@ unsafe impl BindlessPlatform for Ash {
 	) {
 		let mut allocator = ci.memory_allocator.lock();
 		for (_, buffer) in buffers.into_iter() {
-			allocator.free(buffer.memory_allocation.clone()).unwrap();
+			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
+			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
+			// it ourselves.
+			let allocation = unsafe { &mut *buffer.memory_allocation.get() }.assume_init_read();
+			allocator.free(allocation).unwrap();
 			ci.device.destroy_buffer(buffer.buffer, None);
 		}
 	}
@@ -298,7 +297,11 @@ unsafe impl BindlessPlatform for Ash {
 	) {
 		let mut allocator = ci.memory_allocator.lock();
 		for (_, image) in images.into_iter() {
-			allocator.free(image.memory_allocation.clone()).unwrap();
+			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
+			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
+			// it ourselves.
+			let allocation = unsafe { &mut *image.memory_allocation.get() }.assume_init_read();
+			allocator.free(allocation).unwrap();
 			ci.device.destroy_image_view(image.imageview, None);
 			ci.device.destroy_image(image.image, None);
 		}
@@ -461,8 +464,8 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				len,
 				size: ash_create_info.size,
 				usage,
-				memory_allocation,
-				_strong_refs: StrongBackingRefs::default(),
+				memory_allocation: UnsafeCell::new(MaybeUninit::new(memory_allocation)),
+				strong_refs: Default::default(),
 			}))
 		}
 	}
