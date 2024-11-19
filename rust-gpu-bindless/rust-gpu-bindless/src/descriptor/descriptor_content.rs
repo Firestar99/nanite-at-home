@@ -10,8 +10,14 @@ pub trait DescContentCpu: DescContent {
 	/// CPU type exposed externally, that may contain extra generic type information
 	type VulkanType<P: BindlessPlatform>;
 
+	/// CPU type exposed externally, that may contain extra generic type information
+	type Slot<P: BindlessPlatform>;
+
 	/// deref [`Self::TableType`] to exposed [`Self::VulkanType`]
-	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P>;
+	fn get_slot<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::Slot<P>;
+
+	/// deref [`Self::TableType`] to exposed [`Self::VulkanType`]
+	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P>;
 }
 
 /// In a resource table descriptors of varying generic arguments can be stored and are sent to the GPU in a single descriptor binding.

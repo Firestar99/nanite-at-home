@@ -18,9 +18,14 @@ use std::sync::Arc;
 impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	type DescTable<P: BindlessPlatform> = BufferTable<P>;
 	type VulkanType<P: BindlessPlatform> = P::TypedBuffer<T::Transfer>;
+	type Slot<P: BindlessPlatform> = BufferSlot<P>;
 
-	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P> {
-		unsafe { P::reinterpet_ref_buffer(&slot.try_deref::<BufferInterface<P>>().unwrap().buffer) }
+	fn get_slot<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::Slot<P> {
+		&slot.try_deref::<BufferInterface<P>>().unwrap()
+	}
+
+	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P> {
+		unsafe { P::reinterpet_ref_buffer(&slot.buffer) }
 	}
 }
 
@@ -222,8 +227,8 @@ pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
 impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for MutDesc<P, Buffer<T>> {
 	fn mapped(&mut self) -> MappedBuffer<P, T> {
 		MappedBuffer {
-			table_sync: self.r.slot.table_sync_arc(),
-			slot: self.r.slot.try_deref::<BufferInterface<P>>().unwrap(),
+			table_sync: self.rc_slot().table_sync_arc(),
+			slot: self.inner_slot(),
 			_phantom: PhantomData,
 		}
 	}

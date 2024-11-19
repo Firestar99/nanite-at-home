@@ -26,7 +26,7 @@ impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<RCDesc<P, C>> for RC<P
 	type Target = C::VulkanType<P>;
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
-		C::deref_table(&desc.r.slot)
+		C::deref_table(C::get_slot(&desc.r.slot))
 	}
 }
 
@@ -71,7 +71,17 @@ pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	/// Except when Self is [`AnyRCSlot`], then this is always safe.
 	unsafe fn new(slot: RcTableSlot) -> Self;
 
-	fn id(&self) -> DescriptorId;
+	fn rc_slot(&self) -> &RcTableSlot;
+
+	#[inline]
+	fn inner_slot(&self) -> &C::Slot<P> {
+		C::get_slot(self.rc_slot())
+	}
+
+	#[inline]
+	fn id(&self) -> DescriptorId {
+		self.rc_slot().id()
+	}
 
 	#[inline]
 	fn to_weak(&self) -> WeakDesc<C> {
@@ -95,6 +105,7 @@ pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>:
 }
 
 impl<P: BindlessPlatform, C: DescContentCpu> RCDescExt<P, C> for RCDesc<P, C> {
+	#[inline]
 	unsafe fn new(slot: RcTableSlot) -> Self {
 		Desc::new_inner(RC {
 			slot,
@@ -102,8 +113,9 @@ impl<P: BindlessPlatform, C: DescContentCpu> RCDescExt<P, C> for RCDesc<P, C> {
 		})
 	}
 
-	fn id(&self) -> DescriptorId {
-		self.r.slot.id()
+	#[inline]
+	fn rc_slot(&self) -> &RcTableSlot {
+		&self.r.slot
 	}
 
 	#[inline]

@@ -11,9 +11,14 @@ use std::sync::Arc;
 impl DescContentCpu for Sampler {
 	type DescTable<P: BindlessPlatform> = SamplerTable<P>;
 	type VulkanType<P: BindlessPlatform> = P::Sampler;
+	type Slot<P: BindlessPlatform> = P::Sampler;
 
-	fn deref_table<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::VulkanType<P> {
+	fn get_slot<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::Slot<P> {
 		slot.try_deref::<SamplerInterface<P>>().unwrap()
+	}
+
+	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P> {
+		slot
 	}
 }
 

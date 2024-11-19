@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 
 pub struct Mut<P: BindlessPlatform> {
-	pub(crate) slot: RcTableSlot,
+	slot: RcTableSlot,
 	_phantom: PhantomData<P>,
 }
 
@@ -20,7 +20,7 @@ impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<MutDesc<P, C>> for Mut
 	type Target = C::VulkanType<P>;
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
-		C::deref_table(&desc.r.slot)
+		C::deref_table(C::get_slot(&desc.r.slot))
 	}
 }
 
@@ -65,12 +65,23 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	/// Except when Self is [`AnyMutSlot`], then this is always safe.
 	unsafe fn new(slot: RcTableSlot) -> Self;
 
-	fn id(&self) -> DescriptorId;
+	fn rc_slot(&self) -> &RcTableSlot;
+
+	#[inline]
+	fn inner_slot(&self) -> &C::Slot<P> {
+		C::get_slot(self.rc_slot())
+	}
+
+	#[inline]
+	fn id(&self) -> DescriptorId {
+		self.rc_slot().id()
+	}
 
 	fn into_shared(self) -> RCDesc<P, C>;
 }
 
 impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> {
+	#[inline]
 	unsafe fn new(slot: RcTableSlot) -> Self {
 		Desc::new_inner(Mut {
 			slot,
@@ -78,10 +89,12 @@ impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> 
 		})
 	}
 
-	fn id(&self) -> DescriptorId {
-		self.r.slot.id()
+	#[inline]
+	fn rc_slot(&self) -> &RcTableSlot {
+		&self.r.slot
 	}
 
+	#[inline]
 	fn into_shared(self) -> RCDesc<P, C> {
 		unsafe { RCDesc::new(self.r.slot) }
 	}
