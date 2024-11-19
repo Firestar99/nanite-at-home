@@ -1,7 +1,9 @@
 pub mod ash;
 mod bindless;
+mod bindless_pipeline;
 
 pub use bindless::*;
+pub use bindless_pipeline::*;
 use std::error::Error;
 
 /// public interface for a Graphics API. Feel free to use as a base template for other traits.

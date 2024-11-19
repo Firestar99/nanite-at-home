@@ -1,9 +1,10 @@
 use crate::frame_in_flight::{FrameInFlight, SeedInFlight};
-use rust_gpu_bindless_macros::BufferContent;
+use bytemuck_derive::{Pod, Zeroable};
 
 /// Metadata about an execution, like the current frame in flight, to be able to safely upgrade weak pointers.
 /// Currently unused.
-#[derive(Copy, Clone, BufferContent)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct Metadata;
 
 impl Metadata {

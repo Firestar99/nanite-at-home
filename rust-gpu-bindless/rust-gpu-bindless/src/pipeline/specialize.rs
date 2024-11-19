@@ -1,8 +1,6 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::shader::BindlessShader;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
-use vulkano::pipeline::PipelineShaderStageCreateInfo;
-use vulkano::{Validated, ValidationError, VulkanError};
 
 /// If spec constants are used later on, specialization can be implemented here for all pipelines
 pub fn specialize<ShaderType: rust_gpu_bindless_shaders::shader_type::ShaderType, T: BufferStruct>(

@@ -13,7 +13,10 @@ pub unsafe trait BindlessPlatform: Platform {
 	/// implementation's instance, device and other objects required to be initialized by the end user.
 	/// [`Self::Platform`] either is the same as or derefs to the original [`Self::PlatformCreateInfo`] and has some additional
 	/// members that will be initialized in this function.
-	unsafe fn create_platform(create_info: Self::PlatformCreateInfo) -> Self;
+	unsafe fn create_platform(
+		create_info: Self::PlatformCreateInfo,
+		bindless_cyclic: &std::sync::Weak<Bindless<Self>>,
+	) -> Self;
 
 	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts;
 

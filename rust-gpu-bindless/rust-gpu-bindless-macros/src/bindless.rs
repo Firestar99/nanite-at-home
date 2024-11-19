@@ -120,7 +120,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 }
 
 #[allow(unused)]
-struct BindlessPushConstant {
+struct SymPushConstant {
 	metadata: TokenStream,
 	push_constant: TokenStream,
 	param_ty: TokenStream,
@@ -129,7 +129,7 @@ struct BindlessPushConstant {
 fn gen_bindless_push_constant(
 	context: &mut BindlessContext,
 	bindless_param: Option<&PatType>,
-) -> Result<BindlessPushConstant> {
+) -> Result<SymPushConstant> {
 	let crate_shaders = &context.symbols.crate_shaders()?;
 	let param_ty = match bindless_param {
 		None => Ok(quote!(())),
@@ -147,9 +147,9 @@ fn gen_bindless_push_constant(
 
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 	context.entry_args.append_tokens(quote! {
-		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::PushConstant<#param_ty>,
+		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::BindlessPushConstant,
 	});
-	Ok(BindlessPushConstant {
+	Ok(SymPushConstant {
 		metadata: quote!(#push_constant.metadata),
 		push_constant: push_constant.into_token_stream(),
 		param_ty,
@@ -157,14 +157,11 @@ fn gen_bindless_push_constant(
 }
 
 #[allow(unused)]
-struct BindlessDescriptors {
+struct SymDescriptors {
 	descriptors: TokenStream,
 }
 
-fn gen_bindless_descriptors(
-	context: &mut BindlessContext,
-	param: &BindlessPushConstant,
-) -> Result<BindlessDescriptors> {
+fn gen_bindless_descriptors(context: &mut BindlessContext, param: &SymPushConstant) -> Result<SymDescriptors> {
 	let crate_shaders = &context.symbols.crate_shaders()?;
 	let buffers = format_ident!("__bindless_buffers");
 	let samplers = format_ident!("__bindless_samplers");
@@ -207,24 +204,24 @@ fn gen_bindless_descriptors(
 			meta: #meta,
 		};
 	});
-	Ok(BindlessDescriptors {
+	Ok(SymDescriptors {
 		descriptors: descriptors.into_token_stream(),
 	})
 }
 
-struct BindlessInnerCall {
+struct SymInnerCall {
 	params: TokenStream,
 	args: TokenStream,
 }
 
 fn gen_bindless_inner_call(
 	context: &mut BindlessContext,
-	push_constant: &BindlessPushConstant,
-	descriptors: &BindlessDescriptors,
+	push_constant: &SymPushConstant,
+	descriptors: &SymDescriptors,
 	arg_param: Option<&PatType>,
 	arg_descriptors: Option<&PatType>,
 	forward: &[&PatType],
-) -> Result<BindlessInnerCall> {
+) -> Result<SymInnerCall> {
 	let mut params = TokenStream::new();
 	let mut args = TokenStream::new();
 
@@ -234,11 +231,12 @@ fn gen_bindless_inner_call(
 		args.append_tokens(strip_attr(arg));
 	}
 	if let Some(arg) = arg_param {
+		let param_ty = &push_constant.param_ty;
 		let push_constant = &push_constant.push_constant;
 		let descriptors = &descriptors.descriptors;
 		let param = format_ident!("__bindless_param");
 		context.entry_content.append_tokens(quote! {
-			let #param = #push_constant.param_desc.access(&#descriptors).load();
+			let #param = #push_constant.load_param::<#param_ty>(&#descriptors);
 		});
 		params.append_tokens(quote!(&#param,));
 		args.append_tokens(strip_attr(arg));
@@ -249,7 +247,7 @@ fn gen_bindless_inner_call(
 		quote!(#var_name,).to_tokens(&mut params);
 		strip_attr(arg).to_tokens(&mut args);
 	}
-	Ok(BindlessInnerCall { params, args })
+	Ok(SymInnerCall { params, args })
 }
 
 fn strip_attr(arg: &PatType) -> TokenStream {

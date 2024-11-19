@@ -2,27 +2,10 @@ use crate::descriptor::Bindless;
 use crate::pipeline::bindless_pipeline::{BindlessPipeline, VulkanPipeline};
 use crate::pipeline::shader::BindlessShader;
 use crate::pipeline::specialize::specialize;
-use ahash::HashSet;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::shader_type::{FragmentShader, MeshShader, TaskShader};
 use smallvec::SmallVec;
 use std::sync::Arc;
-use vulkano::buffer::Subbuffer;
-use vulkano::command_buffer::{DrawMeshTasksIndirectCommand, RecordingCommandBuffer};
-use vulkano::pipeline::cache::PipelineCache;
-use vulkano::pipeline::graphics::color_blend::ColorBlendState;
-use vulkano::pipeline::graphics::conservative_rasterization::ConservativeRasterizationState;
-use vulkano::pipeline::graphics::depth_stencil::DepthStencilState;
-use vulkano::pipeline::graphics::discard_rectangle::DiscardRectangleState;
-use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::rasterization::RasterizationState;
-use vulkano::pipeline::graphics::subpass::PipelineSubpassType;
-use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
-use vulkano::pipeline::{
-	DynamicState, GraphicsPipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
-};
-use vulkano::{Validated, ValidationError, VulkanError};
 
 pub type BindlessMeshGraphicsPipeline<T> = BindlessPipeline<MeshGraphicsPipelineType, T>;
 

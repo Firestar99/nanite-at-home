@@ -4,15 +4,9 @@ use rust_gpu_bindless_shaders::descriptor::{DescContent, PushConstant, StrongDes
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use vulkano::command_buffer::RecordingCommandBuffer;
-use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
-use vulkano::{Validated, ValidationError, VulkanError};
 
 pub trait VulkanPipeline {
 	type VulkanType: Pipeline;
-
-	const BINDPOINT: PipelineBindPoint;
-
 	fn bind_pipeline(
 		cmd: &mut RecordingCommandBuffer,
 		pipeline: Arc<Self::VulkanType>,
@@ -20,8 +14,8 @@ pub trait VulkanPipeline {
 }
 
 pub struct BindlessPipeline<Pipeline: VulkanPipeline, T: BufferStruct> {
-	pub bindless: Arc<Bindless>,
-	pub(crate) pipeline: Arc<Pipeline::VulkanType>,
+	pub bindless: Arc<Bindless<P>>,
+	pub(crate) pipeline: Pipeline::VulkanType,
 	_phantom: PhantomData<T>,
 }
 

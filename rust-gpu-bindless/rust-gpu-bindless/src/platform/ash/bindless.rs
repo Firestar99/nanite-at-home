@@ -20,19 +20,20 @@ use gpu_allocator::{AllocationError, MemoryLocation};
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
-	Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE, PUSH_CONSTANT_SIZE,
+	BindlessPushConstant, Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
 use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::mem::MaybeUninit;
+use std::mem::{size_of, MaybeUninit};
 use std::ops::Deref;
+use std::sync::{Arc, Weak};
 
 unsafe impl BindlessPlatform for Ash {
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
 
-	unsafe fn create_platform(create_info: Self::PlatformCreateInfo) -> Self {
-		Ash { create_info }
+	unsafe fn create_platform(create_info: Self::PlatformCreateInfo, bindless_cyclic: &Weak<Bindless<Self>>) -> Self {
+		Ash::new(Arc::new(create_info), bindless_cyclic)
 	}
 
 	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts {
@@ -91,7 +92,7 @@ unsafe impl BindlessPlatform for Ash {
 					.set_layouts(&[set_layout])
 					.push_constant_ranges(&[PushConstantRange {
 						offset: 0,
-						size: PUSH_CONSTANT_SIZE as u32,
+						size: size_of::<BindlessPushConstant>() as u32,
 						stage_flags: self.shader_stages,
 					}]),
 				None,
