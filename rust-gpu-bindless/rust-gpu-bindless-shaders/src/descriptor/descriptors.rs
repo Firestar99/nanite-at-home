@@ -1,12 +1,11 @@
-// caused by AnyBitPattern derive on PushConstant
-#![allow(clippy::multiple_bound_locations)]
-
-use crate::buffer_content::{BufferContent, Metadata};
+use crate::buffer_content::{BufferContent, BufferStruct, Metadata};
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::reference::{AliveDescRef, Desc};
-use crate::descriptor::{Buffer, BufferSlice, DescContent};
-use bytemuck_derive::AnyBitPattern;
+use crate::descriptor::{Buffer, BufferSlice, DescContent, StrongDesc};
+use core::mem::size_of;
+use rust_gpu_bindless_macros::BufferContent;
 use spirv_std::{RuntimeArray, Sampler, TypedBuffer};
+use static_assertions::const_assert_eq;
 
 /// Some struct that facilitates access to a [`ValidDesc`] pointing to some [`DescContent`]
 pub trait DescriptorsAccess<C: DescContent + ?Sized> {
@@ -60,8 +59,12 @@ impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
 /// Must not derive `DescStruct`, as to [`DescStruct::from_transfer`] Self you'd need the Metadata, which this struct
 /// contains. To break the loop, it just stores Metadata flat and params directly as `T::TransferDescStruct`.
 #[repr(C)]
-#[derive(Copy, Clone, AnyBitPattern)]
-pub struct PushConstant<T: bytemuck::AnyBitPattern + Send + Sync> {
-	pub t: T,
+#[derive(Copy, Clone, BufferContent)]
+pub struct PushConstant<T: BufferStruct + 'static> {
+	pub param_desc: StrongDesc<Buffer<T>>,
 	pub metadata: Metadata,
 }
+
+pub const PUSH_CONSTANT_SIZE: usize = size_of::<PushConstant<()>>();
+// T generic must not influence size!
+const_assert_eq!(PUSH_CONSTANT_SIZE, size_of::<PushConstant<u32>>());

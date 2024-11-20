@@ -121,44 +121,9 @@ impl<P: BindlessPlatform> Bindless<P> {
 	/// not be deallocated or removed from the bindless descriptor set until this lock is dropped. There may be multiple
 	/// active locks at the same time that can be unlocked out of order.
 	#[inline]
-	pub fn lock(&self) -> FrameGuard {
+	pub fn frame(&self) -> FrameGuard {
 		self.table_sync.frame()
 	}
-
-	// /// Get a pipeline layout with just the bindless descriptor set and the correct push constant size  for your
-	// /// `param_constant` `T`.
-	// /// The push constant size must not exceed 4 words (of u32's), the minimum the device spec requires.
-	// pub fn get_pipeline_layout<T: BufferStruct>(&self) -> Result<&Arc<PipelineLayout>, PushConstantError> {
-	// 	let words = Self::get_push_constant_words::<T>();
-	// 	self.pipeline_layouts
-	// 		.get(words)
-	// 		.ok_or(PushConstantError::TooLarge(words))
-	// }
-	//
-	// /// Get a `Vec<PushConstantRange>` with the correct push constant size for your `param_constant` `T`.
-	// /// The push constant size must not exceed 4 words (of u32's), the minimum the device spec requires.
-	// pub fn get_push_constant<T: BufferStruct>(&self) -> Vec<PushConstantRange> {
-	// 	Self::get_push_constant_inner(self.stages, Self::get_push_constant_words::<T>())
-	// }
-	//
-	// fn get_push_constant_inner(stages: ShaderStages, words: usize) -> Vec<PushConstantRange> {
-	// 	if words == 0 {
-	// 		Vec::new()
-	// 	} else {
-	// 		Vec::from([PushConstantRange {
-	// 			stages,
-	// 			offset: 0,
-	// 			size: words as u32 * 4,
-	// 		}])
-	// 	}
-	// }
-	//
-	// /// Get the push constant word size (of u32's) for your `param_constant` `T`.
-	// pub fn get_push_constant_words<T: BufferStruct>() -> usize {
-	// 	let i = mem::size_of::<PushConstant<T::Transfer>>();
-	// 	// round up to next multiple of words
-	// 	(i + 3) / 4
-	// }
 }
 
 impl<P: BindlessPlatform> Drop for Bindless<P> {

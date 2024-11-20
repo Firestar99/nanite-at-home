@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Platform {
+	type BindlessDescriptorSet: Clone + 'static;
+
 	unsafe fn update_after_bind_descriptor_limits(ci: &Arc<BindlessCreateInfo<Self>>) -> DescriptorCounts;
 
 	unsafe fn create_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>) -> Self::BindlessDescriptorSet;

@@ -131,12 +131,12 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 		Fields::Unit => match ct {
 			BufferContentType::Default => (
 				quote!(;),
-				quote!(let _ = (self, meta); Self::Transfer),
+				quote!(let _ = (self, meta); Self::Transfer {}),
 				quote!(let _ = (from, meta); Self),
 			),
 			BufferContentType::Plain => (
 				quote!(;),
-				quote!(let _ = self; Self::Transfer),
+				quote!(let _ = self; Self::Transfer {}),
 				quote!(let _ = from; Self),
 			),
 		},

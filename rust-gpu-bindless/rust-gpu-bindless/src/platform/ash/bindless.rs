@@ -13,7 +13,7 @@ use ash::vk::{
 	BufferUsageFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool, DescriptorPoolCreateFlags,
 	DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo, DescriptorSetLayout,
 	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageUsageFlags,
-	SamplerCreateInfo, WriteDescriptorSet,
+	PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange, SamplerCreateInfo, WriteDescriptorSet,
 };
 use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
 use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
@@ -21,7 +21,7 @@ use gpu_allocator::{AllocationError, MemoryLocation};
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
-	Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
+	Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE, PUSH_CONSTANT_SIZE,
 };
 use std::cell::UnsafeCell;
 use std::error::Error;
@@ -31,6 +31,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 unsafe impl BindlessPlatform for Ash {
+	type BindlessDescriptorSet = AshBindlessDescriptorSet;
+
 	unsafe fn update_after_bind_descriptor_limits(ci: &Arc<BindlessCreateInfo<Self>>) -> DescriptorCounts {
 		let mut vulkan12properties = PhysicalDeviceVulkan12Properties::default();
 		let mut properties2 = PhysicalDeviceProperties2::default().push_next(&mut vulkan12properties);
@@ -70,12 +72,26 @@ unsafe impl BindlessPlatform for Ash {
 				.stage_flags(ci.shader_stages),
 		];
 
-		let layout = ci
+		let set_layout = ci
 			.device
 			.create_descriptor_set_layout(
 				&DescriptorSetLayoutCreateInfo::default()
 					.flags(DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
 					.bindings(&bindings),
+				None,
+			)
+			.unwrap();
+
+		let pipeline_layout = ci
+			.device
+			.create_pipeline_layout(
+				&PipelineLayoutCreateInfo::default()
+					.set_layouts(&[set_layout])
+					.push_constant_ranges(&[PushConstantRange {
+						offset: 0,
+						size: PUSH_CONSTANT_SIZE as u32,
+						stage_flags: ci.shader_stages,
+					}]),
 				None,
 			)
 			.unwrap();
@@ -99,14 +115,19 @@ unsafe impl BindlessPlatform for Ash {
 			.allocate_descriptor_sets(
 				&DescriptorSetAllocateInfo::default()
 					.descriptor_pool(pool)
-					.set_layouts(&[layout]),
+					.set_layouts(&[set_layout]),
 			)
 			.unwrap()
 			.into_iter()
 			.next()
 			.unwrap();
 
-		AshBindlessDescriptorSet { layout, pool, set }
+		AshBindlessDescriptorSet {
+			pipeline_layout,
+			set_layout,
+			pool,
+			set,
+		}
 	}
 
 	unsafe fn update_descriptor_set(
@@ -235,7 +256,8 @@ unsafe impl BindlessPlatform for Ash {
 	unsafe fn destroy_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>, set: Self::BindlessDescriptorSet) {
 		// descriptor sets allocated from pool are freed implicitly
 		ci.device.destroy_descriptor_pool(set.pool, None);
-		ci.device.destroy_descriptor_set_layout(set.layout, None);
+		ci.device.destroy_pipeline_layout(set.pipeline_layout, None);
+		ci.device.destroy_descriptor_set_layout(set.set_layout, None);
 	}
 
 	unsafe fn alloc_buffer(
@@ -320,7 +342,8 @@ unsafe impl BindlessPlatform for Ash {
 
 #[derive(Copy, Clone, Debug)]
 pub struct AshBindlessDescriptorSet {
-	pub layout: DescriptorSetLayout,
+	pub pipeline_layout: PipelineLayout,
+	pub set_layout: DescriptorSetLayout,
 	pub pool: DescriptorPool,
 	pub set: DescriptorSet,
 }
