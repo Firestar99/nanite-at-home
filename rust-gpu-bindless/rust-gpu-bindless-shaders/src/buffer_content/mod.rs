@@ -17,7 +17,7 @@ pub use rust_gpu_bindless_buffer_content::*;
 /// # Safety
 /// Should not be manually implemented, see [`BufferStruct`].
 pub unsafe trait BufferContent: Send + Sync {
-	type Transfer: Send + Sync + ?Sized;
+	type Transfer: Send + Sync + ?Sized + 'static;
 }
 
 unsafe impl<T: BufferContent> BufferContent for [T]

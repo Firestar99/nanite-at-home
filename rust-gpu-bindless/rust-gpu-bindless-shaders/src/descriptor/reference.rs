@@ -25,7 +25,7 @@ pub trait MutDescRef: DescRef {}
 #[repr(C)]
 pub struct Desc<R: DescRef, C: DescContent> {
 	pub r: R,
-	_phantom: PhantomData<&'static C>,
+	_phantom: PhantomData<C>,
 }
 
 impl<R: DescRef, C: DescContent> Desc<R, C> {

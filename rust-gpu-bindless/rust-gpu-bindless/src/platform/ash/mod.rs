@@ -44,7 +44,7 @@ unsafe impl Platform for Ash {
 	/// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after running destroy.
 	type MemoryAllocation = UnsafeCell<MaybeUninit<Allocation>>;
 	type Buffer = ash::vk::Buffer;
-	type TypedBuffer<T: Send + Sync + ?Sized + 'static> = Self::Buffer;
+	type TypedBuffer<T: Send + Sync + ?Sized> = Self::Buffer;
 	type Image = ash::vk::Image;
 	type ImageView = ash::vk::ImageView;
 	type Sampler = ash::vk::Sampler;

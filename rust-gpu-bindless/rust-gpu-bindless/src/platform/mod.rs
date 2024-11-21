@@ -9,7 +9,7 @@ pub unsafe trait Platform: Sized + Send + Sync + 'static {
 	type PlatformCreateInfo: 'static;
 	type MemoryAllocation: 'static;
 	type Buffer: 'static;
-	type TypedBuffer<T: Send + Sync + ?Sized + 'static>: 'static;
+	type TypedBuffer<T: Send + Sync + ?Sized>: 'static;
 	type Image: 'static;
 	type ImageView: 'static;
 	type Sampler: 'static;

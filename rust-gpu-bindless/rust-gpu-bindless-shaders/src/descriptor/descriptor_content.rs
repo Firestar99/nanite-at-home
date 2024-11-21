@@ -2,6 +2,6 @@
 /// * [`crate::descriptor::buffer::Buffer`]
 /// * [`crate::descriptor::image::Image`]
 /// * [`crate::descriptor::sampler::Sampler`]
-pub trait DescContent: Sized + Send + Sync + 'static {
+pub trait DescContent: Sized + Send + Sync {
 	type AccessType<'a>;
 }
