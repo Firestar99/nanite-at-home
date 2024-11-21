@@ -2,13 +2,13 @@ use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
-use crate::descriptor::{Bindless, BindlessCreateInfo, Image};
+use crate::descriptor::{Bindless, DescriptorCounts, Image};
 use crate::platform::BindlessPlatform;
 use ash::vk::ImageUsageFlags;
 use rust_gpu_bindless_shaders::descriptor::SampleType;
 use rust_gpu_bindless_shaders::spirv_std::image::Image2d;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 impl<
 		SampledType: SampleType<FORMAT, COMPONENTS> + Send + Sync + 'static,
@@ -48,18 +48,9 @@ pub struct ImageTable<P: BindlessPlatform> {
 }
 
 impl<P: BindlessPlatform> ImageTable<P> {
-	pub fn new(
-		table_sync: &Arc<TableSync>,
-		ci: Arc<BindlessCreateInfo<P>>,
-		global_descriptor_set: P::BindlessDescriptorSet,
-	) -> Self {
-		let counts = ci.counts.image;
-		let interface = ImageInterface {
-			ci,
-			global_descriptor_set,
-		};
+	pub fn new(table_sync: &Arc<TableSync>, counts: DescriptorCounts, bindless: Weak<Bindless<P>>) -> Self {
 		Self {
-			table: table_sync.register(counts, interface).unwrap(),
+			table: table_sync.register(counts.image, ImageInterface { bindless }).unwrap(),
 		}
 	}
 }
@@ -100,8 +91,7 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 }
 
 pub struct ImageInterface<P: BindlessPlatform> {
-	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::BindlessDescriptorSet,
+	bindless: Weak<Bindless<P>>,
 }
 
 impl<P: BindlessPlatform> TableInterface for ImageInterface<P> {
@@ -109,7 +99,11 @@ impl<P: BindlessPlatform> TableInterface for ImageInterface<P> {
 
 	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 		unsafe {
-			P::destroy_images(&self.ci, &self.global_descriptor_set, indices);
+			if let Some(bindless) = self.bindless.upgrade() {
+				bindless
+					.platform
+					.destroy_images(&bindless.global_descriptor_set(), indices);
+			}
 		}
 	}
 

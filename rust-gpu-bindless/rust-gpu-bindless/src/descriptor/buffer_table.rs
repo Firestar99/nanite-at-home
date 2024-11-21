@@ -3,7 +3,7 @@ use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface,
 use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutable::{MutDesc, MutDescExt};
-use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, BindlessCreateInfo};
+use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescriptorCounts};
 use crate::platform::BindlessPlatform;
 use parking_lot::Mutex;
 use rust_gpu_bindless_shaders::buffer_content::Metadata;
@@ -13,7 +13,7 @@ use smallvec::SmallVec;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	type DescTable<P: BindlessPlatform> = BufferTable<P>;
@@ -47,25 +47,17 @@ pub struct BufferTable<P: BindlessPlatform> {
 }
 
 impl<P: BindlessPlatform> BufferTable<P> {
-	pub fn new(
-		table_sync: &Arc<TableSync>,
-		ci: Arc<BindlessCreateInfo<P>>,
-		global_descriptor_set: P::BindlessDescriptorSet,
-	) -> Self {
-		let count = ci.counts.buffers;
-		let interface = BufferInterface {
-			ci,
-			global_descriptor_set,
-		};
+	pub fn new(table_sync: &Arc<TableSync>, counts: DescriptorCounts, bindless: Weak<Bindless<P>>) -> Self {
 		Self {
-			table: table_sync.register(count, interface).unwrap(),
+			table: table_sync
+				.register(counts.buffers, BufferInterface { bindless })
+				.unwrap(),
 		}
 	}
 }
 
 pub struct BufferInterface<P: BindlessPlatform> {
-	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::BindlessDescriptorSet,
+	bindless: Weak<Bindless<P>>,
 }
 
 impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
@@ -73,7 +65,11 @@ impl<P: BindlessPlatform> TableInterface for BufferInterface<P> {
 
 	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 		unsafe {
-			P::destroy_buffers(&self.ci, &self.global_descriptor_set, indices);
+			if let Some(bindless) = self.bindless.upgrade() {
+				bindless
+					.platform
+					.destroy_buffers(&bindless.global_descriptor_set(), indices);
+			}
 		}
 	}
 
@@ -163,7 +159,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	) -> Result<MutDesc<P, Buffer<T>>, P::AllocationError> {
 		unsafe {
 			let size = size_of::<T::Transfer>() as u64;
-			let (buffer, memory_allocation) = P::alloc_buffer(&self.0.ci, create_info, size)?;
+			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
 			Ok(self.alloc_slot(BufferSlot {
 				buffer,
 				len: 1,
@@ -182,7 +178,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	) -> Result<MutDesc<P, Buffer<[T]>>, P::AllocationError> {
 		unsafe {
 			let size = size_of::<T::Transfer>() as u64 * len as u64;
-			let (buffer, memory_allocation) = P::alloc_buffer(&self.0.ci, create_info, size)?;
+			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
 			Ok(self.alloc_slot(BufferSlot {
 				buffer,
 				len,

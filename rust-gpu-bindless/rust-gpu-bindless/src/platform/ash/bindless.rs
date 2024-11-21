@@ -2,9 +2,8 @@ use crate::backend::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet
 use crate::backend::table::DrainFlushQueue;
 use crate::descriptor::mutable::MutDesc;
 use crate::descriptor::{
-	BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessCreateInfo, BufferInterface,
-	BufferSlot, BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface,
-	SamplerTableAccess,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,
+	BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface, SamplerTableAccess,
 };
 use crate::platform::ash::Ash;
 use crate::platform::BindlessPlatform;
@@ -28,16 +27,19 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use std::sync::Arc;
 
 unsafe impl BindlessPlatform for Ash {
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
 
-	unsafe fn update_after_bind_descriptor_limits(ci: &Arc<BindlessCreateInfo<Self>>) -> DescriptorCounts {
+	unsafe fn create_platform(create_info: Self::PlatformCreateInfo) -> Self {
+		Ash { create_info }
+	}
+
+	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts {
 		let mut vulkan12properties = PhysicalDeviceVulkan12Properties::default();
 		let mut properties2 = PhysicalDeviceProperties2::default().push_next(&mut vulkan12properties);
-		ci.instance
-			.get_physical_device_properties2(ci.physical_device, &mut properties2);
+		self.instance
+			.get_physical_device_properties2(self.physical_device, &mut properties2);
 		DescriptorCounts {
 			buffers: vulkan12properties.max_descriptor_set_update_after_bind_storage_buffers,
 			image: u32::min(
@@ -48,31 +50,31 @@ unsafe impl BindlessPlatform for Ash {
 		}
 	}
 
-	unsafe fn create_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>) -> Self::BindlessDescriptorSet {
+	unsafe fn create_descriptor_set(&self, counts: DescriptorCounts) -> Self::BindlessDescriptorSet {
 		let bindings = [
 			ash::vk::DescriptorSetLayoutBinding::default()
 				.binding(BINDING_BUFFER)
 				.descriptor_type(DescriptorType::STORAGE_BUFFER)
-				.descriptor_count(ci.counts.buffers)
-				.stage_flags(ci.shader_stages),
+				.descriptor_count(counts.buffers)
+				.stage_flags(self.shader_stages),
 			ash::vk::DescriptorSetLayoutBinding::default()
 				.binding(BINDING_STORAGE_IMAGE)
 				.descriptor_type(DescriptorType::STORAGE_IMAGE)
-				.descriptor_count(ci.counts.image)
-				.stage_flags(ci.shader_stages),
+				.descriptor_count(counts.image)
+				.stage_flags(self.shader_stages),
 			ash::vk::DescriptorSetLayoutBinding::default()
 				.binding(BINDING_SAMPLED_IMAGE)
 				.descriptor_type(DescriptorType::SAMPLED_IMAGE)
-				.descriptor_count(ci.counts.image)
-				.stage_flags(ci.shader_stages),
+				.descriptor_count(counts.image)
+				.stage_flags(self.shader_stages),
 			ash::vk::DescriptorSetLayoutBinding::default()
 				.binding(BINDING_SAMPLER)
 				.descriptor_type(DescriptorType::SAMPLER)
-				.descriptor_count(ci.counts.samplers)
-				.stage_flags(ci.shader_stages),
+				.descriptor_count(counts.samplers)
+				.stage_flags(self.shader_stages),
 		];
 
-		let set_layout = ci
+		let set_layout = self
 			.device
 			.create_descriptor_set_layout(
 				&DescriptorSetLayoutCreateInfo::default()
@@ -82,7 +84,7 @@ unsafe impl BindlessPlatform for Ash {
 			)
 			.unwrap();
 
-		let pipeline_layout = ci
+		let pipeline_layout = self
 			.device
 			.create_pipeline_layout(
 				&PipelineLayoutCreateInfo::default()
@@ -90,13 +92,13 @@ unsafe impl BindlessPlatform for Ash {
 					.push_constant_ranges(&[PushConstantRange {
 						offset: 0,
 						size: PUSH_CONSTANT_SIZE as u32,
-						stage_flags: ci.shader_stages,
+						stage_flags: self.shader_stages,
 					}]),
 				None,
 			)
 			.unwrap();
 
-		let pool = ci
+		let pool = self
 			.device
 			.create_descriptor_pool(
 				&DescriptorPoolCreateInfo::default()
@@ -110,7 +112,7 @@ unsafe impl BindlessPlatform for Ash {
 			)
 			.unwrap();
 
-		let set = ci
+		let set = self
 			.device
 			.allocate_descriptor_sets(
 				&DescriptorSetAllocateInfo::default()
@@ -130,8 +132,10 @@ unsafe impl BindlessPlatform for Ash {
 		}
 	}
 
+	unsafe fn bindless_initialized(&self, _bindless: &mut Bindless<Self>) {}
+
 	unsafe fn update_descriptor_set(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		set: &Self::BindlessDescriptorSet,
 		mut buffers: DrainFlushQueue<BufferInterface<Self>>,
 		mut images: DrainFlushQueue<ImageInterface<Self>>,
@@ -250,22 +254,22 @@ unsafe impl BindlessPlatform for Ash {
 			.chain(sampled_images)
 			.chain(samplers)
 			.collect::<Vec<_>>();
-		ci.device.update_descriptor_sets(&writes, &[]);
+		self.device.update_descriptor_sets(&writes, &[]);
 	}
 
-	unsafe fn destroy_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>, set: Self::BindlessDescriptorSet) {
+	unsafe fn destroy_descriptor_set(&self, set: Self::BindlessDescriptorSet) {
 		// descriptor sets allocated from pool are freed implicitly
-		ci.device.destroy_descriptor_pool(set.pool, None);
-		ci.device.destroy_pipeline_layout(set.pipeline_layout, None);
-		ci.device.destroy_descriptor_set_layout(set.set_layout, None);
+		self.device.destroy_descriptor_pool(set.pool, None);
+		self.device.destroy_pipeline_layout(set.pipeline_layout, None);
+		self.device.destroy_descriptor_set_layout(set.set_layout, None);
 	}
 
 	unsafe fn alloc_buffer(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		create_info: &BindlessBufferCreateInfo,
 		size: u64,
 	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError> {
-		let buffer = ci.device.create_buffer(
+		let buffer = self.device.create_buffer(
 			&ash::vk::BufferCreateInfo {
 				usage: create_info.usage.to_ash_buffer_usage_flags(),
 				size,
@@ -273,15 +277,15 @@ unsafe impl BindlessPlatform for Ash {
 			},
 			None,
 		)?;
-		let requirements = ci.device.get_buffer_memory_requirements(buffer);
-		let memory_allocation = ci.memory_allocator.lock().allocate(&AllocationCreateDesc {
+		let requirements = self.device.get_buffer_memory_requirements(buffer);
+		let memory_allocation = self.memory_allocator.lock().allocate(&AllocationCreateDesc {
 			requirements,
 			name: create_info.name,
 			location: create_info.usage.to_gpu_allocator_memory_location(),
 			allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_buffer(buffer),
 			linear: true,
 		})?;
-		ci.device
+		self.device
 			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
 		Ok((buffer, UnsafeCell::new(MaybeUninit::new(memory_allocation))))
 	}
@@ -297,45 +301,45 @@ unsafe impl BindlessPlatform for Ash {
 	}
 
 	unsafe fn destroy_buffers<'a>(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		buffers: impl DescriptorIndexIterator<'a, BufferInterface<Self>>,
 	) {
-		let mut allocator = ci.memory_allocator.lock();
+		let mut allocator = self.memory_allocator.lock();
 		for (_, buffer) in buffers.into_iter() {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
 			let allocation = unsafe { &mut *buffer.memory_allocation.get() }.assume_init_read();
 			allocator.free(allocation).unwrap();
-			ci.device.destroy_buffer(buffer.buffer, None);
+			self.device.destroy_buffer(buffer.buffer, None);
 		}
 	}
 
 	unsafe fn destroy_images<'a>(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		images: impl DescriptorIndexIterator<'a, ImageInterface<Self>>,
 	) {
-		let mut allocator = ci.memory_allocator.lock();
+		let mut allocator = self.memory_allocator.lock();
 		for (_, image) in images.into_iter() {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
 			let allocation = unsafe { &mut *image.memory_allocation.get() }.assume_init_read();
 			allocator.free(allocation).unwrap();
-			ci.device.destroy_image_view(image.imageview, None);
-			ci.device.destroy_image(image.image, None);
+			self.device.destroy_image_view(image.imageview, None);
+			self.device.destroy_image(image.image, None);
 		}
 	}
 
 	unsafe fn destroy_samplers<'a>(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		samplers: impl DescriptorIndexIterator<'a, SamplerInterface<Self>>,
 	) {
 		for (_, sampler) in samplers.into_iter() {
-			ci.device.destroy_sampler(*sampler, None);
+			self.device.destroy_sampler(*sampler, None);
 		}
 	}
 }

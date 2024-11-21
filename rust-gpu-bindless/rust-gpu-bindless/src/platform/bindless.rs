@@ -1,18 +1,27 @@
 use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::DrainFlushQueue;
 use crate::descriptor::{
-	BindlessBufferCreateInfo, BindlessCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface,
+	Bindless, BindlessBufferCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface,
 };
 use crate::platform::Platform;
-use std::sync::Arc;
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Platform {
-	type BindlessDescriptorSet: Clone + 'static;
+	type BindlessDescriptorSet: 'static;
 
-	unsafe fn update_after_bind_descriptor_limits(ci: &Arc<BindlessCreateInfo<Self>>) -> DescriptorCounts;
+	/// Create an [`Self::Platform`] from the supplied [`Self::PlatformCreateInfo`]. Typically, [`Self::PlatformCreateInfo`] wrap the
+	/// implementation's instance, device and other objects required to be initialized by the end user.
+	/// [`Self::Platform`] either is the same as or derefs to the original [`Self::PlatformCreateInfo`] and has some additional
+	/// members that will be initialized in this function.
+	unsafe fn create_platform(create_info: Self::PlatformCreateInfo) -> Self;
 
-	unsafe fn create_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>) -> Self::BindlessDescriptorSet;
+	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts;
+
+	unsafe fn create_descriptor_set(&self, counts: DescriptorCounts) -> Self::BindlessDescriptorSet;
+
+	/// Bindless has been fully initialized but not yet returned to the end user. Feel free to do any required
+	/// modifications or buffer allocations here.
+	unsafe fn bindless_initialized(&self, bindless: &mut Bindless<Self>);
 
 	/// Update the [`BindlessDescriptorSet`] with these changed buffers, images and samplers.
 	///
@@ -22,17 +31,17 @@ pub unsafe trait BindlessPlatform: Platform {
 	/// [`TableSync`]: crate::backend::table::TableSync
 	/// [`FlushGuard`]: crate::backend::table::FlushGuard
 	unsafe fn update_descriptor_set(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		set: &Self::BindlessDescriptorSet,
 		buffers: DrainFlushQueue<BufferInterface<Self>>,
 		images: DrainFlushQueue<ImageInterface<Self>>,
 		samplers: DrainFlushQueue<SamplerInterface<Self>>,
 	);
 
-	unsafe fn destroy_descriptor_set(ci: &Arc<BindlessCreateInfo<Self>>, set: Self::BindlessDescriptorSet);
+	unsafe fn destroy_descriptor_set(&self, set: Self::BindlessDescriptorSet);
 
 	unsafe fn alloc_buffer(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		create_info: &BindlessBufferCreateInfo,
 		size: u64,
 	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError>;
@@ -50,7 +59,7 @@ pub unsafe trait BindlessPlatform: Platform {
 	/// passed by standard reference. After this method call returns, the [`BufferSlot`] will be dropped and otherwise
 	/// not accessed anymore.
 	unsafe fn destroy_buffers<'a>(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		global_descriptor_set: &Self::BindlessDescriptorSet,
 		buffers: impl DescriptorIndexIterator<'a, BufferInterface<Self>>,
 	);
@@ -59,7 +68,7 @@ pub unsafe trait BindlessPlatform: Platform {
 	/// passed by standard reference. After this method call returns, the [`ImageSlot`] will be dropped and otherwise
 	/// not accessed anymore.
 	unsafe fn destroy_images<'a>(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		global_descriptor_set: &Self::BindlessDescriptorSet,
 		images: impl DescriptorIndexIterator<'a, ImageInterface<Self>>,
 	);
@@ -68,7 +77,7 @@ pub unsafe trait BindlessPlatform: Platform {
 	/// passed by standard reference. After this method call returns, the Samplers will be dropped and otherwise
 	/// not accessed anymore.
 	unsafe fn destroy_samplers<'a>(
-		ci: &Arc<BindlessCreateInfo<Self>>,
+		&self,
 		global_descriptor_set: &Self::BindlessDescriptorSet,
 		samplers: impl DescriptorIndexIterator<'a, SamplerInterface<Self>>,
 	);

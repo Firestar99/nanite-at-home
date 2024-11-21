@@ -2,11 +2,11 @@ use crate::backend::range_set::DescriptorIndexIterator;
 use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::rc::RCDesc;
-use crate::descriptor::{Bindless, BindlessCreateInfo, RCDescExt};
+use crate::descriptor::{Bindless, DescriptorCounts, RCDescExt};
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::Sampler;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 impl DescContentCpu for Sampler {
 	type DescTable<P: BindlessPlatform> = SamplerTable<P>;
@@ -29,18 +29,11 @@ pub struct SamplerTable<P: BindlessPlatform> {
 }
 
 impl<P: BindlessPlatform> SamplerTable<P> {
-	pub fn new(
-		table_sync: &Arc<TableSync>,
-		ci: Arc<BindlessCreateInfo<P>>,
-		global_descriptor_set: P::BindlessDescriptorSet,
-	) -> Self {
-		let counts = ci.counts.samplers;
-		let interface = SamplerInterface {
-			ci,
-			global_descriptor_set,
-		};
+	pub fn new(table_sync: &Arc<TableSync>, counts: DescriptorCounts, bindless: Weak<Bindless<P>>) -> Self {
 		Self {
-			table: table_sync.register(counts, interface).unwrap(),
+			table: table_sync
+				.register(counts.samplers, SamplerInterface { bindless })
+				.unwrap(),
 		}
 	}
 }
@@ -80,8 +73,7 @@ impl<'a, P: BindlessPlatform> SamplerTableAccess<'a, P> {
 }
 
 pub struct SamplerInterface<P: BindlessPlatform> {
-	ci: Arc<BindlessCreateInfo<P>>,
-	global_descriptor_set: P::BindlessDescriptorSet,
+	bindless: Weak<Bindless<P>>,
 }
 
 impl<P: BindlessPlatform> TableInterface for SamplerInterface<P> {
@@ -89,7 +81,11 @@ impl<P: BindlessPlatform> TableInterface for SamplerInterface<P> {
 
 	fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 		unsafe {
-			P::destroy_samplers(&self.ci, &self.global_descriptor_set, indices);
+			if let Some(bindless) = self.bindless.upgrade() {
+				bindless
+					.platform
+					.destroy_samplers(&bindless.global_descriptor_set(), indices);
+			}
 		}
 	}
 

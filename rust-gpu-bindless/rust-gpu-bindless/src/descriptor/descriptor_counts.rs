@@ -1,6 +1,4 @@
-use crate::descriptor::BindlessCreateInfo;
 use crate::platform::BindlessPlatform;
-use std::sync::Arc;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct DescriptorCounts {
@@ -10,8 +8,8 @@ pub struct DescriptorCounts {
 }
 
 impl DescriptorCounts {
-	pub fn limits<P: BindlessPlatform>(ci: &Arc<BindlessCreateInfo<P>>) -> Self {
-		unsafe { P::update_after_bind_descriptor_limits(ci) }
+	pub fn limits<P: BindlessPlatform>(platform: &P) -> Self {
+		unsafe { P::update_after_bind_descriptor_limits(platform) }
 	}
 
 	const REASONABLE_DEFAULTS: Self = DescriptorCounts {
@@ -20,8 +18,18 @@ impl DescriptorCounts {
 		samplers: 400,
 	};
 
-	pub fn reasonable_defaults<P: BindlessPlatform>(ci: &Arc<BindlessCreateInfo<P>>) -> Self {
-		Self::REASONABLE_DEFAULTS.min(Self::limits(ci))
+	pub fn reasonable_defaults<P: BindlessPlatform>(platform: &P) -> Self {
+		Self::REASONABLE_DEFAULTS.min(Self::limits(platform))
+	}
+
+	pub fn assert_within_limits<P: BindlessPlatform>(&self, platform: &P) {
+		let limit = DescriptorCounts::limits(platform);
+		assert!(
+			self.is_within_limit(limit),
+			"{:?} must be within limit of {:?}",
+			self,
+			limit
+		);
 	}
 
 	pub fn is_within_limit(&self, limit: Self) -> bool {
