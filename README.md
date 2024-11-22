@@ -3,6 +3,7 @@
 Requires a mesh shader capable GPU, which all raytracing capable GPUs are (plus a few more). The master branch has been tested on:
 * Windows Nvidia 30XX series
 * Linux AMD 680M iGPU, very similar to a SteamDeck
+* Windows AMD is known to segfault within graphics pipeline creation
 
 Currently, I am still using the vulkano library for vulkan bindings, which unfortunately is causing problems with
 barriers, layout transitions and general synchronization. For this reason the current master does not pass validation
@@ -38,6 +39,7 @@ Showcase scenes:
 * Amazon Lumberyard Bistro, CC-BY 4.0, 2017 Amazon Lumberyard
 * Sponza: CRYENGINE Limited License Agreement
 * San Miguel: Outdoors Restaurant from Mexico, CC BY 3.0, Guillermo M. Leal Llaguno
+* [Not a Stanford Bunny](https://jocelyndaprato.artstation.com/projects/g8PKBm), no right to sell, Feel free to share, use, modify, by Jocelyn Da Prato
 
 Minecraft scenes:
 * Rungholt: CC BY 3.0, kescha
