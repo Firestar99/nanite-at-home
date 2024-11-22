@@ -1,5 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
+use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
@@ -55,14 +56,14 @@ impl<'a, T> ModNode<'a, T> {
 		}
 	}
 
-	pub fn to_tokens(&self, f: impl Fn(Ident, &T) -> TokenStream) -> TokenStream {
+	pub fn to_tokens(&self, mut f: impl FnMut(Ident, &T) -> TokenStream) -> TokenStream {
 		match self {
-			ModNode::Children(children) => self.to_tokens_children(children, &f),
+			ModNode::Children(children) => self.to_tokens_children(children, &mut f),
 			ModNode::Object(_) => unreachable!(),
 		}
 	}
 
-	fn to_tokens_loop(&self, name: Ident, f: &impl Fn(Ident, &T) -> TokenStream) -> TokenStream {
+	fn to_tokens_loop(&self, name: Ident, f: &mut impl FnMut(Ident, &T) -> TokenStream) -> TokenStream {
 		match self {
 			ModNode::Children(children) => {
 				let content = self.to_tokens_children(children, f);
@@ -79,7 +80,7 @@ impl<'a, T> ModNode<'a, T> {
 	fn to_tokens_children(
 		&self,
 		children: &HashMap<Cow<'a, str>, ModNode<'a, T>>,
-		f: &impl Fn(Ident, &T) -> TokenStream,
+		f: &mut impl FnMut(Ident, &T) -> TokenStream,
 	) -> TokenStream {
 		let mut content = quote!();
 		for (name, node) in children {
@@ -90,6 +91,23 @@ impl<'a, T> ModNode<'a, T> {
 			};
 		}
 		content
+	}
+
+	pub fn iter(&'a self, mut f: impl FnMut(&[&'a str], &T)) {
+		fn inner<'a, T>(path: &[&'a str], node: &'a ModNode<'a, T>, f: &mut impl FnMut(&[&'a str], &T)) {
+			match node {
+				ModNode::Children(children) => {
+					let mut path = SmallVec::<[&str; 6]>::from(path);
+					for (name, node) in children {
+						path.push(name);
+						inner(&path, node, f);
+						path.pop();
+					}
+				}
+				ModNode::Object(t) => f(&*path, t),
+			};
+		}
+		inner(&[], self, &mut f);
 	}
 }
 

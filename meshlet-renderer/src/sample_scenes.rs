@@ -1,5 +1,5 @@
 use space_asset_disk::meshlet::scene::MeshletSceneFile;
 
 pub fn sample_scenes() -> Vec<MeshletSceneFile<'static>> {
-	Vec::from([models::Lantern::glTF::Lantern, models::plane::plane])
+	Vec::from(models::ALL_MODELS)
 }
