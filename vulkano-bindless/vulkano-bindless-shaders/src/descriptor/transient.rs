@@ -3,11 +3,12 @@ use crate::descriptor::id::DescriptorId;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
 use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
+use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
 use core::mem;
 use static_assertions::const_assert_eq;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub struct Transient<'a> {
 	id: DescriptorId,
 	_phantom: PhantomData<&'a ()>,
@@ -20,6 +21,12 @@ impl<'a> AliveDescRef for Transient<'a> {
 	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
 		desc.r.id
+	}
+}
+
+impl<'a> Debug for Transient<'a> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_tuple("Transient").field(&self.id).finish()
 	}
 }
 

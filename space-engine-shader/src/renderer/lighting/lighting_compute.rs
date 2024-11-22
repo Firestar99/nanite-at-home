@@ -25,7 +25,7 @@ pub fn lighting_cs(
 	#[bindless(param_constants)] param: &Params<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 1)] g_normal: &Image2d,
-	#[spirv(descriptor_set = 1, binding = 2)] g_mr: &Image2d,
+	#[spirv(descriptor_set = 1, binding = 2)] g_roughness_metallic: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 3)] depth_image: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 4)] output_image: &StorageImage2d,
 	#[spirv(workgroup_id)] wg_id: UVec3,
@@ -36,7 +36,7 @@ pub fn lighting_cs(
 		param,
 		g_albedo,
 		g_normal,
-		g_mr,
+		g_roughness_metallic,
 		depth_image,
 		output_image,
 		wg_id,
@@ -50,7 +50,7 @@ fn lighting_inner(
 	param: &Params<'static>,
 	g_albedo: &Image2d,
 	g_normal: &Image2d,
-	g_mr: &Image2d,
+	g_roughness_metallic: &Image2d,
 	depth_image: &Image2d,
 	output_image: &StorageImage2d,
 	wg_id: UVec3,
@@ -62,8 +62,15 @@ fn lighting_inner(
 	let pixel = pixel_wg_start + uvec2(inv_id.x, 0);
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
-	let (sampled, meshlet_debug_hue) =
-		sampled_material_from_g_buffer(frame_data.camera, g_albedo, g_normal, g_mr, depth_image, pixel, size);
+	let (sampled, meshlet_debug_hue) = sampled_material_from_g_buffer(
+		frame_data.camera,
+		g_albedo,
+		g_normal,
+		g_roughness_metallic,
+		depth_image,
+		pixel,
+		size,
+	);
 	let skybox = is_skybox(sampled.alpha);
 
 	let out_color = match frame_data.debug_settings() {
@@ -75,8 +82,8 @@ fn lighting_inner(
 		),
 		DebugSettings::MeshletId => meshlet_debug_color(meshlet_debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
-		DebugSettings::Normals => sampled.normal,
-		DebugSettings::Omr => vec3(0., sampled.metallic, sampled.roughness),
+		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
+		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),
 		DebugSettings::ReconstructedPosition => {
 			if sampled.alpha < 0.001 {
 				Vec3::ZERO
@@ -110,7 +117,7 @@ fn sampled_material_from_g_buffer(
 	camera: Camera,
 	g_albedo: &Image2d,
 	g_normal: &Image2d,
-	g_mr: &Image2d,
+	g_roughness_metallic: &Image2d,
 	depth_image: &Image2d,
 	pixel: UVec2,
 	size: UVec2,
@@ -121,7 +128,7 @@ fn sampled_material_from_g_buffer(
 	let normal = Vec4::from(g_normal.fetch(pixel));
 	let meshlet_debug_hue = normal.w;
 	let normal = normal.xyz() * 2. - 1.;
-	let [metallic, roughness] = Vec4::from(g_mr.fetch(pixel)).xy().to_array();
+	let [roughness, metallic] = Vec4::from(g_roughness_metallic.fetch(pixel)).xy().to_array();
 	let depth = Vec4::from(depth_image.fetch(pixel)).x;
 
 	let position = camera.reconstruct_from_depth(pixel.as_vec2() / size.as_vec2(), depth);
@@ -131,8 +138,8 @@ fn sampled_material_from_g_buffer(
 		albedo,
 		alpha,
 		normal,
-		metallic,
 		roughness,
+		metallic,
 	};
 	(sampled, meshlet_debug_hue)
 }

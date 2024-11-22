@@ -1,5 +1,5 @@
 use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
-use crate::renderer::frame_data::FrameData;
+use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
 use space_asset_shader::meshlet::instance::MeshletInstance;
@@ -106,10 +106,12 @@ fn draw_meshlet(
 
 #[allow(dead_code)]
 #[derive(Copy, Clone)]
+#[repr(C)]
 struct InterpolationVertex {
+	tangent: Vec4,
 	world_pos: Vec3,
-	normals: Vec3,
-	tex_coords: Vec2,
+	normal: Vec3,
+	tex_coord: Vec2,
 	meshlet_debug_hue: f32,
 }
 
@@ -156,13 +158,11 @@ pub fn meshlet_mesh(
 				.camera
 				.transform_vertex(instance.transform, draw_vertex.position);
 			let pbr_vertex = meshlet.load_pbr_material_vertex_unchecked(descriptors, draw_vertex.material_vertex_id);
-			let normals = frame_data
-				.camera
-				.transform_normal(instance.transform, pbr_vertex.normals);
 			let vertex = InterpolationVertex {
 				world_pos: position.world_space,
-				normals: normals.world_space,
-				tex_coords: pbr_vertex.tex_coords,
+				normal: pbr_vertex.normal,
+				tangent: pbr_vertex.tangent,
+				tex_coord: pbr_vertex.tex_coord,
 				meshlet_debug_hue: GpuRng(meshlet_id.wrapping_add(1)).next_f32(),
 			};
 
@@ -197,24 +197,30 @@ pub fn meshlet_fragment_g_buffer(
 	out_vertex: InterpolationVertex,
 	frag_albedo: &mut Vec4,
 	frag_normal: &mut Vec4,
-	frag_mr: &mut Vec4,
+	frag_roughness_metallic: &mut Vec4,
 ) {
 	let mesh = param.mesh2instance.mesh.access(descriptors).load();
 	let frame_data = param.frame_data.access(descriptors).load();
 	let loc = SurfaceLocation::new(
 		out_vertex.world_pos,
 		frame_data.camera.transform.translation(),
-		out_vertex.normals.normalize(),
-		out_vertex.tex_coords,
+		out_vertex.normal,
+		out_vertex.tangent,
+		out_vertex.tex_coord,
 	);
-	let sampled = mesh
+	let mut sampled = mesh
 		.pbr_material
 		.sample(descriptors, *param.sampler.access(descriptors), loc);
+	match frame_data.debug_settings() {
+		DebugSettings::VertexNormals => sampled.normal = loc.vertex_normal.normalize(),
+		_ => (),
+	}
+
 	if sampled.alpha < 0.01 {
 		spirv_std::arch::kill();
 	}
 
 	*frag_albedo = Vec4::from((sampled.albedo, sampled.alpha));
 	*frag_normal = Vec4::from((sampled.normal * 0.5 + 0.5, out_vertex.meshlet_debug_hue));
-	*frag_mr = Vec4::from((sampled.metallic, sampled.roughness, 1., 1.));
+	*frag_roughness_metallic = Vec4::from((sampled.roughness, sampled.metallic, 1., 1.));
 }

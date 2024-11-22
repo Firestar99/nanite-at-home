@@ -63,7 +63,7 @@ pub struct RendererMain {
 struct RendererMainResources {
 	g_albedo_image: Arc<ImageView>,
 	g_normal_image: Arc<ImageView>,
-	g_rm_image: Arc<ImageView>,
+	g_roughness_metallic_image: Arc<ImageView>,
 	depth_image: Arc<ImageView>,
 	extent: [u32; 3],
 }
@@ -104,7 +104,7 @@ impl RendererMain {
 			ImageCreateFlags::empty(),
 		))
 		.unwrap();
-		let g_rm_image = ImageView::new_default(create_image(
+		let g_roughness_metallic_image = ImageView::new_default(create_image(
 			pipeline.g_rm_format,
 			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
 			ImageCreateFlags::empty(),
@@ -125,7 +125,7 @@ impl RendererMain {
 				depth_image,
 				g_albedo_image,
 				g_normal_image,
-				g_rm_image,
+				g_roughness_metallic_image,
 			},
 		}
 	}
@@ -175,7 +175,7 @@ impl<'a> RendererMainFrame<'a> {
 			c,
 			&r.g_albedo_image,
 			&r.g_normal_image,
-			&r.g_rm_image,
+			&r.g_roughness_metallic_image,
 			&r.depth_image,
 			future,
 		);
@@ -184,7 +184,7 @@ impl<'a> RendererMainFrame<'a> {
 			c,
 			&r.g_albedo_image,
 			&r.g_normal_image,
-			&r.g_rm_image,
+			&r.g_roughness_metallic_image,
 			&r.depth_image,
 			&self.output_image,
 			future,

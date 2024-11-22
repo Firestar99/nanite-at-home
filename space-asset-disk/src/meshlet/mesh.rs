@@ -9,7 +9,7 @@ pub struct MeshletMeshDisk {
 	pub draw_vertices: Vec<DrawVertex>,
 	pub triangles: Vec<CompressedIndices>,
 	pub pbr_material_vertices: Vec<PbrVertex>,
-	pub pbr_material_id: u32,
+	pub pbr_material_id: Option<u32>,
 }
 
 pub use space_asset_disk_shader::meshlet::mesh::*;

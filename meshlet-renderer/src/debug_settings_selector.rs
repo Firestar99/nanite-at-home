@@ -46,7 +46,7 @@ impl DebugSettingsSelector {
 				use winit::keyboard::KeyCode::*;
 				let mut selected = u32::from(self.selected) as i32;
 				match code {
-					// KeyT => selected -= 1,
+					KeyQ => selected -= 1,
 					KeyE => selected += 1,
 					_ => {}
 				}

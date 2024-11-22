@@ -29,7 +29,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 		}
 	}
 
-	let mut mat2mesh = HashMap::<u32, Vec<MeshletMesh2InstanceDisk>>::new();
+	let mut mat2mesh = HashMap::<Option<u32>, Vec<MeshletMesh2InstanceDisk>>::new();
 	for m2i in single_instances {
 		mat2mesh.entry(m2i.mesh.pbr_material_id).or_default().push(m2i);
 	}
@@ -53,7 +53,7 @@ pub fn merge_meshlets(scene: MeshletSceneDisk, _strategy: MergeStrategy) -> anyh
 }
 
 fn merge<'a>(
-	pbr_material_id: u32,
+	pbr_material_id: Option<u32>,
 	meshlets: impl Iterator<Item = (&'a MeshletMeshDisk, MeshletInstanceDisk)>,
 ) -> MeshletMeshDisk {
 	let mut out = MeshletMeshDisk {
@@ -71,7 +71,7 @@ fn merge<'a>(
 		let normal_transform = instance.transform.matrix3.inverse().transpose();
 		out.pbr_material_vertices
 			.extend(mesh.pbr_material_vertices.iter().map(|v| PbrVertex {
-				normals: normal_transform * v.normals,
+				normal: normal_transform * v.normal,
 				..*v
 			}));
 

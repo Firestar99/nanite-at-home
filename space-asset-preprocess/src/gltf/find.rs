@@ -1,10 +1,12 @@
 use crate::modnode::{ModNode, ModNodeError};
 use proc_macro2::TokenStream;
 use proc_macro_crate::{crate_name, FoundCrate};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, TokenStreamExt};
+use smallvec::SmallVec;
 use std::path::{Component, Path, PathBuf};
 use std::{fs, io};
 
+#[derive(Debug)]
 pub struct GltfFile {
 	pub src_path: PathBuf,
 	pub relative: Vec<String>,
@@ -72,12 +74,33 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 			model,
 		)?;
 	}
-	Ok(root.to_tokens(|name, model| {
+	let all_models = {
+		let mut model_paths = Vec::new();
+		root.iter(|path, _| {
+			model_paths.push(SmallVec::<[&str; 6]>::from(path));
+		});
+		model_paths.sort();
+		let mut all_models = quote!();
+		for path in model_paths {
+			all_models.append_separated(path.iter().map(|name| format_ident!("{}", name)), quote!(::));
+			all_models.append_all(&[quote!(,)])
+		}
+		quote! {
+			pub const ALL_MODELS: &[#crate_name::meshlet::scene::MeshletSceneFile<'static>] = &[
+				#all_models
+			];
+		}
+	};
+	let mod_hierarchy = root.to_tokens(|name, model| {
 		let out_relative = &model.out_relative;
 		quote! {
 			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#out_relative) };
 		}
-	}))
+	});
+	Ok(quote! {
+		#all_models
+		#mod_hierarchy
+	})
 }
 
 fn filter_chars_for_typename(c: char) -> char {

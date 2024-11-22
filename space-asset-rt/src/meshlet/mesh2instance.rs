@@ -1,10 +1,10 @@
+use crate::material::pbr::PbrMaterials;
 use crate::meshlet::mesh::upload_mesh;
 use crate::upload_traits::ToStrong;
 use crate::uploader::{deserialize_infallible, UploadError, Uploader};
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
 use space_asset_disk::meshlet::mesh2instance::ArchivedMeshletMesh2InstanceDisk;
 use space_asset_shader::affine_transform::AffineTransform;
-use space_asset_shader::material::pbr::PbrMaterial;
 use space_asset_shader::meshlet::instance::MeshletInstance;
 use space_asset_shader::meshlet::mesh2instance::MeshletMesh2Instance;
 use std::future::Future;
@@ -29,7 +29,7 @@ impl Deref for MeshletMesh2InstanceCpu {
 pub fn upload_mesh_2_instance<'a>(
 	this: &'a ArchivedMeshletMesh2InstanceDisk,
 	uploader: &'a Uploader,
-	pbr_materials: &'a [PbrMaterial<RC>],
+	pbr_materials: &'a PbrMaterials<'a>,
 ) -> impl Future<Output = Result<MeshletMesh2InstanceCpu, Validated<UploadError>>> + 'a {
 	let mesh = upload_mesh(&this.mesh, uploader, pbr_materials);
 	let instances = uploader.upload_buffer_iter(this.instances.iter().map(|a| {

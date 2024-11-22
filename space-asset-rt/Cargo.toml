@@ -20,6 +20,9 @@ vulkano = { workspace = true }
 # model loader
 zune-image = { workspace = true }
 
+# bytes and numbers
+glam = { workspace = true }
+
 # serde
 rkyv = { workspace = true }
 

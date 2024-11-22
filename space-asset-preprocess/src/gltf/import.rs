@@ -1,5 +1,6 @@
+use crate::gltf::Scheme;
 use glam::{Affine3A, Quat, Vec3};
-use gltf::buffer::Data;
+use gltf::buffer::Source;
 use gltf::{Buffer, Document, Node, Scene};
 use smallvec::SmallVec;
 use std::fmt::{Display, Formatter};
@@ -11,12 +12,12 @@ use zune_image::errors::ImageErrors;
 pub struct Gltf {
 	pub document: Document,
 	pub base: PathBuf,
-	pub buffers: SmallVec<[Data; 1]>,
+	pub buffers: SmallVec<[Vec<u8>; 1]>,
 }
 
 impl Gltf {
 	#[profiling::function]
-	pub fn open(path: &Path) -> Result<Self, gltf::Error> {
+	pub fn open(path: &Path) -> anyhow::Result<Self> {
 		let base = path
 			.parent()
 			.map(Path::to_path_buf)
@@ -24,7 +25,7 @@ impl Gltf {
 		let gltf::Gltf { document, mut blob } = gltf::Gltf::open(path)?;
 		let buffers = document
 			.buffers()
-			.map(|buffer| Data::from_source_and_blob(buffer.source(), Some(base.as_path()), &mut blob))
+			.map(|buffer| Self::load_buffer(buffer, base.as_path(), &mut blob))
 			.collect::<Result<_, _>>()?;
 		Ok(Self {
 			document,
@@ -33,12 +34,22 @@ impl Gltf {
 		})
 	}
 
+	fn load_buffer(buffer: Buffer, base_path: &Path, blob: &mut Option<Vec<u8>>) -> Result<Vec<u8>, GltfImageError> {
+		Ok(match buffer.source() {
+			Source::Bin => blob.take().ok_or(GltfImageError::MissingBuffer)?,
+			Source::Uri(uri) => Scheme::parse(uri)
+				.ok_or(GltfImageError::UnsupportedUri)?
+				.read(base_path)?
+				.into_owned(),
+		})
+	}
+
 	pub fn base(&self) -> &Path {
 		self.base.as_path()
 	}
 
 	pub fn buffer(&self, buffer: Buffer) -> Option<&[u8]> {
-		self.buffers.get(buffer.index()).map(|b| &b.0[..])
+		self.buffers.get(buffer.index()).map(|b| &**b)
 	}
 }
 
