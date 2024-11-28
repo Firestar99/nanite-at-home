@@ -1,7 +1,7 @@
 use crate::descriptor::Bindless;
 use crate::platform::ash::{AshAllocationError, AshExecutionResourcePool};
 use crate::platform::Platform;
-use ash::vk::{PhysicalDeviceVulkan12Features, ShaderStageFlags};
+use ash::vk::{PhysicalDeviceVulkan12Features, PipelineCache, ShaderStageFlags};
 use gpu_allocator::vulkan::{Allocation, Allocator};
 use parking_lot::Mutex;
 use static_assertions::assert_impl_all;
@@ -67,4 +67,25 @@ pub struct AshCreateInfo {
 	pub shader_stages: ShaderStageFlags,
 	pub queue_family_index: u32,
 	pub queue: ash::vk::Queue,
+	pub cache: Option<PipelineCache>,
+}
+
+pub struct RunOnDrop<F: FnOnce()>(Option<F>);
+
+impl<F: FnOnce()> RunOnDrop<F> {
+	pub fn new(f: F) -> Self {
+		Self(Some(f))
+	}
+
+	pub fn take(mut self) -> F {
+		self.0.take().unwrap()
+	}
+}
+
+impl<F: FnOnce()> Drop for RunOnDrop<F> {
+	fn drop(&mut self) {
+		if let Some(f) = self.0.take() {
+			f()
+		}
+	}
 }

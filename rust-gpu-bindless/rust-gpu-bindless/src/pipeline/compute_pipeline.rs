@@ -14,16 +14,15 @@ pub struct BindlessComputePipeline<P: BindlessPipelinePlatform, T: BufferStruct>
 
 impl<P: BindlessPipelinePlatform, T: BufferStruct> BindlessComputePipeline<P, T> {
 	pub fn new(
-		bindless: Arc<Bindless<P>>,
-		stage: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
+		bindless: &Arc<Bindless<P>>,
+		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
 	) -> Result<Arc<Self>, P::PipelineCreationError> {
-		// let layout = Self::verify_layout(&bindless, custom_layout).map_err(Validated::from)?;
-		// let ci = ComputePipelineCreateInfo::stage_layout(specialize(&bindless, stage)?, layout);
-		// unsafe {
-		// 	Ok(Self::from(
-		// 		VComputePipeline::new(bindless.device.clone(), cache, ci)?,
-		// 		bindless,
-		// 	))
-		// }
+		unsafe {
+			Ok(Arc::new(Self {
+				bindless: bindless.clone(),
+				pipeline: P::create_compute_pipeline(&bindless, compute_shader)?,
+				_phantom: PhantomData,
+			}))
+		}
 	}
 }

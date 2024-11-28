@@ -1,9 +1,18 @@
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::shader_type::ShaderType;
+use std::ffi::CStr;
 
 pub trait BindlessShader {
 	type ShaderType: ShaderType;
 	type ParamConstant: BufferStruct;
 
-	// fn load(&self, device: Arc<Device>) -> Result<Arc<ShaderModule>, Validated<VulkanError>>;
+	/// Get the spirv binary and the entry point name.
+	/// Currently, `&self` isn't really necessary as it would always be returning `SpirvBinary<'static>`, but it makes
+	/// it easier to work with.
+	fn spirv_binary(&self) -> &SpirvBinary;
+}
+
+pub struct SpirvBinary<'a> {
+	pub binary: &'a [u32],
+	pub entry_point_name: &'a CStr,
 }

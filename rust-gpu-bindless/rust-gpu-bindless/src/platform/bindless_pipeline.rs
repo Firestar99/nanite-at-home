@@ -1,7 +1,9 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
+use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::buffer_content::{BufferStruct, Metadata};
+use rust_gpu_bindless_shaders::shader_type::ComputeShader;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -14,6 +16,11 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type RecordingCommandBuffer: RecordingCommandBuffer<Self>;
 	type RecordingError: 'static + Error;
 	type ExecutingCommandBuffer: ExecutingCommandBuffer<Self>;
+
+	unsafe fn create_compute_pipeline<T: BufferStruct>(
+		bindless: &Arc<Bindless<Self>>,
+		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
+	) -> Result<Self::ComputePipeline, Self::PipelineCreationError>;
 
 	unsafe fn start_recording(
 		bindless: &Arc<Bindless<Self>>,
