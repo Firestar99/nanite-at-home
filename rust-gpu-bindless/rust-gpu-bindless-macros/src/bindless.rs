@@ -73,7 +73,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 	};
 
 	let push_constant = gen_bindless_push_constant(&mut context, arg_param)?;
-	let descriptors = gen_bindless_descriptors(&mut context, &push_constant)?;
+	let descriptors = gen_bindless_descriptors(&mut context)?;
 	let inner_call = gen_bindless_inner_call(
 		&mut context,
 		&push_constant,
@@ -121,7 +121,6 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 
 #[allow(unused)]
 struct SymPushConstant {
-	metadata: TokenStream,
 	push_constant: TokenStream,
 	param_ty: TokenStream,
 }
@@ -150,7 +149,6 @@ fn gen_bindless_push_constant(
 		#[spirv(push_constant)] #push_constant: &#crate_shaders::descriptor::BindlessPushConstant,
 	});
 	Ok(SymPushConstant {
-		metadata: quote!(#push_constant.metadata),
 		push_constant: push_constant.into_token_stream(),
 		param_ty,
 	})
@@ -161,7 +159,7 @@ struct SymDescriptors {
 	descriptors: TokenStream,
 }
 
-fn gen_bindless_descriptors(context: &mut BindlessContext, param: &SymPushConstant) -> Result<SymDescriptors> {
+fn gen_bindless_descriptors(context: &mut BindlessContext) -> Result<SymDescriptors> {
 	let crate_shaders = &context.symbols.crate_shaders()?;
 	let buffers = format_ident!("__bindless_buffers");
 	let samplers = format_ident!("__bindless_samplers");
@@ -195,13 +193,12 @@ fn gen_bindless_descriptors(context: &mut BindlessContext, param: &SymPushConsta
 			#image_args
 			#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders::descriptor::Sampler>,
 		});
-	let meta = &param.metadata;
 	context.entry_content.append_tokens(quote! {
 		let #descriptors = #crate_shaders::descriptor::Descriptors {
 			buffers: #buffers,
 			#image_values
 			samplers: #samplers,
-			meta: #meta,
+			meta: #crate_shaders::buffer_content::Metadata {},
 		};
 	});
 	Ok(SymDescriptors {

@@ -1,7 +1,6 @@
-use crate::buffer_content::Metadata;
 use crate::descriptor::id::DescriptorId;
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{Desc, DescContent, DescRef};
+use crate::descriptor::{Desc, DescContent, DescRef, UnsafeTransientAccess};
 use core::fmt::{Debug, Formatter};
 use rust_gpu_bindless_macros::{assert_transfer_size, BufferContent};
 
@@ -42,7 +41,7 @@ impl<C: DescContent> WeakDesc<C> {
 	/// # Safety
 	/// This unsafe variant assumes the descriptor is still alive, rather than checking whether it actually is.
 	#[inline]
-	pub unsafe fn upgrade_unchecked<'a>(&self, meta: Metadata) -> TransientDesc<'a, C> {
-		unsafe { TransientDesc::new(self.r.id, meta.fake_fif()) }
+	pub unsafe fn upgrade_unchecked<'a>(&self) -> TransientDesc<'a, C> {
+		unsafe { TransientDesc::new(self.r.id, &UnsafeTransientAccess::new()) }
 	}
 }

@@ -1,5 +1,5 @@
 use crate::descriptor::mutable::MutDescExt;
-use crate::descriptor::Bindless;
+use crate::descriptor::{Bindless, BindlessFrame};
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::ash::{Ash, AshExecutingCommandBuffer, AshRecordingCommandBuffer, RunOnDrop};
 use crate::platform::BindlessPipelinePlatform;
@@ -15,7 +15,7 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	type ComputePipeline = ash::vk::Pipeline;
 	type TraditionalGraphicsPipeline = ash::vk::Pipeline;
 	type MeshGraphicsPipeline = ash::vk::Pipeline;
-	type RecordingCommandBuffer = AshRecordingCommandBuffer;
+	type RecordingCommandBuffer<'a> = AshRecordingCommandBuffer<'a>;
 	type RecordingError = ash::vk::Result;
 	type ExecutingCommandBuffer = AshExecutingCommandBuffer;
 
@@ -48,11 +48,10 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	}
 
 	unsafe fn start_recording(
-		bindless: &Arc<Bindless<Self>>,
-		metadata: Metadata,
+		bindless_frame: &Arc<BindlessFrame<Self>>,
 	) -> Result<Self::RecordingCommandBuffer, Self::RecordingError> {
 		Ok(AshRecordingCommandBuffer::new(
-			bindless.platform.execution_resource_pool.pop(),
+			bindless_frame.bindless.platform.execution_manager.pop(),
 			metadata,
 		))
 	}

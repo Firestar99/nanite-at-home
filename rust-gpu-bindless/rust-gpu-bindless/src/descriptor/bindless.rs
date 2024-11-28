@@ -3,7 +3,9 @@ use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
-use crate::platform::BindlessPlatform;
+use crate::platform::{BindlessPipelinePlatform, BindlessPlatform};
+use rust_gpu_bindless_shaders::buffer_content::Metadata;
+use rust_gpu_bindless_shaders::descriptor::TransientAccess;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -96,12 +98,17 @@ impl<P: BindlessPlatform> Bindless<P> {
 		}
 	}
 
-	/// Locking the Bindless system will ensure that any resource, that is dropped after the lock has been created, will
-	/// not be deallocated or removed from the bindless descriptor set until this lock is dropped. There may be multiple
-	/// active locks at the same time that can be unlocked out of order.
+	/// Creating a [`BindlessFrame`] will ensure that any resource, that is dropped after the lock has been created,
+	/// will not be deallocated or removed from the bindless descriptor set until this lock is dropped. This allows
+	/// creating [`TransientDesc`] from [`RCDesc`] which are guaranteed to be alive as long as [`BindlessFrame`] is.
+	/// There may be multiple active Frames at the same time that can finish out of order.
 	#[inline]
-	pub fn frame(&self) -> FrameGuard {
-		self.table_sync.frame()
+	pub fn frame(self: &Arc<Self>) -> Arc<BindlessFrame<P>> {
+		Arc::new(BindlessFrame {
+			bindless: self.clone(),
+			frame_guard: self.table_sync.frame(),
+			metadata: Metadata,
+		})
 	}
 }
 
@@ -113,3 +120,17 @@ impl<P: BindlessPlatform> Drop for Bindless<P> {
 		}
 	}
 }
+
+pub struct BindlessFrame<P: BindlessPlatform> {
+	pub bindless: Arc<Bindless<P>>,
+	pub frame_guard: FrameGuard,
+	pub metadata: Metadata,
+}
+
+impl<P: BindlessPipelinePlatform> BindlessFrame<P> {
+	pub fn start_recording(self: &Arc<Self>) -> P::RecordingCommandBuffer {
+		P::start_recording(self)
+	}
+}
+
+unsafe impl<'a, P: BindlessPlatform> TransientAccess<'a> for &'a BindlessFrame<P> {}

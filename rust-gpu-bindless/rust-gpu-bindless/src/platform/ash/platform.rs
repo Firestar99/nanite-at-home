@@ -1,5 +1,5 @@
 use crate::descriptor::Bindless;
-use crate::platform::ash::{AshAllocationError, AshExecutionResourcePool};
+use crate::platform::ash::{AshAllocationError, AshExecutionManager};
 use crate::platform::Platform;
 use ash::vk::{PhysicalDeviceVulkan12Features, PipelineCache, ShaderStageFlags};
 use gpu_allocator::vulkan::{Allocation, Allocator};
@@ -24,14 +24,14 @@ pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
 
 pub struct Ash {
 	pub create_info: Arc<AshCreateInfo>,
-	pub execution_resource_pool: AshExecutionResourcePool,
+	pub execution_manager: AshExecutionManager,
 }
 assert_impl_all!(Bindless<Ash>: Send, Sync);
 
 impl Ash {
 	pub fn new(create_info: Arc<AshCreateInfo>, bindless: &Weak<Bindless<Self>>) -> Self {
 		Ash {
-			execution_resource_pool: AshExecutionResourcePool::new(bindless),
+			execution_manager: AshExecutionManager::new(bindless),
 			create_info,
 		}
 	}

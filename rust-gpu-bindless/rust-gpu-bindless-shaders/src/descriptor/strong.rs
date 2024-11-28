@@ -1,8 +1,7 @@
 use crate::buffer_content::{Metadata, MetadataCpuInterface};
 use crate::descriptor::id::DescriptorId;
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
-use crate::frame_in_flight::FrameInFlight;
+use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef, TransientAccess};
 use bytemuck_derive::AnyBitPattern;
 use core::fmt::{Debug, Formatter};
 use static_assertions::const_assert_eq;
@@ -40,7 +39,7 @@ impl<C: DescContent> StrongDesc<C> {
 	}
 
 	#[inline]
-	pub fn to_transient<'a>(&self, frame: FrameInFlight<'a>) -> TransientDesc<'a, C> {
+	pub fn to_transient<'a>(&self, frame: &impl TransientAccess<'a>) -> TransientDesc<'a, C> {
 		// Safety: this StrongDesc existing ensures the descriptor will stay alive for this frame
 		unsafe { TransientDesc::new(self.id(), frame) }
 	}

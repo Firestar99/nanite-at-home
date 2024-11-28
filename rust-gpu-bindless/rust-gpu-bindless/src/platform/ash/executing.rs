@@ -5,7 +5,7 @@ use ash::vk::{
 	CommandPoolCreateFlags, CommandPoolCreateInfo, CommandPoolResetFlags, FenceCreateInfo, SemaphoreCreateInfo,
 };
 use ash::Device;
-use parking_lot::Mutex;
+use crossbeam_queue::SegQueue;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Weak};
 
@@ -71,28 +71,26 @@ impl DerefMut for AshPooledExecutionResource {
 
 impl Drop for AshPooledExecutionResource {
 	fn drop(&mut self) {
-		self.bindless
-			.execution_resource_pool
-			.push(&self.bindless, self.resource)
+		self.bindless.execution_manager.push(&self.bindless, self.resource)
 	}
 }
 
-pub struct AshExecutionResourcePool {
+pub struct AshExecutionManager {
 	pub bindless: Weak<Bindless<Ash>>,
-	pool: Mutex<Vec<AshExecutionResource>>,
+	free_pool: SegQueue<AshExecutionResource>,
 }
 
-impl AshExecutionResourcePool {
+impl AshExecutionManager {
 	pub fn new(bindless: &Weak<Bindless<Ash>>) -> Self {
 		Self {
 			bindless: bindless.clone(),
-			pool: Mutex::new(Vec::new()),
+			free_pool: SegQueue::new(),
 		}
 	}
 
 	pub fn pop(&self) -> AshPooledExecutionResource {
 		let bindless = self.bindless.upgrade().expect("bindless was freed");
-		let reuse = self.pool.lock().pop();
+		let reuse = self.free_pool.pop();
 		AshPooledExecutionResource {
 			resource: reuse.unwrap_or_else(|| AshExecutionResource::new(&bindless.device)),
 			bindless,
@@ -101,12 +99,18 @@ impl AshExecutionResourcePool {
 
 	fn push(&self, bindless: &Arc<Bindless<Ash>>, resource: AshExecutionResource) {
 		resource.reset(&bindless.device);
-		self.pool.lock().push(resource);
+		self.free_pool.push(resource);
 	}
 }
 
 pub struct AshExecutingCommandBuffer {
 	resource: AshPooledExecutionResource,
+}
+
+impl AshExecutingCommandBuffer {
+	pub unsafe fn new(resource: AshPooledExecutionResource) -> Self {
+		Self { resource }
+	}
 }
 
 impl Deref for AshExecutingCommandBuffer {

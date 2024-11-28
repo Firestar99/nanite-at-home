@@ -1,6 +1,5 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef};
-use crate::frame_in_flight::FrameInFlight;
+use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef, TransientAccess};
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescriptorId, StrongDesc, TransientDesc, WeakDesc};
 use std::fmt::{Debug, Formatter};
@@ -90,9 +89,9 @@ pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	}
 
 	#[inline]
-	fn to_transient<'a>(&self, frame: FrameInFlight<'a>) -> TransientDesc<'a, C> {
+	fn to_transient<'a>(&self, access: &impl TransientAccess<'a>) -> TransientDesc<'a, C> {
 		// Safety: C does not change, this RCDesc existing ensures the descriptor will stay alive for this frame
-		unsafe { TransientDesc::new(self.id(), frame) }
+		unsafe { TransientDesc::new(self.id(), access) }
 	}
 
 	#[inline]

@@ -1,7 +1,6 @@
 use crate::buffer_content::{Metadata, MetadataCpuInterface};
 use crate::descriptor::id::DescriptorId;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescRef, DescStructRef};
-use crate::frame_in_flight::FrameInFlight;
 use bytemuck_derive::AnyBitPattern;
 use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
@@ -39,11 +38,9 @@ impl<'a, C: DescContent> TransientDesc<'a, C> {
 	/// * The C generic must match the content that the [`DescRef`] points to.
 	/// * id must be a valid descriptor id that stays valid for the remainder of the frame `'a`.
 	#[inline]
-	pub const unsafe fn new(id: DescriptorId, frame_in_flight: FrameInFlight<'a>) -> Self {
-		// We just need the lifetime of the frame, no need to actually store the value.
-		// Apart from maybe future validation?
-		// If this value is ever used, weak's upgrade_unchecked() needs to be adjusted accordingly!
-		let _ = frame_in_flight;
+	pub unsafe fn new(id: DescriptorId, access: &impl TransientAccess<'a>) -> Self {
+		// We just need the lifetime from `TransientAccess`, no need to actually store the value.
+		let _ = access;
 		unsafe {
 			Self::new_inner(Transient {
 				id,
@@ -61,7 +58,7 @@ unsafe impl<'a, C: DescContent> DescStructRef<Desc<Self, C>> for Transient<'a> {
 	}
 
 	unsafe fn desc_read(from: Self::TransferDescStruct, _meta: Metadata) -> Desc<Self, C> {
-		unsafe { TransientDesc::new(from.id, _meta.fake_fif()) }
+		unsafe { TransientDesc::new(from.id, &UnsafeTransientAccess::new()) }
 	}
 }
 
@@ -71,3 +68,26 @@ pub struct TransferTransient {
 	id: DescriptorId,
 }
 const_assert_eq!(mem::size_of::<TransferTransient>(), 4);
+
+/// Allows using this type to create `TransientDesc`, copying the lifetime `'a` of Self to `Transient`.
+///
+/// # Safety
+/// You must ensure that any [`TransientDesc`] created from this remain valid for the duration of `'a`. This is
+/// typically achieved by holding a [`BindlessFrame`] for longer than `'a`, but care must be taken when a shader is
+/// recorded and submitted to the GPU operating on a [`TransientDesc`], as the lifetime will no longer be present.
+pub unsafe trait TransientAccess<'a>: Sized {}
+
+pub struct UnsafeTransientAccess<'a>(PhantomData<&'a ()>);
+
+impl<'a> UnsafeTransientAccess<'a> {
+	/// Create a UnsafeTransientAccess. Hopefully we can remove this hack at some point.
+	///
+	/// # Safety
+	/// This allows you to construct [`TransientDesc`] with `'static` lifetime, which should never exist as they can't
+	/// live on forever, so handle with care!
+	pub unsafe fn new() -> Self {
+		Self(PhantomData)
+	}
+}
+
+unsafe impl<'a> TransientAccess<'a> for UnsafeTransientAccess<'a> {}

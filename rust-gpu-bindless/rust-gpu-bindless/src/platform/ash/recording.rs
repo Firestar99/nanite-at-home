@@ -1,19 +1,19 @@
 use crate::descriptor::mutable::MutDescExt;
-use crate::descriptor::{BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage};
+use crate::descriptor::{BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::{Ash, AshExecutingCommandBuffer, AshPooledExecutionResource};
 use crate::platform::{BindlessPipelinePlatform, RecordingCommandBuffer};
 use ash::vk::{CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, PipelineBindPoint, SubmitInfo};
-use rust_gpu_bindless_shaders::buffer_content::{BufferStruct, Metadata};
+use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::BindlessPushConstant;
 use std::ops::Deref;
 use std::sync::Arc;
 
 pub struct AshRecordingCommandBuffer {
+	frame: Arc<BindlessFrame<Ash>>,
 	resource: AshPooledExecutionResource,
 	cmd: CommandBuffer,
-	metadata: Metadata,
 	compute_bind_descriptors: bool,
 }
 
@@ -26,7 +26,7 @@ impl Deref for AshRecordingCommandBuffer {
 }
 
 impl AshRecordingCommandBuffer {
-	pub fn new(resource: AshPooledExecutionResource, metadata: Metadata) -> Self {
+	pub fn new(frame: Arc<BindlessFrame<Ash>>, resource: AshPooledExecutionResource) -> Self {
 		unsafe {
 			let cmd = resource
 				.bindless
@@ -39,9 +39,9 @@ impl AshRecordingCommandBuffer {
 				)
 				.unwrap();
 			Self {
+				frame,
 				resource,
 				cmd,
-				metadata,
 				compute_bind_descriptors: true,
 			}
 		}
@@ -90,7 +90,7 @@ impl AshRecordingCommandBuffer {
 					param,
 				)
 				.unwrap();
-			let push_constant = BindlessPushConstant::new(desc.id(), 0, self.metadata);
+			let push_constant = BindlessPushConstant::new(desc.id(), 0, self.frame.metadata);
 			device.cmd_push_constants(
 				self.cmd,
 				self.bindless.global_descriptor_set().pipeline_layout,
@@ -104,16 +104,16 @@ impl AshRecordingCommandBuffer {
 
 unsafe impl RecordingCommandBuffer<Ash> for AshRecordingCommandBuffer {
 	unsafe fn dispatch<T: BufferStruct>(
-		mut self,
+		&mut self,
 		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,
 		group_counts: [u32; 3],
 		param: T,
-	) -> Result<Self, <Ash as BindlessPipelinePlatform>::RecordingError> {
+	) -> Result<(), <Ash as BindlessPipelinePlatform>::RecordingError> {
 		unsafe {
 			self.ash_bind_compute(pipeline, param);
 			let device = &self.bindless.platform.device;
 			device.cmd_dispatch(self.cmd, group_counts[0], group_counts[1], group_counts[2]);
-			Ok(self)
+			Ok(())
 		}
 	}
 
@@ -145,9 +145,7 @@ unsafe impl RecordingCommandBuffer<Ash> for AshRecordingCommandBuffer {
 					self.resource.fence,
 				)
 				.unwrap();
-			AshExecutingCommandBuffer {
-				resource: self.resource,
-			}
+			AshExecutingCommandBuffer::new(self.resource)
 		}
 	}
 }

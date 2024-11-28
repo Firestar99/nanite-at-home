@@ -1,7 +1,7 @@
 use crate::buffer_content::{BufferContent, BufferStruct, Metadata};
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::reference::{AliveDescRef, Desc};
-use crate::descriptor::{Buffer, BufferSlice, DescContent, DescriptorId, UnsafeDesc};
+use crate::descriptor::{Buffer, BufferSlice, DescContent, DescriptorId, TransientAccess, UnsafeDesc};
 use bytemuck_derive::{Pod, Zeroable};
 use spirv_std::{RuntimeArray, Sampler, TypedBuffer};
 
@@ -52,6 +52,8 @@ impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
 	}
 }
 
+unsafe impl<'a> TransientAccess<'a> for Descriptors<'a> {}
+
 /// All bindless push constants are this particular struct, with T being the declared push_param.
 ///
 /// Must not derive `DescStruct`, as to [`DescStruct::from_transfer`] Self you'd need the Metadata, which this struct
@@ -61,7 +63,6 @@ impl<'a> DescriptorsAccess<Sampler> for Descriptors<'a> {
 pub struct BindlessPushConstant {
 	param_desc: DescriptorId,
 	param_offset: u32,
-	pub metadata: Metadata,
 }
 
 impl BindlessPushConstant {
@@ -69,18 +70,17 @@ impl BindlessPushConstant {
 	///
 	/// # Safety
 	/// `param_desc` at offset `param_offset` must contain valid parameters for the shader.
-	pub unsafe fn new(param_desc: DescriptorId, param_offset: u32, metadata: Metadata) -> Self {
+	pub unsafe fn new(param_desc: DescriptorId, param_offset: u32) -> Self {
 		Self {
 			param_desc,
 			param_offset,
-			metadata,
 		}
 	}
 
 	pub fn load_param<T: BufferStruct>(&self, descriptors: &Descriptors) -> T {
 		unsafe {
 			UnsafeDesc::<Buffer<[u8]>>::new(self.param_desc)
-				.to_transient_unchecked(descriptors.meta)
+				.to_transient_unchecked(descriptors)
 				.access(descriptors)
 				.load_at_offset::<T>(self.param_offset as usize)
 		}

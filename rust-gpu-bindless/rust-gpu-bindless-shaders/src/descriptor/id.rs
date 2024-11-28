@@ -1,6 +1,5 @@
-use crate::buffer_content::Metadata;
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{Desc, DescContent, DescRef};
+use crate::descriptor::{Desc, DescContent, DescRef, TransientAccess};
 use bytemuck_derive::{Pod, Zeroable};
 use core::mem;
 use core::ops::Sub;
@@ -198,7 +197,7 @@ impl<C: DescContent> UnsafeDesc<C> {
 	/// There is no verification that the contents are actually still alive, and the returned [`TransientDesc`] may
 	/// point to a dropped resource.
 	#[inline]
-	pub unsafe fn to_transient_unchecked<'a>(&self, meta: Metadata) -> TransientDesc<'a, C> {
-		unsafe { TransientDesc::new(self.r, meta.fake_fif()) }
+	pub unsafe fn to_transient_unchecked<'a>(&self, access: &impl TransientAccess<'a>) -> TransientDesc<'a, C> {
+		unsafe { TransientDesc::new(self.r, access) }
 	}
 }
