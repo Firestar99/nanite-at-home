@@ -1,7 +1,7 @@
+use crate::descriptor::Bindless;
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
-use crate::pipeline::execution_context::ExecutionContext;
 use crate::platform::BindlessPlatform;
-use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
+use rust_gpu_bindless_shaders::buffer_content::{BufferStruct, Metadata};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -11,19 +11,26 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type ComputePipeline: 'static;
 	type TraditionalGraphicsPipeline: 'static;
 	type MeshGraphicsPipeline: 'static;
-	type RecordingCommandBuffer: 'static;
+	type RecordingCommandBuffer: RecordingCommandBuffer<Self>;
 	type RecordingError: 'static + Error;
+	type ExecutingCommandBuffer: ExecutingCommandBuffer<Self>;
 
-	unsafe fn cmd_start(
-		exec: &mut ExecutionContext<Self>,
+	unsafe fn start_recording(
+		bindless: &Arc<Bindless<Self>>,
+		metadata: Metadata,
 	) -> Result<Self::RecordingCommandBuffer, Self::RecordingError>;
+}
 
-	unsafe fn cmd_submit(exec: &mut ExecutionContext<Self>) -> Result<(), Self::RecordingError>;
-
-	unsafe fn cmd_dispatch<T: BufferStruct>(
-		exec: &mut ExecutionContext<Self>,
-		pipeline: &Arc<BindlessComputePipeline<Self, T>>,
+pub unsafe trait RecordingCommandBuffer<P: BindlessPipelinePlatform>: Sized {
+	/// Dispatch a bindless compute shader
+	unsafe fn dispatch<T: BufferStruct>(
+		self,
+		pipeline: &Arc<BindlessComputePipeline<P, T>>,
 		group_counts: [u32; 3],
 		param: T,
-	) -> Result<(), Self::RecordingError>;
+	) -> Result<Self, P::RecordingError>;
+
+	fn submit(self) -> P::ExecutingCommandBuffer;
 }
+
+pub unsafe trait ExecutingCommandBuffer<P: BindlessPipelinePlatform> {}

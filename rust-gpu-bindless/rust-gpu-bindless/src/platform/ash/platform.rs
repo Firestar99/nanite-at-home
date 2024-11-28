@@ -65,4 +65,6 @@ pub struct AshCreateInfo {
 	pub device: ash::Device,
 	pub memory_allocator: Mutex<Allocator>,
 	pub shader_stages: ShaderStageFlags,
+	pub queue_family_index: u32,
+	pub queue: ash::vk::Queue,
 }

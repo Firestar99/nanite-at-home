@@ -1,5 +1,4 @@
 use crate::descriptor::Bindless;
-use crate::pipeline::execution_context::ExecutionContext;
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
@@ -27,27 +26,4 @@ impl<P: BindlessPipelinePlatform, T: BufferStruct> BindlessComputePipeline<P, T>
 		// 	))
 		// }
 	}
-}
-
-impl<'a, P: BindlessPipelinePlatform> ExecutionContext<'a, P> {
-	/// Dispatch a bindless compute shader
-	pub fn dispatch<T: BufferStruct>(
-		mut self,
-		pipeline: &Arc<BindlessComputePipeline<P, T>>,
-		group_counts: [u32; 3],
-		param: T,
-	) -> Result<ExecutionContext<P>, P::RecordingError> {
-		unsafe { P::cmd_dispatch(&mut self, pipeline, group_counts, param)? }
-		Ok(self)
-	}
-
-	// /// Dispatch a bindless compute shader indirectly
-	// pub fn dispatch_indirect<'a>(
-	// 	&self,
-	// 	cmd: &'a mut ExecutionContext,
-	// 	indirect_buffer: Desc<MutOrRC, Buffer<DispatchIndirectCommand>>,
-	// 	param: T,
-	// ) -> Result<&'a mut ExecutionContext, Box<ValidationError>> {
-	// 	unsafe { self.bind_modify(cmd, modify, param)?.dispatch_indirect(indirect_buffer) }
-	// }
 }
