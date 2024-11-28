@@ -1,5 +1,5 @@
-use crate::backend::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
-use crate::backend::table::DrainFlushQueue;
+use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
+use crate::backing::table::DrainFlushQueue;
 use crate::descriptor::mutable::MutDesc;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,

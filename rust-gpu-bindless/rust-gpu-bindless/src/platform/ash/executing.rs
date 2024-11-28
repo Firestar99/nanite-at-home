@@ -1,5 +1,6 @@
 use crate::descriptor::Bindless;
 use crate::platform::ash::Ash;
+use crate::platform::ExecutingCommandBuffer;
 use ash::vk::{
 	CommandPoolCreateFlags, CommandPoolCreateInfo, CommandPoolResetFlags, FenceCreateInfo, SemaphoreCreateInfo,
 };
@@ -103,3 +104,16 @@ impl AshExecutionResourcePool {
 		self.pool.lock().push(resource);
 	}
 }
+
+pub struct AshExecutingCommandBuffer {
+	resource: AshPooledExecutionResource,
+}
+
+impl Deref for AshExecutingCommandBuffer {
+	type Target = AshPooledExecutionResource;
+	fn deref(&self) -> &Self::Target {
+		&self.resource
+	}
+}
+
+unsafe impl ExecutingCommandBuffer<Ash> for AshExecutingCommandBuffer {}

@@ -1,5 +1,5 @@
-use crate::backend::range_set::DescriptorIndexIterator;
-use crate::backend::table::DrainFlushQueue;
+use crate::backing::range_set::DescriptorIndexIterator;
+use crate::backing::table::DrainFlushQueue;
 use crate::descriptor::{
 	Bindless, BindlessBufferCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface,
 };
@@ -31,8 +31,8 @@ pub unsafe trait BindlessPlatform: Platform {
 	/// # Safety
 	/// Must be called while holding the associated [`TableSync`]'s [`FlushGuard`].
 	///
-	/// [`TableSync`]: crate::backend::table::TableSync
-	/// [`FlushGuard`]: crate::backend::table::FlushGuard
+	/// [`TableSync`]: crate::backing::table::TableSync
+	/// [`FlushGuard`]: crate::backing::table::FlushGuard
 	unsafe fn update_descriptor_set(
 		&self,
 		set: &Self::BindlessDescriptorSet,

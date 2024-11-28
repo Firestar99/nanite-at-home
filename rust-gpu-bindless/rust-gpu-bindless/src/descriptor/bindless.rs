@@ -1,4 +1,4 @@
-use crate::backend::table::{FrameGuard, TableSync};
+use crate::backing::table::{FrameGuard, TableSync};
 use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};

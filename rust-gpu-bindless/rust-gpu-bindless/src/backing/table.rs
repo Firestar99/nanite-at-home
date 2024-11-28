@@ -1,6 +1,6 @@
-use crate::backend::ab::{ABArray, AB};
-use crate::backend::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
-use crate::backend::slot_array::SlotArray;
+use crate::backing::ab::{ABArray, AB};
+use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
+use crate::backing::slot_array::SlotArray;
 use crossbeam_queue::SegQueue;
 use crossbeam_utils::CachePadded;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -556,7 +556,7 @@ impl Display for SlotAllocationError {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::backend::ab::AB::*;
+	use crate::backing::ab::AB::*;
 	use rangemap::RangeSet;
 	use std::mem::take;
 

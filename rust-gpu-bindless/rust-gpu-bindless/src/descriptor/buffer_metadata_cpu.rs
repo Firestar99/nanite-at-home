@@ -1,4 +1,4 @@
-use crate::backend::table::TableSync;
+use crate::backing::table::TableSync;
 use crate::descriptor::buffer_table::StrongBackingRefs;
 use crate::descriptor::{AnyRCDesc, AnyRCDescExt};
 use crate::platform::BindlessPlatform;

@@ -1,4 +1,4 @@
-use crate::backend::table::RcTableSlot;
+use crate::backing::table::RcTableSlot;
 use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef};
 use crate::frame_in_flight::FrameInFlight;
 use crate::platform::BindlessPlatform;

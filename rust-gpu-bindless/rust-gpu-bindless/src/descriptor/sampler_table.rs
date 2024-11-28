@@ -1,5 +1,5 @@
-use crate::backend::range_set::DescriptorIndexIterator;
-use crate::backend::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
+use crate::backing::range_set::DescriptorIndexIterator;
+use crate::backing::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::rc::RCDesc;
 use crate::descriptor::{Bindless, DescriptorCounts, RCDescExt};

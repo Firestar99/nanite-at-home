@@ -64,8 +64,8 @@ impl<T> IndexMut<AB> for ABArray<T> {
 
 #[cfg(test)]
 mod tests {
-	use crate::backend::ab::AB::*;
-	use crate::backend::ab::{ABArray, AB};
+	use crate::backing::ab::AB::*;
+	use crate::backing::ab::{ABArray, AB};
 
 	#[test]
 	fn test_ab() {

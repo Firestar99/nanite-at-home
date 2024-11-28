@@ -14,7 +14,7 @@
 //! [`GpuFuture::flush`]: vulkano::sync::GpuFuture::flush
 //! [`GpuFuture::then_signal_semaphore_and_flush`]: vulkano::sync::GpuFuture::then_signal_semaphore_and_flush
 //! [`GpuFuture::then_signal_fence_and_flush`]: vulkano::sync::GpuFuture::then_signal_fence_and_flush
-pub mod backend;
+pub mod backing;
 pub mod descriptor;
 pub mod frame_in_flight;
 // pub mod frame_manager;

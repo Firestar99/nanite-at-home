@@ -1,4 +1,4 @@
-use crate::backend::table::RcTableSlot;
+use crate::backing::table::RcTableSlot;
 use crate::descriptor::{Desc, DescContentCpu, RCDesc, RCDescExt};
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{DerefDescRef, DescRef, DescriptorId, MutDescRef};

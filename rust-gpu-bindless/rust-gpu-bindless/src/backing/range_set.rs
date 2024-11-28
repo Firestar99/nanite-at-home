@@ -1,4 +1,4 @@
-use crate::backend::table::{Table, TableInterface};
+use crate::backing::table::{Table, TableInterface};
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::descriptor::DescriptorIndex;
 use std::ops::Range;
