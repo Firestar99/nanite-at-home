@@ -1,13 +1,10 @@
-use crate::codegen::{codegen_shader_symbols, CodegenError, CodegenOptions};
-use error::Error;
+use crate::codegen::{codegen_shader_symbols, CodegenOptions};
 use proc_macro_crate::FoundCrate;
 use spirv_builder::{
-	Capability, CompileResult, MetadataPrintout, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvBuilderError,
-	SpirvMetadata,
+	Capability, CompileResult, MetadataPrintout, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvMetadata,
 };
-use std::fmt::{Display, Formatter};
+use std::env;
 use std::path::{Path, PathBuf};
-use std::{env, error};
 
 pub mod codegen;
 
@@ -101,11 +98,8 @@ impl ShaderSymbolsBuilder {
 		Self { codegen, ..self }
 	}
 
-	pub fn build(self) -> Result<ShaderSymbolsResult, ShaderSymbolsError> {
-		let spirv_result = self
-			.spirv_builder
-			.build()
-			.map_err(ShaderSymbolsError::SpirvBuilderError)?;
+	pub fn build(self) -> anyhow::Result<ShaderSymbolsResult> {
+		let spirv_result = self.spirv_builder.build()?;
 		let codegen_out_path = if let Some(codegen) = &self.codegen {
 			let out_path = Path::new(&env::var("OUT_DIR").unwrap()).join(&codegen.shader_symbols_path);
 			match &spirv_result.module {
@@ -121,8 +115,7 @@ impl ShaderSymbolsBuilder {
 					&out_path,
 					codegen,
 				),
-			}
-			.map_err(ShaderSymbolsError::CodegenError)?;
+			}?;
 			Some(out_path)
 		} else {
 			None
@@ -138,24 +131,3 @@ pub struct ShaderSymbolsResult {
 	pub spirv_result: CompileResult,
 	pub codegen_out_path: Option<PathBuf>,
 }
-
-#[derive(Debug)]
-pub enum ShaderSymbolsError {
-	SpirvBuilderError(SpirvBuilderError),
-	CodegenError(CodegenError),
-}
-
-impl Display for ShaderSymbolsError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		match self {
-			ShaderSymbolsError::SpirvBuilderError(e) => {
-				write!(f, "SpirvBuilder error: {}", e)
-			}
-			ShaderSymbolsError::CodegenError(e) => {
-				write!(f, "Codegen error: {}", e)
-			}
-		}
-	}
-}
-
-impl Error for ShaderSymbolsError {}

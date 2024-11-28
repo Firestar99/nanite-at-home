@@ -12,6 +12,7 @@ members = [
 	"space-engine-shader-builder",
 	"rust-gpu-bindless/rust-gpu-bindless",
 	"rust-gpu-bindless/rust-gpu-bindless-buffer-content",
+	"rust-gpu-bindless/rust-gpu-bindless-macro-utils",
 	"rust-gpu-bindless/rust-gpu-bindless-macros",
 	"rust-gpu-bindless/rust-gpu-bindless-shaders",
 	"rust-gpu-bindless/rust-gpu-bindless-shader-builder",
@@ -43,17 +44,15 @@ space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
 rust-gpu-bindless = { path = "rust-gpu-bindless/rust-gpu-bindless" }
 rust-gpu-bindless-buffer-content = { path = "rust-gpu-bindless/rust-gpu-bindless-buffer-content" }
-rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-shaders" }
+rust-gpu-bindless-macro-utils = { path = "rust-gpu-bindless/rust-gpu-bindless-macro-utils" }
 rust-gpu-bindless-macros = { path = "rust-gpu-bindless/rust-gpu-bindless-macros" }
-rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }
+rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-shaders" }
+rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools"] }
 
-# device
+# vulkan
 ash = "0.38.0"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
 presser = "0.3.1"
-# vulkano 0.35 development
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "40d6e615a3fb59e4bf3b94726eb60520b573d0ec" }
-vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "40d6e615a3fb59e4bf3b94726eb60520b573d0ec" }
 
 winit = { version = "0.29" }
 
@@ -108,11 +107,8 @@ once_cell = "1.18"
 smallvec = { version = "1.11", features = ["const_generics", "const_new", "union"] }
 static_assertions = "1.1.0"
 parking_lot = "0.12"
-parking_lot_core = "0.9"
 clap = { version = "4.5", features = ["derive"] }
-loom = "0.7.1"
 rand = "0.8"
-ahash = "0.8"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 rangemap = "1.5.1"

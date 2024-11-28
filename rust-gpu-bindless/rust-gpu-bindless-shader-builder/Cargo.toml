@@ -7,18 +7,29 @@ license.workspace = true
 repository.workspace = true
 
 [features]
-default = ["use-installed-tools", "use-pretty-print"]
+default = ["use-installed-tools"]
 use-installed-tools = ["spirv-builder/use-installed-tools"]
 use-compiled-tools = ["spirv-builder/use-compiled-tools"]
 use-pretty-print = ["dep:prettyplease"]
 
 [dependencies]
+# members
+rust-gpu-bindless-macro-utils = { workspace = true }
+
+# vulkan
+ash = { workspace = true }
+
+# rust-gpu
 spirv-builder = { workspace = true }
-smallvec = { workspace = true }
+
+# codegen
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true }
 proc-macro-crate = { workspace = true }
+
+# other
+anyhow = { workspace = true }
 
 # feature use-pretty-print
 prettyplease = { workspace = true, optional = true }

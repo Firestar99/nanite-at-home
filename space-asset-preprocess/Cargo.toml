@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 # my projects
 space-asset-disk = { workspace = true }
+rust-gpu-bindless-macro-utils = { workspace = true }
 
 # async
 rayon = { workspace = true }

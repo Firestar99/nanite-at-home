@@ -14,8 +14,6 @@ space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 
 # device
-vulkano = { workspace = true }
-vulkano-shaders = { workspace = true }
 winit = { workspace = true }
 
 # async

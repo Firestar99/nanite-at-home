@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, TokenStreamExt};
 use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -84,11 +84,7 @@ impl<'a, T> ModNode<'a, T> {
 	) -> TokenStream {
 		let mut content = quote!();
 		for (name, node) in children {
-			let append = node.to_tokens_loop(format_ident!("{}", name), f);
-			content = quote! {
-				#content
-				#append
-			};
+			content.append_all(node.to_tokens_loop(format_ident!("{}", name), f));
 		}
 		content
 	}
