@@ -103,21 +103,30 @@ impl AshExecutionManager {
 	}
 }
 
-pub struct AshExecutingCommandBuffer {
+pub struct AshExecutingContext<R> {
 	resource: AshPooledExecutionResource,
+	r: R,
 }
 
-impl AshExecutingCommandBuffer {
-	pub unsafe fn new(resource: AshPooledExecutionResource) -> Self {
-		Self { resource }
+impl<R> AshExecutingContext<R> {
+	pub unsafe fn new(resource: AshPooledExecutionResource, r: R) -> Self {
+		Self { resource, r }
 	}
 }
 
-impl Deref for AshExecutingCommandBuffer {
+impl<R> Deref for AshExecutingContext<R> {
 	type Target = AshPooledExecutionResource;
 	fn deref(&self) -> &Self::Target {
 		&self.resource
 	}
 }
 
-unsafe impl ExecutingCommandBuffer<Ash> for AshExecutingCommandBuffer {}
+unsafe impl<R> ExecutingCommandBuffer<Ash, R> for AshExecutingContext<R> {
+	fn block_on(self) -> R {
+		unsafe {
+			let device = &self.resource.bindless.device;
+			device.wait_for_fences(&[self.resource.fence], true, 0).unwrap();
+			self.r
+		}
+	}
+}

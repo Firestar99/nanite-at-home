@@ -112,6 +112,15 @@ impl<P: BindlessPlatform> Bindless<P> {
 	}
 }
 
+impl<P: BindlessPipelinePlatform> Bindless<P> {
+	pub fn execute<R>(
+		self: &Arc<Self>,
+		f: impl FnOnce(&mut P::RecordingContext<'_>) -> Result<R, P::RecordingError>,
+	) -> Result<P::ExecutingContext<R>, P::RecordingError> {
+		unsafe { P::record_and_execute(self, f) }
+	}
+}
+
 impl<P: BindlessPlatform> Drop for Bindless<P> {
 	fn drop(&mut self) {
 		unsafe {
@@ -125,12 +134,6 @@ pub struct BindlessFrame<P: BindlessPlatform> {
 	pub bindless: Arc<Bindless<P>>,
 	pub frame_guard: FrameGuard,
 	pub metadata: Metadata,
-}
-
-impl<P: BindlessPipelinePlatform> BindlessFrame<P> {
-	pub fn start_recording(self: &Arc<Self>) -> P::RecordingCommandBuffer {
-		P::start_recording(self)
-	}
 }
 
 unsafe impl<'a, P: BindlessPlatform> TransientAccess<'a> for &'a BindlessFrame<P> {}

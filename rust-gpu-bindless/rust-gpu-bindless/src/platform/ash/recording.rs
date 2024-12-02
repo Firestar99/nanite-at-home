@@ -1,23 +1,30 @@
 use crate::descriptor::mutable::MutDescExt;
-use crate::descriptor::{BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame};
+use crate::descriptor::{
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame,
+};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::platform::ash::ash_ext::DeviceExt;
-use crate::platform::ash::{Ash, AshExecutingCommandBuffer, AshPooledExecutionResource};
+use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
 use crate::platform::{BindlessPipelinePlatform, RecordingCommandBuffer};
+use ash::prelude::VkResult;
 use ash::vk::{CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, PipelineBindPoint, SubmitInfo};
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
-use rust_gpu_bindless_shaders::descriptor::BindlessPushConstant;
+use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, TransientAccess};
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
 
-pub struct AshRecordingCommandBuffer {
+pub struct AshRecordingContext<'a> {
+	#[allow(dead_code)]
 	frame: Arc<BindlessFrame<Ash>>,
 	resource: AshPooledExecutionResource,
+	_phantom: PhantomData<&'a ()>,
+	// mut state
 	cmd: CommandBuffer,
 	compute_bind_descriptors: bool,
 }
 
-impl Deref for AshRecordingCommandBuffer {
+impl<'a> Deref for AshRecordingContext<'a> {
 	type Target = AshPooledExecutionResource;
 
 	fn deref(&self) -> &Self::Target {
@@ -25,7 +32,16 @@ impl Deref for AshRecordingCommandBuffer {
 	}
 }
 
-impl AshRecordingCommandBuffer {
+impl<'a> AshRecordingContext<'a> {
+	pub unsafe fn ash_record_and_execute<R>(
+		bindless: &Arc<Bindless<Ash>>,
+		f: impl FnOnce(&mut AshRecordingContext<'_>) -> VkResult<R>,
+	) -> VkResult<AshExecutingContext<R>> {
+		let mut recording = Self::new(bindless.frame(), bindless.execution_manager.pop());
+		let r = f(&mut recording)?;
+		Ok(AshExecutingContext::new(recording.ash_end_submit(), r))
+	}
+
 	pub fn new(frame: Arc<BindlessFrame<Ash>>, resource: AshPooledExecutionResource) -> Self {
 		unsafe {
 			let cmd = resource
@@ -41,6 +57,7 @@ impl AshRecordingCommandBuffer {
 			Self {
 				frame,
 				resource,
+				_phantom: PhantomData,
 				cmd,
 				compute_bind_descriptors: true,
 			}
@@ -90,7 +107,7 @@ impl AshRecordingCommandBuffer {
 					param,
 				)
 				.unwrap();
-			let push_constant = BindlessPushConstant::new(desc.id(), 0, self.frame.metadata);
+			let push_constant = BindlessPushConstant::new(desc.id(), 0);
 			device.cmd_push_constants(
 				self.cmd,
 				self.bindless.global_descriptor_set().pipeline_layout,
@@ -100,10 +117,30 @@ impl AshRecordingCommandBuffer {
 			);
 		}
 	}
+
+	pub unsafe fn ash_end_submit(self) -> AshPooledExecutionResource {
+		unsafe {
+			let device = &self.bindless.platform.device;
+			device.end_command_buffer(self.cmd).unwrap();
+			self.bindless.flush();
+			device
+				.queue_submit(
+					self.bindless.queue,
+					&[SubmitInfo::default()
+						.command_buffers(&[self.cmd])
+						.signal_semaphores(&[self.semaphore])],
+					self.resource.fence,
+				)
+				.unwrap();
+			self.resource
+		}
+	}
 }
 
-unsafe impl RecordingCommandBuffer<Ash> for AshRecordingCommandBuffer {
-	unsafe fn dispatch<T: BufferStruct>(
+unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
+
+unsafe impl<'a> RecordingCommandBuffer<'a, Ash> for AshRecordingContext<'a> {
+	fn dispatch<T: BufferStruct>(
 		&mut self,
 		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,
 		group_counts: [u32; 3],
@@ -131,21 +168,4 @@ unsafe impl RecordingCommandBuffer<Ash> for AshRecordingCommandBuffer {
 	// 		Ok(self)
 	// 	}
 	// }
-
-	fn submit(self) -> AshExecutingCommandBuffer {
-		unsafe {
-			let device = &self.bindless.platform.device;
-			device.end_command_buffer(self.cmd).unwrap();
-			device
-				.queue_submit(
-					self.bindless.queue,
-					&[SubmitInfo::default()
-						.command_buffers(&[self.cmd])
-						.signal_semaphores(&[self.semaphore])],
-					self.resource.fence,
-				)
-				.unwrap();
-			AshExecutingCommandBuffer::new(self.resource)
-		}
-	}
 }

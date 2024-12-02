@@ -1,12 +1,11 @@
-use crate::descriptor::mutable::MutDescExt;
-use crate::descriptor::{Bindless, BindlessFrame};
+use crate::descriptor::Bindless;
 use crate::pipeline::shader::BindlessShader;
-use crate::platform::ash::{Ash, AshExecutingCommandBuffer, AshRecordingCommandBuffer, RunOnDrop};
+use crate::platform::ash::{Ash, AshExecutingContext, AshRecordingContext, RunOnDrop};
 use crate::platform::BindlessPipelinePlatform;
 use ash::vk::{
 	ComputePipelineCreateInfo, PipelineCache, PipelineShaderStageCreateInfo, ShaderModuleCreateInfo, ShaderStageFlags,
 };
-use rust_gpu_bindless_shaders::buffer_content::{BufferStruct, Metadata};
+use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::shader_type::ComputeShader;
 use std::sync::Arc;
 
@@ -15,10 +14,11 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	type ComputePipeline = ash::vk::Pipeline;
 	type TraditionalGraphicsPipeline = ash::vk::Pipeline;
 	type MeshGraphicsPipeline = ash::vk::Pipeline;
-	type RecordingCommandBuffer<'a> = AshRecordingCommandBuffer<'a>;
+	type RecordingContext<'a> = AshRecordingContext<'a>;
 	type RecordingError = ash::vk::Result;
-	type ExecutingCommandBuffer = AshExecutingCommandBuffer;
+	type ExecutingContext<R> = AshExecutingContext<R>;
 
+	// FIXME compute pipelines are never destroyed!
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
 		bindless: &Arc<Bindless<Self>>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
@@ -47,12 +47,10 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		Ok(pipelines[0])
 	}
 
-	unsafe fn start_recording(
-		bindless_frame: &Arc<BindlessFrame<Self>>,
-	) -> Result<Self::RecordingCommandBuffer, Self::RecordingError> {
-		Ok(AshRecordingCommandBuffer::new(
-			bindless_frame.bindless.platform.execution_manager.pop(),
-			metadata,
-		))
+	unsafe fn record_and_execute<R>(
+		bindless: &Arc<Bindless<Self>>,
+		f: impl FnOnce(&mut Self::RecordingContext<'_>) -> Result<R, Self::RecordingError>,
+	) -> Result<Self::ExecutingContext<R>, Self::RecordingError> {
+		AshRecordingContext::ash_record_and_execute(bindless, f)
 	}
 }
