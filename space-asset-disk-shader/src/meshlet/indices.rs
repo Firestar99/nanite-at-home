@@ -3,10 +3,10 @@ use crate::meshlet::MESHLET_INDICES_BITS;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use glam::UVec3;
-use rust_gpu_bindless_macros::BufferContentPlain;
+use rust_gpu_bindless_macros::BufferStructPlain;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Default, BufferContentPlain)]
+#[derive(Copy, Clone, Default, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CompressedIndices(pub u32);
 

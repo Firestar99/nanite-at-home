@@ -1,9 +1,9 @@
-use rust_gpu_bindless_macros::BufferContent;
+use rust_gpu_bindless_macros::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Desc, DescRef};
 use rust_gpu_bindless_shaders::spirv_std::image::Image2d;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, BufferContent)]
+#[derive(Copy, Clone, Debug, BufferStruct)]
 pub struct PbrMaterial<R: DescRef> {
 	pub base_color: Desc<R, Image2d>,
 	pub base_color_factor: [f32; 4],

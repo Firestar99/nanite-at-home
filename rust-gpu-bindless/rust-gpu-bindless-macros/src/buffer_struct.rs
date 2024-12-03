@@ -9,12 +9,12 @@ use syn::{
 	TypeParamBound,
 };
 
-pub enum BufferContentType {
+pub enum BufferStructType {
 	Default,
 	Plain,
 }
 
-pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -> Result<TokenStream> {
+pub fn buffer_struct(ct: BufferStructType, content: proc_macro::TokenStream) -> Result<TokenStream> {
 	let symbols = Symbols::new()?;
 	let item = syn::parse::<ItemStruct>(content)?;
 	let generics = item
@@ -29,12 +29,12 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 		.collect();
 
 	let crate_buffer_content = match ct {
-		BufferContentType::Default => symbols.crate_shaders_buffer_content()?,
-		BufferContentType::Plain => symbols.crate_buffer_content.clone(),
+		BufferStructType::Default => symbols.crate_shaders_buffer_content()?,
+		BufferStructType::Plain => symbols.crate_buffer_content.clone(),
 	};
 	let crate_shader = match ct {
-		BufferContentType::Default => symbols.crate_shaders()?.clone(),
-		BufferContentType::Plain => format_ident!("you_should_never_see_this_ident"),
+		BufferStructType::Default => symbols.crate_shaders()?.clone(),
+		BufferStructType::Plain => format_ident!("you_should_never_see_this_ident"),
 	};
 
 	let mut transfer = Punctuated::<TokenStream, Token![,]>::new();
@@ -55,27 +55,27 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 					quote!(#name: #gen)
 				} else {
 					match ct {
-						BufferContentType::Default => quote! {
+						BufferStructType::Default => quote! {
 							#name: <#ty as #crate_buffer_content::BufferStruct>::Transfer
 						},
-						BufferContentType::Plain => quote! {
+						BufferStructType::Plain => quote! {
 							#name: <#ty as #crate_buffer_content::BufferStructPlain>::Transfer
 						},
 					}
 				});
 				write_cpu.push(match ct {
-					BufferContentType::Default => quote! {
+					BufferStructType::Default => quote! {
 						#name: #crate_buffer_content::BufferStruct::write_cpu(self.#name, meta)
 					},
-					BufferContentType::Plain => quote! {
+					BufferStructType::Plain => quote! {
 						#name: #crate_buffer_content::BufferStructPlain::write(self.#name)
 					},
 				});
 				read.push(match ct {
-					BufferContentType::Default => quote! {
+					BufferStructType::Default => quote! {
 						#name: #crate_buffer_content::BufferStruct::read(from.#name, meta)
 					},
-					BufferContentType::Plain => quote! {
+					BufferStructType::Plain => quote! {
 						#name: #crate_buffer_content::BufferStructPlain::read(from.#name)
 					},
 				});
@@ -96,28 +96,28 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 					gen_name_gen.next().into_token_stream()
 				} else {
 					match ct {
-						BufferContentType::Default => quote! {
+						BufferStructType::Default => quote! {
 							<#ty as #crate_buffer_content::BufferStruct>::Transfer
 						},
-						BufferContentType::Plain => quote! {
+						BufferStructType::Plain => quote! {
 							<#ty as #crate_buffer_content::BufferStructPlain>::Transfer
 						},
 					}
 				});
 				let index = syn::Index::from(i);
 				write_cpu.push(match ct {
-					BufferContentType::Default => quote! {
+					BufferStructType::Default => quote! {
 						#index: #crate_buffer_content::BufferStruct::write_cpu(self.#index, meta)
 					},
-					BufferContentType::Plain => quote! {
+					BufferStructType::Plain => quote! {
 						#index: #crate_buffer_content::BufferStructPlain::write(self.#index)
 					},
 				});
 				read.push(match ct {
-					BufferContentType::Default => quote! {
+					BufferStructType::Default => quote! {
 						#crate_buffer_content::BufferStruct::read(from.#index, meta)
 					},
-					BufferContentType::Plain => quote! {
+					BufferStructType::Plain => quote! {
 						#crate_buffer_content::BufferStructPlain::read(from.#index)
 					},
 				});
@@ -129,12 +129,12 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 			)
 		}
 		Fields::Unit => match ct {
-			BufferContentType::Default => (
+			BufferStructType::Default => (
 				quote!(;),
 				quote!(let _ = (self, meta); Self::Transfer {}),
 				quote!(let _ = (from, meta); Self),
 			),
-			BufferContentType::Plain => (
+			BufferStructType::Plain => (
 				quote!(;),
 				quote!(let _ = self; Self::Transfer {}),
 				quote!(let _ = from; Self),
@@ -147,25 +147,25 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 	let generics_where = gen_ref_tys
 		.iter()
 		.map(|ty| match ct {
-			BufferContentType::Default => quote!(#ty: #crate_buffer_content::BufferStruct),
-			BufferContentType::Plain => quote!(#ty: #crate_buffer_content::BufferStructPlain),
+			BufferStructType::Default => quote!(#ty: #crate_buffer_content::BufferStruct),
+			BufferStructType::Plain => quote!(#ty: #crate_buffer_content::BufferStructPlain),
 		})
 		.collect::<Punctuated<TokenStream, Token![,]>>()
 		.into_token_stream();
 
 	let transfer_generics_decl = gen_name_gen.decl(match ct {
-		BufferContentType::Default => quote! {
+		BufferStructType::Default => quote! {
 			#crate_shader::bytemuck::AnyBitPattern + Send + Sync
 		},
-		BufferContentType::Plain => quote! {
+		BufferStructType::Plain => quote! {
 			#crate_buffer_content::bytemuck::AnyBitPattern + Send + Sync
 		},
 	});
 	let transfer_generics_ref = gen_ref_tys
 		.iter()
 		.map(|ty| match ct {
-			BufferContentType::Default => quote!(<#ty as #crate_buffer_content::BufferStruct>::Transfer),
-			BufferContentType::Plain => quote!(<#ty as #crate_buffer_content::BufferStructPlain>::Transfer),
+			BufferStructType::Default => quote!(<#ty as #crate_buffer_content::BufferStruct>::Transfer),
+			BufferStructType::Plain => quote!(<#ty as #crate_buffer_content::BufferStructPlain>::Transfer),
 		})
 		.collect::<Punctuated<TokenStream, Token![,]>>()
 		.into_token_stream();
@@ -174,7 +174,7 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 	let ident = &item.ident;
 	let transfer_ident = format_ident!("{}Transfer", ident);
 	Ok(match ct {
-		BufferContentType::Default => quote! {
+		BufferStructType::Default => quote! {
 			#[derive(Copy, Clone, #crate_shader::bytemuck_derive::AnyBitPattern)]
 			#vis struct #transfer_ident #transfer_generics_decl #transfer
 
@@ -194,7 +194,7 @@ pub fn buffer_content(ct: BufferContentType, content: proc_macro::TokenStream) -
 				}
 			}
 		},
-		BufferContentType::Plain => quote! {
+		BufferStructType::Plain => quote! {
 			#[derive(Copy, Clone, #crate_buffer_content::bytemuck_derive::AnyBitPattern)]
 			#vis struct #transfer_ident #transfer_generics_decl #transfer
 

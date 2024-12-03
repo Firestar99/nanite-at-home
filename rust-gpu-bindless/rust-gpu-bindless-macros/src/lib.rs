@@ -1,11 +1,11 @@
-use crate::buffer_content::BufferContentType;
+use crate::buffer_struct::BufferStructType;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::Error;
 
 mod assert_transfer_size;
 mod bindless;
-mod buffer_content;
+mod buffer_struct;
 mod symbols;
 
 #[path = "../../image_types.rs"]
@@ -18,16 +18,16 @@ pub fn bindless(attr: TokenStream, item: TokenStream) -> TokenStream {
 		.into()
 }
 
-#[proc_macro_derive(BufferContent)]
-pub fn buffer_content(content: TokenStream) -> TokenStream {
-	buffer_content::buffer_content(BufferContentType::Default, content)
+#[proc_macro_derive(BufferStruct)]
+pub fn buffer_struct(content: TokenStream) -> TokenStream {
+	buffer_struct::buffer_struct(BufferStructType::Default, content)
 		.unwrap_or_else(Error::into_compile_error)
 		.into()
 }
 
-#[proc_macro_derive(BufferContentPlain)]
-pub fn buffer_content_plain(content: TokenStream) -> TokenStream {
-	buffer_content::buffer_content(BufferContentType::Plain, content)
+#[proc_macro_derive(BufferStructPlain)]
+pub fn buffer_struct_plain(content: TokenStream) -> TokenStream {
+	buffer_struct::buffer_struct(BufferStructType::Plain, content)
 		.unwrap_or_else(Error::into_compile_error)
 		.into()
 }

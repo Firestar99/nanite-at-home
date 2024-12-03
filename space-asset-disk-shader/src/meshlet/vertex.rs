@@ -1,9 +1,9 @@
 use core::ops::Deref;
 use glam::Vec3;
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferContentPlain};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, BufferContentPlain)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(bytemuck_derive::Zeroable, bytemuck_derive::Pod))]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MaterialVertexId(pub u32);
@@ -18,7 +18,7 @@ impl Deref for MaterialVertexId {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, BufferContentPlain)]
+#[derive(Copy, Clone, Debug, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(bytemuck_derive::Zeroable, bytemuck_derive::Pod))]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct DrawVertex {

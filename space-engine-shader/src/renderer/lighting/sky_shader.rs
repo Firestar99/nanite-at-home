@@ -5,7 +5,7 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
 use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
-use rust_gpu_bindless_macros::{bindless, BufferContent};
+use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 use spirv_std::image::{Image2d, StorageImage2d};
 #[cfg(target_arch = "spirv")]
@@ -132,7 +132,7 @@ pub fn preetham_sky(dir: Vec3, sun_position: Vec3) -> Vec3 {
 	lin + l0
 }
 
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, BufferStruct)]
 pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }

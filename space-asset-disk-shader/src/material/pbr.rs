@@ -1,8 +1,8 @@
 use glam::{Vec2, Vec3, Vec4};
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferContentPlain};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, BufferContentPlain)]
+#[derive(Copy, Clone, Debug, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct PbrVertex {
 	pub tangent: Vec4,

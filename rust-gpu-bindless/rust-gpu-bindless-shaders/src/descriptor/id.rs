@@ -3,7 +3,7 @@ use crate::descriptor::{Desc, DescContent, DescRef, TransientAccess};
 use bytemuck_derive::{Pod, Zeroable};
 use core::mem;
 use core::ops::Sub;
-use rust_gpu_bindless_macros::BufferContent;
+use rust_gpu_bindless_macros::BufferStruct;
 use static_assertions::const_assert_eq;
 
 pub const ID_INDEX_BITS: u32 = 18;
@@ -33,7 +33,7 @@ const_assert_eq!(ID_TYPE_MASK << ID_TYPE_SHIFT & ID_VERSION_MASK << ID_VERSION_S
 /// The raw unsafe descriptor identifier to locate a resource. Internally it's a bit packed u32 containing the
 /// [`DescriptorType`], [`DescriptorIndex`] and version. All other descriptors use `DescriptorId` internally.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Zeroable, Pod, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Zeroable, Pod, BufferStruct)]
 pub struct DescriptorId(u32);
 const_assert_eq!(mem::size_of::<DescriptorId>(), 4);
 
@@ -66,7 +66,7 @@ impl DescRef for DescriptorId {}
 
 /// The descriptor table type of [`DescriptorId`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, BufferStruct)]
 pub struct DescriptorType(u32);
 const_assert_eq!(mem::size_of::<DescriptorType>(), 4);
 
@@ -102,7 +102,7 @@ impl DescriptorType {
 
 /// The index of [`DescriptorId`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, BufferStruct)]
 pub struct DescriptorIndex(u32);
 const_assert_eq!(mem::size_of::<DescriptorIndex>(), 4);
 
@@ -145,7 +145,7 @@ impl Sub for DescriptorIndex {
 
 /// The version of [`DescriptorId`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, BufferContent)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, BufferStruct)]
 pub struct DescriptorVersion(u32);
 const_assert_eq!(mem::size_of::<DescriptorVersion>(), 4);
 
