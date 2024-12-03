@@ -13,5 +13,7 @@ pub fn add(#[bindless(descriptors)] descriptors: &Descriptors, #[bindless(param)
 	let a = param.a.access(descriptors).load();
 	let b = param.b.access(descriptors).load();
 	let c = a + b;
-	panic!("{} + {} = {}", a, b, c);
+	if c != 123456 {
+		panic!("{} + {} = {}", a, b, c);
+	}
 }

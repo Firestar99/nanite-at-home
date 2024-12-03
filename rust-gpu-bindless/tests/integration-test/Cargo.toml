@@ -13,4 +13,5 @@ integration-test-shader = { workspace = true }
 anyhow = { workspace = true }
 
 [build-dependencies]
-space-engine-shader-builder = { workspace = true }
+anyhow = { workspace = true }
+rust-gpu-bindless-shader-builder = { workspace = true }

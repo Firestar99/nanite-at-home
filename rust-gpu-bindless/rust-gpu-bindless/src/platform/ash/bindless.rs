@@ -9,10 +9,11 @@ use crate::platform::ash::Ash;
 use crate::platform::BindlessPlatform;
 use ash::prelude::VkResult;
 use ash::vk::{
-	BufferUsageFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool, DescriptorPoolCreateFlags,
-	DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo, DescriptorSetLayout,
-	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageUsageFlags,
-	PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange, SamplerCreateInfo, WriteDescriptorSet,
+	BufferUsageFlags, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
+	DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo,
+	DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo, DescriptorSetLayoutCreateFlags,
+	DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageUsageFlags, PipelineLayout,
+	PipelineLayoutCreateInfo, PushConstantRange, SamplerCreateInfo, WriteDescriptorSet,
 };
 use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
 use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
@@ -27,13 +28,13 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::mem::{size_of, MaybeUninit};
 use std::ops::Deref;
-use std::sync::{Arc, Weak};
+use std::sync::Weak;
 
 unsafe impl BindlessPlatform for Ash {
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
 
 	unsafe fn create_platform(create_info: Self::PlatformCreateInfo, bindless_cyclic: &Weak<Bindless<Self>>) -> Self {
-		Ash::new(Arc::new(create_info), bindless_cyclic)
+		Ash::new(create_info, bindless_cyclic)
 	}
 
 	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts {
@@ -74,13 +75,17 @@ unsafe impl BindlessPlatform for Ash {
 				.descriptor_count(counts.samplers)
 				.stage_flags(self.shader_stages),
 		];
+		let binding_flags =
+			[DescriptorBindingFlags::UPDATE_AFTER_BIND | DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING; 4];
+		assert_eq!(bindings.len(), binding_flags.len());
 
 		let set_layout = self
 			.device
 			.create_descriptor_set_layout(
 				&DescriptorSetLayoutCreateInfo::default()
 					.flags(DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
-					.bindings(&bindings),
+					.bindings(&bindings)
+					.push_next(&mut DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&binding_flags)),
 				None,
 			)
 			.unwrap();
@@ -108,7 +113,8 @@ unsafe impl BindlessPlatform for Ash {
 						DescriptorPoolSize::default()
 							.ty(b.descriptor_type)
 							.descriptor_count(b.descriptor_count)
-					})),
+					}))
+					.max_sets(1),
 				None,
 			)
 			.unwrap();

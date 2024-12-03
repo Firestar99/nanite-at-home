@@ -101,6 +101,14 @@ impl AshExecutionManager {
 		resource.reset(&bindless.device);
 		self.free_pool.push(resource);
 	}
+
+	pub fn destroy(&mut self, device: &Device) {
+		unsafe {
+			if let Some(resource) = self.free_pool.pop() {
+				resource.destroy(device)
+			}
+		}
+	}
 }
 
 pub struct AshExecutingContext<R> {
@@ -125,7 +133,7 @@ unsafe impl<R> ExecutingCommandBuffer<Ash, R> for AshExecutingContext<R> {
 	fn block_on(self) -> R {
 		unsafe {
 			let device = &self.resource.bindless.device;
-			device.wait_for_fences(&[self.resource.fence], true, 0).unwrap();
+			device.wait_for_fences(&[self.resource.fence], true, !0).unwrap();
 			self.r
 		}
 	}

@@ -1067,7 +1067,7 @@ dependencies = [
  "anyhow",
  "integration-test-shader",
  "rust-gpu-bindless",
- "space-engine-shader-builder",
+ "rust-gpu-bindless-shader-builder",
 ]
 
 [[package]]

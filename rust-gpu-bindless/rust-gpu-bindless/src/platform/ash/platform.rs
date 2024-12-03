@@ -9,7 +9,7 @@ use static_assertions::assert_impl_all;
 use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use std::sync::{Arc, Weak};
+use std::sync::Weak;
 
 pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
 	PhysicalDeviceVulkan12Features::default()
@@ -24,13 +24,13 @@ pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
 }
 
 pub struct Ash {
-	pub create_info: Arc<AshCreateInfo>,
+	pub create_info: AshCreateInfo,
 	pub execution_manager: AshExecutionManager,
 }
 assert_impl_all!(Bindless<Ash>: Send, Sync);
 
 impl Ash {
-	pub fn new(create_info: Arc<AshCreateInfo>, bindless: &Weak<Bindless<Self>>) -> Self {
+	pub fn new(create_info: AshCreateInfo, bindless: &Weak<Bindless<Self>>) -> Self {
 		Ash {
 			execution_manager: AshExecutionManager::new(bindless),
 			create_info,
@@ -43,6 +43,12 @@ impl Deref for Ash {
 
 	fn deref(&self) -> &Self::Target {
 		&self.create_info
+	}
+}
+
+impl Drop for Ash {
+	fn drop(&mut self) {
+		self.execution_manager.destroy(&self.create_info.device);
 	}
 }
 

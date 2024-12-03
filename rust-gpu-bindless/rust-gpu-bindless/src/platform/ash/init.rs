@@ -96,7 +96,7 @@ pub fn ash_init_single_graphics_queue(
 							.application_version(create_info.app_version)
 							.engine_name(c"rust-gpu-bindless")
 							.engine_version(1)
-							.api_version(0),
+							.api_version(ash::vk::make_api_version(0, 1, 3, 0)),
 					)
 					.enabled_extension_names(&extensions)
 					.enabled_layer_names(&layers)

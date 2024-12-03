@@ -7,7 +7,10 @@ use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
 use crate::platform::{BindlessPipelinePlatform, RecordingCommandBuffer};
 use ash::prelude::VkResult;
-use ash::vk::{CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, PipelineBindPoint, SubmitInfo};
+use ash::vk::{
+	CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsageFlags,
+	PipelineBindPoint, SubmitInfo,
+};
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, TransientAccess};
 use std::marker::PhantomData;
@@ -37,30 +40,31 @@ impl<'a> AshRecordingContext<'a> {
 		bindless: &Arc<Bindless<Ash>>,
 		f: impl FnOnce(&mut AshRecordingContext<'_>) -> VkResult<R>,
 	) -> VkResult<AshExecutingContext<R>> {
-		let mut recording = Self::new(bindless.frame(), bindless.execution_manager.pop());
+		let mut recording = Self::new(bindless.frame(), bindless.execution_manager.pop())?;
 		let r = f(&mut recording)?;
 		Ok(AshExecutingContext::new(recording.ash_end_submit(), r))
 	}
 
-	pub fn new(frame: Arc<BindlessFrame<Ash>>, resource: AshPooledExecutionResource) -> Self {
+	pub fn new(frame: Arc<BindlessFrame<Ash>>, resource: AshPooledExecutionResource) -> VkResult<Self> {
 		unsafe {
-			let cmd = resource
-				.bindless
-				.device
-				.allocate_command_buffer(
-					&CommandBufferAllocateInfo::default()
-						.command_pool(resource.command_pool)
-						.level(CommandBufferLevel::PRIMARY)
-						.command_buffer_count(1),
-				)
-				.unwrap();
-			Self {
+			let device = &resource.bindless.device;
+			let cmd = device.allocate_command_buffer(
+				&CommandBufferAllocateInfo::default()
+					.command_pool(resource.command_pool)
+					.level(CommandBufferLevel::PRIMARY)
+					.command_buffer_count(1),
+			)?;
+			device.begin_command_buffer(
+				cmd,
+				&CommandBufferBeginInfo::default().flags(CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+			)?;
+			Ok(Self {
 				frame,
 				resource,
 				_phantom: PhantomData,
 				cmd,
 				compute_bind_descriptors: true,
-			}
+			})
 		}
 	}
 

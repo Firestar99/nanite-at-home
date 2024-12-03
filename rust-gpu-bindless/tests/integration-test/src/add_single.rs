@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use integration_test_shader::add_single::Param;
 use rust_gpu_bindless::descriptor::mutable::MutDescExt;
 use rust_gpu_bindless::descriptor::{
@@ -11,17 +13,18 @@ use std::sync::Arc;
 #[test]
 fn test_add_single_ash() -> anyhow::Result<()> {
 	unsafe {
-		test_add_single(Bindless::<Ash>::new(
+		let bindless = Bindless::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				..AshSingleGraphicsQueueCreateInfo::default()
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
-		));
+		);
+		test_add_single(&bindless);
 		Ok(())
 	}
 }
 
-fn test_add_single<P: BindlessPipelinePlatform>(bindless: Arc<Bindless<P>>) {
+fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) {
 	let pipeline = BindlessComputePipeline::new(&bindless, crate::shader::add_single::new()).unwrap();
 
 	let buffer_ci = BindlessBufferCreateInfo {
@@ -42,7 +45,11 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: Arc<Bindless<P>>) {
 			// Mutable resources can only be used unsafely, the user has to ensure they aren't used by multiple recordings
 			// simultaneously. By creating the output buffer here and returning it, it can only be accessed once the
 			// execution has completed.
-			// let buffer_c = bindless.buffer().alloc_from_data(&buffer_ci, 0).unwrap();
+			// let buffer_c = bindless.buffer().alloc_from_data(&BindlessBufferCreateInfo {
+			// 	name: "c readback",
+			// 	usage: BindlessBufferUsage::MAP_READ | BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
+			// 	allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
+			// }, 0).unwrap();
 			// let c = unsafe { buffer_c.to_mut_transient_unchecked(&recording_context) };
 
 			// Enqueueing some dispatch takes in a user-supplied param struct that may contain
@@ -51,7 +58,7 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: Arc<Bindless<P>>) {
 			// not having finished yet.
 			recording_context.dispatch(
 				&pipeline,
-				[1, 0, 0],
+				[1, 1, 1],
 				Param {
 					a,
 					b,
