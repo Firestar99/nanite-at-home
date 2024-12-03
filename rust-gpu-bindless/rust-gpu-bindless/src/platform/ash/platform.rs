@@ -3,7 +3,8 @@ use crate::platform::ash::{AshAllocationError, AshExecutionManager};
 use crate::platform::Platform;
 use ash::vk::{PhysicalDeviceVulkan12Features, PipelineCache, ShaderStageFlags};
 use gpu_allocator::vulkan::{Allocation, Allocator};
-use parking_lot::Mutex;
+use parking_lot::lock_api::MutexGuard;
+use parking_lot::{Mutex, RawMutex};
 use static_assertions::assert_impl_all;
 use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
@@ -60,14 +61,30 @@ unsafe impl Platform for Ash {
 }
 
 pub struct AshCreateInfo {
+	pub entry: ash::Entry,
 	pub instance: ash::Instance,
 	pub physical_device: ash::vk::PhysicalDevice,
 	pub device: ash::Device,
-	pub memory_allocator: Mutex<Allocator>,
+	pub memory_allocator: Option<Mutex<Allocator>>,
 	pub shader_stages: ShaderStageFlags,
 	pub queue_family_index: u32,
 	pub queue: ash::vk::Queue,
 	pub cache: Option<PipelineCache>,
+	pub destroy: Option<Box<dyn FnOnce(&mut AshCreateInfo) + Send + Sync>>,
+}
+
+impl AshCreateInfo {
+	pub fn memory_allocator(&self) -> MutexGuard<'_, RawMutex, Allocator> {
+		self.memory_allocator.as_ref().unwrap().lock()
+	}
+}
+
+impl Drop for AshCreateInfo {
+	fn drop(&mut self) {
+		if let Some(destroy) = self.destroy.take() {
+			destroy(self);
+		}
+	}
 }
 
 pub struct RunOnDrop<F: FnOnce()>(Option<F>);

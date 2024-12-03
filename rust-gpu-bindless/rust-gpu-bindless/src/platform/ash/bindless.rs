@@ -279,7 +279,7 @@ unsafe impl BindlessPlatform for Ash {
 			None,
 		)?;
 		let requirements = self.device.get_buffer_memory_requirements(buffer);
-		let memory_allocation = self.memory_allocator.lock().allocate(&AllocationCreateDesc {
+		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
 			requirements,
 			name: create_info.name,
 			location: create_info.usage.to_gpu_allocator_memory_location(),
@@ -306,7 +306,7 @@ unsafe impl BindlessPlatform for Ash {
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		buffers: impl DescriptorIndexIterator<'a, BufferInterface<Self>>,
 	) {
-		let mut allocator = self.memory_allocator.lock();
+		let mut allocator = self.memory_allocator();
 		for (_, buffer) in buffers.into_iter() {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
@@ -322,7 +322,7 @@ unsafe impl BindlessPlatform for Ash {
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		images: impl DescriptorIndexIterator<'a, ImageInterface<Self>>,
 	) {
-		let mut allocator = self.memory_allocator.lock();
+		let mut allocator = self.memory_allocator();
 		for (_, image) in images.into_iter() {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
@@ -477,7 +477,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 		unsafe {
 			let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
 			let requirements = self.0.device.get_buffer_memory_requirements(buffer);
-			let memory_allocation = self.0.memory_allocator.lock().allocate(&AllocationCreateDesc {
+			let memory_allocation = self.0.memory_allocator().allocate(&AllocationCreateDesc {
 				requirements,
 				name,
 				location,

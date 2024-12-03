@@ -12,7 +12,7 @@ impl DescriptorCounts {
 		unsafe { P::update_after_bind_descriptor_limits(platform) }
 	}
 
-	const REASONABLE_DEFAULTS: Self = DescriptorCounts {
+	pub const REASONABLE_DEFAULTS: Self = DescriptorCounts {
 		buffers: 10_000,
 		image: 10_000,
 		samplers: 400,

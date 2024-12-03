@@ -37,7 +37,4 @@ crossbeam-queue = { workspace = true }
 crossbeam-utils = { workspace = true }
 rangemap = { workspace = true }
 bitflags = { workspace = true }
-
-[dev-dependencies]
-rand = { workspace = true }
 anyhow = { workspace = true }

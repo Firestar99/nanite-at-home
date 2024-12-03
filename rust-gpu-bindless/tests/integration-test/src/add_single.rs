@@ -1,15 +1,25 @@
 use integration_test_shader::add_single::Param;
 use rust_gpu_bindless::descriptor::mutable::MutDescExt;
 use rust_gpu_bindless::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, RCDescExt,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts, RCDescExt,
 };
 use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
-use rust_gpu_bindless::platform::ash::Ash;
+use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingCommandBuffer, RecordingCommandBuffer};
 use std::sync::Arc;
 
 #[test]
-fn test_add_single_ash() {}
+fn test_add_single_ash() -> anyhow::Result<()> {
+	unsafe {
+		test_add_single(Bindless::<Ash>::new(
+			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
+				..AshSingleGraphicsQueueCreateInfo::default()
+			})?,
+			DescriptorCounts::REASONABLE_DEFAULTS,
+		));
+		Ok(())
+	}
+}
 
 fn test_add_single<P: BindlessPipelinePlatform>(bindless: Arc<Bindless<P>>) {
 	let pipeline = BindlessComputePipeline::new(&bindless, crate::shader::add_single::new()).unwrap();
