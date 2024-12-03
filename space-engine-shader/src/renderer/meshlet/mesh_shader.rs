@@ -15,7 +15,7 @@ use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub scene: TransientDesc<'a, Buffer<MeshletScene<Strong>>>,
 	pub sampler: TransientDesc<'a, Sampler>,
@@ -39,7 +39,7 @@ const_assert_eq!(MESHLET_MAX_TRIANGLES, 124);
 #[bindless(mesh_ext(threads(32), output_vertices = 64, output_primitives_ext = 124, output_triangles_ext))]
 pub fn meshlet_mesh(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params<'static>,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 0)] out_meshlet_instances_buffer: &[u32],
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 1)]
 	out_meshlet_indirect_draw_args: &DrawMeshTasksIndirectCommandEXT,
@@ -137,7 +137,7 @@ fn debug_hue(frame_data: FrameData, meshlet_id: u32, primitive_id: u32) -> f32 {
 #[bindless(fragment())]
 pub fn meshlet_fragment_g_buffer(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params<'static>,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(per_primitive_ext)] out_debug_hue: f32,
 	#[spirv(flat)] out_mesh_id: u32,
 	out_vertex: InterpolationVertex,

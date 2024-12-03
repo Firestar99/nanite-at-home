@@ -133,7 +133,7 @@ pub fn preetham_sky(dir: Vec3, sun_position: Vec3) -> Vec3 {
 }
 
 #[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }
 
@@ -144,7 +144,7 @@ const_assert_eq!(SKY_SHADER_WG_SIZE.y, 8);
 #[bindless(compute(threads(8, 8)))]
 pub fn sky_shader_cs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params<'static>,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 4)] output_image: &StorageImage2d,
 	#[spirv(global_invocation_id)] inv_id: UVec3,

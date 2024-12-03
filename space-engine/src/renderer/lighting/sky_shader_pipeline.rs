@@ -1,7 +1,7 @@
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
 use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
-use space_engine_shader::renderer::lighting::sky_shader::{Params, SKY_SHADER_WG_SIZE};
+use space_engine_shader::renderer::lighting::sky_shader::{Param, SKY_SHADER_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -12,7 +12,7 @@ use vulkano::pipeline::PipelineBindPoint;
 use vulkano::pipeline::{Pipeline, PipelineLayout};
 
 pub struct SkyShaderPipeline {
-	pipeline: BindlessComputePipeline<Params<'static>>,
+	pipeline: BindlessComputePipeline<Param<'static>>,
 }
 
 impl SkyShaderPipeline {
@@ -29,7 +29,7 @@ impl SkyShaderPipeline {
 							init.bindless.descriptor_set_layout.clone(),
 							image_descriptor_set_layout.clone(),
 						]),
-						push_constant_ranges: init.bindless.get_push_constant::<Params<'static>>(),
+						push_constant_ranges: init.bindless.get_push_constant::<Param<'static>>(),
 						..PipelineLayoutCreateInfo::default()
 					},
 				)
@@ -67,7 +67,7 @@ impl SkyShaderPipeline {
 							image_descriptor,
 						)
 					},
-					Params {
+					Param {
 						frame_data: frame_context.frame_data_desc,
 					},
 				)

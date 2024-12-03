@@ -6,7 +6,7 @@ use rust_gpu_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
 };
 use space_asset_rt::meshlet::scene::MeshletSceneCpu;
-use space_engine_shader::renderer::meshlet::mesh_shader::Params;
+use space_engine_shader::renderer::meshlet::mesh_shader::Param;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -24,7 +24,7 @@ use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::{DynamicState, Pipeline, PipelineBindPoint, PipelineLayout};
 
 pub struct MeshDrawPipeline {
-	pipeline: BindlessMeshGraphicsPipeline<Params<'static>>,
+	pipeline: BindlessMeshGraphicsPipeline<Param<'static>>,
 	sampler: RCDesc<Sampler>,
 }
 
@@ -92,7 +92,7 @@ impl MeshDrawPipeline {
 							init.bindless.descriptor_set_layout.clone(),
 							alloc_buffer.descriptor_set.layout().clone(),
 						]),
-						push_constant_ranges: init.bindless.get_push_constant::<Params<'static>>(),
+						push_constant_ranges: init.bindless.get_push_constant::<Param<'static>>(),
 						..PipelineLayoutCreateInfo::default()
 					},
 				)
@@ -132,7 +132,7 @@ impl MeshDrawPipeline {
 						)?;
 						frame_context.modify()(cmd)
 					},
-					Params {
+					Param {
 						frame_data: frame_context.frame_data_desc,
 						scene: scene.scene.to_transient(frame_context.fif),
 						sampler: self.sampler.to_transient(frame_context.fif),

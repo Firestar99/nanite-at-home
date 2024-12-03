@@ -47,7 +47,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 			let bindless_list = bindless.meta.require_list()?;
 			let bindless_list_str = bindless_list.tokens.to_string();
 			let slot = match &*bindless_list_str {
-				"param_constants" => &mut arg_param,
+				"param" => &mut arg_param,
 				"descriptors" => &mut arg_descriptors,
 				_ => return Err(Error::new(arg.span(), "Unknown bindless parameter")),
 			};

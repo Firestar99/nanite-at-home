@@ -12,7 +12,7 @@ use spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT;
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub scene: TransientDesc<'a, Buffer<MeshletScene<Strong>>>,
 	pub num_instances: u32,
@@ -24,7 +24,7 @@ const_assert_eq!(INSTANCE_CULL_WG_SIZE, 32);
 #[bindless(compute(threads(32)))]
 pub fn instance_cull_compute(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] params: &Params<'static>,
+	#[bindless(param)] params: &Param<'static>,
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 0)] out_meshlet_instances_buffer: &mut [u32],
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 1)]
 	out_meshlet_indirect_draw_args: &mut DrawMeshTasksIndirectCommandEXT,

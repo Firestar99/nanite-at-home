@@ -12,7 +12,7 @@ use spirv_std::image::{Image2d, StorageImage2d};
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }
 
@@ -22,7 +22,7 @@ const_assert_eq!(LIGHTING_WG_SIZE, 64);
 #[bindless(compute(threads(64)))]
 pub fn lighting_cs(
 	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params<'static>,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 1)] g_normal: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 2)] g_roughness_metallic: &Image2d,
@@ -47,7 +47,7 @@ pub fn lighting_cs(
 #[allow(clippy::too_many_arguments, clippy::useless_conversion)]
 fn lighting_inner(
 	descriptors: &Descriptors,
-	param: &Params<'static>,
+	param: &Param<'static>,
 	g_albedo: &Image2d,
 	g_normal: &Image2d,
 	g_roughness_metallic: &Image2d,
