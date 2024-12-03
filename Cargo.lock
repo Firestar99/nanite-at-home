@@ -1061,6 +1061,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
 
 [[package]]
+name = "integration-test"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "integration-test-shader",
+ "num-derive",
+ "num-traits",
+ "parking_lot",
+ "profiling",
+ "rust-gpu-bindless",
+ "smallvec",
+ "space-engine-shader-builder",
+ "static_assertions",
+]
+
+[[package]]
+name = "integration-test-shader"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "libm",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "rust-gpu-bindless-macros",
+ "rust-gpu-bindless-shaders",
+ "spirv-std",
+ "static_assertions",
+]
+
+[[package]]
 name = "intel_tex_2"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

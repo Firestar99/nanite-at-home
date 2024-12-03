@@ -16,6 +16,8 @@ members = [
 	"rust-gpu-bindless/rust-gpu-bindless-macros",
 	"rust-gpu-bindless/rust-gpu-bindless-shaders",
 	"rust-gpu-bindless/rust-gpu-bindless-shader-builder",
+	"rust-gpu-bindless/tests/integration-test",
+	"rust-gpu-bindless/tests/integration-test-shader",
 ]
 resolver = "2"
 
@@ -48,6 +50,8 @@ rust-gpu-bindless-macro-utils = { path = "rust-gpu-bindless/rust-gpu-bindless-ma
 rust-gpu-bindless-macros = { path = "rust-gpu-bindless/rust-gpu-bindless-macros" }
 rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-shaders" }
 rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools"] }
+integration-test = { path = "rust-gpu-bindless/tests/integration-test" }
+integration-test-shader = { path = "rust-gpu-bindless/tests/integration-test-shader" }
 
 # vulkan
 ash = "0.38.0"
