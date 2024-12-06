@@ -1,4 +1,4 @@
-use crate::descriptor::mutable::MutDescExt;
+use crate::descriptor::boxed::BoxDescExt;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame,
 };

@@ -1,5 +1,5 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{Desc, DescContentCpu, RCDesc, RCDescExt};
+use crate::descriptor::{Desc, DescContentCpu, DescContentMutCpu, RCDesc, RCDescExt};
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{DerefDescRef, DescRef, DescriptorId, MutDescRef};
 use std::fmt::{Debug, Formatter};
@@ -7,16 +7,16 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-pub struct Mut<P: BindlessPlatform> {
+pub struct Box<P: BindlessPlatform> {
 	slot: RcTableSlot,
 	_phantom: PhantomData<P>,
 }
 
-impl<P: BindlessPlatform> DescRef for Mut<P> {}
+impl<P: BindlessPlatform> DescRef for Box<P> {}
 
-impl<P: BindlessPlatform> MutDescRef for Mut<P> {}
+impl<P: BindlessPlatform> MutDescRef for Box<P> {}
 
-impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<MutDesc<P, C>> for Mut<P> {
+impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<BoxDesc<P, C>> for Box<P> {
 	type Target = C::VulkanType<P>;
 
 	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
@@ -24,38 +24,29 @@ impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<MutDesc<P, C>> for Mut
 	}
 }
 
-impl<P: BindlessPlatform> Clone for Mut<P> {
-	fn clone(&self) -> Self {
-		Self {
-			slot: self.slot.clone(),
-			_phantom: PhantomData {},
-		}
-	}
-}
-
-impl<P: BindlessPlatform> Debug for Mut<P> {
+impl<P: BindlessPlatform> Debug for Box<P> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
 		f.debug_tuple("Mut").field(&self.slot.id()).finish()
 	}
 }
 
-impl<P: BindlessPlatform> PartialEq<Self> for Mut<P> {
+impl<P: BindlessPlatform> PartialEq<Self> for Box<P> {
 	fn eq(&self, other: &Self) -> bool {
 		self.slot.id() == other.slot.id()
 	}
 }
 
-impl<P: BindlessPlatform> Eq for Mut<P> {}
+impl<P: BindlessPlatform> Eq for Box<P> {}
 
-impl<P: BindlessPlatform> Hash for Mut<P> {
+impl<P: BindlessPlatform> Hash for Box<P> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.slot.id().hash(state)
 	}
 }
 
-pub type MutDesc<P, C> = Desc<Mut<P>, C>;
+pub type BoxDesc<P, C> = Desc<Box<P>, C>;
 
-pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>:
+pub trait BoxDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	Sized + Hash + Eq + Deref<Target = C::VulkanType<P>>
 {
 	/// Create a new MutDesc
@@ -76,14 +67,16 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	fn id(&self) -> DescriptorId {
 		self.rc_slot().id()
 	}
-
-	fn into_shared(self) -> RCDesc<P, C>;
 }
 
-impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> {
+pub trait MutBoxDescExt<P: BindlessPlatform, C: DescContentMutCpu>: BoxDescExt<P, C> {
+	fn into_shared(self) -> RCDesc<P, C::Shared>;
+}
+
+impl<P: BindlessPlatform, C: DescContentCpu> BoxDescExt<P, C> for BoxDesc<P, C> {
 	#[inline]
 	unsafe fn new(slot: RcTableSlot) -> Self {
-		Desc::new_inner(Mut {
+		Desc::new_inner(Box {
 			slot,
 			_phantom: PhantomData {},
 		})
@@ -93,9 +86,11 @@ impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> 
 	fn rc_slot(&self) -> &RcTableSlot {
 		&self.r.slot
 	}
+}
 
+impl<P: BindlessPlatform, C: DescContentMutCpu> MutBoxDescExt<P, C> for BoxDesc<P, C> {
 	#[inline]
-	fn into_shared(self) -> RCDesc<P, C> {
+	fn into_shared(self) -> RCDesc<P, C::Shared> {
 		unsafe { RCDesc::new(self.r.slot) }
 	}
 }

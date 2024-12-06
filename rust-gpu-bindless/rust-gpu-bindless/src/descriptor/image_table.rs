@@ -1,7 +1,7 @@
 use crate::backing::range_set::DescriptorIndexIterator;
 use crate::backing::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
+use crate::descriptor::boxed::{BoxDesc, BoxDescExt};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::mutable::{MutDesc, MutDescExt};
 use crate::descriptor::{Bindless, DescriptorCounts, Image};
 use crate::platform::BindlessPlatform;
 use ash::vk::ImageUsageFlags;
@@ -74,9 +74,9 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 	/// ImageView is transferred to this table. You may not access or drop it afterward, except by going though the
 	/// returned `RCDesc`.
 	#[inline]
-	pub unsafe fn alloc_slot_2d(&self, image: ImageSlot<P>) -> MutDesc<P, Image2d> {
+	pub unsafe fn alloc_slot_2d(&self, image: ImageSlot<P>) -> BoxDesc<P, Image2d> {
 		unsafe {
-			MutDesc::new(
+			BoxDesc::new(
 				self.table
 					.alloc_slot(image)
 					.map_err(|a| format!("ImageTable: {}", a))

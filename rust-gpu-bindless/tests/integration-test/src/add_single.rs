@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use integration_test_shader::add_single::Param;
-use rust_gpu_bindless::descriptor::mutable::MutDescExt;
+use rust_gpu_bindless::descriptor::boxed::MutBoxDescExt;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts, RCDescExt,
 };

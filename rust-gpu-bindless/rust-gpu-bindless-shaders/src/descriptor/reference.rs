@@ -1,7 +1,8 @@
 use crate::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};
 use crate::descriptor::descriptor_content::DescContent;
-use crate::descriptor::descriptors::DescriptorsAccess;
+use crate::descriptor::descriptors::DescriptorAccess;
 use crate::descriptor::id::DescriptorId;
+use crate::descriptor::DescriptorAccessMut;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
@@ -177,7 +178,12 @@ impl<R: AliveDescRef, C: DescContent> Desc<R, C> {
 	}
 
 	#[inline]
-	pub fn access<'a>(&self, descriptors: &'a impl DescriptorsAccess<C>) -> C::AccessType<'a> {
+	pub fn access<'a, AT: DescriptorAccess<'a, C>>(&self, descriptors: &'a AT) -> AT::AccessType {
 		descriptors.access(self)
+	}
+
+	#[inline]
+	pub fn access_mut<'a, AT: DescriptorAccessMut<'a, C>>(&self, descriptors: &'a mut AT) -> AT::AccessTypeMut {
+		descriptors.access_mut(self)
 	}
 }

@@ -1,10 +1,10 @@
 pub mod bindless;
+pub mod boxed;
 pub mod buffer_metadata_cpu;
 pub mod buffer_table;
 pub mod descriptor_content;
 pub mod descriptor_counts;
 pub mod image_table;
-pub mod mutable;
 pub mod rc;
 pub mod sampler_table;
 

@@ -1,14 +1,14 @@
 use crate::backing::range_set::DescriptorIndexIterator;
 use crate::backing::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
+use crate::descriptor::boxed::{BoxDesc, BoxDescExt};
 use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::mutable::{MutDesc, MutDescExt};
-use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescriptorCounts};
+use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts};
 use crate::platform::BindlessPlatform;
 use parking_lot::Mutex;
 use rust_gpu_bindless_shaders::buffer_content::Metadata;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
-use rust_gpu_bindless_shaders::descriptor::Buffer;
+use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use std::mem::size_of;
@@ -27,6 +27,25 @@ impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P> {
 		unsafe { P::reinterpet_ref_buffer(&slot.buffer) }
 	}
+}
+
+// TODO should this be deduplicated by moving some methods to BufferTable?
+impl<T: BufferContent + ?Sized> DescContentCpu for MutBuffer<T> {
+	type DescTable<P: BindlessPlatform> = BufferTable<P>;
+	type VulkanType<P: BindlessPlatform> = P::TypedBuffer<T::Transfer>;
+	type Slot<P: BindlessPlatform> = BufferSlot<P>;
+
+	fn get_slot<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::Slot<P> {
+		&slot.try_deref::<BufferInterface<P>>().unwrap()
+	}
+
+	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P> {
+		unsafe { P::reinterpet_ref_buffer(&slot.buffer) }
+	}
+}
+
+impl<T: BufferContent + ?Sized> DescContentMutCpu for MutBuffer<T> {
+	type Shared = Buffer<T>;
 }
 
 impl<P: BindlessPlatform> DescTable for BufferTable<P> {}
@@ -138,9 +157,9 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	/// table. You may not access or drop it afterward, except by going though the returned `RCDesc`.
 	/// The generic T must match the contents of the Buffer and the size of the buffer must not be smaller than T.
 	#[inline]
-	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(&self, buffer: BufferSlot<P>) -> MutDesc<P, Buffer<T>> {
+	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(&self, buffer: BufferSlot<P>) -> BoxDesc<P, MutBuffer<T>> {
 		unsafe {
-			MutDesc::new(
+			BoxDesc::new(
 				self.table
 					.alloc_slot(buffer)
 					.map_err(|a| format!("BufferTable: {}", a))
@@ -156,7 +175,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	pub fn alloc_sized<T: BufferStruct>(
 		&self,
 		create_info: &BindlessBufferCreateInfo,
-	) -> Result<MutDesc<P, Buffer<T>>, P::AllocationError> {
+	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
 		unsafe {
 			let size = size_of::<T::Transfer>() as u64;
 			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
@@ -175,7 +194,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		len: usize,
-	) -> Result<MutDesc<P, Buffer<[T]>>, P::AllocationError> {
+	) -> Result<BoxDesc<P, MutBuffer<[T]>>, P::AllocationError> {
 		unsafe {
 			let size = size_of::<T::Transfer>() as u64 * len as u64;
 			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
@@ -194,9 +213,9 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		data: T,
-	) -> Result<MutDesc<P, Buffer<T>>, P::AllocationError> {
+	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
 		let mut buffer = self.alloc_sized(create_info)?;
-		buffer.mapped().write_data(data);
+		unsafe { buffer.mapped().write_data(data) };
 		Ok(buffer)
 	}
 
@@ -204,24 +223,28 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		iter: I,
-	) -> Result<MutDesc<P, Buffer<[T]>>, P::AllocationError>
+	) -> Result<BoxDesc<P, MutBuffer<[T]>>, P::AllocationError>
 	where
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
 	{
 		let iter = iter.into_iter();
 		let mut buffer = self.alloc_slice(create_info, iter.len())?;
-		buffer.mapped().overwrite_from_iter_exact(iter);
+		unsafe { buffer.mapped().overwrite_from_iter_exact(iter) };
 		Ok(buffer)
 	}
 }
 
 pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
-	fn mapped(&mut self) -> MappedBuffer<P, T>;
+	/// Map and access the buffer's contents on the host
+	///
+	/// # Safety
+	/// Buffer must not be in use simultaneously by the Device
+	unsafe fn mapped(&mut self) -> MappedBuffer<P, T>;
 }
 
-impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for MutDesc<P, Buffer<T>> {
-	fn mapped(&mut self) -> MappedBuffer<P, T> {
+impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for BoxDesc<P, MutBuffer<T>> {
+	unsafe fn mapped(&mut self) -> MappedBuffer<P, T> {
 		MappedBuffer {
 			table_sync: self.rc_slot().table_sync_arc(),
 			slot: self.inner_slot(),

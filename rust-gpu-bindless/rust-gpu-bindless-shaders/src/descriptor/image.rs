@@ -14,5 +14,4 @@ impl<
 		const COMPONENTS: u32,
 	> DescContent for Image<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, FORMAT, COMPONENTS>
 {
-	type AccessType<'a> = &'a Self;
 }

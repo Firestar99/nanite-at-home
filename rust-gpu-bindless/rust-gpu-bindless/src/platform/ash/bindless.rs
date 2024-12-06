@@ -1,6 +1,6 @@
 use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
 use crate::backing::table::DrainFlushQueue;
-use crate::descriptor::mutable::MutDesc;
+use crate::descriptor::boxed::BoxDesc;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,
 	BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface, SamplerTableAccess,
@@ -21,7 +21,7 @@ use gpu_allocator::{AllocationError, MemoryLocation};
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
-	BindlessPushConstant, Buffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
+	BindlessPushConstant, MutBuffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
 use std::cell::UnsafeCell;
 use std::error::Error;
@@ -479,7 +479,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 		allocation_scheme: BindlessAllocationScheme,
 		len: usize,
 		name: &str,
-	) -> Result<MutDesc<Ash, Buffer<T>>, AshAllocationError> {
+	) -> Result<BoxDesc<Ash, MutBuffer<T>>, AshAllocationError> {
 		unsafe {
 			let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
 			let requirements = self.0.device.get_buffer_memory_requirements(buffer);

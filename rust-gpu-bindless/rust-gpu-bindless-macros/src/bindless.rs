@@ -162,6 +162,7 @@ struct SymDescriptors {
 fn gen_bindless_descriptors(context: &mut BindlessContext) -> Result<SymDescriptors> {
 	let crate_shaders = &context.symbols.crate_shaders()?;
 	let buffers = format_ident!("__bindless_buffers");
+	let buffers_mut = format_ident!("__bindless_buffers_mut");
 	let samplers = format_ident!("__bindless_samplers");
 	let descriptors = format_ident!("__bindless_descriptors");
 
@@ -190,12 +191,14 @@ fn gen_bindless_descriptors(context: &mut BindlessContext) -> Result<SymDescript
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
 	context.entry_args.append_tokens(quote! {
 			#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders::spirv_std::TypedBuffer<[u32]>>,
+			#[spirv(descriptor_set = 0, binding = 0, storage_buffer)] #buffers_mut: &mut #crate_shaders::spirv_std::RuntimeArray<#crate_shaders::spirv_std::TypedBuffer<[u32]>>,
 			#image_args
 			#[spirv(descriptor_set = 0, binding = 3)] #samplers: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders::descriptor::Sampler>,
 		});
 	context.entry_content.append_tokens(quote! {
 		let #descriptors = #crate_shaders::descriptor::Descriptors {
 			buffers: #buffers,
+			buffers_mut: #buffers_mut,
 			#image_values
 			samplers: #samplers,
 			meta: #crate_shaders::buffer_content::Metadata {},

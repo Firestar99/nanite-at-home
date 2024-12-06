@@ -157,7 +157,7 @@ pub fn meshlet_fragment_g_buffer(
 	);
 	let mut sampled = mesh
 		.pbr_material
-		.sample(descriptors, *param.sampler.access(descriptors), loc);
+		.sample(descriptors, param.sampler.access(descriptors), loc);
 	match frame_data.debug_settings() {
 		DebugSettings::VertexNormals => sampled.normal = loc.vertex_normal.normalize(),
 		_ => (),
