@@ -1,7 +1,9 @@
 use crate::backing::table::RcTableSlot;
 use crate::descriptor::{Desc, DescContentCpu, DescContentMutCpu, RCDesc, RCDescExt};
 use crate::platform::BindlessPlatform;
-use rust_gpu_bindless_shaders::descriptor::{DerefDescRef, DescRef, DescriptorId, MutDescRef};
+use rust_gpu_bindless_shaders::descriptor::{
+	DerefDescRef, DescRef, DescriptorId, MutDescRef, TransientAccess, TransientDesc,
+};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -66,6 +68,16 @@ pub trait BoxDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	#[inline]
 	fn id(&self) -> DescriptorId {
 		self.rc_slot().id()
+	}
+
+	/// Create a [`TransientDesc`] pointing to the contents of this [`BoxDesc`].
+	///
+	/// # Safety
+	/// Buffer must not be in use simultaneously by the Device
+	#[inline]
+	unsafe fn to_transient_unchecked<'a>(&self, access: &impl TransientAccess<'a>) -> TransientDesc<'a, C> {
+		// Safety: C does not change, this BoxDesc existing ensures the descriptor will stay alive for this frame
+		unsafe { TransientDesc::new(self.id(), access) }
 	}
 }
 

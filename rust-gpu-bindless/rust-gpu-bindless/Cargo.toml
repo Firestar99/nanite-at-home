@@ -38,3 +38,4 @@ crossbeam-utils = { workspace = true }
 rangemap = { workspace = true }
 bitflags = { workspace = true }
 anyhow = { workspace = true }
+thiserror = { workspace = true }

@@ -169,23 +169,23 @@ fn gen_bindless_descriptors(context: &mut BindlessContext) -> Result<SymDescript
 	let image_args;
 	let image_values;
 	macro_rules! make_image_args {
-			(
-				{$($storage_name:ident: $storage_ty:ty,)*}
-				{$($sampled_name:ident: $sampled_ty:ty,)*}
-			) => {
-				$(let $storage_name = format_ident!("__bindless_{}", stringify!($storage_name));)*
-				$(let $sampled_name = format_ident!("__bindless_{}", stringify!($sampled_name));)*
+		(
+			{$($storage_name:ident: $storage_ty:ty,)*}
+			{$($sampled_name:ident: $sampled_ty:ty,)*}
+		) => {
+			$(let $storage_name = format_ident!("__bindless_{}", stringify!($storage_name));)*
+			$(let $sampled_name = format_ident!("__bindless_{}", stringify!($sampled_name));)*
 
-				image_args = quote! {
-					$(#[spirv(descriptor_set = 0, binding = 1)] #$storage_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$storage_ty>,)*
-					$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$sampled_ty>,)*
-				};
-				image_values = quote! {
-					$($storage_name: #$storage_name,)*
-					$($sampled_name: #$sampled_name,)*
-				};
+			image_args = quote! {
+				$(#[spirv(descriptor_set = 0, binding = 1)] #$storage_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$storage_ty>,)*
+				$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$sampled_ty>,)*
 			};
-		}
+			image_values = quote! {
+				$($storage_name: #$storage_name,)*
+				$($sampled_name: #$sampled_name,)*
+			};
+		};
+	}
 	standard_image_types!(make_image_args);
 
 	// these "plain" spirv here are correct, as they are non-macro attributes to function arguments, not proc macros!
@@ -227,7 +227,7 @@ fn gen_bindless_inner_call(
 
 	if let Some(arg) = arg_descriptors {
 		let descriptors = &descriptors.descriptors;
-		params.append_tokens(quote!(&#descriptors,));
+		params.append_tokens(quote!(#descriptors,));
 		args.append_tokens(strip_attr(arg));
 	}
 	if let Some(arg) = arg_param {

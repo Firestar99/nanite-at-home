@@ -11,14 +11,7 @@ use spirv_std::{RuntimeArray, Sampler, TypedBuffer};
 pub trait DescriptorAccess<'a, C: DescContent + ?Sized> {
 	type AccessType: 'a;
 
-	fn access(&'a self, desc: &Desc<impl AliveDescRef, C>) -> Self::AccessType;
-}
-
-/// Some struct that facilitates access to a [`AliveDescRef`] pointing to some [`DescContent`]
-pub trait DescriptorAccessMut<'a, C: DescContent + ?Sized> {
-	type AccessTypeMut: 'a;
-
-	fn access_mut(&'a mut self, desc: &Desc<impl AliveDescRef, C>) -> Self::AccessTypeMut;
+	fn access(self, desc: &Desc<impl AliveDescRef, C>) -> Self::AccessType;
 }
 
 macro_rules! decl_descriptors {
@@ -35,19 +28,19 @@ macro_rules! decl_descriptors {
 			pub meta: Metadata,
 		}
 		$(
-			impl<'a> DescriptorAccess<'a, $storage_ty> for Descriptors<'a> {
+			impl<'a> DescriptorAccess<'a, $storage_ty> for &'a Descriptors<'_> {
 				type AccessType = &'a $storage_ty;
 
-				fn access(&'a self, desc: &Desc<impl AliveDescRef, $storage_ty>) -> Self::AccessType {
+				fn access(self, desc: &Desc<impl AliveDescRef, $storage_ty>) -> Self::AccessType {
 					unsafe { self.$storage_name.index(desc.id().index().to_usize()) }
 				}
 			}
 		)*
 		$(
-			impl<'a> DescriptorAccess<'a, $sampled_ty> for Descriptors<'a> {
+			impl<'a> DescriptorAccess<'a, $sampled_ty> for &'a Descriptors<'_> {
 				type AccessType = &'a $sampled_ty;
 
-				fn access(&'a self, desc: &Desc<impl AliveDescRef, $sampled_ty>) -> Self::AccessType {
+				fn access(self, desc: &Desc<impl AliveDescRef, $sampled_ty>) -> Self::AccessType {
 					unsafe { self.$sampled_name.index(desc.id().index().to_usize()) }
 				}
 			}
@@ -56,26 +49,26 @@ macro_rules! decl_descriptors {
 }
 standard_image_types!(decl_descriptors);
 
-impl<'a, T: ?Sized + BufferContent + 'static> DescriptorAccess<'a, Buffer<T>> for Descriptors<'a> {
+impl<'a, T: ?Sized + BufferContent + 'static> DescriptorAccess<'a, Buffer<T>> for &'a Descriptors<'_> {
 	type AccessType = BufferSlice<'a, T>;
 
-	fn access(&'a self, desc: &Desc<impl AliveDescRef, Buffer<T>>) -> Self::AccessType {
+	fn access(self, desc: &Desc<impl AliveDescRef, Buffer<T>>) -> Self::AccessType {
 		unsafe { BufferSlice::from_slice(self.buffers.index(desc.id().index().to_usize()), self.meta) }
 	}
 }
 
-impl<'a, T: ?Sized + BufferContent + 'static> DescriptorAccessMut<'a, MutBuffer<T>> for Descriptors<'a> {
-	type AccessTypeMut = MutBufferSlice<'a, T>;
+impl<'a, T: ?Sized + BufferContent + 'static> DescriptorAccess<'a, MutBuffer<T>> for &'a mut Descriptors<'_> {
+	type AccessType = MutBufferSlice<'a, T>;
 
-	fn access_mut(&'a mut self, desc: &Desc<impl AliveDescRef, MutBuffer<T>>) -> Self::AccessTypeMut {
+	fn access(self, desc: &Desc<impl AliveDescRef, MutBuffer<T>>) -> Self::AccessType {
 		unsafe { MutBufferSlice::from_mut_slice(self.buffers_mut.index_mut(desc.id().index().to_usize()), self.meta) }
 	}
 }
 
-impl<'a> DescriptorAccess<'a, Sampler> for Descriptors<'a> {
+impl<'a> DescriptorAccess<'a, Sampler> for &'a Descriptors<'_> {
 	type AccessType = Sampler;
 
-	fn access(&'a self, desc: &Desc<impl AliveDescRef, Sampler>) -> Self::AccessType {
+	fn access(self, desc: &Desc<impl AliveDescRef, Sampler>) -> Self::AccessType {
 		unsafe { *self.samplers.index(desc.id().index().to_usize()) }
 	}
 }

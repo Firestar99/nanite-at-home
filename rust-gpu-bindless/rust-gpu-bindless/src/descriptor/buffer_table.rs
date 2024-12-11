@@ -6,6 +6,7 @@ use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts};
 use crate::platform::BindlessPlatform;
 use parking_lot::Mutex;
+use presser::Slab;
 use rust_gpu_bindless_shaders::buffer_content::Metadata;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
@@ -14,6 +15,7 @@ use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
+use thiserror::Error;
 
 impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	type DescTable<P: BindlessPlatform> = BufferTable<P>;
@@ -135,7 +137,7 @@ bitflags::bitflags! {
 }
 
 impl BindlessBufferUsage {
-	pub fn is_mapped(&self) -> bool {
+	pub fn is_mappable(&self) -> bool {
 		self.contains(BindlessBufferUsage::MAP_READ) || self.contains(BindlessBufferUsage::MAP_WRITE)
 	}
 }
@@ -215,7 +217,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		data: T,
 	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
 		let mut buffer = self.alloc_sized(create_info)?;
-		unsafe { buffer.mapped().write_data(data) };
+		unsafe { buffer.mapped().unwrap().write_data(data) };
 		Ok(buffer)
 	}
 
@@ -230,7 +232,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	{
 		let iter = iter.into_iter();
 		let mut buffer = self.alloc_slice(create_info, iter.len())?;
-		unsafe { buffer.mapped().overwrite_from_iter_exact(iter) };
+		unsafe { buffer.mapped().unwrap().overwrite_from_iter_exact(iter) };
 		Ok(buffer)
 	}
 }
@@ -240,17 +242,28 @@ pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
 	///
 	/// # Safety
 	/// Buffer must not be in use simultaneously by the Device
-	unsafe fn mapped(&mut self) -> MappedBuffer<P, T>;
+	unsafe fn mapped(&mut self) -> Result<MappedBuffer<P, T>, MapError>;
 }
 
 impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for BoxDesc<P, MutBuffer<T>> {
-	unsafe fn mapped(&mut self) -> MappedBuffer<P, T> {
-		MappedBuffer {
-			table_sync: self.rc_slot().table_sync_arc(),
-			slot: self.inner_slot(),
-			_phantom: PhantomData,
+	unsafe fn mapped(&mut self) -> Result<MappedBuffer<P, T>, MapError> {
+		let slot = self.inner_slot();
+		if slot.usage.is_mappable() {
+			Ok(MappedBuffer {
+				table_sync: self.rc_slot().table_sync_arc(),
+				slot,
+				_phantom: PhantomData,
+			})
+		} else {
+			Err(MapError::BufferNotMappable)
 		}
 	}
+}
+
+#[derive(Debug, Error)]
+pub enum MapError {
+	#[error("Buffer is not mappable, BufferUsage is missing `MAP_WRITE` or `MAP_READ` flags")]
+	BufferNotMappable,
 }
 
 pub struct MappedBuffer<'a, P: BindlessPlatform, T: BufferContent + ?Sized> {
@@ -279,6 +292,16 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, T> {
 			let record = presser::copy_from_slice_to_offset(&[T::write_cpu(t, &mut meta)], slab, 0).unwrap();
 			assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
 			*self.slot.strong_refs.lock() = meta.into_backing_refs();
+		}
+	}
+
+	pub fn read_data(&mut self) -> T {
+		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
+		// TODO mapped buffers are initialized (not yet)
+		unsafe {
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[0];
+			T::read(t, Metadata {})
 		}
 	}
 }
@@ -341,6 +364,16 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 			.unwrap();
 			assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
 			self.slot.strong_refs.lock().merge(meta.into_backing_refs());
+		}
+	}
+
+	pub fn read_offset(&mut self, index: usize) -> T {
+		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
+		// TODO mapped buffers are initialized (not yet)
+		unsafe {
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[index];
+			T::read(t, Metadata {})
 		}
 	}
 }

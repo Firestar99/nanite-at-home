@@ -21,7 +21,7 @@ pub const LIGHTING_WG_SIZE: u32 = 64;
 const_assert_eq!(LIGHTING_WG_SIZE, 64);
 #[bindless(compute(threads(64)))]
 pub fn lighting_cs(
-	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(descriptors)] descriptors: Descriptors,
 	#[bindless(param)] param: &Param<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 1)] g_normal: &Image2d,
@@ -46,7 +46,7 @@ pub fn lighting_cs(
 
 #[allow(clippy::too_many_arguments, clippy::useless_conversion)]
 fn lighting_inner(
-	descriptors: &Descriptors,
+	descriptors: Descriptors,
 	param: &Param<'static>,
 	g_albedo: &Image2d,
 	g_normal: &Image2d,
@@ -56,7 +56,7 @@ fn lighting_inner(
 	wg_id: UVec3,
 	inv_id: UVec3,
 ) {
-	let frame_data = param.frame_data.access(descriptors).load();
+	let frame_data = param.frame_data.access(&descriptors).load();
 	let size: UVec2 = frame_data.viewport_size;
 	let pixel_wg_start = wg_id.xy() * uvec2(64, 1);
 	let pixel = pixel_wg_start + uvec2(inv_id.x, 0);

@@ -38,7 +38,7 @@ const_assert_eq!(MESHLET_MAX_VERTICES, 64);
 const_assert_eq!(MESHLET_MAX_TRIANGLES, 124);
 #[bindless(mesh_ext(threads(32), output_vertices = 64, output_primitives_ext = 124, output_triangles_ext))]
 pub fn meshlet_mesh(
-	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(descriptors)] descriptors: Descriptors,
 	#[bindless(param)] param: &Param<'static>,
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 0)] out_meshlet_instances_buffer: &[u32],
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 1)]
@@ -54,8 +54,8 @@ pub fn meshlet_mesh(
 	let meshlet_instance_id = wg_id.x;
 	let inv_id = inv_id.x as usize;
 
-	let frame_data = param.frame_data.access(descriptors).load();
-	let scene = param.scene.access(descriptors).load();
+	let frame_data = param.frame_data.access(&descriptors).load();
+	let scene = param.scene.access(&descriptors).load();
 	let meshlet_instance = unsafe {
 		AllocationBufferReader::<MeshletInstance>::new(
 			out_meshlet_instances_buffer,
@@ -65,10 +65,13 @@ pub fn meshlet_mesh(
 	};
 	let instance = scene
 		.instances
-		.access(descriptors)
+		.access(&descriptors)
 		.load(meshlet_instance.instance_id as usize);
-	let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(meshlet_instance.mesh_id as usize);
-	let meshlet = mesh.meshlet(descriptors, meshlet_instance.meshlet_id as usize);
+	let mesh: MeshletMesh<Strong> = scene
+		.meshes
+		.access(&descriptors)
+		.load(meshlet_instance.mesh_id as usize);
+	let meshlet = mesh.meshlet(&descriptors, meshlet_instance.meshlet_id as usize);
 
 	let vertex_count = meshlet.vertices();
 	let triangle_count = meshlet.triangles();
@@ -84,11 +87,11 @@ pub fn meshlet_mesh(
 			let inbounds = i < vertex_count;
 			let i = if inbounds { i } else { vertex_count - 1 };
 
-			let draw_vertex = meshlet.load_draw_vertex(descriptors, i);
+			let draw_vertex = meshlet.load_draw_vertex(&descriptors, i);
 			let position = frame_data
 				.camera
 				.transform_vertex(instance.transform, draw_vertex.position);
-			let pbr_vertex = meshlet.load_pbr_material_vertex(descriptors, draw_vertex.material_vertex_id);
+			let pbr_vertex = meshlet.load_pbr_material_vertex(&descriptors, draw_vertex.material_vertex_id);
 			let vertex = InterpolationVertex {
 				world_pos: position.world_space,
 				normal: pbr_vertex.normal,
@@ -112,7 +115,7 @@ pub fn meshlet_mesh(
 			let inbounds = i < triangle_count;
 			let i = if inbounds { i } else { triangle_count - 1 };
 
-			let indices = meshlet.load_triangle(descriptors, i);
+			let indices = meshlet.load_triangle(&descriptors, i);
 			let debug_hue = debug_hue(frame_data, meshlet_instance.meshlet_id, i as u32);
 
 			if i < triangle_count {
@@ -136,7 +139,7 @@ fn debug_hue(frame_data: FrameData, meshlet_id: u32, primitive_id: u32) -> f32 {
 
 #[bindless(fragment())]
 pub fn meshlet_fragment_g_buffer(
-	#[bindless(descriptors)] descriptors: &Descriptors,
+	#[bindless(descriptors)] descriptors: Descriptors,
 	#[bindless(param)] param: &Param<'static>,
 	#[spirv(per_primitive_ext)] out_debug_hue: f32,
 	#[spirv(flat)] out_mesh_id: u32,
@@ -145,9 +148,9 @@ pub fn meshlet_fragment_g_buffer(
 	frag_normal: &mut Vec4,
 	frag_roughness_metallic: &mut Vec4,
 ) {
-	let scene = param.scene.access(descriptors).load();
-	let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(out_mesh_id as usize);
-	let frame_data = param.frame_data.access(descriptors).load();
+	let scene = param.scene.access(&descriptors).load();
+	let mesh: MeshletMesh<Strong> = scene.meshes.access(&descriptors).load(out_mesh_id as usize);
+	let frame_data = param.frame_data.access(&descriptors).load();
 	let loc = SurfaceLocation::new(
 		out_vertex.world_pos,
 		frame_data.camera.transform.translation(),
@@ -157,7 +160,7 @@ pub fn meshlet_fragment_g_buffer(
 	);
 	let mut sampled = mesh
 		.pbr_material
-		.sample(descriptors, param.sampler.access(descriptors), loc);
+		.sample(&descriptors, param.sampler.access(&descriptors), loc);
 	match frame_data.debug_settings() {
 		DebugSettings::VertexNormals => sampled.normal = loc.vertex_normal.normalize(),
 		_ => (),
