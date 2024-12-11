@@ -10,4 +10,4 @@ extern crate core;
 #[cfg(not(target_arch = "spirv"))]
 extern crate std;
 
-pub mod add_single;
+pub mod simple_compute;

@@ -5,7 +5,8 @@ use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, MutBuffer, Tran
 pub struct Param<'a> {
 	pub a: TransientDesc<'a, Buffer<u32>>,
 	pub b: TransientDesc<'a, Buffer<u32>>,
-	pub c: TransientDesc<'a, MutBuffer<u32>>,
+	pub c: u32,
+	pub out: TransientDesc<'a, MutBuffer<u32>>,
 }
 
 // wg of 1 is silly slow but doesn't matter
@@ -16,12 +17,13 @@ pub fn add_compute(
 ) {
 	let a = param.a.access(&descriptors).load();
 	let b = param.b.access(&descriptors).load();
-	let c = add_calculation(a, b);
+	let c = param.c;
+	let result = add_calculation(a, b, c);
 	unsafe {
-		param.c.access(&mut descriptors).store(c);
+		param.out.access(&mut descriptors).store(result);
 	}
 }
 
-pub fn add_calculation(a: u32, b: u32) -> u32 {
-	a + b
+pub fn add_calculation(a: u32, b: u32, c: u32) -> u32 {
+	a * b + c
 }
