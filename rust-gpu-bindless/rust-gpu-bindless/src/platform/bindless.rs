@@ -7,7 +7,7 @@ use crate::platform::Platform;
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Platform {
-	type BindlessDescriptorSet: 'static;
+	type BindlessDescriptorSet: 'static + Send + Sync;
 
 	/// Create an [`Self::Platform`] from the supplied [`Self::PlatformCreateInfo`]. Typically, [`Self::PlatformCreateInfo`] wrap the
 	/// implementation's instance, device and other objects required to be initialized by the end user.

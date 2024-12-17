@@ -10,20 +10,20 @@ use std::sync::Arc;
 
 /// Internal interface for pipeline module related API calls, may change at any time!
 pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
-	type PipelineCreationError: 'static + Error;
-	type ComputePipeline: 'static;
-	type TraditionalGraphicsPipeline: 'static;
-	type MeshGraphicsPipeline: 'static;
+	type PipelineCreationError: 'static + Error + Send + Sync;
+	type ComputePipeline: 'static + Send + Sync;
+	type TraditionalGraphicsPipeline: 'static + Send + Sync;
+	type MeshGraphicsPipeline: 'static + Send + Sync;
 	type RecordingContext<'a>: RecordingCommandBuffer<'a, Self>;
-	type RecordingError: 'static + Error;
-	type ExecutingContext<R>: ExecutingCommandBuffer<Self, R>;
+	type RecordingError: 'static + Error + Send + Sync;
+	type ExecutingContext<R: Send + Sync>: ExecutingCommandBuffer<Self, R> + Send + Sync;
 
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
 		bindless: &Arc<Bindless<Self>>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
 	) -> Result<Self::ComputePipeline, Self::PipelineCreationError>;
 
-	unsafe fn record_and_execute<R>(
+	unsafe fn record_and_execute<R: Send + Sync>(
 		bindless: &Arc<Bindless<Self>>,
 		f: impl FnOnce(&mut Self::RecordingContext<'_>) -> Result<R, Self::RecordingError>,
 	) -> Result<Self::ExecutingContext<R>, Self::RecordingError>;

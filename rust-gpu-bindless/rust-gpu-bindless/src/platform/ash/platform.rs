@@ -57,7 +57,7 @@ unsafe impl Platform for Ash {
 	/// # Safety
 	/// UnsafeCell: Required to gain mutable access where it is safe to do so, see safety of interface methods.
 	/// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after running destroy.
-	type MemoryAllocation = UnsafeCell<MaybeUninit<Allocation>>;
+	type MemoryAllocation = AshMemoryAllocation;
 	type Buffer = ash::vk::Buffer;
 	type TypedBuffer<T: Send + Sync + ?Sized> = Self::Buffer;
 	type Image = ash::vk::Image;
@@ -65,6 +65,41 @@ unsafe impl Platform for Ash {
 	type Sampler = ash::vk::Sampler;
 	type AllocationError = AshAllocationError;
 }
+
+/// Wraps gpu-allocator's MemoryAllocation to be able to [`Option::take`] it on drop, but saving the enum flag byte
+/// with [`MaybeUninit`]
+#[derive(Debug)]
+pub struct AshMemoryAllocation(UnsafeCell<MaybeUninit<Allocation>>);
+
+impl AshMemoryAllocation {
+	/// Create a AshMemoryAllocation from a gpu-allocator Allocation
+	///
+	/// # Safety
+	/// You must [`Self::take`] the Allocation and deallocate manually before dropping self
+	pub unsafe fn new(allocation: Allocation) -> Self {
+		Self(UnsafeCell::new(MaybeUninit::new(allocation)))
+	}
+
+	/// Get exclusive mutable access to the Allocation
+	///
+	/// # Safety
+	/// You must ensure you have exclusive mutable access to the Allocation
+	pub unsafe fn get_mut(&self) -> &mut Allocation {
+		unsafe { (&mut *self.0.get()).assume_init_mut() }
+	}
+
+	/// Take the allocation
+	///
+	/// # Safety
+	/// Once the allocation was taken, you must only drop self, any other action is unsafe
+	pub unsafe fn take(&self) -> Allocation {
+		unsafe { (&mut *self.0.get()).assume_init_read() }
+	}
+}
+
+/// Safety: MemoryAllocation is safety Send and Sync, will only uninit on drop
+unsafe impl Send for AshMemoryAllocation {}
+unsafe impl Sync for AshMemoryAllocation {}
 
 pub struct AshCreateInfo {
 	pub entry: ash::Entry,

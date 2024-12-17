@@ -113,7 +113,7 @@ impl<P: BindlessPlatform> Bindless<P> {
 }
 
 impl<P: BindlessPipelinePlatform> Bindless<P> {
-	pub fn execute<R>(
+	pub fn execute<R: Send + Sync>(
 		self: &Arc<Self>,
 		f: impl FnOnce(&mut P::RecordingContext<'_>) -> Result<R, P::RecordingError>,
 	) -> Result<P::ExecutingContext<R>, P::RecordingError> {

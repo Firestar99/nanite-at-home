@@ -16,7 +16,7 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	type MeshGraphicsPipeline = ash::vk::Pipeline;
 	type RecordingContext<'a> = AshRecordingContext<'a>;
 	type RecordingError = ash::vk::Result;
-	type ExecutingContext<R> = AshExecutingContext<R>;
+	type ExecutingContext<R: Send + Sync> = AshExecutingContext<R>;
 
 	// FIXME compute pipelines are never destroyed!
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
@@ -47,7 +47,7 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		Ok(pipelines[0])
 	}
 
-	unsafe fn record_and_execute<R>(
+	unsafe fn record_and_execute<R: Send + Sync>(
 		bindless: &Arc<Bindless<Self>>,
 		f: impl FnOnce(&mut Self::RecordingContext<'_>) -> Result<R, Self::RecordingError>,
 	) -> Result<Self::ExecutingContext<R>, Self::RecordingError> {

@@ -5,7 +5,7 @@ use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,
 	BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface, SamplerTableAccess,
 };
-use crate::platform::ash::Ash;
+use crate::platform::ash::{Ash, AshMemoryAllocation};
 use crate::platform::BindlessPlatform;
 use ash::prelude::VkResult;
 use ash::vk::{
@@ -23,10 +23,9 @@ use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
 	BindlessPushConstant, MutBuffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
-use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::mem::{size_of, MaybeUninit};
+use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::Weak;
 
@@ -294,13 +293,13 @@ unsafe impl BindlessPlatform for Ash {
 		})?;
 		self.device
 			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
-		Ok((buffer, UnsafeCell::new(MaybeUninit::new(memory_allocation))))
+		Ok((buffer, AshMemoryAllocation::new(memory_allocation)))
 	}
 
 	unsafe fn memory_allocation_to_slab<'a>(
 		memory_allocation: &'a Self::MemoryAllocation,
 	) -> &'a mut (impl presser::Slab + 'a) {
-		unsafe { &mut *memory_allocation.get() }.assume_init_mut()
+		memory_allocation.get_mut()
 	}
 
 	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T> {
@@ -317,7 +316,7 @@ unsafe impl BindlessPlatform for Ash {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
-			let allocation = unsafe { &mut *buffer.memory_allocation.get() }.assume_init_read();
+			let allocation = buffer.memory_allocation.take();
 			allocator.free(allocation).unwrap();
 			self.device.destroy_buffer(buffer.buffer, None);
 		}
@@ -333,7 +332,7 @@ unsafe impl BindlessPlatform for Ash {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
-			let allocation = unsafe { &mut *image.memory_allocation.get() }.assume_init_read();
+			let allocation = image.memory_allocation.take();
 			allocator.free(allocation).unwrap();
 			self.device.destroy_image_view(image.imageview, None);
 			self.device.destroy_image(image.image, None);
@@ -498,7 +497,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				len,
 				size: ash_create_info.size,
 				usage,
-				memory_allocation: UnsafeCell::new(MaybeUninit::new(memory_allocation)),
+				memory_allocation: AshMemoryAllocation::new(memory_allocation),
 				strong_refs: Default::default(),
 			}))
 		}
