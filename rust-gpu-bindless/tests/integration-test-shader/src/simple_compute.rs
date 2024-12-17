@@ -26,13 +26,13 @@ pub fn add_compute(
 		let a = param.a;
 
 		let index = wg_id.x as usize;
-		let b = param.b.access(&descriptors).load_unchecked(index);
+		let b = param.b.access(&descriptors).load(index);
 
 		let indirection = param.indirection.access(&descriptors).load();
 		let c = indirection.c.access(&descriptors).load();
 
 		let result = add_calculation(a, b, c);
-		param.out.access(&mut descriptors).store_unchecked(index, result);
+		param.out.access(&mut descriptors).store(index, result);
 	}
 }
 
