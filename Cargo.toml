@@ -121,6 +121,7 @@ anyhow = "1.0"
 num_enum = { version = "0.7.2", default-features = false }
 bitflags = "2.6.0"
 thiserror = "2.0.6"
+approx = "0.5.1"
 
 [patch.crates-io]
 glam = { git = "https://github.com/Firestar99/glam-rs.git", rev = "27649a451790a3fc8a34f021937ea3fcb45b5ff5" }

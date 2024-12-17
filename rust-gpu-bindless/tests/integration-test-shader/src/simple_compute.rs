@@ -1,12 +1,18 @@
+use glam::UVec3;
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
-use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, MutBuffer, TransientDesc};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, MutBuffer, StrongDesc, TransientDesc};
+
+#[derive(Copy, Clone, BufferStruct)]
+pub struct Indirection {
+	pub c: StrongDesc<Buffer<f32>>,
+}
 
 #[derive(Copy, Clone, BufferStruct)]
 pub struct Param<'a> {
-	pub a: TransientDesc<'a, Buffer<u32>>,
-	pub b: TransientDesc<'a, Buffer<u32>>,
-	pub c: u32,
-	pub out: TransientDesc<'a, MutBuffer<u32>>,
+	pub a: f32,
+	pub b: TransientDesc<'a, Buffer<[f32]>>,
+	pub indirection: TransientDesc<'a, Buffer<Indirection>>,
+	pub out: TransientDesc<'a, MutBuffer<[f32]>>,
 }
 
 // wg of 1 is silly slow but doesn't matter
@@ -14,16 +20,22 @@ pub struct Param<'a> {
 pub fn add_compute(
 	#[bindless(descriptors)] mut descriptors: Descriptors<'_>,
 	#[bindless(param)] param: &Param<'static>,
+	#[spirv(workgroup_id)] wg_id: UVec3,
 ) {
-	let a = param.a.access(&descriptors).load();
-	let b = param.b.access(&descriptors).load();
-	let c = param.c;
-	let result = add_calculation(a, b, c);
 	unsafe {
-		param.out.access(&mut descriptors).store(result);
+		let a = param.a;
+
+		let index = wg_id.x as usize;
+		let b = param.b.access(&descriptors).load_unchecked(index);
+
+		let indirection = param.indirection.access(&descriptors).load();
+		let c = indirection.c.access(&descriptors).load();
+
+		let result = add_calculation(a, b, c);
+		param.out.access(&mut descriptors).store_unchecked(index, result);
 	}
 }
 
-pub fn add_calculation(a: u32, b: u32, c: u32) -> u32 {
+pub fn add_calculation(a: f32, b: f32, c: f32) -> f32 {
 	a * b + c
 }

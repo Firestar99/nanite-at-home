@@ -11,6 +11,7 @@ repository.workspace = true
 rust-gpu-bindless = { workspace = true }
 integration-test-shader = { workspace = true }
 anyhow = { workspace = true }
+approx = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }

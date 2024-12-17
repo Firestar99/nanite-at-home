@@ -81,17 +81,16 @@ pub fn ash_init_single_graphics_queue(
 
 			if let Some(validation_feature_ext) = match create_info.debug {
 				Debuggers::Validation => Some(ValidationFeatureEnableEXT::GPU_ASSISTED),
-				Debuggers::DebugPrintf => {
-					// these features may be required for debug printf to work, at least without it's complaining about
-					// them missing, though I've never been able to verify this claim
-					create_info.features_vk12 = create_info
-						.features_vk12
-						.vulkan_memory_model(true)
-						.vulkan_memory_model_device_scope(true);
-					Some(ValidationFeatureEnableEXT::DEBUG_PRINTF)
-				}
+				Debuggers::DebugPrintf => Some(ValidationFeatureEnableEXT::DEBUG_PRINTF),
 				_ => None,
 			} {
+				// these features may be required for anything gpu assisted to work, at least without it's complaining
+				// about them missing
+				create_info.features_vk12 = create_info
+					.features_vk12
+					.vulkan_memory_model(true)
+					.vulkan_memory_model_device_scope(true);
+
 				layers.push(LAYER_VALIDATION.as_ptr());
 				validation_features.extend_from_slice(&[
 					validation_feature_ext,

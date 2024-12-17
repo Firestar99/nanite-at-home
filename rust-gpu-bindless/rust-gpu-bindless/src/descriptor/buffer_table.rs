@@ -366,16 +366,6 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 			self.slot.strong_refs.lock().merge(meta.into_backing_refs());
 		}
 	}
-
-	pub fn read_offset(&mut self, index: usize) -> T {
-		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
-		// TODO mapped buffers are initialized (not yet)
-		unsafe {
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
-			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[index];
-			T::read(t, Metadata {})
-		}
-	}
 }
 
 impl<'a, P: BindlessPlatform, T: BufferStruct + Clone> MappedBuffer<'a, P, [T]> {
@@ -392,6 +382,28 @@ impl<'a, P: BindlessPlatform, T: BufferStruct + Default> MappedBuffer<'a, P, [T]
 	/// [`Default::default`]
 	pub fn overwrite_from_iter_and_fill_default(&mut self, iter: impl Iterator<Item = T>) {
 		self.overwrite_from_iter_and_fill_with(iter, Default::default)
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
+	pub fn read_offset(&mut self, index: usize) -> T {
+		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
+		// TODO mapped buffers are initialized (not yet)
+		unsafe {
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[index];
+			T::read(t, Metadata {})
+		}
+	}
+
+	pub fn read_iter(&mut self) -> impl ExactSizeIterator<Item = T> + '_ {
+		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
+		// TODO mapped buffers are initialized (not yet)
+		unsafe {
+			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes());
+			t.iter().take(self.len()).copied().map(|t| T::read(t, Metadata {}))
+		}
 	}
 }
 
