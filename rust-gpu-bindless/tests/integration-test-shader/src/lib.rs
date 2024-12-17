@@ -10,4 +10,5 @@ extern crate core;
 #[cfg(not(target_arch = "spirv"))]
 extern crate std;
 
+pub mod buffer_barriers;
 pub mod simple_compute;
