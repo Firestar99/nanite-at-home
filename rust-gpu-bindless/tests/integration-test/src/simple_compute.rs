@@ -11,7 +11,7 @@ use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingCommandBuffer, RecordingCommandBuffer};
+use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext, RecordingContext};
 use std::sync::Arc;
 
 #[test]

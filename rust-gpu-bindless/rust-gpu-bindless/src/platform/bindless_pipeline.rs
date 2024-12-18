@@ -14,9 +14,9 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type ComputePipeline: 'static + Send + Sync;
 	type TraditionalGraphicsPipeline: 'static + Send + Sync;
 	type MeshGraphicsPipeline: 'static + Send + Sync;
-	type RecordingContext<'a>: RecordingCommandBuffer<'a, Self>;
+	type RecordingContext<'a>: RecordingContext<'a, Self>;
 	type RecordingError: 'static + Error + Send + Sync;
-	type ExecutingContext<R: Send + Sync>: ExecutingCommandBuffer<Self, R> + Send + Sync;
+	type ExecutingContext<R: Send + Sync>: ExecutingContext<Self, R>;
 
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
 		bindless: &Arc<Bindless<Self>>,
@@ -29,7 +29,7 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	) -> Result<Self::ExecutingContext<R>, Self::RecordingError>;
 }
 
-pub unsafe trait RecordingCommandBuffer<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> {
+pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> {
 	/// Dispatch a bindless compute shader
 	fn dispatch<T: BufferStruct>(
 		&mut self,
@@ -39,7 +39,7 @@ pub unsafe trait RecordingCommandBuffer<'a, P: BindlessPipelinePlatform>: Transi
 	) -> Result<(), P::RecordingError>;
 }
 
-pub unsafe trait ExecutingCommandBuffer<P: BindlessPipelinePlatform, R> {
+pub unsafe trait ExecutingContext<P: BindlessPipelinePlatform, R: Send + Sync>: Send + Sync {
 	/// Stopgap solution to wait for execution to finish
 	fn block_on(self) -> R;
 }

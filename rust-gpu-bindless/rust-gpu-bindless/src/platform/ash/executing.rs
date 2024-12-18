@@ -1,6 +1,6 @@
 use crate::descriptor::Bindless;
 use crate::platform::ash::Ash;
-use crate::platform::ExecutingCommandBuffer;
+use crate::platform::ExecutingContext;
 use ash::vk::{
 	CommandPoolCreateFlags, CommandPoolCreateInfo, CommandPoolResetFlags, FenceCreateInfo, SemaphoreCreateInfo,
 };
@@ -129,7 +129,7 @@ impl<R> Deref for AshExecutingContext<R> {
 	}
 }
 
-unsafe impl<R> ExecutingCommandBuffer<Ash, R> for AshExecutingContext<R> {
+unsafe impl<R: Send + Sync> ExecutingContext<Ash, R> for AshExecutingContext<R> {
 	fn block_on(self) -> R {
 		unsafe {
 			let device = &self.resource.bindless.device;

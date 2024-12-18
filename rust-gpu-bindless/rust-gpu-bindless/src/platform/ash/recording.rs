@@ -5,7 +5,7 @@ use crate::descriptor::{
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
-use crate::platform::{BindlessPipelinePlatform, RecordingCommandBuffer};
+use crate::platform::{BindlessPipelinePlatform, RecordingContext};
 use ash::prelude::VkResult;
 use ash::vk::{
 	CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsageFlags,
@@ -143,7 +143,7 @@ impl<'a> AshRecordingContext<'a> {
 
 unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
-unsafe impl<'a> RecordingCommandBuffer<'a, Ash> for AshRecordingContext<'a> {
+unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 	fn dispatch<T: BufferStruct>(
 		&mut self,
 		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,
