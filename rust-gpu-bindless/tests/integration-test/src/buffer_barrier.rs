@@ -2,11 +2,12 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::buffer_barriers::{CopyParam, COMPUTE_COPY_WG};
-use rust_gpu_bindless::descriptor::boxed::BoxDescExt;
+use rust_gpu_bindless::descriptor::boxed::BoxMutBufferExt;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt,
 };
+use rust_gpu_bindless::pipeline::access_type::{Read, ReadWrite};
 use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
@@ -41,41 +42,43 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 		.buffer()
 		.alloc_from_iter(&buffer_ci("first"), value.iter().copied())?;
 	let second = bindless.buffer().alloc_slice(&buffer_ci("second"), len)?;
-	let mut third = bindless.buffer().alloc_slice(&buffer_ci("third"), len)?;
+	let third = bindless.buffer().alloc_slice(&buffer_ci("third"), len)?;
 
 	let compute = BindlessComputePipeline::new(bindless, crate::shader::buffer_barriers::compute_copy::new())?;
-	bindless
+	let third = bindless
 		.execute(|cmd| unsafe {
-			let first = first.to_transient_unchecked(cmd);
-			let second = second.to_transient_unchecked(cmd);
-			let third = third.to_transient_unchecked(cmd);
+			let first = first.access_dont_care_unchecked(cmd).transition::<Read>();
+			let second = second.access_dont_care_unchecked(cmd).transition::<ReadWrite>();
 
 			let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
 			cmd.dispatch(
 				&compute,
 				[wgs, 1, 1],
 				CopyParam {
-					input: first,
-					output: second,
+					input: first.to_transient(),
+					output: second.to_mut_transient(),
 					len: len as u32,
 				},
 			)?;
+
+			let second = second.transition::<Read>();
+			let third = third.access_dont_care_unchecked(cmd).transition::<ReadWrite>();
 
 			cmd.dispatch(
 				&compute,
 				[wgs, 1, 1],
 				CopyParam {
-					input: second,
-					output: third,
+					input: second.to_transient(),
+					output: third.to_mut_transient(),
 					len: len as u32,
 				},
 			)?;
 
-			Ok(())
+			Ok(third.into_inner())
 		})?
 		.block_on();
 
-	let result = unsafe { third.mapped()?.read_iter().collect::<Vec<_>>() };
+	let result = unsafe { third.mapped_unchecked()?.read_iter().collect::<Vec<_>>() };
 	assert_relative_eq!(&*result, &*value, epsilon = 0.01);
 	Ok(())
 }

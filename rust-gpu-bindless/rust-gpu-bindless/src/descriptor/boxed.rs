@@ -1,9 +1,10 @@
 use crate::backing::table::RcTableSlot;
 use crate::descriptor::{Desc, DescContentCpu, DescContentMutCpu, RCDesc, RCDescExt};
-use crate::platform::BindlessPlatform;
-use rust_gpu_bindless_shaders::descriptor::{
-	DerefDescRef, DescRef, DescriptorId, MutDescRef, TransientAccess, TransientDesc,
-};
+use crate::pipeline::access_type::Undefined;
+use crate::pipeline::mutable::MutBufferAccess;
+use crate::platform::{BindlessPipelinePlatform, BindlessPlatform};
+use rust_gpu_bindless_shaders::buffer_content::BufferContent;
+use rust_gpu_bindless_shaders::descriptor::{DerefDescRef, DescRef, DescriptorId, MutBuffer, MutDescRef};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -69,20 +70,6 @@ pub trait BoxDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	fn id(&self) -> DescriptorId {
 		self.rc_slot().id()
 	}
-
-	/// Create a [`TransientDesc`] pointing to the contents of this [`BoxDesc`].
-	///
-	/// # Safety
-	/// Buffer must not be in use simultaneously by the Device
-	#[inline]
-	unsafe fn to_transient_unchecked<'a>(&self, access: &impl TransientAccess<'a>) -> TransientDesc<'a, C> {
-		// Safety: C does not change, this BoxDesc existing ensures the descriptor will stay alive for this frame
-		unsafe { TransientDesc::new(self.id(), access) }
-	}
-}
-
-pub trait MutBoxDescExt<P: BindlessPlatform, C: DescContentMutCpu>: BoxDescExt<P, C> {
-	fn into_shared(self) -> RCDesc<P, C::Shared>;
 }
 
 impl<P: BindlessPlatform, C: DescContentCpu> BoxDescExt<P, C> for BoxDesc<P, C> {
@@ -98,6 +85,32 @@ impl<P: BindlessPlatform, C: DescContentCpu> BoxDescExt<P, C> for BoxDesc<P, C> 
 	fn rc_slot(&self) -> &RcTableSlot {
 		&self.r.slot
 	}
+}
+
+pub trait BoxMutBufferExt<P: BindlessPipelinePlatform, T: BufferContent + ?Sized>: BoxDescExt<P, MutBuffer<T>> {
+	/// Access this mutable buffer to use it for recording. Does not care for the contents of this buffer and assumes
+	/// it is uninitialized.
+	///
+	/// # Safety
+	/// Buffer must not be in use simultaneously by the Device or Host
+	unsafe fn access_dont_care_unchecked<'a>(
+		self,
+		cmd: &P::RecordingContext<'a>,
+	) -> MutBufferAccess<'a, P, T, Undefined>;
+}
+
+impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized> BoxMutBufferExt<P, T> for BoxDesc<P, MutBuffer<T>> {
+	unsafe fn access_dont_care_unchecked<'a>(
+		self,
+		cmd: &P::RecordingContext<'a>,
+	) -> MutBufferAccess<'a, P, T, Undefined> {
+		MutBufferAccess::new_dont_care(self, cmd)
+	}
+}
+
+// TODO consider replacing this with an `into_shared` within an execution context
+pub trait MutBoxDescExt<P: BindlessPlatform, C: DescContentMutCpu>: BoxDescExt<P, C> {
+	fn into_shared(self) -> RCDesc<P, C::Shared>;
 }
 
 impl<P: BindlessPlatform, C: DescContentMutCpu> MutBoxDescExt<P, C> for BoxDesc<P, C> {

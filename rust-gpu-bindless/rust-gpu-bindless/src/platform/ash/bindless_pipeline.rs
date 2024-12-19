@@ -1,6 +1,8 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::shader::BindlessShader;
-use crate::platform::ash::{Ash, AshExecutingContext, AshRecordingContext, RunOnDrop};
+use crate::platform::ash::{
+	ash_record_and_execute, Ash, AshExecutingContext, AshRecordingContext, AshRecordingResourceContext, RunOnDrop,
+};
 use crate::platform::BindlessPipelinePlatform;
 use ash::vk::{
 	ComputePipelineCreateInfo, PipelineCache, PipelineShaderStageCreateInfo, ShaderModuleCreateInfo, ShaderStageFlags,
@@ -14,6 +16,7 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	type ComputePipeline = ash::vk::Pipeline;
 	type TraditionalGraphicsPipeline = ash::vk::Pipeline;
 	type MeshGraphicsPipeline = ash::vk::Pipeline;
+	type RecordingResourceContext = AshRecordingResourceContext;
 	type RecordingContext<'a> = AshRecordingContext<'a>;
 	type RecordingError = ash::vk::Result;
 	type ExecutingContext<R: Send + Sync> = AshExecutingContext<R>;
@@ -51,6 +54,6 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		bindless: &Arc<Bindless<Self>>,
 		f: impl FnOnce(&mut Self::RecordingContext<'_>) -> Result<R, Self::RecordingError>,
 	) -> Result<Self::ExecutingContext<R>, Self::RecordingError> {
-		AshRecordingContext::ash_record_and_execute(bindless, f)
+		ash_record_and_execute(bindless, f)
 	}
 }

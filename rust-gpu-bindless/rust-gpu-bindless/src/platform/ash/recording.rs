@@ -1,27 +1,31 @@
 use crate::descriptor::boxed::BoxDescExt;
 use crate::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame, BufferSlot,
+	ImageSlot,
 };
+use crate::pipeline::access_type::{BufferAccess, ImageAccess};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
-use crate::platform::{BindlessPipelinePlatform, RecordingContext};
+use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use ash::prelude::VkResult;
 use ash::vk::{
-	CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsageFlags,
-	PipelineBindPoint, SubmitInfo,
+	BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel,
+	CommandBufferUsageFlags, DependencyInfo, ImageAspectFlags, ImageMemoryBarrier2, ImageSubresourceRange,
+	MemoryBarrier2, PipelineBindPoint, SubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS,
+	WHOLE_SIZE,
 };
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, TransientAccess};
-use std::marker::PhantomData;
+use smallvec::SmallVec;
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::sync::Arc;
 
 pub struct AshRecordingContext<'a> {
-	#[allow(dead_code)]
 	frame: Arc<BindlessFrame<Ash>>,
-	resource: AshPooledExecutionResource,
-	_phantom: PhantomData<&'a ()>,
+	resource: &'a AshRecordingResourceContext,
+	exec_resource: AshPooledExecutionResource,
 	// mut state
 	cmd: CommandBuffer,
 	compute_bind_descriptors: bool,
@@ -31,26 +35,109 @@ impl<'a> Deref for AshRecordingContext<'a> {
 	type Target = AshPooledExecutionResource;
 
 	fn deref(&self) -> &Self::Target {
-		&self.resource
+		&self.exec_resource
 	}
 }
 
-impl<'a> AshRecordingContext<'a> {
-	pub unsafe fn ash_record_and_execute<R>(
-		bindless: &Arc<Bindless<Ash>>,
-		f: impl FnOnce(&mut AshRecordingContext<'_>) -> VkResult<R>,
-	) -> VkResult<AshExecutingContext<R>> {
-		let mut recording = Self::new(bindless.frame(), bindless.execution_manager.pop())?;
-		let r = f(&mut recording)?;
-		Ok(AshExecutingContext::new(recording.ash_end_submit(), r))
+#[derive(Debug, Default)]
+pub struct AshRecordingResourceContext {
+	inner: RefCell<AshBarrierCollector>,
+}
+
+#[derive(Debug, Default)]
+pub struct AshBarrierCollector {
+	memory: SmallVec<[MemoryBarrier2<'static>; 0]>,
+	buffers: SmallVec<[BufferMemoryBarrier2<'static>; 10]>,
+	image: SmallVec<[ImageMemoryBarrier2<'static>; 10]>,
+}
+
+impl AshRecordingResourceContext {
+	pub fn push_memory_barrier(&self, memory: MemoryBarrier2<'static>) {
+		self.inner.borrow_mut().memory.push(memory);
 	}
 
-	pub fn new(frame: Arc<BindlessFrame<Ash>>, resource: AshPooledExecutionResource) -> VkResult<Self> {
+	pub fn push_buffer_barrier(&self, buffer: BufferMemoryBarrier2<'static>) {
+		self.inner.borrow_mut().buffers.push(buffer);
+	}
+
+	pub fn push_image_barrier(&self, image: ImageMemoryBarrier2<'static>) {
+		self.inner.borrow_mut().image.push(image);
+	}
+}
+
+unsafe impl<'a> TransientAccess<'a> for &'a AshRecordingResourceContext {}
+
+unsafe impl RecordingResourceContext<Ash> for AshRecordingResourceContext {
+	unsafe fn to_transient_access(&self) -> impl TransientAccess<'_> {
+		self
+	}
+
+	unsafe fn transition_buffer(&self, slot: &BufferSlot<Ash>, src: BufferAccess, dst: BufferAccess) {
+		let src = src.to_ash_buffer_access();
+		let dst = dst.to_ash_buffer_access();
+		self.push_buffer_barrier(
+			BufferMemoryBarrier2::default()
+				.buffer(slot.buffer)
+				.offset(0)
+				.size(WHOLE_SIZE)
+				.src_access_mask(src.access_mask)
+				.src_stage_mask(src.stage_mask)
+				.dst_access_mask(dst.access_mask)
+				.dst_stage_mask(dst.stage_mask)
+				.src_queue_family_index(QUEUE_FAMILY_IGNORED)
+				.dst_queue_family_index(QUEUE_FAMILY_IGNORED),
+		)
+	}
+
+	unsafe fn transition_image(&self, image: &ImageSlot<Ash>, src: ImageAccess, dst: ImageAccess) {
+		let src = src.to_ash_image_access();
+		let dst = dst.to_ash_image_access();
+		self.push_image_barrier(
+			ImageMemoryBarrier2::default()
+				.image(image.image)
+				.subresource_range(
+					ImageSubresourceRange::default()
+						// I'm unsure if it's valid to specify it like this or if the aspect has to match the format of
+						// the image, I guess we'll find out later!
+						.aspect_mask(ImageAspectFlags::COLOR | ImageAspectFlags::DEPTH | ImageAspectFlags::STENCIL)
+						.base_array_layer(0)
+						.layer_count(REMAINING_ARRAY_LAYERS)
+						.base_mip_level(0)
+						.level_count(REMAINING_MIP_LEVELS),
+				)
+				.src_access_mask(src.access_mask)
+				.src_stage_mask(src.stage_mask)
+				.old_layout(src.image_layout)
+				.dst_access_mask(dst.access_mask)
+				.dst_stage_mask(dst.stage_mask)
+				.new_layout(dst.image_layout)
+				.src_queue_family_index(QUEUE_FAMILY_IGNORED)
+				.dst_queue_family_index(QUEUE_FAMILY_IGNORED),
+		)
+	}
+}
+
+pub unsafe fn ash_record_and_execute<R>(
+	bindless: &Arc<Bindless<Ash>>,
+	f: impl FnOnce(&mut AshRecordingContext<'_>) -> VkResult<R>,
+) -> VkResult<AshExecutingContext<R>> {
+	let resource = AshRecordingResourceContext::default();
+	let mut recording = AshRecordingContext::new(bindless.frame(), bindless.execution_manager.pop(), &resource)?;
+	let r = f(&mut recording)?;
+	Ok(AshExecutingContext::new(recording.ash_end_submit(), r))
+}
+
+impl<'a> AshRecordingContext<'a> {
+	pub fn new(
+		frame: Arc<BindlessFrame<Ash>>,
+		exec_resource: AshPooledExecutionResource,
+		resource: &'a AshRecordingResourceContext,
+	) -> VkResult<Self> {
 		unsafe {
-			let device = &resource.bindless.device;
+			let device = &exec_resource.bindless.device;
 			let cmd = device.allocate_command_buffer(
 				&CommandBufferAllocateInfo::default()
-					.command_pool(resource.command_pool)
+					.command_pool(exec_resource.command_pool)
 					.level(CommandBufferLevel::PRIMARY)
 					.command_buffer_count(1),
 			)?;
@@ -61,14 +148,50 @@ impl<'a> AshRecordingContext<'a> {
 			Ok(Self {
 				frame,
 				resource,
-				_phantom: PhantomData,
+				exec_resource,
 				cmd,
 				compute_bind_descriptors: true,
 			})
 		}
 	}
 
-	pub fn ash_flush(&mut self) {}
+	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any shader
+	/// execution command is recorded.
+	pub fn ash_flush(&mut self) {
+		unsafe {
+			let device = &self.bindless.device;
+			let mut collector = self.resource.inner.borrow_mut();
+			device.cmd_pipeline_barrier2(
+				self.cmd,
+				&DependencyInfo::default()
+					.memory_barriers(&*collector.memory)
+					.buffer_memory_barriers(&*collector.buffers)
+					.image_memory_barriers(&*collector.image),
+			);
+			collector.memory.clear();
+			collector.buffers.clear();
+			collector.image.clear();
+		}
+	}
+
+	/// Invalidates internal state that keeps track of the command buffer's state. Currently, it forces the global
+	/// descriptor set to be rebound again, in case anything overwrote it outside our control.
+	pub fn ash_invalidate(&mut self) {
+		self.compute_bind_descriptors = true;
+	}
+
+	/// Gets the command buffer to allow inserting custom ash commands directly.
+	///
+	/// # Safety
+	/// Use [`Self::ash_flush`] and [`Self::ash_invalidate`] appropriately
+	pub unsafe fn ash_get_command_buffer(&self) -> CommandBuffer {
+		self.cmd
+	}
+
+	/// Gets the [`BindlessFrame`] which implements [`TransientAccess`] and this allows creating `TransientDesc`'s
+	pub fn ash_get_bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
+		&self.frame
+	}
 
 	pub unsafe fn ash_bind_compute<T: BufferStruct>(
 		&mut self,
@@ -77,7 +200,7 @@ impl<'a> AshRecordingContext<'a> {
 	) {
 		unsafe {
 			self.ash_flush();
-			let device = &self.resource.bindless.platform.device;
+			let device = &self.exec_resource.bindless.platform.device;
 			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.pipeline);
 			if self.compute_bind_descriptors {
 				self.compute_bind_descriptors = false;
@@ -133,10 +256,10 @@ impl<'a> AshRecordingContext<'a> {
 					&[SubmitInfo::default()
 						.command_buffers(&[self.cmd])
 						.signal_semaphores(&[self.semaphore])],
-					self.resource.fence,
+					self.exec_resource.fence,
 				)
 				.unwrap();
-			self.resource
+			self.exec_resource
 		}
 	}
 }
@@ -144,6 +267,10 @@ impl<'a> AshRecordingContext<'a> {
 unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
 unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
+	fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
+		self.resource
+	}
+
 	fn dispatch<T: BufferStruct>(
 		&mut self,
 		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,

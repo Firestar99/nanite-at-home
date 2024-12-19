@@ -216,8 +216,8 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		create_info: &BindlessBufferCreateInfo,
 		data: T,
 	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
-		let mut buffer = self.alloc_sized(create_info)?;
-		unsafe { buffer.mapped().unwrap().write_data(data) };
+		let buffer = self.alloc_sized(create_info)?;
+		unsafe { buffer.mapped_unchecked().unwrap().write_data(data) };
 		Ok(buffer)
 	}
 
@@ -231,8 +231,8 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		I::IntoIter: ExactSizeIterator,
 	{
 		let iter = iter.into_iter();
-		let mut buffer = self.alloc_slice(create_info, iter.len())?;
-		unsafe { buffer.mapped().unwrap().overwrite_from_iter_exact(iter) };
+		let buffer = self.alloc_slice(create_info, iter.len())?;
+		unsafe { buffer.mapped_unchecked().unwrap().overwrite_from_iter_exact(iter) };
 		Ok(buffer)
 	}
 }
@@ -242,11 +242,11 @@ pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
 	///
 	/// # Safety
 	/// Buffer must not be in use simultaneously by the Device
-	unsafe fn mapped(&mut self) -> Result<MappedBuffer<P, T>, MapError>;
+	unsafe fn mapped_unchecked(&self) -> Result<MappedBuffer<P, T>, MapError>;
 }
 
 impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for BoxDesc<P, MutBuffer<T>> {
-	unsafe fn mapped(&mut self) -> Result<MappedBuffer<P, T>, MapError> {
+	unsafe fn mapped_unchecked(&self) -> Result<MappedBuffer<P, T>, MapError> {
 		let slot = self.inner_slot();
 		if slot.usage.is_mappable() {
 			Ok(MappedBuffer {

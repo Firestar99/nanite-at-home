@@ -2,11 +2,12 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::simple_compute::{add_calculation, Indirection, Param};
-use rust_gpu_bindless::descriptor::boxed::{BoxDescExt, MutBoxDescExt};
+use rust_gpu_bindless::descriptor::boxed::{BoxMutBufferExt, MutBoxDescExt};
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt, RCDescExt,
 };
+use rust_gpu_bindless::pipeline::access_type::ReadWrite;
 use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
@@ -105,26 +106,39 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 				len,
 			)
 			.unwrap();
-		let out = unsafe { buffer_out.to_transient_unchecked(recording_context) };
+		let out = unsafe {
+			buffer_out
+				.access_dont_care_unchecked(recording_context)
+				.transition::<ReadWrite>()
+		};
 
 		// Enqueueing some dispatch takes in a user-supplied param struct that may contain any number of buffer
 		// accesses. This method will internally "remove" the lifetime of the param struct, as the lifetime of the
 		// buffers will be ensured by this execution not having finished yet.
 		// Note how `c` is passed in directly, without an indirection like the other buffers.
-		recording_context.dispatch(&pipeline, [len as u32, 1, 1], Param { a, b, indirection, out })?;
+		recording_context.dispatch(
+			&pipeline,
+			[len as u32, 1, 1],
+			Param {
+				a,
+				b,
+				indirection,
+				out: out.to_mut_transient(),
+			},
+		)?;
 
 		// you can return arbitrary data here, that can only be accessed once the execution has finished
-		Ok(buffer_out)
+		Ok(out.into_inner())
 
 		// returning makes us loose the reference on recording_context, so no accessors can leak beyond here
 	})?;
 
 	// wait for result and get back the data returned from the closure
-	let mut out = execution_context.block_on();
+	let out = execution_context.block_on();
 
 	// unsafely map the buffer to read data from it. Just like the executing, the end user has to ensure no concurrent
 	// access by some other execution or map operation.
-	let result = unsafe { out.mapped()?.read_iter().collect::<Vec<_>>() };
+	let result = unsafe { out.mapped_unchecked()?.read_iter().collect::<Vec<_>>() };
 	let expected = b.iter().copied().map(|b| add_calculation(a, b, c)).collect::<Vec<_>>();
 	println!("result: {:?}", result);
 	println!("expected: {:?}", expected);

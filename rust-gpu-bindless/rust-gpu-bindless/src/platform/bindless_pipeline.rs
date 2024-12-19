@@ -1,4 +1,5 @@
-use crate::descriptor::Bindless;
+use crate::descriptor::{Bindless, BufferSlot, ImageSlot};
+use crate::pipeline::access_type::{BufferAccess, ImageAccess};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPlatform;
@@ -14,6 +15,7 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type ComputePipeline: 'static + Send + Sync;
 	type TraditionalGraphicsPipeline: 'static + Send + Sync;
 	type MeshGraphicsPipeline: 'static + Send + Sync;
+	type RecordingResourceContext: RecordingResourceContext<Self>;
 	type RecordingContext<'a>: RecordingContext<'a, Self>;
 	type RecordingError: 'static + Error + Send + Sync;
 	type ExecutingContext<R: Send + Sync>: ExecutingContext<Self, R>;
@@ -30,6 +32,8 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 }
 
 pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> {
+	fn resource_context(&self) -> &'a P::RecordingResourceContext;
+
 	/// Dispatch a bindless compute shader
 	fn dispatch<T: BufferStruct>(
 		&mut self,
@@ -37,6 +41,13 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAcc
 		group_counts: [u32; 3],
 		param: T,
 	) -> Result<(), P::RecordingError>;
+}
+
+pub unsafe trait RecordingResourceContext<P: BindlessPipelinePlatform>: 'static {
+	unsafe fn to_transient_access(&self) -> impl TransientAccess<'_>;
+	unsafe fn transition_buffer(&self, buffer: &BufferSlot<P>, src: BufferAccess, dst: BufferAccess);
+
+	unsafe fn transition_image(&self, image: &ImageSlot<P>, src: ImageAccess, dst: ImageAccess);
 }
 
 pub unsafe trait ExecutingContext<P: BindlessPipelinePlatform, R: Send + Sync>: Send + Sync {
