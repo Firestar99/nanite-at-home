@@ -1,7 +1,7 @@
 use crate::descriptor::Bindless;
 use crate::platform::ash::{AshAllocationError, AshExecutionManager};
 use crate::platform::Platform;
-use ash::vk::{PhysicalDeviceVulkan12Features, PipelineCache, ShaderStageFlags};
+use ash::vk::{PipelineCache, ShaderStageFlags};
 use gpu_allocator::vulkan::{Allocation, Allocator};
 use parking_lot::lock_api::MutexGuard;
 use parking_lot::{Mutex, RawMutex};
@@ -10,18 +10,6 @@ use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Weak;
-
-pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
-	PhysicalDeviceVulkan12Features::default()
-		.vulkan_memory_model(true)
-		.runtime_descriptor_array(true)
-		.descriptor_binding_update_unused_while_pending(true)
-		.descriptor_binding_partially_bound(true)
-		.descriptor_binding_storage_buffer_update_after_bind(true)
-		.descriptor_binding_sampled_image_update_after_bind(true)
-		.descriptor_binding_storage_image_update_after_bind(true)
-		.descriptor_binding_uniform_buffer_update_after_bind(true)
-}
 
 pub struct Ash {
 	pub create_info: AshCreateInfo,

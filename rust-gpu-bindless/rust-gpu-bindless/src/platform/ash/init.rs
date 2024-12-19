@@ -1,4 +1,4 @@
-use crate::platform::ash::{required_features_vk12, AshCreateInfo};
+use crate::platform::ash::AshCreateInfo;
 use anyhow::anyhow;
 use ash::ext::debug_utils;
 use ash::vk::{
@@ -16,6 +16,28 @@ use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::ffi::{c_void, CStr};
 use std::fmt::Debug;
+
+pub fn required_features_vk11() -> PhysicalDeviceVulkan11Features<'static> {
+	PhysicalDeviceVulkan11Features::default()
+}
+
+pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
+	PhysicalDeviceVulkan12Features::default()
+		.vulkan_memory_model(true)
+		.runtime_descriptor_array(true)
+		.descriptor_binding_update_unused_while_pending(true)
+		.descriptor_binding_partially_bound(true)
+		.descriptor_binding_storage_buffer_update_after_bind(true)
+		.descriptor_binding_sampled_image_update_after_bind(true)
+		.descriptor_binding_storage_image_update_after_bind(true)
+		.descriptor_binding_uniform_buffer_update_after_bind(true)
+}
+
+pub fn required_features_vk13() -> PhysicalDeviceVulkan13Features<'static> {
+	PhysicalDeviceVulkan13Features::default()
+		.synchronization2(true)
+		.dynamic_rendering(true)
+}
 
 pub const LAYER_VALIDATION: &CStr = c"VK_LAYER_KHRONOS_validation";
 
@@ -49,9 +71,9 @@ impl Default for AshSingleGraphicsQueueCreateInfo<'_> {
 			shader_stages: ShaderStageFlags::ALL_GRAPHICS | ShaderStageFlags::COMPUTE,
 			extensions: &[],
 			features: PhysicalDeviceFeatures::default(),
-			features_vk11: PhysicalDeviceVulkan11Features::default(),
+			features_vk11: required_features_vk11(),
 			features_vk12: required_features_vk12(),
-			features_vk13: PhysicalDeviceVulkan13Features::default(),
+			features_vk13: required_features_vk13(),
 			debug: Debuggers::default(),
 			debug_callback: None,
 		}
