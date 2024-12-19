@@ -35,7 +35,7 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 	let len = b.len();
 
 	// Pipelines can be created from the shaders and carry the `T` generic which is the param struct of the shader.
-	let pipeline = BindlessComputePipeline::new(&bindless, crate::shader::simple_compute::new())?;
+	let pipeline = BindlessComputePipeline::new(&bindless, crate::shader::simple_compute::simple_compute::new())?;
 
 	// buffer_b is a slice of f32s
 	let buffer_b = bindless

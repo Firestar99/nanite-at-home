@@ -27,7 +27,6 @@ pub fn codegen_shader_symbols<'a>(
 	let tokens = root.to_tokens(|shader_ident, (entry_point_name, spv_path)| {
 		let mut mod_path = syn::parse_str::<Path>(entry_point_name).unwrap();
 		mod_path.segments.pop();
-		mod_path.segments.pop_punct();
 		let entry_point_name = CString::new(*entry_point_name).unwrap();
 
 		let mut spv_file = File::open(PathBuf::from(spv_path)).unwrap();
@@ -41,8 +40,8 @@ pub fn codegen_shader_symbols<'a>(
 			pub struct #shader_ident;
 
 			impl rust_gpu_bindless::pipeline::shader::BindlessShader for #shader_ident {
-				type ShaderType = #crate_name::#mod_path::#entry_shader_type_ident;
-				type ParamConstant = #crate_name::#mod_path::#param_type_ident;
+				type ShaderType = #crate_name::#mod_path #entry_shader_type_ident;
+				type ParamConstant = #crate_name::#mod_path #param_type_ident;
 
 				fn spirv_binary(&self) -> &rust_gpu_bindless::pipeline::shader::SpirvBinary {
 					&rust_gpu_bindless::pipeline::shader::SpirvBinary {
@@ -52,8 +51,10 @@ pub fn codegen_shader_symbols<'a>(
 				}
 			}
 
-			pub fn new() -> &'static #shader_ident {
-				&#shader_ident {}
+			impl #shader_ident {
+				pub fn new() -> &'static #shader_ident {
+					&#shader_ident {}
+				}
 			}
 		}
 	});

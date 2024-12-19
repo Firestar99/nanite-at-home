@@ -17,7 +17,7 @@ pub struct Param<'a> {
 
 // wg of 1 is silly slow but doesn't matter
 #[bindless(compute(threads(1)))]
-pub fn add_compute(
+pub fn simple_compute(
 	#[bindless(descriptors)] mut descriptors: Descriptors<'_>,
 	#[bindless(param)] param: &Param<'static>,
 	#[spirv(workgroup_id)] wg_id: UVec3,

@@ -43,7 +43,7 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	let second = bindless.buffer().alloc_slice(&buffer_ci("second"), len)?;
 	let mut third = bindless.buffer().alloc_slice(&buffer_ci("third"), len)?;
 
-	let compute = BindlessComputePipeline::new(bindless, crate::shader::buffer_barriers::new())?;
+	let compute = BindlessComputePipeline::new(bindless, crate::shader::buffer_barriers::compute_copy::new())?;
 	bindless
 		.execute(|cmd| unsafe {
 			let first = first.to_transient_unchecked(cmd);
