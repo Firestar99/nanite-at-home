@@ -33,11 +33,14 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	let value = (0..1024).map(|i| i as f32).collect::<Vec<_>>();
 	let len = value.len();
 
+	// The shader isn't very interesting, it just copies data from `input` to `output`.
+	// Rather have a look at this CPU code, which...
 	let buffer_ci = |name: &'static str| BindlessBufferCreateInfo {
 		name,
 		usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::MAP_READ | BindlessBufferUsage::STORAGE_BUFFER,
 		allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 	};
+	// 1. uploads some data into `first`
 	let first = bindless
 		.buffer()
 		.alloc_from_iter(&buffer_ci("first"), value.iter().copied())?;
@@ -50,6 +53,7 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 			let first = first.access_dont_care_unchecked(cmd).transition::<Read>();
 			let second = second.access_dont_care_unchecked(cmd).transition::<ReadWrite>();
 
+			// 2. does a dispatch to copy from `first` to `second`
 			let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
 			cmd.dispatch(
 				&compute,
@@ -61,9 +65,11 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 				},
 			)?;
 
+			// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
 			let second = second.transition::<Read>();
 			let third = third.access_dont_care_unchecked(cmd).transition::<ReadWrite>();
 
+			// 4. another dispatch to copy from `second` to `third`
 			cmd.dispatch(
 				&compute,
 				[wgs, 1, 1],
@@ -78,6 +84,7 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 		})?
 		.block_on();
 
+	// 5. downloads the data from `third` and verifies that it hasn't corrupted
 	let result = unsafe { third.mapped_unchecked()?.read_iter().collect::<Vec<_>>() };
 	assert_relative_eq!(&*result, &*value, epsilon = 0.01);
 	Ok(())
