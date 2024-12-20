@@ -2,12 +2,12 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::simple_compute::{add_calculation, Indirection, Param};
-use rust_gpu_bindless::descriptor::boxed::{BoxMutBufferExt, MutBoxDescExt};
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt, RCDescExt,
 };
-use rust_gpu_bindless::pipeline::access_type::ReadWrite;
+use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
+use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderReadWrite};
 use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
@@ -39,45 +39,36 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 	let pipeline = BindlessComputePipeline::new(&bindless, crate::shader::simple_compute::simple_compute::new())?;
 
 	// buffer_b is a slice of f32s
-	let buffer_b = bindless
-		.buffer()
-		.alloc_from_iter(
-			&BindlessBufferCreateInfo {
-				name: "b",
-				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
-				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
-			},
-			b,
-		)?
-		.into_shared();
+	let buffer_b = bindless.buffer().alloc_shared_from_iter(
+		&BindlessBufferCreateInfo {
+			name: "b",
+			usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
+			allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
+		},
+		b,
+	)?;
 
 	// buffer_indirection holds a reference to buffer_c which contains the value c
 	let buffer_indirection = {
-		let buffer_c = bindless
-			.buffer()
-			.alloc_from_data(
-				&BindlessBufferCreateInfo {
-					name: "c",
-					usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
-					allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
-				},
-				c,
-			)?
-			.into_shared();
+		let buffer_c = bindless.buffer().alloc_shared_from_data(
+			&BindlessBufferCreateInfo {
+				name: "c",
+				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
+				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
+			},
+			c,
+		)?;
 		let indirection = Indirection {
 			c: buffer_c.to_strong(),
 		};
-		bindless
-			.buffer()
-			.alloc_from_data(
-				&BindlessBufferCreateInfo {
-					name: "indirection",
-					usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
-					allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
-				},
-				indirection,
-			)?
-			.into_shared()
+		bindless.buffer().alloc_shared_from_data(
+			&BindlessBufferCreateInfo {
+				name: "indirection",
+				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
+				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
+			},
+			indirection,
+		)?
 		// buffer_c is dropped here, but buffer_indirection having a StrongDesc on it will keep it alive for as long as
 		// buffer_indirection is
 	};
@@ -106,11 +97,7 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 				len,
 			)
 			.unwrap();
-		let out = unsafe {
-			buffer_out
-				.access_dont_care_unchecked(recording_context)
-				.transition::<ReadWrite>()
-		};
+		let out = buffer_out.access_dont_care::<ShaderReadWrite>(recording_context)?;
 
 		// Enqueueing some dispatch takes in a user-supplied param struct that may contain any number of buffer
 		// accesses. This method will internally "remove" the lifetime of the param struct, as the lifetime of the
@@ -128,7 +115,7 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 		)?;
 
 		// you can return arbitrary data here, that can only be accessed once the execution has finished
-		Ok(out.into_inner())
+		Ok(out.transition::<HostAccess>().into_desc())
 
 		// returning makes us loose the reference on recording_context, so no accessors can leak beyond here
 	})?;
@@ -138,7 +125,7 @@ fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 
 	// unsafely map the buffer to read data from it. Just like the executing, the end user has to ensure no concurrent
 	// access by some other execution or map operation.
-	let result = unsafe { out.mapped_unchecked()?.read_iter().collect::<Vec<_>>() };
+	let result = out.mapped()?.read_iter().collect::<Vec<_>>();
 	let expected = b.iter().copied().map(|b| add_calculation(a, b, c)).collect::<Vec<_>>();
 	println!("result: {:?}", result);
 	println!("expected: {:?}", expected);

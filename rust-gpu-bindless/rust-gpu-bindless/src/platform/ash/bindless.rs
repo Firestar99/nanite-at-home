@@ -1,10 +1,12 @@
 use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
 use crate::backing::table::{DrainFlushQueue, SlotAllocationError};
-use crate::descriptor::boxed::BoxDesc;
+use crate::descriptor::MutDesc;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,
 	BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface, SamplerTableAccess,
 };
+use crate::pipeline::access_lock::AccessLock;
+use crate::pipeline::access_type::BufferAccess;
 use crate::platform::ash::{Ash, AshMemoryAllocation};
 use crate::platform::BindlessPlatform;
 use ash::prelude::VkResult;
@@ -23,11 +25,10 @@ use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
 	BindlessPushConstant, MutBuffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::Weak;
+use thiserror::Error;
 
 unsafe impl BindlessPlatform for Ash {
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
@@ -366,28 +367,19 @@ impl Deref for AshBindlessDescriptorSet {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AshAllocationError {
+	#[error("Vk Error: {0}")]
 	Vk(ash::vk::Result),
-	Allocator(AllocationError),
+	#[error("Allocator Error: {0}")]
+	Allocation(AllocationError),
+	#[error("Slot Error: {0}")]
 	Slot(SlotAllocationError),
 }
 
-impl Display for AshAllocationError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		match self {
-			AshAllocationError::Vk(e) => Display::fmt(e, f),
-			AshAllocationError::Allocator(e) => Display::fmt(e, f),
-			AshAllocationError::Slot(e) => Display::fmt(e, f),
-		}
-	}
-}
-
-impl Error for AshAllocationError {}
-
 impl From<SlotAllocationError> for AshAllocationError {
 	fn from(value: SlotAllocationError) -> Self {
-		AshAllocationError::Slot(value)
+		Self::Slot(value)
 	}
 }
 
@@ -399,7 +391,7 @@ impl From<ash::vk::Result> for AshAllocationError {
 
 impl From<AllocationError> for AshAllocationError {
 	fn from(value: AllocationError) -> Self {
-		Self::Allocator(value)
+		Self::Allocation(value)
 	}
 }
 
@@ -478,7 +470,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 	/// # Safety
 	/// Size must be sufficient to store `T`. If `T` is a slice, `len` must be its length, otherwise it must be 1.
 	/// Returned buffer will be uninitialized.
-	pub unsafe fn alloc_ash<T: BufferContent + ?Sized>(
+	pub unsafe fn alloc_ash_unchecked<T: BufferContent + ?Sized>(
 		&self,
 		ash_create_info: &ash::vk::BufferCreateInfo,
 		usage: BindlessBufferUsage,
@@ -486,7 +478,8 @@ impl<'a> BufferTableAccess<'a, Ash> {
 		allocation_scheme: BindlessAllocationScheme,
 		len: usize,
 		name: &str,
-	) -> Result<BoxDesc<Ash, MutBuffer<T>>, AshAllocationError> {
+		prev_access_type: BufferAccess,
+	) -> Result<MutDesc<Ash, MutBuffer<T>>, AshAllocationError> {
 		unsafe {
 			let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
 			let requirements = self.0.device.get_buffer_memory_requirements(buffer);
@@ -507,6 +500,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				usage,
 				memory_allocation: AshMemoryAllocation::new(memory_allocation),
 				strong_refs: Default::default(),
+				access_lock: AccessLock::new(prev_access_type),
 			})?)
 		}
 	}

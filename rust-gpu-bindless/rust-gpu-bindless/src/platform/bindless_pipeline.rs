@@ -1,4 +1,5 @@
 use crate::descriptor::{Bindless, BufferSlot, ImageSlot};
+use crate::pipeline::access_lock::AccessLockError;
 use crate::pipeline::access_type::{BufferAccess, ImageAccess};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::pipeline::shader::BindlessShader;
@@ -17,7 +18,7 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type MeshGraphicsPipeline: 'static + Send + Sync;
 	type RecordingResourceContext: RecordingResourceContext<Self>;
 	type RecordingContext<'a>: RecordingContext<'a, Self>;
-	type RecordingError: 'static + Error + Send + Sync;
+	type RecordingError: 'static + Error + Send + Sync + From<AccessLockError>;
 	type ExecutingContext<R: Send + Sync>: ExecutingContext<Self, R>;
 
 	unsafe fn create_compute_pipeline<T: BufferStruct>(

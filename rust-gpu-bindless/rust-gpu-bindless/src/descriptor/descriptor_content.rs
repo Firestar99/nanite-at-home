@@ -26,4 +26,5 @@ pub trait DescTable: Sized {}
 
 pub trait DescContentMutCpu: DescContentCpu {
 	type Shared: DescContentCpu;
+	type Access: Copy + Eq + Send + Sync + 'static;
 }

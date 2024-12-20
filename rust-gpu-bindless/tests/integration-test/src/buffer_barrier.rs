@@ -2,12 +2,12 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::buffer_barriers::{CopyParam, COMPUTE_COPY_WG};
-use rust_gpu_bindless::descriptor::boxed::BoxMutBufferExt;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt,
 };
-use rust_gpu_bindless::pipeline::access_type::{Read, ReadWrite};
+use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
+use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderRead, ShaderReadWrite};
 use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
@@ -49,9 +49,9 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 
 	let compute = BindlessComputePipeline::new(bindless, crate::shader::buffer_barriers::compute_copy::new())?;
 	let third = bindless
-		.execute(|cmd| unsafe {
-			let first = first.access_dont_care_unchecked(cmd).transition::<Read>();
-			let second = second.access_dont_care_unchecked(cmd).transition::<ReadWrite>();
+		.execute(|cmd| {
+			let first = first.access::<ShaderRead>(cmd)?;
+			let second = second.access_dont_care::<ShaderReadWrite>(cmd)?;
 
 			// 2. does a dispatch to copy from `first` to `second`
 			let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
@@ -66,8 +66,8 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 			)?;
 
 			// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
-			let second = second.transition::<Read>();
-			let third = third.access_dont_care_unchecked(cmd).transition::<ReadWrite>();
+			let second = second.transition::<ShaderRead>();
+			let third = third.access_dont_care::<ShaderReadWrite>(cmd)?;
 
 			// 4. another dispatch to copy from `second` to `third`
 			cmd.dispatch(
@@ -80,12 +80,12 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 				},
 			)?;
 
-			Ok(third.into_inner())
+			Ok(third.transition::<HostAccess>().into_desc())
 		})?
 		.block_on();
 
 	// 5. downloads the data from `third` and verifies that it hasn't corrupted
-	let result = unsafe { third.mapped_unchecked()?.read_iter().collect::<Vec<_>>() };
+	let result = third.mapped()?.read_iter().collect::<Vec<_>>();
 	assert_relative_eq!(&*result, &*value, epsilon = 0.01);
 	Ok(())
 }

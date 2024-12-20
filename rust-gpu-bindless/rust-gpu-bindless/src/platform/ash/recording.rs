@@ -1,8 +1,9 @@
-use crate::descriptor::boxed::BoxDescExt;
+use crate::descriptor::MutDescExt;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame, BufferSlot,
 	ImageSlot,
 };
+use crate::pipeline::access_lock::AccessLockError;
 use crate::pipeline::access_type::{BufferAccess, ImageAccess};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::platform::ash::ash_ext::DeviceExt;
@@ -19,8 +20,10 @@ use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, TransientAccess};
 use smallvec::SmallVec;
 use std::cell::RefCell;
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
+use thiserror::Error;
 
 pub struct AshRecordingContext<'a> {
 	frame: Arc<BindlessFrame<Ash>>,
@@ -119,8 +122,8 @@ unsafe impl RecordingResourceContext<Ash> for AshRecordingResourceContext {
 
 pub unsafe fn ash_record_and_execute<R>(
 	bindless: &Arc<Bindless<Ash>>,
-	f: impl FnOnce(&mut AshRecordingContext<'_>) -> VkResult<R>,
-) -> VkResult<AshExecutingContext<R>> {
+	f: impl FnOnce(&mut AshRecordingContext<'_>) -> Result<R, AshRecordingError>,
+) -> Result<AshExecutingContext<R>, AshRecordingError> {
 	let resource = AshRecordingResourceContext::default();
 	let mut recording = AshRecordingContext::new(bindless.frame(), bindless.execution_manager.pop(), &resource)?;
 	let r = f(&mut recording)?;
@@ -299,4 +302,24 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 	// 		Ok(self)
 	// 	}
 	// }
+}
+
+#[derive(Debug, Error)]
+pub enum AshRecordingError {
+	#[error("Vk Error: {0}")]
+	Vk(ash::vk::Result),
+	#[error("AccessLockError: {0}")]
+	AccessLock(AccessLockError),
+}
+
+impl From<ash::vk::Result> for AshRecordingError {
+	fn from(value: ash::vk::Result) -> Self {
+		Self::Vk(value)
+	}
+}
+
+impl From<AccessLockError> for AshRecordingError {
+	fn from(value: AccessLockError) -> Self {
+		Self::AccessLock(value)
+	}
 }

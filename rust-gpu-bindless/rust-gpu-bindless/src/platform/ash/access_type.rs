@@ -23,23 +23,33 @@ impl BufferAccess {
 				PipelineStageFlags2::ALL_COMMANDS,
 				AccessFlags2::MEMORY_READ | AccessFlags2::MEMORY_WRITE,
 			),
+			BufferAccess::GeneralRead => {
+				AshBufferAccess::new(PipelineStageFlags2::ALL_COMMANDS, AccessFlags2::MEMORY_READ)
+			}
+			BufferAccess::GeneralWrite => {
+				AshBufferAccess::new(PipelineStageFlags2::ALL_COMMANDS, AccessFlags2::MEMORY_WRITE)
+			}
 			BufferAccess::TransferRead => {
 				AshBufferAccess::new(PipelineStageFlags2::TRANSFER, AccessFlags2::TRANSFER_READ)
 			}
 			BufferAccess::TransferWrite => {
 				AshBufferAccess::new(PipelineStageFlags2::TRANSFER, AccessFlags2::TRANSFER_WRITE)
 			}
-			BufferAccess::Read => AshBufferAccess::new(
+			BufferAccess::ShaderRead => AshBufferAccess::new(
 				PipelineStageFlags2::ALL_GRAPHICS | PipelineStageFlags2::COMPUTE_SHADER,
 				AccessFlags2::SHADER_STORAGE_READ,
 			),
-			BufferAccess::Write => AshBufferAccess::new(
+			BufferAccess::ShaderWrite => AshBufferAccess::new(
 				PipelineStageFlags2::ALL_GRAPHICS | PipelineStageFlags2::COMPUTE_SHADER,
 				AccessFlags2::SHADER_STORAGE_WRITE,
 			),
-			BufferAccess::ReadWrite => AshBufferAccess::new(
+			BufferAccess::ShaderReadWrite => AshBufferAccess::new(
 				PipelineStageFlags2::ALL_GRAPHICS | PipelineStageFlags2::COMPUTE_SHADER,
 				AccessFlags2::SHADER_STORAGE_READ | AccessFlags2::SHADER_STORAGE_WRITE,
+			),
+			BufferAccess::HostAccess => AshBufferAccess::new(
+				PipelineStageFlags2::HOST,
+				AccessFlags2::HOST_READ | AccessFlags2::HOST_WRITE,
 			),
 			BufferAccess::IndirectCommandRead => {
 				AshBufferAccess::new(PipelineStageFlags2::DRAW_INDIRECT, AccessFlags2::INDIRECT_COMMAND_READ)
@@ -80,6 +90,16 @@ impl ImageAccess {
 			ImageAccess::General => AshImageAccess::new(
 				PipelineStageFlags2::ALL_COMMANDS,
 				AccessFlags2::MEMORY_READ | AccessFlags2::MEMORY_WRITE,
+				ImageLayout::GENERAL,
+			),
+			ImageAccess::GeneralRead => AshImageAccess::new(
+				PipelineStageFlags2::ALL_COMMANDS,
+				AccessFlags2::MEMORY_READ,
+				ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+			),
+			ImageAccess::GeneralWrite => AshImageAccess::new(
+				PipelineStageFlags2::ALL_COMMANDS,
+				AccessFlags2::MEMORY_WRITE,
 				ImageLayout::GENERAL,
 			),
 			ImageAccess::TransferRead => AshImageAccess::new(

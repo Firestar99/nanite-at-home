@@ -2,9 +2,10 @@ pub mod ash;
 mod bindless;
 mod bindless_pipeline;
 
-use crate::backing::table::SlotAllocationError;
 pub use bindless::*;
 pub use bindless_pipeline::*;
+
+use crate::backing::table::SlotAllocationError;
 use std::error::Error;
 
 /// public interface for a Graphics API. Feel free to use as a base template for other traits.

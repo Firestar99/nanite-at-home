@@ -1,9 +1,11 @@
 use crate::backing::range_set::DescriptorIndexIterator;
 use crate::backing::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
-use crate::descriptor::boxed::{BoxDesc, BoxDescExt};
 use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts};
+use crate::descriptor::mutdesc::{MutBoxDescExt, MutDesc, MutDescExt};
+use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts, RCDesc};
+use crate::pipeline::access_lock::{AccessLock, AccessLockError};
+use crate::pipeline::access_type::BufferAccess;
 use crate::platform::BindlessPlatform;
 use parking_lot::Mutex;
 use presser::Slab;
@@ -48,6 +50,7 @@ impl<T: BufferContent + ?Sized> DescContentCpu for MutBuffer<T> {
 
 impl<T: BufferContent + ?Sized> DescContentMutCpu for MutBuffer<T> {
 	type Shared = Buffer<T>;
+	type Access = BufferAccess;
 }
 
 impl<P: BindlessPlatform> DescTable for BufferTable<P> {}
@@ -61,6 +64,7 @@ pub struct BufferSlot<P: BindlessPlatform> {
 	pub usage: BindlessBufferUsage,
 	pub memory_allocation: P::MemoryAllocation,
 	pub strong_refs: Mutex<StrongBackingRefs<P>>,
+	pub access_lock: AccessLock<BufferAccess>,
 }
 
 pub struct BufferTable<P: BindlessPlatform> {
@@ -140,6 +144,14 @@ impl BindlessBufferUsage {
 	pub fn is_mappable(&self) -> bool {
 		self.contains(BindlessBufferUsage::MAP_READ) || self.contains(BindlessBufferUsage::MAP_WRITE)
 	}
+
+	pub fn initial_buffer_access(&self) -> BufferAccess {
+		if self.is_mappable() {
+			BufferAccess::General
+		} else {
+			BufferAccess::Undefined
+		}
+	}
 }
 
 pub struct BindlessBufferCreateInfo<'a> {
@@ -156,14 +168,14 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	///
 	/// # Safety
 	/// The Buffer's device must be the same as the bindless device. Ownership of the buffer is transferred to this
-	/// table. You may not access or drop it afterward, except by going though the returned `RCDesc`.
+	/// table. You may not access or drop it afterward, except by going though the returned `MutDesc`.
 	/// The generic T must match the contents of the Buffer and the size of the buffer must not be smaller than T.
 	#[inline]
 	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(
 		&self,
 		buffer: BufferSlot<P>,
-	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
-		unsafe { Ok(BoxDesc::new(self.table.alloc_slot(buffer)?)) }
+	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
+		unsafe { Ok(MutDesc::new(self.table.alloc_slot(buffer)?)) }
 	}
 
 	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, BufferInterface<P>> {
@@ -173,7 +185,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	pub fn alloc_sized<T: BufferStruct>(
 		&self,
 		create_info: &BindlessBufferCreateInfo,
-	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
 		unsafe {
 			let size = size_of::<T::Transfer>() as u64;
 			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
@@ -184,6 +196,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				usage: create_info.usage,
 				memory_allocation,
 				strong_refs: Default::default(),
+				access_lock: AccessLock::new(create_info.usage.initial_buffer_access()),
 			})?)
 		}
 	}
@@ -192,7 +205,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		len: usize,
-	) -> Result<BoxDesc<P, MutBuffer<[T]>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<[T]>>, P::AllocationError> {
 		unsafe {
 			let size = size_of::<T::Transfer>() as u64 * len as u64;
 			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
@@ -203,6 +216,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				usage: create_info.usage,
 				memory_allocation,
 				strong_refs: Default::default(),
+				access_lock: AccessLock::new(create_info.usage.initial_buffer_access()),
 			})?)
 		}
 	}
@@ -211,61 +225,100 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		data: T,
-	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
 		let buffer = self.alloc_sized(create_info)?;
-		unsafe { buffer.mapped_unchecked().unwrap().write_data(data) };
+		buffer.mapped().unwrap().write_data(data);
 		Ok(buffer)
+	}
+
+	pub fn alloc_shared_from_data<T: BufferStruct>(
+		&self,
+		create_info: &BindlessBufferCreateInfo,
+		data: T,
+	) -> Result<RCDesc<P, Buffer<T>>, P::AllocationError> {
+		unsafe { Ok(self.alloc_from_data(create_info, data)?.into_shared_unchecked()) }
 	}
 
 	pub fn alloc_from_iter<T: BufferStruct, I>(
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		iter: I,
-	) -> Result<BoxDesc<P, MutBuffer<[T]>>, P::AllocationError>
+	) -> Result<MutDesc<P, MutBuffer<[T]>>, P::AllocationError>
 	where
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
 	{
 		let iter = iter.into_iter();
 		let buffer = self.alloc_slice(create_info, iter.len())?;
-		unsafe { buffer.mapped_unchecked().unwrap().overwrite_from_iter_exact(iter) };
+		buffer.mapped().unwrap().overwrite_from_iter_exact(iter);
 		Ok(buffer)
+	}
+
+	pub fn alloc_shared_from_iter<T: BufferStruct, I>(
+		&self,
+		create_info: &BindlessBufferCreateInfo,
+		iter: I,
+	) -> Result<RCDesc<P, Buffer<[T]>>, P::AllocationError>
+	where
+		I: IntoIterator<Item = T>,
+		I::IntoIter: ExactSizeIterator,
+	{
+		unsafe { Ok(self.alloc_from_iter(create_info, iter)?.into_shared_unchecked()) }
 	}
 }
 
 pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
 	/// Map and access the buffer's contents on the host
-	///
-	/// # Safety
-	/// Buffer must not be in use simultaneously by the Device
-	unsafe fn mapped_unchecked(&self) -> Result<MappedBuffer<P, T>, MapError>;
+	fn mapped(&self) -> Result<MappedBuffer<P, T>, MapError>;
 }
 
-impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for BoxDesc<P, MutBuffer<T>> {
-	unsafe fn mapped_unchecked(&self) -> Result<MappedBuffer<P, T>, MapError> {
+impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for MutDesc<P, MutBuffer<T>> {
+	fn mapped(&self) -> Result<MappedBuffer<P, T>, MapError> {
 		let slot = self.inner_slot();
-		if slot.usage.is_mappable() {
-			Ok(MappedBuffer {
-				table_sync: self.rc_slot().table_sync_arc(),
-				slot,
-				_phantom: PhantomData,
-			})
-		} else {
-			Err(MapError::BufferNotMappable)
+		if !slot.usage.is_mappable() {
+			return Err(MapError::MissingBufferUsage);
 		}
+		let curr_access = slot.access_lock.try_lock()?;
+		if !matches!(curr_access, BufferAccess::General | BufferAccess::HostAccess) {
+			slot.access_lock.unlock(curr_access);
+			return Err(MapError::IncorrectLayout(curr_access));
+		}
+		Ok(MappedBuffer {
+			table_sync: self.rc_slot().table_sync_arc(),
+			slot,
+			curr_access,
+			_phantom: PhantomData,
+		})
 	}
 }
 
 #[derive(Debug, Error)]
 pub enum MapError {
 	#[error("Buffer is not mappable, BufferUsage is missing `MAP_WRITE` or `MAP_READ` flags")]
-	BufferNotMappable,
+	MissingBufferUsage,
+	#[error("Buffer must be in BufferAccess::HostAccess or General, but is in {0:?} access")]
+	IncorrectLayout(BufferAccess),
+	#[error("AccessLockError: {0}")]
+	AccessLock(AccessLockError),
+}
+
+impl From<AccessLockError> for MapError {
+	fn from(value: AccessLockError) -> Self {
+		Self::AccessLock(value)
+	}
 }
 
 pub struct MappedBuffer<'a, P: BindlessPlatform, T: BufferContent + ?Sized> {
 	table_sync: Arc<TableSync>,
 	slot: &'a BufferSlot<P>,
+	curr_access: BufferAccess,
 	_phantom: PhantomData<T>,
+}
+
+impl<'a, P: BindlessPlatform, T: BufferContent + ?Sized> Drop for MappedBuffer<'a, P, T> {
+	fn drop(&mut self) {
+		self.slot.access_lock.unlock(self.curr_access);
+	}
 }
 
 impl<'a, P: BindlessPlatform, T: BufferContent> MappedBuffer<'a, P, T> {

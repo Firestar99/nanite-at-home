@@ -1,21 +1,26 @@
+use num_derive::{FromPrimitive, ToPrimitive};
+
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum BufferAccess {
 	Undefined,
 	General,
 	TransferRead,
 	TransferWrite,
-	Read,
-	/// Write is currently useless, use [`BufferAccess::ReadWrite`] instead
-	Write,
-	ReadWrite,
+	ShaderRead,
+	/// Write is currently useless, use [`BufferAccess::ShaderReadWrite`] instead
+	ShaderWrite,
+	ShaderReadWrite,
+	GeneralRead,
+	GeneralWrite,
+	HostAccess,
 	IndirectCommandRead,
 	IndexRead,
 	VertexAttributeRead,
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum ImageAccess {
 	Undefined,
 	General,
@@ -25,6 +30,8 @@ pub enum ImageAccess {
 	/// StorageWrite is currently useless, use [`ImageAccess::StorageReadWrite`] instead
 	StorageWrite,
 	StorageReadWrite,
+	GeneralRead,
+	GeneralWrite,
 	SampledRead,
 	ColorAttachment,
 	DepthStencilAttachment,
@@ -78,15 +85,18 @@ macro_rules! access_type {
 
 access_type!(pub Undefined: BufferAccess::Undefined ImageAccess::Undefined);
 access_type!(pub General: BufferAccess::General ImageAccess::General ShaderReadable ShaderWriteable ShaderReadWriteable ShaderSampleable);
+access_type!(pub GeneralRead: BufferAccess::GeneralRead ImageAccess::GeneralRead ShaderReadable ShaderSampleable);
+access_type!(pub GeneralWrite: BufferAccess::GeneralWrite ImageAccess::GeneralWrite ShaderWriteable);
 access_type!(pub TransferRead: BufferAccess::TransferRead ImageAccess::TransferRead);
 access_type!(pub TransferWrite: BufferAccess::TransferWrite ImageAccess::TransferWrite);
 
-access_type!(pub Read: BufferAccess::Read ShaderReadable);
+access_type!(pub ShaderRead: BufferAccess::ShaderRead ShaderReadable);
 access_type! {
-	/// Write is currently useless, use [`ReadWrite`] instead
-	pub Write: BufferAccess::Write ShaderWriteable
+	/// Write is currently useless, use [`ShaderReadWrite`] instead
+	pub ShaderWrite: BufferAccess::ShaderWrite ShaderWriteable
 }
-access_type!(pub ReadWrite: BufferAccess::ReadWrite ShaderReadable ShaderWriteable ShaderReadWriteable);
+access_type!(pub ShaderReadWrite: BufferAccess::ShaderReadWrite ShaderReadable ShaderWriteable ShaderReadWriteable);
+access_type!(pub HostAccess: BufferAccess::HostAccess);
 access_type!(pub IndirectCommandRead: BufferAccess::IndirectCommandRead);
 access_type!(pub IndexRead: BufferAccess::IndexRead);
 access_type!(pub VertexAttributeRead: BufferAccess::VertexAttributeRead);

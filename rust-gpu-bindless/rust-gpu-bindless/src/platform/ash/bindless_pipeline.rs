@@ -1,7 +1,8 @@
 use crate::descriptor::Bindless;
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::ash::{
-	ash_record_and_execute, Ash, AshExecutingContext, AshRecordingContext, AshRecordingResourceContext, RunOnDrop,
+	ash_record_and_execute, Ash, AshExecutingContext, AshRecordingContext, AshRecordingError,
+	AshRecordingResourceContext, RunOnDrop,
 };
 use crate::platform::BindlessPipelinePlatform;
 use ash::vk::{
@@ -18,7 +19,7 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	type MeshGraphicsPipeline = ash::vk::Pipeline;
 	type RecordingResourceContext = AshRecordingResourceContext;
 	type RecordingContext<'a> = AshRecordingContext<'a>;
-	type RecordingError = ash::vk::Result;
+	type RecordingError = AshRecordingError;
 	type ExecutingContext<R: Send + Sync> = AshExecutingContext<R>;
 
 	// FIXME compute pipelines are never destroyed!
