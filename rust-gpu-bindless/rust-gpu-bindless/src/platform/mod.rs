@@ -2,6 +2,7 @@ pub mod ash;
 mod bindless;
 mod bindless_pipeline;
 
+use crate::backing::table::SlotAllocationError;
 pub use bindless::*;
 pub use bindless_pipeline::*;
 use std::error::Error;
@@ -15,5 +16,5 @@ pub unsafe trait Platform: Sized + Send + Sync + 'static {
 	type Image: 'static + Send + Sync;
 	type ImageView: 'static + Send + Sync;
 	type Sampler: 'static + Send + Sync;
-	type AllocationError: 'static + Error + Send + Sync;
+	type AllocationError: 'static + Error + Send + Sync + From<SlotAllocationError>;
 }

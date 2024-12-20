@@ -11,11 +11,6 @@ pub struct Buffer<T: BufferContent + ?Sized> {
 
 impl<T: BufferContent + ?Sized> DescContent for Buffer<T> {}
 
-/// FIXME instead of mut descriptors, what about mut content?
-///  * Allows reusing Transient and all the others
-///  * easier to define custom accessor methods (eg. store) with separate content type
-///  * can mutably borrow Descriptors (even though mut borrow exclusivity is nonsensical, easier to get running)
-///  * Change MutDesc to BoxDesc, into_shared(BoxDesc<MutBuffer>) -> RCDesc<Buffer>
 pub struct MutBuffer<T: BufferContent + ?Sized> {
 	_phantom: PhantomData<T>,
 }

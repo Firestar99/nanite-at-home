@@ -1,5 +1,5 @@
 use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
-use crate::backing::table::DrainFlushQueue;
+use crate::backing::table::{DrainFlushQueue, SlotAllocationError};
 use crate::descriptor::boxed::BoxDesc;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,
@@ -370,6 +370,7 @@ impl Deref for AshBindlessDescriptorSet {
 pub enum AshAllocationError {
 	Vk(ash::vk::Result),
 	Allocator(AllocationError),
+	Slot(SlotAllocationError),
 }
 
 impl Display for AshAllocationError {
@@ -377,11 +378,18 @@ impl Display for AshAllocationError {
 		match self {
 			AshAllocationError::Vk(e) => Display::fmt(e, f),
 			AshAllocationError::Allocator(e) => Display::fmt(e, f),
+			AshAllocationError::Slot(e) => Display::fmt(e, f),
 		}
 	}
 }
 
 impl Error for AshAllocationError {}
+
+impl From<SlotAllocationError> for AshAllocationError {
+	fn from(value: SlotAllocationError) -> Self {
+		AshAllocationError::Slot(value)
+	}
+}
 
 impl From<ash::vk::Result> for AshAllocationError {
 	fn from(value: ash::vk::Result) -> Self {
@@ -499,7 +507,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				usage,
 				memory_allocation: AshMemoryAllocation::new(memory_allocation),
 				strong_refs: Default::default(),
-			}))
+			})?)
 		}
 	}
 }

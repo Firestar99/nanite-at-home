@@ -159,15 +159,11 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	/// table. You may not access or drop it afterward, except by going though the returned `RCDesc`.
 	/// The generic T must match the contents of the Buffer and the size of the buffer must not be smaller than T.
 	#[inline]
-	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(&self, buffer: BufferSlot<P>) -> BoxDesc<P, MutBuffer<T>> {
-		unsafe {
-			BoxDesc::new(
-				self.table
-					.alloc_slot(buffer)
-					.map_err(|a| format!("BufferTable: {}", a))
-					.unwrap(),
-			)
-		}
+	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(
+		&self,
+		buffer: BufferSlot<P>,
+	) -> Result<BoxDesc<P, MutBuffer<T>>, P::AllocationError> {
+		unsafe { Ok(BoxDesc::new(self.table.alloc_slot(buffer)?)) }
 	}
 
 	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, BufferInterface<P>> {
@@ -188,7 +184,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				usage: create_info.usage,
 				memory_allocation,
 				strong_refs: Default::default(),
-			}))
+			})?)
 		}
 	}
 
@@ -207,7 +203,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				usage: create_info.usage,
 				memory_allocation,
 				strong_refs: Default::default(),
-			}))
+			})?)
 		}
 	}
 
