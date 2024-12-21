@@ -61,8 +61,8 @@ presser = "0.3.1"
 winit = { version = "0.29" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "a69eb48e17b2a97bb74523eabdea54a9b92782a4", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "a69eb48e17b2a97bb74523eabdea54a9b92782a4", features = ["bytemuck"] }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", features = ["bytemuck"] }
 
 # async
 async-std = "1.12.0"

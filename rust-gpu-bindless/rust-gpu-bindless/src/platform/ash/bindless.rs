@@ -2,28 +2,34 @@ use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet
 use crate::backing::table::{DrainFlushQueue, SlotAllocationError};
 use crate::descriptor::MutDesc;
 use crate::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferInterface, BufferSlot,
-	BufferTableAccess, DescriptorCounts, ImageInterface, RCDesc, Sampler, SamplerInterface, SamplerTableAccess,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
+	BindlessImageUsage, BufferInterface, BufferSlot, BufferTableAccess, DescriptorCounts, Extent, ImageInterface,
+	RCDesc, SampleCount, Sampler, SamplerInterface, SamplerTableAccess,
 };
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::BufferAccess;
+use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{Ash, AshMemoryAllocation};
 use crate::platform::BindlessPlatform;
+use crate::spirv_std::image::{Arrayed, Dimensionality};
 use ash::prelude::VkResult;
 use ash::vk::{
-	BufferUsageFlags, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
-	DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo,
-	DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo, DescriptorSetLayoutCreateFlags,
-	DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageUsageFlags, PipelineLayout,
-	PipelineLayoutCreateInfo, PushConstantRange, SamplerCreateInfo, WriteDescriptorSet,
+	BufferUsageFlags, ComponentMapping, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
+	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
+	DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo,
+	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, Extent3D, ImageLayout,
+	ImageSubresourceRange, ImageTiling, ImageUsageFlags, ImageViewCreateInfo, ImageViewType, PipelineLayout,
+	PipelineLayoutCreateInfo, PushConstantRange, SamplerCreateInfo, SharingMode, WriteDescriptorSet,
 };
+use ash::vk::{ImageType as VkImageType, SampleCountFlags};
 use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
 use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
 use gpu_allocator::{AllocationError, MemoryLocation};
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
-	BindlessPushConstant, MutBuffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
+	BindlessPushConstant, ImageType, MutBuffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER,
+	BINDING_STORAGE_IMAGE,
 };
 use std::mem::size_of;
 use std::ops::Deref;
@@ -179,10 +185,10 @@ unsafe impl BindlessPlatform for Ash {
 		let mut sampled_images = DescriptorIndexRangeSet::new(image_table, RangeSet::new());
 		for image_id in images {
 			let image = unsafe { image_table.get_slot_unchecked(image_id) };
-			if image.usage.contains(ImageUsageFlags::STORAGE) {
+			if image.usage.contains(BindlessImageUsage::STORAGE) {
 				storage_images.insert(image_id);
 			}
-			if image.usage.contains(ImageUsageFlags::SAMPLED) {
+			if image.usage.contains(BindlessImageUsage::SAMPLED) {
 				sampled_images.insert(image_id);
 			}
 		}
@@ -277,11 +283,10 @@ unsafe impl BindlessPlatform for Ash {
 		size: u64,
 	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError> {
 		let buffer = self.device.create_buffer(
-			&ash::vk::BufferCreateInfo {
-				usage: create_info.usage.to_ash_buffer_usage_flags(),
-				size,
-				..Default::default()
-			},
+			&ash::vk::BufferCreateInfo::default()
+				.usage(create_info.usage.to_ash_buffer_usage_flags())
+				.size(size)
+				.sharing_mode(SharingMode::EXCLUSIVE),
 			None,
 		)?;
 		let requirements = self.device.get_buffer_memory_requirements(buffer);
@@ -295,6 +300,55 @@ unsafe impl BindlessPlatform for Ash {
 		self.device
 			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
 		Ok((buffer, AshMemoryAllocation::new(memory_allocation)))
+	}
+
+	unsafe fn alloc_image<T: ImageType>(
+		&self,
+		create_info: &BindlessImageCreateInfo<T>,
+	) -> Result<(Self::Image, Self::ImageView, Self::MemoryAllocation), Self::AllocationError> {
+		let image_type = bindless_image_type_to_vk_image_type::<T>().expect("Unsupported ImageType");
+		let image_view_type = bindless_image_type_to_vk_image_view_type::<T>().expect("Unsupported ImageType");
+		let image = self.device.create_image(
+			&ash::vk::ImageCreateInfo::default()
+				.flags(ash::vk::ImageCreateFlags::empty())
+				.image_type(image_type)
+				.format(create_info.format)
+				.extent(create_info.extent.into())
+				.mip_levels(create_info.mip_levels)
+				.array_layers(create_info.array_layers)
+				.samples(create_info.samples.to_ash_sample_count_flags())
+				.tiling(ImageTiling::OPTIMAL)
+				.usage(create_info.usage.to_ash_image_usage_flags())
+				.sharing_mode(SharingMode::EXCLUSIVE)
+				.initial_layout(ImageLayout::UNDEFINED),
+			None,
+		)?;
+		let requirements = self.device.get_image_memory_requirements(image);
+		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
+			requirements,
+			name: create_info.name,
+			location: create_info.usage.to_gpu_allocator_memory_location(),
+			allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_image(image),
+			linear: true,
+		})?;
+		self.device
+			.bind_image_memory(image, memory_allocation.memory(), memory_allocation.offset())?;
+		let image_view = self.device.create_image_view(
+			&ImageViewCreateInfo::default()
+				.image(image)
+				.view_type(image_view_type)
+				.format(create_info.format)
+				.components(ComponentMapping::default()) // identity
+				.subresource_range(ImageSubresourceRange {
+					aspect_mask: create_info.format.aspect(),
+					base_mip_level: 0,
+					level_count: create_info.mip_levels,
+					base_array_layer: 0,
+					layer_count: create_info.array_layers,
+				}),
+			None,
+		)?;
+		Ok((image, image_view, AshMemoryAllocation::new(memory_allocation)))
 	}
 
 	unsafe fn memory_allocation_to_slab<'a>(
@@ -460,6 +514,88 @@ impl BindlessBufferUsage {
 		} else {
 			MemoryLocation::GpuOnly
 		}
+	}
+}
+
+fn bindless_image_type_to_vk_image_type<T: ImageType>() -> Option<VkImageType> {
+	match T::dimensionality() {
+		Dimensionality::OneD => Some(VkImageType::TYPE_1D),
+		Dimensionality::TwoD => Some(VkImageType::TYPE_2D),
+		Dimensionality::ThreeD => Some(VkImageType::TYPE_3D),
+		Dimensionality::Cube => Some(VkImageType::TYPE_2D),
+		Dimensionality::Rect => Some(VkImageType::TYPE_2D),
+		Dimensionality::Buffer => None,
+		Dimensionality::SubpassData => None,
+	}
+}
+
+fn bindless_image_type_to_vk_image_view_type<T: ImageType>() -> Option<ImageViewType> {
+	match (T::dimensionality(), T::arrayed()) {
+		(Dimensionality::OneD, Arrayed::False) => Some(ImageViewType::TYPE_1D),
+		(Dimensionality::OneD, Arrayed::True) => Some(ImageViewType::TYPE_1D_ARRAY),
+		(Dimensionality::TwoD, Arrayed::False) => Some(ImageViewType::TYPE_2D),
+		(Dimensionality::TwoD, Arrayed::True) => Some(ImageViewType::TYPE_2D_ARRAY),
+		(Dimensionality::ThreeD, Arrayed::False) => Some(ImageViewType::TYPE_3D),
+		(Dimensionality::ThreeD, Arrayed::True) => None,
+		(Dimensionality::Cube, Arrayed::False) => Some(ImageViewType::CUBE),
+		(Dimensionality::Cube, Arrayed::True) => Some(ImageViewType::CUBE_ARRAY),
+		(Dimensionality::Rect, Arrayed::False) => Some(ImageViewType::TYPE_2D),
+		(Dimensionality::Rect, Arrayed::True) => Some(ImageViewType::TYPE_2D_ARRAY),
+		(Dimensionality::Buffer, _) => None,
+		(Dimensionality::SubpassData, _) => None,
+	}
+}
+
+impl SampleCount {
+	pub fn to_ash_sample_count_flags(&self) -> SampleCountFlags {
+		match self {
+			SampleCount::Sample1 => SampleCountFlags::TYPE_1,
+			SampleCount::Sample2 => SampleCountFlags::TYPE_2,
+			SampleCount::Sample4 => SampleCountFlags::TYPE_4,
+			SampleCount::Sample8 => SampleCountFlags::TYPE_8,
+			SampleCount::Sample16 => SampleCountFlags::TYPE_16,
+			SampleCount::Sample32 => SampleCountFlags::TYPE_32,
+			SampleCount::Sample64 => SampleCountFlags::TYPE_64,
+		}
+	}
+}
+
+impl From<Extent> for Extent3D {
+	fn from(value: Extent) -> Self {
+		Extent3D {
+			width: value.width,
+			height: value.height,
+			depth: value.depth,
+		}
+	}
+}
+
+impl BindlessImageUsage {
+	pub fn to_ash_image_usage_flags(&self) -> ImageUsageFlags {
+		let mut out = ImageUsageFlags::empty();
+		if self.contains(BindlessImageUsage::TRANSFER_SRC) {
+			out |= ImageUsageFlags::TRANSFER_SRC;
+		}
+		if self.contains(BindlessImageUsage::TRANSFER_DST) {
+			out |= ImageUsageFlags::TRANSFER_DST;
+		}
+		if self.contains(BindlessImageUsage::SAMPLED) {
+			out |= ImageUsageFlags::SAMPLED;
+		}
+		if self.contains(BindlessImageUsage::STORAGE) {
+			out |= ImageUsageFlags::STORAGE;
+		}
+		if self.contains(BindlessImageUsage::COLOR_ATTACHMENT) {
+			out |= ImageUsageFlags::COLOR_ATTACHMENT;
+		}
+		if self.contains(BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT) {
+			out |= ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
+		}
+		out
+	}
+
+	pub fn to_gpu_allocator_memory_location(&self) -> MemoryLocation {
+		MemoryLocation::GpuOnly
 	}
 }
 

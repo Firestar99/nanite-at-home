@@ -169,20 +169,17 @@ fn gen_bindless_descriptors(context: &mut BindlessContext) -> Result<SymDescript
 	let image_args;
 	let image_values;
 	macro_rules! make_image_args {
-		(
-			{$($storage_name:ident: $storage_ty:ty,)*}
-			{$($sampled_name:ident: $sampled_ty:ty,)*}
-		) => {
-			$(let $storage_name = format_ident!("__bindless_{}", stringify!($storage_name));)*
-			$(let $sampled_name = format_ident!("__bindless_{}", stringify!($sampled_name));)*
+		($($image:ident: $sampled:ident $storage:ident,)*) => {
+			$(let $storage = format_ident!("__bindless_{}", stringify!($storage));)*
+			$(let $sampled = format_ident!("__bindless_{}", stringify!($sampled));)*
 
 			image_args = quote! {
-				$(#[spirv(descriptor_set = 0, binding = 1)] #$storage_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$storage_ty>,)*
-				$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled_name: &#crate_shaders::spirv_std::RuntimeArray<#crate_shaders$sampled_ty>,)*
+				$(#[spirv(descriptor_set = 0, binding = 1)] #$storage: &#crate_shaders::spirv_std::RuntimeArray<<#crate_shaders::descriptor::$image as #crate_shaders::descriptor::ImageType>::StorageSpvImage>,)*
+				$(#[spirv(descriptor_set = 0, binding = 2)] #$sampled: &#crate_shaders::spirv_std::RuntimeArray<<#crate_shaders::descriptor::$image as #crate_shaders::descriptor::ImageType>::SampledSpvImage>,)*
 			};
 			image_values = quote! {
-				$($storage_name: #$storage_name,)*
-				$($sampled_name: #$sampled_name,)*
+				$($storage: #$storage,)*
+				$($sampled: #$sampled,)*
 			};
 		};
 	}

@@ -60,6 +60,7 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>:
 
 	fn into_rc_slot(self) -> RcTableSlot;
 
+	// TODO these functions aren't exactly safe
 	#[inline]
 	fn inner_slot(&self) -> &C::Slot<P> {
 		C::get_slot(self.rc_slot())

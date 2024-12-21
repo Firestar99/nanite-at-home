@@ -3,21 +3,26 @@ use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame, BufferSlot,
 	ImageSlot,
 };
+use crate::pipeline::access_buffer::MutBufferAccess;
+use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_lock::AccessLockError;
-use crate::pipeline::access_type::{BufferAccess, ImageAccess};
+use crate::pipeline::access_type::{
+	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
+};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::platform::ash::ash_ext::DeviceExt;
+use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
 use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use ash::prelude::VkResult;
 use ash::vk::{
-	BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo, CommandBufferLevel,
-	CommandBufferUsageFlags, DependencyInfo, ImageAspectFlags, ImageMemoryBarrier2, ImageSubresourceRange,
-	MemoryBarrier2, PipelineBindPoint, SubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS,
-	WHOLE_SIZE,
+	BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
+	CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo,
+	ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint,
+	SubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, WHOLE_SIZE,
 };
-use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
-use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, TransientAccess};
+use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, TransientAccess};
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -102,7 +107,7 @@ unsafe impl RecordingResourceContext<Ash> for AshRecordingResourceContext {
 					ImageSubresourceRange::default()
 						// I'm unsure if it's valid to specify it like this or if the aspect has to match the format of
 						// the image, I guess we'll find out later!
-						.aspect_mask(ImageAspectFlags::COLOR | ImageAspectFlags::DEPTH | ImageAspectFlags::STENCIL)
+						.aspect_mask(image.format.aspect())
 						.base_array_layer(0)
 						.layer_count(REMAINING_ARRAY_LAYERS)
 						.base_mip_level(0)
@@ -158,8 +163,8 @@ impl<'a> AshRecordingContext<'a> {
 		}
 	}
 
-	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any shader
-	/// execution command is recorded.
+	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any action
+	/// command is recorded.
 	pub fn ash_flush(&mut self) {
 		unsafe {
 			let device = &self.bindless.device;
@@ -272,6 +277,84 @@ unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 	fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
 		self.resource
+	}
+
+	fn copy_buffer_to_image<
+		BT: BufferContent + ?Sized,
+		BA: BufferAccessType + TransferReadable,
+		IT: ImageType,
+		IA: ImageAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src_buffer: &mut MutBufferAccess<Ash, BT, BA>,
+		dst_image: &mut MutImageAccess<Ash, IT, IA>,
+	) {
+		unsafe {
+			self.ash_flush();
+			let device = &self.bindless.platform.device;
+			let buffer = src_buffer.inner_slot();
+			let image = dst_image.inner_slot();
+			device.cmd_copy_buffer_to_image2(
+				self.cmd,
+				&CopyBufferToImageInfo2::default()
+					.src_buffer(buffer.buffer)
+					.dst_image(image.image)
+					.dst_image_layout(IA::IMAGE_ACCESS.to_ash_image_access().image_layout)
+					.regions(&[BufferImageCopy2 {
+						buffer_offset: 0,
+						buffer_row_length: 0,
+						buffer_image_height: 0,
+						image_subresource: ImageSubresourceLayers {
+							aspect_mask: image.format.aspect(),
+							mip_level: 0,
+							base_array_layer: 0,
+							layer_count: image.array_layers,
+						},
+						image_offset: Offset3D::default(),
+						image_extent: image.extent.into(),
+						..Default::default()
+					}]),
+			)
+		}
+	}
+
+	fn copy_image_to_buffer<
+		IT: ImageType,
+		IA: ImageAccessType + TransferReadable,
+		BT: BufferContent + ?Sized,
+		BA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src_image: &mut MutImageAccess<Ash, IT, IA>,
+		dst_buffer: &mut MutBufferAccess<Ash, BT, BA>,
+	) {
+		unsafe {
+			self.ash_flush();
+			let device = &self.bindless.platform.device;
+			let buffer = dst_buffer.inner_slot();
+			let image = src_image.inner_slot();
+			device.cmd_copy_image_to_buffer2(
+				self.cmd,
+				&CopyImageToBufferInfo2::default()
+					.src_image(image.image)
+					.src_image_layout(IA::IMAGE_ACCESS.to_ash_image_access().image_layout)
+					.dst_buffer(buffer.buffer)
+					.regions(&[BufferImageCopy2 {
+						buffer_offset: 0,
+						buffer_row_length: 0,
+						buffer_image_height: 0,
+						image_subresource: ImageSubresourceLayers {
+							aspect_mask: image.format.aspect(),
+							mip_level: 0,
+							base_array_layer: 0,
+							layer_count: image.array_layers,
+						},
+						image_offset: Offset3D::default(),
+						image_extent: image.extent.into(),
+						..Default::default()
+					}]),
+			)
+		}
 	}
 
 	fn dispatch<T: BufferStruct>(

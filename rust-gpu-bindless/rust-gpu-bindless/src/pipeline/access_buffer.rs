@@ -66,14 +66,16 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 		cmd: &P::RecordingContext<'a>,
 		f: impl FnOnce(BufferAccess) -> BufferAccess,
 	) -> Result<Self, AccessLockError> {
-		let this = Self {
-			slot: desc.into_rc_slot(),
-			resource_context: cmd.resource_context(),
-			_phantom: PhantomData,
-			_phantom2: PhantomData,
-		};
-		this.transition_inner(f(this.inner_slot().access_lock.try_lock()?), A::BUFFER_ACCESS);
-		Ok(this)
+		unsafe {
+			let this = Self {
+				slot: desc.into_rc_slot(),
+				resource_context: cmd.resource_context(),
+				_phantom: PhantomData,
+				_phantom2: PhantomData,
+			};
+			this.transition_inner(f(this.inner_slot().access_lock.try_lock()?), A::BUFFER_ACCESS);
+			Ok(this)
+		}
 	}
 
 	/// Transition this Buffer from one [`BufferAccessType`] to another and inserts appropriate barriers.
@@ -96,7 +98,7 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	}
 
 	#[inline]
-	fn inner_slot(&self) -> &BufferSlot<P> {
+	pub unsafe fn inner_slot(&self) -> &BufferSlot<P> {
 		MutBuffer::<T>::get_slot(&self.slot)
 	}
 
@@ -105,8 +107,10 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	//  unlock, which is useful for frame in flight shared resources.
 	/// Turns this mutable access to a [`MutBuffer`] back into a [`MutBuffer`] to be used in another execution
 	pub fn into_desc(self) -> MutDesc<P, MutBuffer<T>> {
-		self.inner_slot().access_lock.unlock(A::BUFFER_ACCESS);
-		unsafe { MutDesc::new(self.slot) }
+		unsafe {
+			self.inner_slot().access_lock.unlock(A::BUFFER_ACCESS);
+			MutDesc::new(self.slot)
+		}
 	}
 
 	/// Turns this mutable access to a [`MutBuffer`] into a shared [`RCDesc`]

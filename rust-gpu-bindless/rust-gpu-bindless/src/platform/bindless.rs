@@ -1,9 +1,11 @@
 use crate::backing::range_set::DescriptorIndexIterator;
 use crate::backing::table::DrainFlushQueue;
 use crate::descriptor::{
-	Bindless, BindlessBufferCreateInfo, BufferInterface, DescriptorCounts, ImageInterface, SamplerInterface,
+	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BufferInterface, DescriptorCounts, ImageInterface,
+	SamplerInterface,
 };
 use crate::platform::Platform;
+use rust_gpu_bindless_shaders::descriptor::ImageType;
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Platform {
@@ -48,6 +50,11 @@ pub unsafe trait BindlessPlatform: Platform {
 		create_info: &BindlessBufferCreateInfo,
 		size: u64,
 	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError>;
+
+	unsafe fn alloc_image<T: ImageType>(
+		&self,
+		create_info: &BindlessImageCreateInfo<T>,
+	) -> Result<(Self::Image, Self::ImageView, Self::MemoryAllocation), Self::AllocationError>;
 
 	/// Turn the [`MemoryAllocation`] into a Slab. You may assume that the [`MemoryAllocation`] is mappable and has
 	/// either [`BindlessBufferUsage::MAP_WRITE`] or [`BindlessBufferUsage::MAP_READ`]. You also have exclusive access

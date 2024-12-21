@@ -1,11 +1,15 @@
 use crate::descriptor::{Bindless, BufferSlot, ImageSlot};
+use crate::pipeline::access_buffer::MutBufferAccess;
+use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_lock::AccessLockError;
-use crate::pipeline::access_type::{BufferAccess, ImageAccess};
+use crate::pipeline::access_type::{
+	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
+};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPlatform;
-use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
-use rust_gpu_bindless_shaders::descriptor::TransientAccess;
+use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
 use rust_gpu_bindless_shaders::shader_type::ComputeShader;
 use std::error::Error;
 use std::sync::Arc;
@@ -34,6 +38,28 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 
 pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> {
 	fn resource_context(&self) -> &'a P::RecordingResourceContext;
+
+	fn copy_buffer_to_image<
+		BT: BufferContent + ?Sized,
+		BA: BufferAccessType + TransferReadable,
+		IT: ImageType,
+		IA: ImageAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &mut MutBufferAccess<P, BT, BA>,
+		dst: &mut MutImageAccess<P, IT, IA>,
+	);
+
+	fn copy_image_to_buffer<
+		IT: ImageType,
+		IA: ImageAccessType + TransferReadable,
+		BT: BufferContent + ?Sized,
+		BA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &mut MutImageAccess<P, IT, IA>,
+		dst: &mut MutBufferAccess<P, BT, BA>,
+	);
 
 	/// Dispatch a bindless compute shader
 	fn dispatch<T: BufferStruct>(

@@ -62,9 +62,9 @@ pub struct BufferSlot<P: BindlessPlatform> {
 	/// the total size of this buffer in bytes
 	pub size: u64,
 	pub usage: BindlessBufferUsage,
+	pub access_lock: AccessLock<BufferAccess>,
 	pub memory_allocation: P::MemoryAllocation,
 	pub strong_refs: Mutex<StrongBackingRefs<P>>,
-	pub access_lock: AccessLock<BufferAccess>,
 }
 
 pub struct BufferTable<P: BindlessPlatform> {
@@ -117,7 +117,7 @@ impl<'a, P: BindlessPlatform> Deref for BufferTableAccess<'a, P> {
 bitflags::bitflags! {
 	/// Buffer usage specify how you may use a buffer. Missing flags are only validated during runtime.
 	#[repr(transparent)]
-	#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+	#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 	pub struct BindlessBufferUsage: u64 {
 		/// Can be used as a source of transfer operations
 		const TRANSFER_SRC = 0b1;
@@ -141,10 +141,12 @@ bitflags::bitflags! {
 }
 
 impl BindlessBufferUsage {
+	#[inline]
 	pub fn is_mappable(&self) -> bool {
-		self.contains(BindlessBufferUsage::MAP_READ) || self.contains(BindlessBufferUsage::MAP_WRITE)
+		self.intersects(BindlessBufferUsage::MAP_READ | BindlessBufferUsage::MAP_WRITE)
 	}
 
+	#[inline]
 	pub fn initial_buffer_access(&self) -> BufferAccess {
 		if self.is_mappable() {
 			BufferAccess::General
@@ -154,6 +156,7 @@ impl BindlessBufferUsage {
 	}
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct BindlessBufferCreateInfo<'a> {
 	/// Buffer usage specify how you may use a buffer. Missing flags are only validated during runtime.
 	pub usage: BindlessBufferUsage,
@@ -161,6 +164,16 @@ pub struct BindlessBufferCreateInfo<'a> {
 	pub allocation_scheme: BindlessAllocationScheme,
 	/// Name of the buffer, for tracking and debugging purposes
 	pub name: &'a str,
+}
+
+impl<'a> Default for BindlessBufferCreateInfo<'a> {
+	fn default() -> Self {
+		Self {
+			usage: BindlessBufferUsage::default(),
+			allocation_scheme: BindlessAllocationScheme::default(),
+			name: "",
+		}
+	}
 }
 
 impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {

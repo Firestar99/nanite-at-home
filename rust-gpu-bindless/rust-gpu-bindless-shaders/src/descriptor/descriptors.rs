@@ -2,7 +2,8 @@ use crate::buffer_content::{BufferContent, BufferStruct, Metadata};
 use crate::descriptor::image_types::standard_image_types;
 use crate::descriptor::reference::{AliveDescRef, Desc};
 use crate::descriptor::{
-	Buffer, BufferSlice, DescContent, DescriptorId, MutBuffer, MutBufferSlice, TransientAccess, UnsafeDesc,
+	Buffer, BufferSlice, DescContent, DescriptorId, Image, ImageType, MutBuffer, MutBufferSlice, MutImage,
+	TransientAccess, UnsafeDesc,
 };
 use bytemuck_derive::{Pod, Zeroable};
 use spirv_std::{RuntimeArray, Sampler, TypedBuffer};
@@ -15,33 +16,31 @@ pub trait DescriptorAccess<'a, C: DescContent + ?Sized> {
 }
 
 macro_rules! decl_descriptors {
-    (
-		{$($storage_name:ident: $storage_ty:ty,)*}
-		{$($sampled_name:ident: $sampled_ty:ty,)*}
-	) => {
+    ($($image:ident: $sampled:ident $storage:ident,)*) => {
 		pub struct Descriptors<'a> {
 			pub buffers: &'a RuntimeArray<TypedBuffer<[u32]>>,
 			pub buffers_mut: &'a mut RuntimeArray<TypedBuffer<[u32]>>,
-			$(pub $storage_name: &'a RuntimeArray<$storage_ty>,)*
-			$(pub $sampled_name: &'a RuntimeArray<$sampled_ty>,)*
+			$(
+				pub $storage: &'a RuntimeArray<<crate::descriptor::$image as ImageType>::StorageSpvImage>,
+				pub $sampled: &'a RuntimeArray<<crate::descriptor::$image as ImageType>::SampledSpvImage>,
+			)*
 			pub samplers: &'a RuntimeArray<Sampler>,
 			pub meta: Metadata,
 		}
 		$(
-			impl<'a> DescriptorAccess<'a, $storage_ty> for &'a Descriptors<'_> {
-				type AccessType = &'a $storage_ty;
+			impl<'a> DescriptorAccess<'a, MutImage<crate::descriptor::$image>> for &'a Descriptors<'_> {
+				type AccessType = &'a <crate::descriptor::$image as ImageType>::StorageSpvImage;
 
-				fn access(self, desc: &Desc<impl AliveDescRef, $storage_ty>) -> Self::AccessType {
-					unsafe { self.$storage_name.index(desc.id().index().to_usize()) }
+				fn access(self, desc: &Desc<impl AliveDescRef, MutImage<crate::descriptor::$image>>) -> Self::AccessType {
+					unsafe { self.$storage.index(desc.id().index().to_usize()) }
 				}
 			}
-		)*
-		$(
-			impl<'a> DescriptorAccess<'a, $sampled_ty> for &'a Descriptors<'_> {
-				type AccessType = &'a $sampled_ty;
 
-				fn access(self, desc: &Desc<impl AliveDescRef, $sampled_ty>) -> Self::AccessType {
-					unsafe { self.$sampled_name.index(desc.id().index().to_usize()) }
+			impl<'a> DescriptorAccess<'a, Image<crate::descriptor::$image>> for &'a Descriptors<'_> {
+				type AccessType = &'a <crate::descriptor::$image as ImageType>::SampledSpvImage;
+
+				fn access(self, desc: &Desc<impl AliveDescRef, Image<crate::descriptor::$image>>) -> Self::AccessType {
+					unsafe { self.$sampled.index(desc.id().index().to_usize()) }
 				}
 			}
 		)*

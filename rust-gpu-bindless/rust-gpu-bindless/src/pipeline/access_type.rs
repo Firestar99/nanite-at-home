@@ -26,6 +26,7 @@ pub enum ImageAccess {
 	General,
 	TransferRead,
 	TransferWrite,
+	/// StorageRead is currently useless, use [`SampledRead`] or [`StorageReadWrite`] instead
 	StorageRead,
 	/// StorageWrite is currently useless, use [`ImageAccess::StorageReadWrite`] instead
 	StorageWrite,
@@ -58,6 +59,12 @@ pub unsafe trait ShaderReadWriteable: ShaderReadable + ShaderWriteable {}
 /// AccessType that allows a shader to sample a sampled image
 pub unsafe trait ShaderSampleable {}
 
+/// AccessType that allows a transfer operation to read from it
+pub unsafe trait TransferReadable {}
+
+/// AccessType that allows a transfer operation to read from it
+pub unsafe trait TransferWriteable {}
+
 macro_rules! access_type {
     (@inner $name:ident: BufferAccess::$access:ident $($tt:tt)*) => {
 		unsafe impl BufferAccessType for $name {
@@ -84,11 +91,13 @@ macro_rules! access_type {
 }
 
 access_type!(pub Undefined: BufferAccess::Undefined ImageAccess::Undefined);
-access_type!(pub General: BufferAccess::General ImageAccess::General ShaderReadable ShaderWriteable ShaderReadWriteable ShaderSampleable);
-access_type!(pub GeneralRead: BufferAccess::GeneralRead ImageAccess::GeneralRead ShaderReadable ShaderSampleable);
-access_type!(pub GeneralWrite: BufferAccess::GeneralWrite ImageAccess::GeneralWrite ShaderWriteable);
-access_type!(pub TransferRead: BufferAccess::TransferRead ImageAccess::TransferRead);
-access_type!(pub TransferWrite: BufferAccess::TransferWrite ImageAccess::TransferWrite);
+access_type!(pub General: BufferAccess::General ImageAccess::General ShaderReadable ShaderWriteable ShaderReadWriteable
+	ShaderSampleable TransferReadable TransferWriteable);
+access_type!(pub GeneralRead: BufferAccess::GeneralRead ImageAccess::GeneralRead ShaderReadable ShaderSampleable
+	TransferReadable);
+access_type!(pub GeneralWrite: BufferAccess::GeneralWrite ImageAccess::GeneralWrite ShaderWriteable TransferWriteable);
+access_type!(pub TransferRead: BufferAccess::TransferRead ImageAccess::TransferRead TransferReadable);
+access_type!(pub TransferWrite: BufferAccess::TransferWrite ImageAccess::TransferWrite TransferWriteable);
 
 access_type!(pub ShaderRead: BufferAccess::ShaderRead ShaderReadable);
 access_type! {
@@ -101,7 +110,10 @@ access_type!(pub IndirectCommandRead: BufferAccess::IndirectCommandRead);
 access_type!(pub IndexRead: BufferAccess::IndexRead);
 access_type!(pub VertexAttributeRead: BufferAccess::VertexAttributeRead);
 
-access_type!(pub StorageRead: ImageAccess::StorageRead ShaderReadable);
+access_type! {
+	/// StorageRead is currently useless, use [`SampledRead`] or [`StorageReadWrite`] instead
+	pub StorageRead: ImageAccess::StorageRead ShaderReadable
+}
 access_type! {
 	/// StorageWrite is currently useless, use [`StorageReadWrite`] instead
 	pub StorageWrite: ImageAccess::StorageWrite ShaderWriteable
