@@ -154,8 +154,16 @@ unsafe impl BindlessPlatform for Ash {
 		mut images: DrainFlushQueue<ImageInterface<Self>>,
 		mut samplers: DrainFlushQueue<SamplerInterface<Self>>,
 	) {
-		let buffers = buffers.into_range_set();
-		let buffer_infos = buffers
+		let (buffer_table, buffers) = buffers.into_inner();
+		let mut storage_buffers = DescriptorIndexRangeSet::new(buffer_table, RangeSet::new());
+		for buffer_id in buffers {
+			let buffer = unsafe { buffer_table.get_slot_unchecked(buffer_id) };
+			if buffer.usage.contains(BindlessBufferUsage::STORAGE_BUFFER) {
+				storage_buffers.insert(buffer_id);
+			}
+		}
+
+		let buffer_infos = storage_buffers
 			.iter()
 			.map(|(_, buffer)| {
 				DescriptorBufferInfo::default()
@@ -165,7 +173,7 @@ unsafe impl BindlessPlatform for Ash {
 			})
 			.collect::<Vec<_>>();
 		let mut buffer_info_index = 0;
-		let buffers = buffers.iter_ranges().map(|(range, _)| {
+		let buffers = storage_buffers.iter_ranges().map(|(range, _)| {
 			let count = range.end.to_usize() - range.start.to_usize();
 			WriteDescriptorSet::default()
 				.dst_set(set.set)
@@ -197,7 +205,7 @@ unsafe impl BindlessPlatform for Ash {
 			.iter()
 			.map(|(_, storage_image)| {
 				DescriptorImageInfo::default()
-					.image_view(storage_image.imageview)
+					.image_view(*storage_image.imageview.as_ref().unwrap())
 					.image_layout(ImageLayout::GENERAL)
 			})
 			.collect::<Vec<_>>();
@@ -221,7 +229,7 @@ unsafe impl BindlessPlatform for Ash {
 			.iter()
 			.map(|(_, sampled_image)| {
 				DescriptorImageInfo::default()
-					.image_view(sampled_image.imageview)
+					.image_view(*sampled_image.imageview.as_ref().unwrap())
 					.image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
 			})
 			.collect::<Vec<_>>();
@@ -333,21 +341,27 @@ unsafe impl BindlessPlatform for Ash {
 		})?;
 		self.device
 			.bind_image_memory(image, memory_allocation.memory(), memory_allocation.offset())?;
-		let image_view = self.device.create_image_view(
-			&ImageViewCreateInfo::default()
-				.image(image)
-				.view_type(image_view_type)
-				.format(create_info.format)
-				.components(ComponentMapping::default()) // identity
-				.subresource_range(ImageSubresourceRange {
-					aspect_mask: create_info.format.aspect(),
-					base_mip_level: 0,
-					level_count: create_info.mip_levels,
-					base_array_layer: 0,
-					layer_count: create_info.array_layers,
-				}),
-			None,
-		)?;
+		let image_view = if create_info.usage.has_image_view() {
+			Some(
+				self.device.create_image_view(
+					&ImageViewCreateInfo::default()
+						.image(image)
+						.view_type(image_view_type)
+						.format(create_info.format)
+						.components(ComponentMapping::default()) // identity
+						.subresource_range(ImageSubresourceRange {
+							aspect_mask: create_info.format.aspect(),
+							base_mip_level: 0,
+							level_count: create_info.mip_levels,
+							base_array_layer: 0,
+							layer_count: create_info.array_layers,
+						}),
+					None,
+				)?,
+			)
+		} else {
+			None
+		};
 		Ok((image, image_view, AshMemoryAllocation::new(memory_allocation)))
 	}
 
@@ -389,7 +403,9 @@ unsafe impl BindlessPlatform for Ash {
 			// it ourselves.
 			let allocation = image.memory_allocation.take();
 			allocator.free(allocation).unwrap();
-			self.device.destroy_image_view(image.imageview, None);
+			if let Some(imageview) = image.imageview {
+				self.device.destroy_image_view(imageview, None);
+			}
 			self.device.destroy_image(image.image, None);
 		}
 	}
@@ -596,6 +612,15 @@ impl BindlessImageUsage {
 
 	pub fn to_gpu_allocator_memory_location(&self) -> MemoryLocation {
 		MemoryLocation::GpuOnly
+	}
+
+	pub fn has_image_view(&self) -> bool {
+		self.intersects(
+			BindlessImageUsage::SAMPLED
+				| BindlessImageUsage::STORAGE
+				| BindlessImageUsage::COLOR_ATTACHMENT
+				| BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT,
+		)
 	}
 }
 

@@ -49,7 +49,7 @@ unsafe impl Platform for Ash {
 	type Buffer = ash::vk::Buffer;
 	type TypedBuffer<T: Send + Sync + ?Sized> = Self::Buffer;
 	type Image = ash::vk::Image;
-	type ImageView = ash::vk::ImageView;
+	type ImageView = Option<ash::vk::ImageView>;
 	type Sampler = ash::vk::Sampler;
 	type AllocationError = AshAllocationError;
 }

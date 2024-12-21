@@ -38,7 +38,6 @@ fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 		name,
 		usage: BindlessBufferUsage::MAP_WRITE
 			| BindlessBufferUsage::MAP_READ
-			| BindlessBufferUsage::STORAGE_BUFFER
 			| BindlessBufferUsage::TRANSFER_SRC
 			| BindlessBufferUsage::TRANSFER_DST,
 		allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
@@ -50,7 +49,7 @@ fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 	let image = bindless.image().alloc::<Image2d>(&BindlessImageCreateInfo {
 		format,
 		extent: Extent::from(extent),
-		usage: BindlessImageUsage::TRANSFER_SRC | BindlessImageUsage::TRANSFER_DST | BindlessImageUsage::SAMPLED,
+		usage: BindlessImageUsage::TRANSFER_SRC | BindlessImageUsage::TRANSFER_DST,
 		..BindlessImageCreateInfo::default()
 	})?;
 	let staging_download = bindless.buffer().alloc_slice::<u8>(&buffer_ci("staging_upload"), len)?;
