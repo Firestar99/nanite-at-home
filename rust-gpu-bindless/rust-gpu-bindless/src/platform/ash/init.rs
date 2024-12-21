@@ -236,6 +236,12 @@ pub fn ash_init_single_graphics_queue(
 	}
 }
 
+/// All child objects created on device must have been destroyed prior to destroying device
+/// https://vulkan.lunarg.com/doc/view/1.3.296.0/linux/1.3-extensions/vkspec.html#VUID-vkDestroyDevice-device-05137
+const VUID_VK_DESTROY_DEVICE_DEVICE_05137: i32 = 0x4872eaa0;
+
+const IGNORED_MSG_IDS: &[i32] = &[VUID_VK_DESTROY_DEVICE_DEVICE_05137];
+
 unsafe extern "system" fn default_debug_callback(
 	message_severity: DebugUtilsMessageSeverityFlagsEXT,
 	message_type: DebugUtilsMessageTypeFlagsEXT,
@@ -251,11 +257,17 @@ unsafe extern "system" fn default_debug_callback(
 		let message = callback_data
 			.message_as_c_str()
 			.map_or(Cow::Borrowed("No message"), CStr::to_string_lossy);
-
 		let args =
-			format!("{message_severity:?}: {message_type:?} [{message_id_name} ({message_id_number})]: {message}");
-		if message_severity.contains(DebugUtilsMessageSeverityFlagsEXT::ERROR) {
-			panic!("{}", args);
+			format!("{message_severity:?}: {message_type:?} [{message_id_name} ({message_id_number:#x})]: {message}");
+
+		let is_error = message_severity.contains(DebugUtilsMessageSeverityFlagsEXT::ERROR);
+		let is_ignored = IGNORED_MSG_IDS.contains(&message_id_number);
+		if is_error {
+			if is_ignored {
+				eprintln!("{}", args);
+			} else {
+				panic!("{}", args);
+			}
 		} else {
 			println!("{}", args);
 		}
