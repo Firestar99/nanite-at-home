@@ -16,7 +16,7 @@ use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext, Re
 use std::sync::Arc;
 
 #[test]
-fn test_add_single_ash() -> anyhow::Result<()> {
+fn test_simple_compute_ash() -> anyhow::Result<()> {
 	unsafe {
 		let bindless = Bindless::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
@@ -25,11 +25,11 @@ fn test_add_single_ash() -> anyhow::Result<()> {
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
 		);
-		test_add_single(&bindless)
+		test_simple_compute(&bindless)
 	}
 }
 
-fn test_add_single<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
 	let a = 42.2;
 	let b = [1., 2., 3.];
 	let c = 69.3;
