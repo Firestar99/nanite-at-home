@@ -318,7 +318,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		}
 	}
 
-	fn copy_image_to_buffer<
+	unsafe fn copy_image_to_buffer<
 		IT: ImageType,
 		IA: ImageAccessType + TransferReadable,
 		BT: BufferContent + ?Sized,

@@ -49,9 +49,9 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 
 	let compute = BindlessComputePipeline::new(bindless, crate::shader::buffer_barriers::compute_copy::new())?;
 	let third = bindless
-		.execute(|cmd| {
+		.execute(|cmd| unsafe {
 			let first = first.access::<ShaderRead>(cmd)?;
-			let second = second.access_dont_care::<ShaderReadWrite>(cmd)?;
+			let second = second.access_undefined_contents::<ShaderReadWrite>(cmd)?;
 
 			// 2. does a dispatch to copy from `first` to `second`
 			let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
@@ -67,7 +67,7 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 
 			// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
 			let second = second.transition::<ShaderRead>();
-			let third = third.access_dont_care::<ShaderReadWrite>(cmd)?;
+			let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
 
 			// 4. another dispatch to copy from `second` to `third`
 			cmd.dispatch(

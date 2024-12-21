@@ -17,9 +17,12 @@ pub trait MutBufferAccessExt<P: BindlessPipelinePlatform, T: BufferContent + ?Si
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError>;
 
-	/// Access this mutable buffer to use it for recording. Does not care for the contents of this buffer and assumes
-	/// it is uninitialized.
-	fn access_dont_care<'a, A: BufferAccessType>(
+	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
+	/// uninitialized.
+	///
+	/// # Safety
+	/// Must not read uninitialized memory and fully overwrite it within this execution context.
+	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError>;
@@ -33,11 +36,11 @@ impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized> MutBufferAccessExt<
 		MutBufferAccess::from(self, cmd)
 	}
 
-	fn access_dont_care<'a, A: BufferAccessType>(
+	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError> {
-		MutBufferAccess::from_dont_care(self, cmd)
+		MutBufferAccess::from_undefined_contents(self, cmd)
 	}
 }
 
@@ -49,7 +52,7 @@ pub struct MutBufferAccess<'a, P: BindlessPipelinePlatform, T: BufferContent + ?
 }
 
 impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccessType> MutBufferAccess<'a, P, T, A> {
-	pub fn from_dont_care(
+	pub fn from_undefined_contents(
 		desc: MutDesc<P, MutBuffer<T>>,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<Self, AccessLockError> {

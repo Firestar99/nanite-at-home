@@ -39,6 +39,8 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> {
 	fn resource_context(&self) -> &'a P::RecordingResourceContext;
 
+	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
+	/// Partial copies and copying to mips other than mip 0 is not yet possible.
 	fn copy_buffer_to_image<
 		BT: BufferContent + ?Sized,
 		BA: BufferAccessType + TransferReadable,
@@ -50,7 +52,13 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAcc
 		dst: &mut MutImageAccess<P, IT, IA>,
 	);
 
-	fn copy_image_to_buffer<
+	/// Copy data from an image to a buffer. It is assumed that the image data is tightly packed within the buffer.
+	/// Partial copies and copying to mips other than mip 0 is not yet possible.
+	///
+	/// # Safety
+	/// This allows any data to be written to the buffer, without checking the buffer's type, potentially transmuting
+	/// data.
+	unsafe fn copy_image_to_buffer<
 		IT: ImageType,
 		IA: ImageAccessType + TransferReadable,
 		BT: BufferContent + ?Sized,

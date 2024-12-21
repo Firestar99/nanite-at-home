@@ -97,7 +97,7 @@ fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 				len,
 			)
 			.unwrap();
-		let out = buffer_out.access_dont_care::<ShaderReadWrite>(recording_context)?;
+		let out = buffer_out.access::<ShaderReadWrite>(recording_context)?;
 
 		// Enqueueing some dispatch takes in a user-supplied param struct that may contain any number of buffer
 		// accesses. This method will internally "remove" the lifetime of the param struct, as the lifetime of the

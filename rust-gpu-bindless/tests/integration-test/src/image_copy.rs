@@ -62,7 +62,7 @@ fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 
 			cmd.copy_buffer_to_image(&mut staging_upload, &mut image);
 			let mut image = image.transition::<TransferRead>();
-			cmd.copy_image_to_buffer(&mut image, &mut staging_download);
+			unsafe { cmd.copy_image_to_buffer(&mut image, &mut staging_download) };
 
 			Ok(staging_download.transition::<HostAccess>().into_desc())
 		})?
