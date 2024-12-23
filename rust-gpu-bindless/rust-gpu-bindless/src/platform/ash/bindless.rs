@@ -10,7 +10,7 @@ use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::ash::image_format::FormatExt;
-use crate::platform::ash::{Ash, AshBuffer, AshImage, AshMemoryAllocation};
+use crate::platform::ash::{Ash, AshBuffer, AshCreateInfo, AshImage, AshMemoryAllocation};
 use crate::platform::BindlessPlatform;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
 use ash::prelude::VkResult;
@@ -39,6 +39,11 @@ use std::sync::Weak;
 use thiserror::Error;
 
 unsafe impl BindlessPlatform for Ash {
+	type PlatformCreateInfo = AshCreateInfo;
+	type Buffer = AshBuffer;
+	type Image = AshImage;
+	type Sampler = ash::vk::Sampler;
+	type AllocationError = AshAllocationError;
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
 
 	unsafe fn create_platform(create_info: Self::PlatformCreateInfo, bindless_cyclic: &Weak<Bindless<Self>>) -> Self {

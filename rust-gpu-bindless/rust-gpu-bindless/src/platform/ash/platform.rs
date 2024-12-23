@@ -1,6 +1,5 @@
 use crate::descriptor::Bindless;
-use crate::platform::ash::{AshAllocationError, AshExecutionManager};
-use crate::platform::Platform;
+use crate::platform::ash::AshExecutionManager;
 use ash::vk::{PipelineCache, ShaderStageFlags};
 use gpu_allocator::vulkan::{Allocation, Allocator};
 use parking_lot::lock_api::MutexGuard;
@@ -38,14 +37,6 @@ impl Drop for Ash {
 	fn drop(&mut self) {
 		self.execution_manager.destroy(&self.create_info.device);
 	}
-}
-
-unsafe impl Platform for Ash {
-	type PlatformCreateInfo = AshCreateInfo;
-	type Buffer = AshBuffer;
-	type Image = AshImage;
-	type Sampler = ash::vk::Sampler;
-	type AllocationError = AshAllocationError;
 }
 
 /// Wraps gpu-allocator's MemoryAllocation to be able to [`Option::take`] it on drop, but saving the enum flag byte
