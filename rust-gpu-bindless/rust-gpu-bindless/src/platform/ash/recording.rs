@@ -209,7 +209,7 @@ impl<'a> AshRecordingContext<'a> {
 		unsafe {
 			self.ash_flush();
 			let device = &self.exec_resource.bindless.platform.device;
-			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.pipeline);
+			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.pipeline.0.pipeline);
 			if self.compute_bind_descriptors {
 				self.compute_bind_descriptors = false;
 				let desc = self.bindless.global_descriptor_set();

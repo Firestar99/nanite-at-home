@@ -18,7 +18,7 @@ use std::sync::Arc;
 pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type PipelineCreationError: 'static + Error + Send + Sync;
 	type ComputePipeline: 'static + Send + Sync;
-	type TraditionalGraphicsPipeline: 'static + Send + Sync;
+	type ClassicGraphicsPipeline: 'static + Send + Sync;
 	type MeshGraphicsPipeline: 'static + Send + Sync;
 	type RecordingResourceContext: RecordingResourceContext<Self>;
 	type RecordingContext<'a>: RecordingContext<'a, Self>;

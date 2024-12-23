@@ -6,7 +6,8 @@ use crate::platform::ash::{
 };
 use crate::platform::BindlessPipelinePlatform;
 use ash::vk::{
-	ComputePipelineCreateInfo, PipelineCache, PipelineShaderStageCreateInfo, ShaderModuleCreateInfo, ShaderStageFlags,
+	ComputePipelineCreateInfo, Pipeline, PipelineCache, PipelineShaderStageCreateInfo, ShaderModuleCreateInfo,
+	ShaderStageFlags,
 };
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::shader_type::ComputeShader;
@@ -14,15 +15,14 @@ use std::sync::Arc;
 
 unsafe impl BindlessPipelinePlatform for Ash {
 	type PipelineCreationError = ash::vk::Result;
-	type ComputePipeline = ash::vk::Pipeline;
-	type TraditionalGraphicsPipeline = ash::vk::Pipeline;
-	type MeshGraphicsPipeline = ash::vk::Pipeline;
+	type ComputePipeline = AshComputePipeline;
+	type ClassicGraphicsPipeline = AshClassicGraphicsPipeline;
+	type MeshGraphicsPipeline = AshMeshhGraphicsPipeline;
 	type RecordingResourceContext = AshRecordingResourceContext;
 	type RecordingContext<'a> = AshRecordingContext<'a>;
 	type RecordingError = AshRecordingError;
 	type ExecutingContext<R: Send + Sync> = AshExecutingContext<R>;
 
-	// FIXME compute pipelines are never destroyed!
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
 		bindless: &Arc<Bindless<Self>>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
@@ -48,7 +48,10 @@ unsafe impl BindlessPipelinePlatform for Ash {
 			)
 			// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
 			.map_err(|e| e.1)?;
-		Ok(pipelines[0])
+		Ok(AshComputePipeline(AshPipeline {
+			bindless: bindless.clone(),
+			pipeline: pipelines[0],
+		}))
 	}
 
 	unsafe fn record_and_execute<R: Send + Sync>(
@@ -56,5 +59,23 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		f: impl FnOnce(&mut Self::RecordingContext<'_>) -> Result<R, Self::RecordingError>,
 	) -> Result<Self::ExecutingContext<R>, Self::RecordingError> {
 		ash_record_and_execute(bindless, f)
+	}
+}
+
+pub struct AshComputePipeline(pub AshPipeline);
+pub struct AshClassicGraphicsPipeline(pub AshPipeline);
+pub struct AshMeshhGraphicsPipeline(pub AshPipeline);
+
+pub struct AshPipeline {
+	pub bindless: Arc<Bindless<Ash>>,
+	pub pipeline: Pipeline,
+}
+
+impl Drop for AshPipeline {
+	fn drop(&mut self) {
+		// TODO Pipelines need to be kept alive while executing. Put in TableSync?
+		// unsafe {
+		// 	self.bindless.device.destroy_pipeline(self.pipeline, None);
+		// }
 	}
 }
