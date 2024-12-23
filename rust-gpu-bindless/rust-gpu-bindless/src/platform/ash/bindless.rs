@@ -1,10 +1,10 @@
 use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
-use crate::backing::table::{DrainFlushQueue, SlotAllocationError};
+use crate::backing::table::DrainFlushQueue;
 use crate::descriptor::{
 	Bindless, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo, BindlessImageUsage,
-	BufferInterface, BufferSlot, DescriptorCounts, ImageInterface, SamplerInterface,
+	BufferAllocationError, BufferInterface, BufferSlot, DescriptorCounts, ImageAllocationError, ImageInterface,
+	SamplerInterface,
 };
-use crate::pipeline::access_error::AccessError;
 use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{
 	bindless_image_type_to_vk_image_type, bindless_image_type_to_vk_image_view_type, AshExecutionManager,
@@ -158,19 +158,27 @@ impl Deref for AshBindlessDescriptorSet {
 
 #[derive(Error)]
 pub enum AshAllocationError {
-	#[error("Vk Error: {0}")]
+	#[error("VkResult: {0}")]
 	Vk(#[from] ash::vk::Result),
-	#[error("Allocator Error: {0}")]
+	#[error("gpu-allocator Error: {0}")]
 	Allocation(#[from] AllocationError),
-	#[error("Slot Error: {0}")]
-	Slot(#[from] SlotAllocationError),
-	#[error("Access Error: {0}")]
-	AccessError(#[from] AccessError),
 }
 
 impl core::fmt::Debug for AshAllocationError {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		core::fmt::Display::fmt(self, f)
+	}
+}
+
+impl From<AshAllocationError> for BufferAllocationError<Ash> {
+	fn from(value: AshAllocationError) -> Self {
+		BufferAllocationError::Platform(value)
+	}
+}
+
+impl From<AshAllocationError> for ImageAllocationError<Ash> {
+	fn from(value: AshAllocationError) -> Self {
+		ImageAllocationError::Platform(value)
 	}
 }
 

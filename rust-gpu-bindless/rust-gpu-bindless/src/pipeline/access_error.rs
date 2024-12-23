@@ -21,8 +21,6 @@ pub enum AccessError {
 		usage: BindlessImageUsage,
 		missing_usage: BindlessImageUsage,
 	},
-	#[error("Image {name} must not be created with {swapchain:?}, instead swapchain images must be acquired from a swapchain", swapchain = BindlessImageUsage::SWAPCHAIN)]
-	InvalidSwapchainImageUsage { name: String },
 }
 
 impl core::fmt::Debug for AccessError {

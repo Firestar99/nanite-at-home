@@ -1,6 +1,6 @@
 use crate::descriptor::{
-	BindlessAllocationScheme, BindlessBufferUsage, BufferSlot, BufferTableAccess, MutDesc, RCDesc, Sampler,
-	SamplerTableAccess,
+	BindlessAllocationScheme, BindlessBufferUsage, BufferAllocationError, BufferSlot, BufferTableAccess, MutDesc,
+	RCDesc, Sampler, SamplerTableAccess,
 };
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::BufferAccess;
@@ -41,20 +41,29 @@ impl<'a> BufferTableAccess<'a, Ash> {
 		len: usize,
 		name: &str,
 		prev_access_type: BufferAccess,
-	) -> Result<MutDesc<Ash, MutBuffer<T>>, AshAllocationError> {
+	) -> Result<MutDesc<Ash, MutBuffer<T>>, BufferAllocationError<Ash>> {
 		unsafe {
-			let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
+			let buffer = self
+				.0
+				.device
+				.create_buffer(&ash_create_info, None)
+				.map_err(AshAllocationError::from)?;
 			let requirements = self.0.device.get_buffer_memory_requirements(buffer);
-			let memory_allocation = self.0.memory_allocator().allocate(&AllocationCreateDesc {
-				requirements,
-				name,
-				location,
-				allocation_scheme: allocation_scheme.to_gpu_allocator_buffer(buffer),
-				linear: true,
-			})?;
+			let memory_allocation = self
+				.0
+				.memory_allocator()
+				.allocate(&AllocationCreateDesc {
+					requirements,
+					name,
+					location,
+					allocation_scheme: allocation_scheme.to_gpu_allocator_buffer(buffer),
+					linear: true,
+				})
+				.map_err(AshAllocationError::from)?;
 			self.0
 				.device
-				.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
+				.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())
+				.map_err(AshAllocationError::from)?;
 			Ok(self.alloc_slot(BufferSlot {
 				platform: AshBuffer {
 					buffer,

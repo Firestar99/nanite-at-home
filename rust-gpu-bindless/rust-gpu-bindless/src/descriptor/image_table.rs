@@ -3,14 +3,15 @@ use crate::backing::table::{DrainFlushQueue, RcTableSlot, SlotAllocationError, T
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutdesc::{MutDesc, MutDescExt};
 use crate::descriptor::{Bindless, BindlessAllocationScheme, DescriptorCounts, Extent};
-use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::ImageAccess;
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage};
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
+use thiserror::Error;
 
 impl<T: ImageType> DescContentCpu for Image<T> {
 	type DescTable<P: BindlessPlatform> = ImageTable<P>;
@@ -150,19 +151,6 @@ pub struct BindlessImageCreateInfo<'a, T: ImageType> {
 	pub _phantom: PhantomData<T>,
 }
 
-impl<'a, T: ImageType> BindlessImageCreateInfo<'a, T> {
-	#[inline]
-	pub fn validate(&self) -> Result<(), AccessError> {
-		if self.usage.contains(BindlessImageUsage::SWAPCHAIN) {
-			Err(AccessError::InvalidSwapchainImageUsage {
-				name: self.name.to_owned(),
-			})
-		} else {
-			Ok(())
-		}
-	}
-}
-
 impl<'a, T: ImageType> Default for BindlessImageCreateInfo<'a, T> {
 	fn default() -> Self {
 		Self {
@@ -176,6 +164,37 @@ impl<'a, T: ImageType> Default for BindlessImageCreateInfo<'a, T> {
 			name: "",
 			_phantom: PhantomData,
 		}
+	}
+}
+
+impl<'a, T: ImageType> BindlessImageCreateInfo<'a, T> {
+	#[inline]
+	pub fn validate<P: BindlessPlatform>(&self) -> Result<(), ImageAllocationError<P>> {
+		if self.usage.contains(BindlessImageUsage::SWAPCHAIN) {
+			Err(ImageAllocationError::SwapchainUsage {
+				name: self.name.to_owned(),
+			})
+		} else {
+			Ok(())
+		}
+	}
+}
+
+#[derive(Error)]
+pub enum ImageAllocationError<P: BindlessPlatform> {
+	#[error("Platform Error: {0}")]
+	Platform(#[source] P::AllocationError),
+	#[error("Slot Allocation Error: {0}")]
+	Slot(#[from] SlotAllocationError),
+	#[error("Image {name} must have at least one usage must be declared")]
+	NoUsageDeclared { name: String },
+	#[error("Image {name} must not be created with {swapchain:?}, instead swapchain images must be acquired from a swapchain", swapchain = BindlessImageUsage::SWAPCHAIN)]
+	SwapchainUsage { name: String },
+}
+
+impl<P: BindlessPlatform> Debug for ImageAllocationError<P> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		Display::fmt(&self, f)
 	}
 }
 
@@ -201,10 +220,14 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 	pub fn alloc<T: ImageType>(
 		&self,
 		create_info: &BindlessImageCreateInfo<T>,
-	) -> Result<MutDesc<P, MutImage<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutImage<T>>, ImageAllocationError<P>> {
 		unsafe {
 			create_info.validate()?;
-			let image = self.0.platform.alloc_image(create_info)?;
+			let image = self
+				.0
+				.platform
+				.alloc_image(create_info)
+				.map_err(Into::<ImageAllocationError<P>>::into)?;
 			Ok(self.alloc_slot(ImageSlot {
 				platform: image,
 				usage: create_info.usage,

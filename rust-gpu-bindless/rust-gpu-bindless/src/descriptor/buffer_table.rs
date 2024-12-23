@@ -4,7 +4,6 @@ use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutdesc::{MutBoxDescExt, MutDesc, MutDescExt};
 use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts, RCDesc};
-use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::{AccessLock, AccessLockError};
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::BindlessPlatform;
@@ -14,6 +13,7 @@ use rust_gpu_bindless_shaders::buffer_content::Metadata;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
 use smallvec::SmallVec;
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ops::Deref;
@@ -168,13 +168,6 @@ pub struct BindlessBufferCreateInfo<'a> {
 	pub name: &'a str,
 }
 
-impl<'a> BindlessBufferCreateInfo<'a> {
-	#[inline]
-	pub fn validate(&self) -> Result<(), AccessError> {
-		Ok(())
-	}
-}
-
 impl<'a> Default for BindlessBufferCreateInfo<'a> {
 	fn default() -> Self {
 		Self {
@@ -182,6 +175,35 @@ impl<'a> Default for BindlessBufferCreateInfo<'a> {
 			allocation_scheme: BindlessAllocationScheme::default(),
 			name: "",
 		}
+	}
+}
+
+impl<'a> BindlessBufferCreateInfo<'a> {
+	#[inline]
+	pub fn validate<P: BindlessPlatform>(&self) -> Result<(), BufferAllocationError<P>> {
+		if self.usage.is_empty() {
+			Err(BufferAllocationError::NoUsageDeclared {
+				name: self.name.to_string(),
+			})
+		} else {
+			Ok(())
+		}
+	}
+}
+
+#[derive(Error)]
+pub enum BufferAllocationError<P: BindlessPlatform> {
+	#[error("Platform Error: {0}")]
+	Platform(#[source] P::AllocationError),
+	#[error("Slot Allocation Error: {0}")]
+	Slot(#[from] SlotAllocationError),
+	#[error("Buffer {name} must have at least one usage must be declared")]
+	NoUsageDeclared { name: String },
+}
+
+impl<P: BindlessPlatform> Debug for BufferAllocationError<P> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		Display::fmt(&self, f)
 	}
 }
 
@@ -207,11 +229,15 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	pub fn alloc_sized<T: BufferStruct>(
 		&self,
 		create_info: &BindlessBufferCreateInfo,
-	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<T>>, BufferAllocationError<P>> {
 		unsafe {
 			create_info.validate()?;
 			let size = size_of::<T::Transfer>() as u64;
-			let buffer = self.0.platform.alloc_buffer(create_info, size)?;
+			let buffer = self
+				.0
+				.platform
+				.alloc_buffer(create_info, size)
+				.map_err(Into::<BufferAllocationError<P>>::into)?;
 			Ok(self.alloc_slot(BufferSlot {
 				platform: buffer,
 				len: 1,
@@ -228,11 +254,15 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		len: usize,
-	) -> Result<MutDesc<P, MutBuffer<[T]>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<[T]>>, BufferAllocationError<P>> {
 		unsafe {
 			create_info.validate()?;
 			let size = size_of::<T::Transfer>() as u64 * len as u64;
-			let buffer = self.0.platform.alloc_buffer(create_info, size)?;
+			let buffer = self
+				.0
+				.platform
+				.alloc_buffer(create_info, size)
+				.map_err(Into::<BufferAllocationError<P>>::into)?;
 			Ok(self.alloc_slot(BufferSlot {
 				platform: buffer,
 				len,
@@ -249,7 +279,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		data: T,
-	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<T>>, BufferAllocationError<P>> {
 		let buffer = self.alloc_sized(create_info)?;
 		buffer.mapped().unwrap().write_data(data);
 		Ok(buffer)
@@ -259,7 +289,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		data: T,
-	) -> Result<RCDesc<P, Buffer<T>>, P::AllocationError> {
+	) -> Result<RCDesc<P, Buffer<T>>, BufferAllocationError<P>> {
 		unsafe { Ok(self.alloc_from_data(create_info, data)?.into_shared_unchecked()) }
 	}
 
@@ -267,7 +297,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		iter: I,
-	) -> Result<MutDesc<P, MutBuffer<[T]>>, P::AllocationError>
+	) -> Result<MutDesc<P, MutBuffer<[T]>>, BufferAllocationError<P>>
 	where
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,
@@ -282,7 +312,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		iter: I,
-	) -> Result<RCDesc<P, Buffer<[T]>>, P::AllocationError>
+	) -> Result<RCDesc<P, Buffer<[T]>>, BufferAllocationError<P>>
 	where
 		I: IntoIterator<Item = T>,
 		I::IntoIter: ExactSizeIterator,

@@ -1,10 +1,9 @@
 use crate::backing::range_set::DescriptorIndexIterator;
-use crate::backing::table::{DrainFlushQueue, SlotAllocationError};
+use crate::backing::table::DrainFlushQueue;
 use crate::descriptor::{
-	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BufferInterface, BufferSlot, DescriptorCounts,
-	ImageInterface, SamplerInterface,
+	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BufferAllocationError, BufferInterface, BufferSlot,
+	DescriptorCounts, ImageAllocationError, ImageInterface, SamplerInterface,
 };
-use crate::pipeline::access_error::AccessError;
 use rust_gpu_bindless_shaders::descriptor::ImageType;
 use std::error::Error;
 
@@ -14,7 +13,12 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 	type Buffer: 'static + Send + Sync;
 	type Image: 'static + Send + Sync;
 	type Sampler: 'static + Send + Sync;
-	type AllocationError: 'static + Error + Send + Sync + From<SlotAllocationError> + From<AccessError>;
+	type AllocationError: 'static
+		+ Error
+		+ Send
+		+ Sync
+		+ Into<BufferAllocationError<Self>>
+		+ Into<ImageAllocationError<Self>>;
 	type BindlessDescriptorSet: 'static + Send + Sync;
 
 	/// Create an [`Self::Platform`] from the supplied [`Self::PlatformCreateInfo`]. Typically, [`Self::PlatformCreateInfo`] wrap the
