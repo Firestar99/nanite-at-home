@@ -1,11 +1,10 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{Desc, DescContentCpu, DescContentMutCpu, RCDesc, RCDescExt};
+use crate::descriptor::{Desc, DescContentCpu, DescContentMutCpu, DescTable, RCDesc, RCDescExt};
 use crate::platform::BindlessPlatform;
-use rust_gpu_bindless_shaders::descriptor::{DerefDescRef, DescRef, DescriptorId, MutDescRef};
+use rust_gpu_bindless_shaders::descriptor::{DescRef, DescriptorId, MutDescRef};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::ops::Deref;
 
 pub struct Mut<P: BindlessPlatform> {
 	slot: RcTableSlot,
@@ -15,14 +14,6 @@ pub struct Mut<P: BindlessPlatform> {
 impl<P: BindlessPlatform> DescRef for Mut<P> {}
 
 impl<P: BindlessPlatform> MutDescRef for Mut<P> {}
-
-impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<MutDesc<P, C>> for Mut<P> {
-	type Target = C::VulkanType<P>;
-
-	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
-		C::deref_table(C::get_slot(&desc.r.slot))
-	}
-}
 
 impl<P: BindlessPlatform> Debug for Mut<P> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -46,9 +37,7 @@ impl<P: BindlessPlatform> Hash for Mut<P> {
 
 pub type MutDesc<P, C> = Desc<Mut<P>, C>;
 
-pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>:
-	Sized + Hash + Eq + Deref<Target = C::VulkanType<P>>
-{
+pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq {
 	/// Create a new MutDesc
 	///
 	/// # Safety
@@ -60,10 +49,10 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>:
 
 	fn into_rc_slot(self) -> RcTableSlot;
 
-	// TODO these functions aren't exactly safe
+	// TODO soundness: these functions aren't exactly safe
 	#[inline]
-	fn inner_slot(&self) -> &C::Slot<P> {
-		C::get_slot(self.rc_slot())
+	fn inner_slot(&self) -> &<C::DescTable<P> as DescTable<P>>::Slot {
+		<C::DescTable<P> as DescTable<P>>::get_slot(self.rc_slot())
 	}
 
 	#[inline]

@@ -63,8 +63,6 @@ pub unsafe trait BindlessPlatform: Platform {
 		memory_allocation: &'a Self::MemoryAllocation,
 	) -> &'a mut (impl presser::Slab + 'a);
 
-	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T>;
-
 	/// Destroy specified buffers. You have exclusive access to the associated [`BufferSlot`]s, even if they are just
 	/// passed by standard reference. After this method call returns, the [`BufferSlot`] will be dropped and otherwise
 	/// not accessed anymore.

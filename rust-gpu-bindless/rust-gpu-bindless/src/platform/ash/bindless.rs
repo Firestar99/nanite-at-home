@@ -372,10 +372,6 @@ unsafe impl BindlessPlatform for Ash {
 		memory_allocation.get_mut()
 	}
 
-	unsafe fn reinterpet_ref_buffer<T: Send + Sync + ?Sized + 'static>(buffer: &Self::Buffer) -> &Self::TypedBuffer<T> {
-		buffer
-	}
-
 	unsafe fn destroy_buffers<'a>(
 		&self,
 		_global_descriptor_set: &Self::BindlessDescriptorSet,

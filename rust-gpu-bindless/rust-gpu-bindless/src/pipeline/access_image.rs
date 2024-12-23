@@ -1,5 +1,5 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{BindlessImageUsage, DescContentCpu, ImageSlot, RCDesc, RCDescExt};
+use crate::descriptor::{BindlessImageUsage, DescTable, ImageSlot, ImageTable, RCDesc, RCDescExt};
 use crate::descriptor::{MutDesc, MutDescExt};
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{
@@ -143,7 +143,7 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 
 	#[inline]
 	pub unsafe fn inner_slot(&self) -> &ImageSlot<P> {
-		MutImage::<T>::get_slot(&self.slot)
+		ImageTable::get_slot(&self.slot)
 	}
 
 	/// Turns this mutable access to a [`MutImage`] back into a [`MutImage`] to be used in another execution

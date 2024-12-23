@@ -22,31 +22,10 @@ use thiserror::Error;
 
 impl<T: BufferContent + ?Sized> DescContentCpu for Buffer<T> {
 	type DescTable<P: BindlessPlatform> = BufferTable<P>;
-	type VulkanType<P: BindlessPlatform> = P::TypedBuffer<T::Transfer>;
-	type Slot<P: BindlessPlatform> = BufferSlot<P>;
-
-	fn get_slot<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::Slot<P> {
-		&slot.try_deref::<BufferInterface<P>>().unwrap()
-	}
-
-	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P> {
-		unsafe { P::reinterpet_ref_buffer(&slot.buffer) }
-	}
 }
 
-// TODO should this be deduplicated by moving some methods to BufferTable?
 impl<T: BufferContent + ?Sized> DescContentCpu for MutBuffer<T> {
 	type DescTable<P: BindlessPlatform> = BufferTable<P>;
-	type VulkanType<P: BindlessPlatform> = P::TypedBuffer<T::Transfer>;
-	type Slot<P: BindlessPlatform> = BufferSlot<P>;
-
-	fn get_slot<P: BindlessPlatform>(slot: &RcTableSlot) -> &Self::Slot<P> {
-		&slot.try_deref::<BufferInterface<P>>().unwrap()
-	}
-
-	fn deref_table<P: BindlessPlatform>(slot: &Self::Slot<P>) -> &Self::VulkanType<P> {
-		unsafe { P::reinterpet_ref_buffer(&slot.buffer) }
-	}
 }
 
 impl<T: BufferContent + ?Sized> DescContentMutCpu for MutBuffer<T> {
@@ -54,7 +33,13 @@ impl<T: BufferContent + ?Sized> DescContentMutCpu for MutBuffer<T> {
 	type Access = BufferAccess;
 }
 
-impl<P: BindlessPlatform> DescTable for BufferTable<P> {}
+impl<P: BindlessPlatform> DescTable<P> for BufferTable<P> {
+	type Slot = BufferSlot<P>;
+
+	fn get_slot(slot: &RcTableSlot) -> &Self::Slot {
+		&slot.try_deref::<BufferInterface<P>>().unwrap()
+	}
+}
 
 pub struct BufferSlot<P: BindlessPlatform> {
 	pub buffer: P::Buffer,

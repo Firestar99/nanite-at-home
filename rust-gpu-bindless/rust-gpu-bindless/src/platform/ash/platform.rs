@@ -47,7 +47,6 @@ unsafe impl Platform for Ash {
 	/// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after running destroy.
 	type MemoryAllocation = AshMemoryAllocation;
 	type Buffer = ash::vk::Buffer;
-	type TypedBuffer<T: Send + Sync + ?Sized> = Self::Buffer;
 	type Image = ash::vk::Image;
 	type ImageView = Option<ash::vk::ImageView>;
 	type Sampler = ash::vk::Sampler;

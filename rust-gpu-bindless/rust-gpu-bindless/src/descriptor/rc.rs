@@ -1,11 +1,10 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef, TransientAccess};
+use crate::descriptor::{AliveDescRef, Desc, DescContent, DescContentCpu, DescRef, DescTable, TransientAccess};
 use crate::platform::BindlessPlatform;
-use rust_gpu_bindless_shaders::descriptor::{AnyDesc, DerefDescRef, DescriptorId, StrongDesc, TransientDesc, WeakDesc};
+use rust_gpu_bindless_shaders::descriptor::{AnyDesc, DescriptorId, StrongDesc, TransientDesc, WeakDesc};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::ops::Deref;
 
 pub struct RC<P: BindlessPlatform> {
 	slot: RcTableSlot,
@@ -18,14 +17,6 @@ impl<P: BindlessPlatform> AliveDescRef for RC<P> {
 	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
 		desc.r.slot.id()
-	}
-}
-
-impl<P: BindlessPlatform, C: DescContentCpu> DerefDescRef<RCDesc<P, C>> for RC<P> {
-	type Target = C::VulkanType<P>;
-
-	fn deref(desc: &Desc<Self, C>) -> &Self::Target {
-		C::deref_table(C::get_slot(&desc.r.slot))
 	}
 }
 
@@ -60,9 +51,7 @@ impl<P: BindlessPlatform> Hash for RC<P> {
 
 pub type RCDesc<P, C> = Desc<RC<P>, C>;
 
-pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>:
-	Sized + Hash + Eq + Deref<Target = C::VulkanType<P>>
-{
+pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq {
 	/// Create a new RCDesc
 	///
 	/// # Safety
@@ -73,8 +62,8 @@ pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>:
 	fn rc_slot(&self) -> &RcTableSlot;
 
 	#[inline]
-	fn inner_slot(&self) -> &C::Slot<P> {
-		C::get_slot(self.rc_slot())
+	fn inner_slot(&self) -> &<C::DescTable<P> as DescTable<P>>::Slot {
+		<C::DescTable<P> as DescTable<P>>::get_slot(self.rc_slot())
 	}
 
 	#[inline]

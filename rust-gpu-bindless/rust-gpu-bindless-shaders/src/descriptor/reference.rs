@@ -5,7 +5,6 @@ use crate::descriptor::id::DescriptorId;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
-use core::ops::Deref;
 
 /// A shared read-only [`Desc`].
 pub trait DescRef: Sized + Send + Sync {}
@@ -80,21 +79,6 @@ impl<R: DescRef + PartialEq, C: DescContent> PartialEq for Desc<R, C> {
 }
 
 impl<R: DescRef + Eq, C: DescContent> Eq for Desc<R, C> {}
-
-// desc extra traits
-pub trait DerefDescRef<D> {
-	type Target;
-
-	fn deref(desc: &D) -> &Self::Target;
-}
-
-impl<R: DescRef + DerefDescRef<Self>, C: DescContent> Deref for Desc<R, C> {
-	type Target = R::Target;
-
-	fn deref(&self) -> &Self::Target {
-		R::deref(self)
-	}
-}
 
 /// works just like [`BufferStruct`] but on [`Desc`] instead of Self
 ///

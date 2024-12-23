@@ -1,5 +1,5 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{BindlessBufferUsage, BufferSlot, DescContentCpu, RCDesc, RCDescExt};
+use crate::descriptor::{BindlessBufferUsage, BufferSlot, BufferTable, DescTable, RCDesc, RCDescExt};
 use crate::descriptor::{MutDesc, MutDescExt};
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{BufferAccess, BufferAccessType, ShaderReadWriteable, ShaderReadable};
@@ -145,7 +145,7 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 
 	#[inline]
 	pub unsafe fn inner_slot(&self) -> &BufferSlot<P> {
-		MutBuffer::<T>::get_slot(&self.slot)
+		BufferTable::get_slot(&self.slot)
 	}
 
 	// TODO these technically unlock the slot too early, one would have to wait until the execution finished to unlock
