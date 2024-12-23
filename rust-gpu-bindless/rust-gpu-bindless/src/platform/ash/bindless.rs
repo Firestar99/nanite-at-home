@@ -509,7 +509,13 @@ impl BindlessBufferUsage {
 		if self.contains(BindlessBufferUsage::INDIRECT_BUFFER) {
 			out |= BufferUsageFlags::INDIRECT_BUFFER;
 		}
-		out
+		// empty flags are invalid in vulkan, this is reachable via a buffer that is only host mappable
+		assert!(!self.is_empty());
+		if out.is_empty() {
+			BufferUsageFlags::TRANSFER_SRC
+		} else {
+			out
+		}
 	}
 
 	/// prioritizes MAP_WRITE over MAP_READ
@@ -598,6 +604,8 @@ impl BindlessImageUsage {
 		if self.contains(BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT) {
 			out |= ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
 		}
+		// empty flags are invalid in vulkan, but unlike buffer this is unreachable
+		assert!(!out.is_empty());
 		out
 	}
 
