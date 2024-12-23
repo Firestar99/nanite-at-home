@@ -42,19 +42,18 @@ impl Drop for Ash {
 
 unsafe impl Platform for Ash {
 	type PlatformCreateInfo = AshCreateInfo;
-	/// # Safety
-	/// UnsafeCell: Required to gain mutable access where it is safe to do so, see safety of interface methods.
-	/// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after running destroy.
-	type MemoryAllocation = AshMemoryAllocation;
-	type Buffer = ash::vk::Buffer;
-	type Image = ash::vk::Image;
-	type ImageView = Option<ash::vk::ImageView>;
+	type Buffer = AshBuffer;
+	type Image = AshImage;
 	type Sampler = ash::vk::Sampler;
 	type AllocationError = AshAllocationError;
 }
 
 /// Wraps gpu-allocator's MemoryAllocation to be able to [`Option::take`] it on drop, but saving the enum flag byte
 /// with [`MaybeUninit`]
+///
+/// # Safety
+/// UnsafeCell: Required to gain mutable access where it is safe to do so, see safety of interface methods.
+/// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after taking it during drop.
 #[derive(Debug)]
 pub struct AshMemoryAllocation(UnsafeCell<MaybeUninit<Allocation>>);
 
@@ -87,6 +86,17 @@ impl AshMemoryAllocation {
 /// Safety: MemoryAllocation is safety Send and Sync, will only uninit on drop
 unsafe impl Send for AshMemoryAllocation {}
 unsafe impl Sync for AshMemoryAllocation {}
+
+pub struct AshBuffer {
+	pub buffer: ash::vk::Buffer,
+	pub allocation: AshMemoryAllocation,
+}
+
+pub struct AshImage {
+	pub image: ash::vk::Image,
+	pub image_view: Option<ash::vk::ImageView>,
+	pub allocation: AshMemoryAllocation,
+}
 
 pub struct AshCreateInfo {
 	pub entry: ash::Entry,

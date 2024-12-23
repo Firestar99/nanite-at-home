@@ -42,18 +42,25 @@ impl<P: BindlessPlatform> DescTable<P> for BufferTable<P> {
 }
 
 pub struct BufferSlot<P: BindlessPlatform> {
-	pub buffer: P::Buffer,
+	pub platform: P::Buffer,
 	/// len in T's if this is a slice, otherwise 1
 	pub len: usize,
 	/// the total size of this buffer in bytes
 	pub size: u64,
 	pub usage: BindlessBufferUsage,
 	pub access_lock: AccessLock<BufferAccess>,
-	pub memory_allocation: P::MemoryAllocation,
 	pub strong_refs: Mutex<StrongBackingRefs<P>>,
 	/// This may be replaced with a platform-specific getter, once you can query the name from gpu-allocator to not
 	/// unnecessarily duplicate the String (see my PR https://github.com/Traverse-Research/gpu-allocator/pull/257)
 	pub debug_name: String,
+}
+
+impl<P: BindlessPlatform> Deref for BufferSlot<P> {
+	type Target = P::Buffer;
+
+	fn deref(&self) -> &Self::Target {
+		&self.platform
+	}
 }
 
 impl<P: BindlessPlatform> BufferSlot<P> {
@@ -204,13 +211,12 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		unsafe {
 			create_info.validate()?;
 			let size = size_of::<T::Transfer>() as u64;
-			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
+			let buffer = self.0.platform.alloc_buffer(create_info, size)?;
 			Ok(self.alloc_slot(BufferSlot {
-				buffer,
+				platform: buffer,
 				len: 1,
 				size,
 				usage: create_info.usage,
-				memory_allocation,
 				strong_refs: Default::default(),
 				access_lock: AccessLock::new(create_info.usage.initial_buffer_access()),
 				debug_name: create_info.name.to_string(),
@@ -226,13 +232,12 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		unsafe {
 			create_info.validate()?;
 			let size = size_of::<T::Transfer>() as u64 * len as u64;
-			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
+			let buffer = self.0.platform.alloc_buffer(create_info, size)?;
 			Ok(self.alloc_slot(BufferSlot {
-				buffer,
+				platform: buffer,
 				len,
 				size,
 				usage: create_info.usage,
-				memory_allocation,
 				strong_refs: Default::default(),
 				access_lock: AccessLock::new(create_info.usage.initial_buffer_access()),
 				debug_name: create_info.name.to_string(),
@@ -356,7 +361,7 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, T> {
 	pub fn write_data(&mut self, t: T) {
 		unsafe {
 			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let record = presser::copy_from_slice_to_offset(&[T::write_cpu(t, &mut meta)], slab, 0).unwrap();
 			assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
 			*self.slot.strong_refs.lock() = meta.into_backing_refs();
@@ -367,7 +372,7 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, T> {
 		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
 		// TODO mapped buffers are initialized (not yet)
 		unsafe {
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[0];
 			T::read(t, Metadata {})
 		}
@@ -385,7 +390,7 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 	pub fn overwrite_from_iter_exact(&mut self, iter: impl Iterator<Item = T>) {
 		unsafe {
 			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let mut written = 0;
 			let record = presser::copy_from_iter_to_offset_with_align_packed(
 				iter.map(|i| {
@@ -423,7 +428,7 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 	pub fn write_offset(&mut self, index: usize, t: T) {
 		unsafe {
 			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let record = presser::copy_from_slice_to_offset(
 				&[T::write_cpu(t, &mut meta)],
 				slab,
@@ -453,12 +458,14 @@ impl<'a, P: BindlessPlatform, T: BufferStruct + Default> MappedBuffer<'a, P, [T]
 	}
 }
 
+// TODO soundness: these methods may allow reading uninitialized buffers, there is no mechanic to ensure they're
+//  initialized
 impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 	pub fn read_offset(&mut self, index: usize) -> T {
 		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
-		// TODO mapped buffers are initialized (not yet)
+		// mapped buffers are initialized (not yet)
 		unsafe {
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[index];
 			T::read(t, Metadata {})
 		}
@@ -466,9 +473,9 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 
 	pub fn read_iter(&mut self) -> impl ExactSizeIterator<Item = T> + '_ {
 		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
-		// TODO mapped buffers are initialized (not yet)
+		// mapped buffers are initialized (not yet)
 		unsafe {
-			let slab = P::memory_allocation_to_slab(&self.slot.memory_allocation);
+			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes());
 			t.iter().take(self.len()).copied().map(|t| T::read(t, Metadata {}))
 		}

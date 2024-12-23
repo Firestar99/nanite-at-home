@@ -29,8 +29,7 @@ impl<P: BindlessPlatform> DescTable<P> for ImageTable<P> {
 }
 
 pub struct ImageSlot<P: BindlessPlatform> {
-	pub image: P::Image,
-	pub imageview: P::ImageView,
+	pub platform: P::Image,
 	pub usage: BindlessImageUsage,
 	/// The image format
 	pub format: Format,
@@ -42,10 +41,17 @@ pub struct ImageSlot<P: BindlessPlatform> {
 	/// The amount of array layers. Must be `1` if the image is not arrayed.
 	pub array_layers: u32,
 	pub access_lock: AccessLock<ImageAccess>,
-	pub memory_allocation: P::MemoryAllocation,
 	/// This may be replaced with a platform-specific getter, once you can query the name from gpu-allocator to not
 	/// unnecessarily duplicate the String (see my PR https://github.com/Traverse-Research/gpu-allocator/pull/257)
 	pub debug_name: String,
+}
+
+impl<P: BindlessPlatform> Deref for ImageSlot<P> {
+	type Target = P::Image;
+
+	fn deref(&self) -> &Self::Target {
+		&self.platform
+	}
 }
 
 impl<P: BindlessPlatform> ImageSlot<P> {
@@ -198,17 +204,15 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 	) -> Result<MutDesc<P, MutImage<T>>, P::AllocationError> {
 		unsafe {
 			create_info.validate()?;
-			let (image, imageview, memory_allocation) = self.0.platform.alloc_image(create_info)?;
+			let image = self.0.platform.alloc_image(create_info)?;
 			Ok(self.alloc_slot(ImageSlot {
-				image,
-				imageview,
+				platform: image,
 				usage: create_info.usage,
 				format: create_info.format,
 				extent: create_info.extent,
 				mip_levels: create_info.mip_levels,
 				array_layers: create_info.array_layers,
 				access_lock: AccessLock::new(create_info.usage.initial_image_access()),
-				memory_allocation,
 				debug_name: create_info.name.to_string(),
 			})?)
 		}

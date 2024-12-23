@@ -10,7 +10,7 @@ use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::ash::image_format::FormatExt;
-use crate::platform::ash::{Ash, AshMemoryAllocation};
+use crate::platform::ash::{Ash, AshBuffer, AshImage, AshMemoryAllocation};
 use crate::platform::BindlessPlatform;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
 use ash::prelude::VkResult;
@@ -26,6 +26,7 @@ use ash::vk::{ImageType as VkImageType, SampleCountFlags};
 use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
 use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
 use gpu_allocator::{AllocationError, MemoryLocation};
+use presser::Slab;
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
@@ -206,7 +207,7 @@ unsafe impl BindlessPlatform for Ash {
 			.iter()
 			.map(|(_, storage_image)| {
 				DescriptorImageInfo::default()
-					.image_view(*storage_image.imageview.as_ref().unwrap())
+					.image_view(*storage_image.image_view.as_ref().unwrap())
 					.image_layout(ImageLayout::GENERAL)
 			})
 			.collect::<Vec<_>>();
@@ -230,7 +231,7 @@ unsafe impl BindlessPlatform for Ash {
 			.iter()
 			.map(|(_, sampled_image)| {
 				DescriptorImageInfo::default()
-					.image_view(*sampled_image.imageview.as_ref().unwrap())
+					.image_view(*sampled_image.image_view.as_ref().unwrap())
 					.image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
 			})
 			.collect::<Vec<_>>();
@@ -290,7 +291,7 @@ unsafe impl BindlessPlatform for Ash {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		size: u64,
-	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError> {
+	) -> Result<Self::Buffer, Self::AllocationError> {
 		let buffer = self.device.create_buffer(
 			&ash::vk::BufferCreateInfo::default()
 				.usage(create_info.usage.to_ash_buffer_usage_flags())
@@ -308,13 +309,16 @@ unsafe impl BindlessPlatform for Ash {
 		})?;
 		self.device
 			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
-		Ok((buffer, AshMemoryAllocation::new(memory_allocation)))
+		Ok(AshBuffer {
+			buffer,
+			allocation: AshMemoryAllocation::new(memory_allocation),
+		})
 	}
 
 	unsafe fn alloc_image<T: ImageType>(
 		&self,
 		create_info: &BindlessImageCreateInfo<T>,
-	) -> Result<(Self::Image, Self::ImageView, Self::MemoryAllocation), Self::AllocationError> {
+	) -> Result<Self::Image, Self::AllocationError> {
 		let image_type = bindless_image_type_to_vk_image_type::<T>().expect("Unsupported ImageType");
 		let image_view_type = bindless_image_type_to_vk_image_view_type::<T>().expect("Unsupported ImageType");
 		let image = self.device.create_image(
@@ -363,13 +367,15 @@ unsafe impl BindlessPlatform for Ash {
 		} else {
 			None
 		};
-		Ok((image, image_view, AshMemoryAllocation::new(memory_allocation)))
+		Ok(AshImage {
+			image,
+			image_view,
+			allocation: AshMemoryAllocation::new(memory_allocation),
+		})
 	}
 
-	unsafe fn memory_allocation_to_slab<'a>(
-		memory_allocation: &'a Self::MemoryAllocation,
-	) -> &'a mut (impl presser::Slab + 'a) {
-		memory_allocation.get_mut()
+	unsafe fn mapped_buffer_to_slab<'a>(buffer: &'a BufferSlot<Self>) -> &'a mut (impl Slab + 'a) {
+		buffer.allocation.get_mut()
 	}
 
 	unsafe fn destroy_buffers<'a>(
@@ -382,7 +388,7 @@ unsafe impl BindlessPlatform for Ash {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
-			let allocation = buffer.memory_allocation.take();
+			let allocation = buffer.allocation.take();
 			allocator.free(allocation).unwrap();
 			self.device.destroy_buffer(buffer.buffer, None);
 		}
@@ -398,9 +404,9 @@ unsafe impl BindlessPlatform for Ash {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
-			let allocation = image.memory_allocation.take();
+			let allocation = image.allocation.take();
 			allocator.free(allocation).unwrap();
-			if let Some(imageview) = image.imageview {
+			if let Some(imageview) = image.image_view {
 				self.device.destroy_image_view(imageview, None);
 			}
 			self.device.destroy_image(image.image, None);
@@ -650,11 +656,13 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				.device
 				.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
 			Ok(self.alloc_slot(BufferSlot {
-				buffer,
+				platform: AshBuffer {
+					buffer,
+					allocation: AshMemoryAllocation::new(memory_allocation),
+				},
 				len,
 				size: ash_create_info.size,
 				usage,
-				memory_allocation: AshMemoryAllocation::new(memory_allocation),
 				strong_refs: Default::default(),
 				access_lock: AccessLock::new(prev_access_type),
 				debug_name: name.to_string(),

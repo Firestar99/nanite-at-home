@@ -80,12 +80,12 @@ unsafe impl RecordingResourceContext<Ash> for AshRecordingResourceContext {
 		self
 	}
 
-	unsafe fn transition_buffer(&self, slot: &BufferSlot<Ash>, src: BufferAccess, dst: BufferAccess) {
+	unsafe fn transition_buffer(&self, buffer: &BufferSlot<Ash>, src: BufferAccess, dst: BufferAccess) {
 		let src = src.to_ash_buffer_access();
 		let dst = dst.to_ash_buffer_access();
 		self.push_buffer_barrier(
 			BufferMemoryBarrier2::default()
-				.buffer(slot.buffer)
+				.buffer(buffer.buffer)
 				.offset(0)
 				.size(WHOLE_SIZE)
 				.src_access_mask(src.access_mask)

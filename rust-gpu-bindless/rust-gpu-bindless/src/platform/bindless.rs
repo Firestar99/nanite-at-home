@@ -1,8 +1,8 @@
 use crate::backing::range_set::DescriptorIndexIterator;
 use crate::backing::table::DrainFlushQueue;
 use crate::descriptor::{
-	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BufferInterface, DescriptorCounts, ImageInterface,
-	SamplerInterface,
+	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BufferInterface, BufferSlot, DescriptorCounts,
+	ImageInterface, SamplerInterface,
 };
 use crate::platform::Platform;
 use rust_gpu_bindless_shaders::descriptor::ImageType;
@@ -49,19 +49,17 @@ pub unsafe trait BindlessPlatform: Platform {
 		&self,
 		create_info: &BindlessBufferCreateInfo,
 		size: u64,
-	) -> Result<(Self::Buffer, Self::MemoryAllocation), Self::AllocationError>;
+	) -> Result<Self::Buffer, Self::AllocationError>;
 
 	unsafe fn alloc_image<T: ImageType>(
 		&self,
 		create_info: &BindlessImageCreateInfo<T>,
-	) -> Result<(Self::Image, Self::ImageView, Self::MemoryAllocation), Self::AllocationError>;
+	) -> Result<Self::Image, Self::AllocationError>;
 
-	/// Turn the [`MemoryAllocation`] into a Slab. You may assume that the [`MemoryAllocation`] is mappable and has
-	/// either [`BindlessBufferUsage::MAP_WRITE`] or [`BindlessBufferUsage::MAP_READ`]. You also have exclusive access
-	/// to the [`MemoryAllocation`].
-	unsafe fn memory_allocation_to_slab<'a>(
-		memory_allocation: &'a Self::MemoryAllocation,
-	) -> &'a mut (impl presser::Slab + 'a);
+	/// Turn a mapped Buffer into a Slab. You may assume that the buffer is mappable, aka. has either
+	/// [`BindlessBufferUsage::MAP_WRITE`] or [`BindlessBufferUsage::MAP_READ`]. You also have exclusive access
+	/// to the Buffer.
+	unsafe fn mapped_buffer_to_slab<'a>(buffer: &'a BufferSlot<Self>) -> &'a mut (impl presser::Slab + 'a);
 
 	/// Destroy specified buffers. You have exclusive access to the associated [`BufferSlot`]s, even if they are just
 	/// passed by standard reference. After this method call returns, the [`BufferSlot`] will be dropped and otherwise
