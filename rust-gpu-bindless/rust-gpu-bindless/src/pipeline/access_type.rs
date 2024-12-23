@@ -1,3 +1,4 @@
+use crate::descriptor::{BindlessBufferUsage, BindlessImageUsage};
 use num_derive::{FromPrimitive, ToPrimitive};
 
 #[repr(u8)]
@@ -19,6 +20,32 @@ pub enum BufferAccess {
 	VertexAttributeRead,
 }
 
+impl BufferAccess {
+	/// Returns the required [`BindlessBufferUsage`] flags to transition to this state.
+	///
+	/// Note that this just verifies being allowed to transition to that state, and does not say anything about how you
+	/// can use the buffer once in this state. For example, you can always transition a buffer to general, and while
+	/// general allows you to create a [`TransientDesc`] with read access to your buffer, the function creating said
+	/// [`TransientDesc`] still needs to runtime check that your buffer has [`BindlessBufferUsage::STORAGE_BUFFER`].
+	pub fn required_buffer_usage(&self) -> BindlessBufferUsage {
+		match self {
+			BufferAccess::Undefined => BindlessBufferUsage::empty(),
+			BufferAccess::General => BindlessBufferUsage::empty(),
+			BufferAccess::TransferRead => BindlessBufferUsage::TRANSFER_SRC,
+			BufferAccess::TransferWrite => BindlessBufferUsage::TRANSFER_DST,
+			BufferAccess::ShaderRead => BindlessBufferUsage::STORAGE_BUFFER,
+			BufferAccess::ShaderWrite => BindlessBufferUsage::STORAGE_BUFFER,
+			BufferAccess::ShaderReadWrite => BindlessBufferUsage::STORAGE_BUFFER,
+			BufferAccess::GeneralRead => BindlessBufferUsage::empty(),
+			BufferAccess::GeneralWrite => BindlessBufferUsage::empty(),
+			BufferAccess::HostAccess => BindlessBufferUsage::empty(),
+			BufferAccess::IndirectCommandRead => BindlessBufferUsage::INDIRECT_BUFFER,
+			BufferAccess::IndexRead => BindlessBufferUsage::INDEX_BUFFER,
+			BufferAccess::VertexAttributeRead => BindlessBufferUsage::VERTEX_BUFFER,
+		}
+	}
+}
+
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum ImageAccess {
@@ -37,6 +64,33 @@ pub enum ImageAccess {
 	ColorAttachment,
 	DepthStencilAttachment,
 	Present,
+}
+
+impl ImageAccess {
+	/// Returns the required [`BindlessImageUsage`] flags to transition to this state.
+	///
+	/// Note that this just verifies being allowed to transition to that state, and does not say anything about how you
+	/// can use the image once in this state. For example, you can always transition an image to general, and while
+	/// general allows you to create a [`TransientDesc`] with read access to your image, the function creating said
+	/// [`TransientDesc`] still needs to runtime check that your image has [`BindlessImageUsage::SAMPLED`] or
+	/// [`BindlessImageUsage::STORAGE`], depending on what is required.
+	pub fn required_image_usage(&self) -> BindlessImageUsage {
+		match self {
+			ImageAccess::Undefined => BindlessImageUsage::empty(),
+			ImageAccess::General => BindlessImageUsage::empty(),
+			ImageAccess::TransferRead => BindlessImageUsage::TRANSFER_SRC,
+			ImageAccess::TransferWrite => BindlessImageUsage::TRANSFER_DST,
+			ImageAccess::StorageRead => BindlessImageUsage::STORAGE,
+			ImageAccess::StorageWrite => BindlessImageUsage::STORAGE,
+			ImageAccess::StorageReadWrite => BindlessImageUsage::STORAGE,
+			ImageAccess::GeneralRead => BindlessImageUsage::empty(),
+			ImageAccess::GeneralWrite => BindlessImageUsage::empty(),
+			ImageAccess::SampledRead => BindlessImageUsage::SAMPLED,
+			ImageAccess::ColorAttachment => BindlessImageUsage::COLOR_ATTACHMENT,
+			ImageAccess::DepthStencilAttachment => BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT,
+			ImageAccess::Present => BindlessImageUsage::SWAPCHAIN,
+		}
+	}
 }
 
 pub unsafe trait BufferAccessType {

@@ -6,6 +6,7 @@ use crate::descriptor::{
 	BindlessImageUsage, BufferInterface, BufferSlot, BufferTableAccess, DescriptorCounts, Extent, ImageInterface,
 	RCDesc, SampleCount, Sampler, SamplerInterface, SamplerTableAccess,
 };
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::ash::image_format::FormatExt;
@@ -437,31 +438,21 @@ impl Deref for AshBindlessDescriptorSet {
 	}
 }
 
-#[derive(Debug, Error)]
+#[derive(Error)]
 pub enum AshAllocationError {
 	#[error("Vk Error: {0}")]
-	Vk(ash::vk::Result),
+	Vk(#[from] ash::vk::Result),
 	#[error("Allocator Error: {0}")]
-	Allocation(AllocationError),
+	Allocation(#[from] AllocationError),
 	#[error("Slot Error: {0}")]
-	Slot(SlotAllocationError),
+	Slot(#[from] SlotAllocationError),
+	#[error("Access Error: {0}")]
+	AccessError(#[from] AccessError),
 }
 
-impl From<SlotAllocationError> for AshAllocationError {
-	fn from(value: SlotAllocationError) -> Self {
-		Self::Slot(value)
-	}
-}
-
-impl From<ash::vk::Result> for AshAllocationError {
-	fn from(value: ash::vk::Result) -> Self {
-		Self::Vk(value)
-	}
-}
-
-impl From<AllocationError> for AshAllocationError {
-	fn from(value: AllocationError) -> Self {
-		Self::Allocation(value)
+impl core::fmt::Debug for AshAllocationError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Display::fmt(self, f)
 	}
 }
 
@@ -662,6 +653,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				memory_allocation: AshMemoryAllocation::new(memory_allocation),
 				strong_refs: Default::default(),
 				access_lock: AccessLock::new(prev_access_type),
+				debug_name: name.to_string(),
 			})?)
 		}
 	}

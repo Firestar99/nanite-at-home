@@ -1,7 +1,7 @@
 use crate::descriptor::{Bindless, BufferSlot, ImageSlot};
 use crate::pipeline::access_buffer::MutBufferAccess;
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
-use crate::pipeline::access_lock::AccessLockError;
 use crate::pipeline::access_type::{
 	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
 };
@@ -22,7 +22,7 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type MeshGraphicsPipeline: 'static + Send + Sync;
 	type RecordingResourceContext: RecordingResourceContext<Self>;
 	type RecordingContext<'a>: RecordingContext<'a, Self>;
-	type RecordingError: 'static + Error + Send + Sync + From<AccessLockError>;
+	type RecordingError: 'static + Error + Send + Sync + From<AccessError>;
 	type ExecutingContext<R: Send + Sync>: ExecutingContext<Self, R>;
 
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
@@ -50,7 +50,7 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAcc
 		&mut self,
 		src: &mut MutBufferAccess<P, BT, BA>,
 		dst: &mut MutImageAccess<P, IT, IA>,
-	);
+	) -> Result<(), AccessError>;
 
 	/// Copy data from an image to a buffer. It is assumed that the image data is tightly packed within the buffer.
 	/// Partial copies and copying to mips other than mip 0 is not yet possible.
@@ -67,7 +67,7 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: TransientAcc
 		&mut self,
 		src: &mut MutImageAccess<P, IT, IA>,
 		dst: &mut MutBufferAccess<P, BT, BA>,
-	);
+	) -> Result<(), AccessError>;
 
 	/// Dispatch a bindless compute shader
 	fn dispatch<T: BufferStruct>(

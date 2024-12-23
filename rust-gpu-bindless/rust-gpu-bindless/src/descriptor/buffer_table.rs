@@ -1,9 +1,10 @@
 use crate::backing::range_set::DescriptorIndexIterator;
-use crate::backing::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
+use crate::backing::table::{DrainFlushQueue, RcTableSlot, SlotAllocationError, Table, TableInterface, TableSync};
 use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutdesc::{MutBoxDescExt, MutDesc, MutDescExt};
 use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts, RCDesc};
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::{AccessLock, AccessLockError};
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::BindlessPlatform;
@@ -65,6 +66,15 @@ pub struct BufferSlot<P: BindlessPlatform> {
 	pub access_lock: AccessLock<BufferAccess>,
 	pub memory_allocation: P::MemoryAllocation,
 	pub strong_refs: Mutex<StrongBackingRefs<P>>,
+	/// This may be replaced with a platform-specific getter, once you can query the name from gpu-allocator to not
+	/// unnecessarily duplicate the String (see my PR https://github.com/Traverse-Research/gpu-allocator/pull/257)
+	pub debug_name: String,
+}
+
+impl<P: BindlessPlatform> BufferSlot<P> {
+	pub fn debug_name(&self) -> &str {
+		&self.debug_name
+	}
 }
 
 pub struct BufferTable<P: BindlessPlatform> {
@@ -166,6 +176,13 @@ pub struct BindlessBufferCreateInfo<'a> {
 	pub name: &'a str,
 }
 
+impl<'a> BindlessBufferCreateInfo<'a> {
+	#[inline]
+	pub fn validate(&self) -> Result<(), AccessError> {
+		Ok(())
+	}
+}
+
 impl<'a> Default for BindlessBufferCreateInfo<'a> {
 	fn default() -> Self {
 		Self {
@@ -187,7 +204,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	pub unsafe fn alloc_slot<T: BufferContent + ?Sized>(
 		&self,
 		buffer: BufferSlot<P>,
-	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutBuffer<T>>, SlotAllocationError> {
 		unsafe { Ok(MutDesc::new(self.table.alloc_slot(buffer)?)) }
 	}
 
@@ -200,6 +217,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		create_info: &BindlessBufferCreateInfo,
 	) -> Result<MutDesc<P, MutBuffer<T>>, P::AllocationError> {
 		unsafe {
+			create_info.validate()?;
 			let size = size_of::<T::Transfer>() as u64;
 			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
 			Ok(self.alloc_slot(BufferSlot {
@@ -210,6 +228,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				memory_allocation,
 				strong_refs: Default::default(),
 				access_lock: AccessLock::new(create_info.usage.initial_buffer_access()),
+				debug_name: create_info.name.to_string(),
 			})?)
 		}
 	}
@@ -220,6 +239,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		len: usize,
 	) -> Result<MutDesc<P, MutBuffer<[T]>>, P::AllocationError> {
 		unsafe {
+			create_info.validate()?;
 			let size = size_of::<T::Transfer>() as u64 * len as u64;
 			let (buffer, memory_allocation) = self.0.platform.alloc_buffer(create_info, size)?;
 			Ok(self.alloc_slot(BufferSlot {
@@ -230,6 +250,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 				memory_allocation,
 				strong_refs: Default::default(),
 				access_lock: AccessLock::new(create_info.usage.initial_buffer_access()),
+				debug_name: create_info.name.to_string(),
 			})?)
 		}
 	}

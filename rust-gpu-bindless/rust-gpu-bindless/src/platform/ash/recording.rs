@@ -1,11 +1,11 @@
-use crate::descriptor::MutDescExt;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame, BufferSlot,
 	ImageSlot,
 };
+use crate::descriptor::{BindlessImageUsage, MutDescExt};
 use crate::pipeline::access_buffer::MutBufferAccess;
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
-use crate::pipeline::access_lock::AccessLockError;
 use crate::pipeline::access_type::{
 	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
 };
@@ -288,7 +288,9 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		&mut self,
 		src_buffer: &mut MutBufferAccess<Ash, BT, BA>,
 		dst_image: &mut MutImageAccess<Ash, IT, IA>,
-	) {
+	) -> Result<(), AccessError> {
+		src_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
+		dst_image.has_required_usage(BindlessImageUsage::TRANSFER_DST)?;
 		unsafe {
 			self.ash_flush();
 			let device = &self.bindless.platform.device;
@@ -314,7 +316,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 						image_extent: image.extent.into(),
 						..Default::default()
 					}]),
-			)
+			);
+			Ok(())
 		}
 	}
 
@@ -327,7 +330,9 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		&mut self,
 		src_image: &mut MutImageAccess<Ash, IT, IA>,
 		dst_buffer: &mut MutBufferAccess<Ash, BT, BA>,
-	) {
+	) -> Result<(), AccessError> {
+		src_image.has_required_usage(BindlessImageUsage::TRANSFER_SRC)?;
+		dst_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
 		unsafe {
 			self.ash_flush();
 			let device = &self.bindless.platform.device;
@@ -353,7 +358,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 						image_extent: image.extent.into(),
 						..Default::default()
 					}]),
-			)
+			);
+			Ok(())
 		}
 	}
 
@@ -387,22 +393,16 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 	// }
 }
 
-#[derive(Debug, Error)]
+#[derive(Error)]
 pub enum AshRecordingError {
 	#[error("Vk Error: {0}")]
-	Vk(ash::vk::Result),
-	#[error("AccessLockError: {0}")]
-	AccessLock(AccessLockError),
+	Vk(#[from] ash::vk::Result),
+	#[error("AccessError: {0}")]
+	AccessError(#[from] AccessError),
 }
 
-impl From<ash::vk::Result> for AshRecordingError {
-	fn from(value: ash::vk::Result) -> Self {
-		Self::Vk(value)
-	}
-}
-
-impl From<AccessLockError> for AshRecordingError {
-	fn from(value: AccessLockError) -> Self {
-		Self::AccessLock(value)
+impl Debug for AshRecordingError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Display::fmt(self, f)
 	}
 }

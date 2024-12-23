@@ -56,13 +56,13 @@ fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> 
 
 	let staging_download = bindless
 		.execute(|cmd| {
-			let mut staging_upload = staging_upload.access::<TransferRead>(cmd)?;
-			let mut image = image.access::<TransferWrite>(cmd)?;
-			let mut staging_download = staging_download.access::<TransferWrite>(cmd)?;
+			let mut staging_upload = staging_upload.access::<TransferRead>(cmd);
+			let mut image = image.access::<TransferWrite>(cmd);
+			let mut staging_download = staging_download.access::<TransferWrite>(cmd);
 
-			cmd.copy_buffer_to_image(&mut staging_upload, &mut image);
+			cmd.copy_buffer_to_image(&mut staging_upload, &mut image)?;
 			let mut image = image.transition::<TransferRead>();
-			unsafe { cmd.copy_image_to_buffer(&mut image, &mut staging_download) };
+			unsafe { cmd.copy_image_to_buffer(&mut image, &mut staging_download)? };
 
 			Ok(staging_download.transition::<HostAccess>().into_desc())
 		})?

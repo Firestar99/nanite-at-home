@@ -1,7 +1,7 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{BufferSlot, DescContentCpu, RCDesc, RCDescExt};
+use crate::descriptor::{BindlessBufferUsage, BufferSlot, DescContentCpu, RCDesc, RCDescExt};
 use crate::descriptor::{MutDesc, MutDescExt};
-use crate::pipeline::access_lock::AccessLockError;
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{BufferAccess, BufferAccessType, ShaderReadWriteable, ShaderReadable};
 use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
@@ -11,35 +11,52 @@ use std::marker::PhantomData;
 pub trait MutBufferAccessExt<P: BindlessPipelinePlatform, T: BufferContent + ?Sized>:
 	MutDescExt<P, MutBuffer<T>>
 {
+	/// Access this mutable buffer to use it for recording. Panics if an [`AccessError`] occurred.
+	fn access<'a, A: BufferAccessType>(self, cmd: &P::RecordingContext<'a>) -> MutBufferAccess<'a, P, T, A> {
+		self.try_access(cmd).unwrap()
+	}
+
 	/// Access this mutable buffer to use it for recording.
-	fn access<'a, A: BufferAccessType>(
+	fn try_access<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
-	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError>;
+	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError>;
 
 	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
-	/// uninitialized.
+	/// uninitialized. Panics if an [`AccessError`] occurred.
 	///
 	/// # Safety
 	/// Must not read uninitialized memory and fully overwrite it within this execution context.
 	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
-	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError>;
+	) -> MutBufferAccess<'a, P, T, A> {
+		self.try_access_undefined_contents(cmd).unwrap()
+	}
+
+	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
+	/// uninitialized.
+	///
+	/// # Safety
+	/// Must not read uninitialized memory and fully overwrite it within this execution context.
+	unsafe fn try_access_undefined_contents<'a, A: BufferAccessType>(
+		self,
+		cmd: &P::RecordingContext<'a>,
+	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError>;
 }
 
 impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized> MutBufferAccessExt<P, T> for MutDesc<P, MutBuffer<T>> {
-	fn access<'a, A: BufferAccessType>(
+	fn try_access<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
-	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError> {
+	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
 		MutBufferAccess::from(self, cmd)
 	}
 
-	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
+	unsafe fn try_access_undefined_contents<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
-	) -> Result<MutBufferAccess<'a, P, T, A>, AccessLockError> {
+	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
 		MutBufferAccess::from_undefined_contents(self, cmd)
 	}
 }
@@ -55,11 +72,11 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	pub fn from_undefined_contents(
 		desc: MutDesc<P, MutBuffer<T>>,
 		cmd: &P::RecordingContext<'a>,
-	) -> Result<Self, AccessLockError> {
+	) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |_| BufferAccess::Undefined)
 	}
 
-	pub fn from(desc: MutDesc<P, MutBuffer<T>>, cmd: &P::RecordingContext<'a>) -> Result<Self, AccessLockError> {
+	pub fn from(desc: MutDesc<P, MutBuffer<T>>, cmd: &P::RecordingContext<'a>) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |x| x)
 	}
 
@@ -68,7 +85,7 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 		desc: MutDesc<P, MutBuffer<T>>,
 		cmd: &P::RecordingContext<'a>,
 		f: impl FnOnce(BufferAccess) -> BufferAccess,
-	) -> Result<Self, AccessLockError> {
+	) -> Result<Self, AccessError> {
 		unsafe {
 			let this = Self {
 				slot: desc.into_rc_slot(),
@@ -76,27 +93,53 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 				_phantom: PhantomData,
 				_phantom2: PhantomData,
 			};
-			this.transition_inner(f(this.inner_slot().access_lock.try_lock()?), A::BUFFER_ACCESS);
+			this.transition_inner(f(this.inner_slot().access_lock.try_lock()?), A::BUFFER_ACCESS)?;
 			Ok(this)
 		}
 	}
 
-	/// Transition this Buffer from one [`BufferAccessType`] to another and inserts appropriate barriers.
+	/// Verify that this buffer has all the usages given by param.
+	#[inline]
+	pub fn has_required_usage(&self, required: BindlessBufferUsage) -> Result<(), AccessError> {
+		unsafe {
+			let slot = self.inner_slot();
+			if !slot.usage.contains(required) {
+				Err(AccessError::MissingBufferUsage {
+					name: slot.debug_name().to_string(),
+					usage: slot.usage,
+					missing_usage: required,
+				})
+			} else {
+				Ok(())
+			}
+		}
+	}
+
+	/// Transition this Buffer from one [`BufferAccessType`] to another and inserts appropriate barriers. Panics if an
+	/// [`AccessError`] occurred.
 	pub fn transition<B: BufferAccessType>(self) -> MutBufferAccess<'a, P, T, B> {
-		self.transition_inner(A::BUFFER_ACCESS, B::BUFFER_ACCESS);
-		MutBufferAccess {
+		self.try_transition::<B>().unwrap()
+	}
+
+	/// Transition this Buffer from one [`BufferAccessType`] to another and inserts appropriate barriers.
+	pub fn try_transition<B: BufferAccessType>(self) -> Result<MutBufferAccess<'a, P, T, B>, AccessError> {
+		self.transition_inner(A::BUFFER_ACCESS, B::BUFFER_ACCESS)?;
+		Ok(MutBufferAccess {
 			slot: self.slot,
 			resource_context: self.resource_context,
 			_phantom: PhantomData,
 			_phantom2: PhantomData,
-		}
+		})
 	}
 
 	#[inline]
-	fn transition_inner(&self, src: BufferAccess, dst: BufferAccess) {
-		// TODO check buffer usage if transition is valid
-		if src != dst {
-			unsafe { self.resource_context.transition_buffer(&self.inner_slot(), src, dst) }
+	fn transition_inner(&self, src: BufferAccess, dst: BufferAccess) -> Result<(), AccessError> {
+		unsafe {
+			self.has_required_usage(dst.required_buffer_usage())?;
+			if src != dst {
+				self.resource_context.transition_buffer(self.inner_slot(), src, dst)
+			}
+			Ok(())
 		}
 	}
 
@@ -119,7 +162,9 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	/// Turns this mutable access to a [`MutBuffer`] into a shared [`RCDesc`]
 	pub fn into_shared(self) -> RCDesc<P, Buffer<T>> {
 		unsafe {
-			self.transition_inner(A::BUFFER_ACCESS, BufferAccess::GeneralRead);
+			// cannot fail
+			self.transition_inner(A::BUFFER_ACCESS, BufferAccess::GeneralRead)
+				.unwrap();
 			self.inner_slot().access_lock.unlock_to_shared();
 			RCDesc::new(self.slot)
 		}
@@ -130,8 +175,18 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	MutBufferAccess<'a, P, T, A>
 {
 	pub fn to_transient(&self) -> TransientDesc<Buffer<T>> {
+		self.try_to_transient().unwrap()
+	}
+
+	pub fn try_to_transient(&self) -> Result<TransientDesc<Buffer<T>>, AccessError> {
+		self.has_required_usage(BindlessBufferUsage::STORAGE_BUFFER)?;
 		// Safety: mutable resource is in a layout that implements ShaderReadable, so it is readable by a shader
-		unsafe { TransientDesc::new(self.slot.id(), &self.resource_context.to_transient_access()) }
+		unsafe {
+			Ok(TransientDesc::new(
+				self.slot.id(),
+				&self.resource_context.to_transient_access(),
+			))
+		}
 	}
 }
 
@@ -139,8 +194,18 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	MutBufferAccess<'a, P, T, A>
 {
 	pub fn to_mut_transient(&self) -> TransientDesc<MutBuffer<T>> {
+		self.try_to_mut_transient().unwrap()
+	}
+
+	pub fn try_to_mut_transient(&self) -> Result<TransientDesc<MutBuffer<T>>, AccessError> {
+		self.has_required_usage(BindlessBufferUsage::STORAGE_BUFFER)?;
 		// Safety: mutable resource is in a layout that implements ShaderReadWriteable, so it is readable and writeable
 		// by a shader
-		unsafe { TransientDesc::new(self.slot.id(), &self.resource_context.to_transient_access()) }
+		unsafe {
+			Ok(TransientDesc::new(
+				self.slot.id(),
+				&self.resource_context.to_transient_access(),
+			))
+		}
 	}
 }

@@ -1,8 +1,9 @@
 use crate::backing::range_set::DescriptorIndexIterator;
-use crate::backing::table::{DrainFlushQueue, RcTableSlot, Table, TableInterface, TableSync};
+use crate::backing::table::{DrainFlushQueue, RcTableSlot, SlotAllocationError, Table, TableInterface, TableSync};
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutdesc::{MutDesc, MutDescExt};
 use crate::descriptor::{Bindless, BindlessAllocationScheme, DescriptorCounts, Extent};
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::ImageAccess;
 use crate::platform::BindlessPlatform;
@@ -56,6 +57,15 @@ pub struct ImageSlot<P: BindlessPlatform> {
 	pub array_layers: u32,
 	pub access_lock: AccessLock<ImageAccess>,
 	pub memory_allocation: P::MemoryAllocation,
+	/// This may be replaced with a platform-specific getter, once you can query the name from gpu-allocator to not
+	/// unnecessarily duplicate the String (see my PR https://github.com/Traverse-Research/gpu-allocator/pull/257)
+	pub debug_name: String,
+}
+
+impl<P: BindlessPlatform> ImageSlot<P> {
+	pub fn debug_name(&self) -> &str {
+		&self.debug_name
+	}
 }
 
 pub struct ImageTable<P: BindlessPlatform> {
@@ -98,6 +108,9 @@ bitflags::bitflags! {
 		const COLOR_ATTACHMENT = 0b1_0000;
 		/// Can be used as framebuffer depth/stencil attachment
 		const DEPTH_STENCIL_ATTACHMENT = 0b10_0000;
+		/// Image is part of a swapchain and may be used for presenting. You may not create an image with this usage
+		/// yourself, and must acquire it from a swapchain.
+		const SWAPCHAIN = 0b100_0000;
 	}
 }
 
@@ -145,6 +158,19 @@ pub struct BindlessImageCreateInfo<'a, T: ImageType> {
 	pub _phantom: PhantomData<T>,
 }
 
+impl<'a, T: ImageType> BindlessImageCreateInfo<'a, T> {
+	#[inline]
+	pub fn validate(&self) -> Result<(), AccessError> {
+		if self.usage.contains(BindlessImageUsage::SWAPCHAIN) {
+			Err(AccessError::InvalidSwapchainImageUsage {
+				name: self.name.to_owned(),
+			})
+		} else {
+			Ok(())
+		}
+	}
+}
+
 impl<'a, T: ImageType> Default for BindlessImageCreateInfo<'a, T> {
 	fn default() -> Self {
 		Self {
@@ -172,7 +198,7 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 	pub unsafe fn alloc_slot<T: ImageType>(
 		&self,
 		image: ImageSlot<P>,
-	) -> Result<MutDesc<P, MutImage<T>>, P::AllocationError> {
+	) -> Result<MutDesc<P, MutImage<T>>, SlotAllocationError> {
 		unsafe { Ok(MutDesc::new(self.table.alloc_slot(image)?)) }
 	}
 
@@ -185,8 +211,9 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 		create_info: &BindlessImageCreateInfo<T>,
 	) -> Result<MutDesc<P, MutImage<T>>, P::AllocationError> {
 		unsafe {
+			create_info.validate()?;
 			let (image, imageview, memory_allocation) = self.0.platform.alloc_image(create_info)?;
-			self.alloc_slot(ImageSlot {
+			Ok(self.alloc_slot(ImageSlot {
 				image,
 				imageview,
 				usage: create_info.usage,
@@ -196,7 +223,8 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 				array_layers: create_info.array_layers,
 				access_lock: AccessLock::new(create_info.usage.initial_image_access()),
 				memory_allocation,
-			})
+				debug_name: create_info.name.to_string(),
+			})?)
 		}
 	}
 }
