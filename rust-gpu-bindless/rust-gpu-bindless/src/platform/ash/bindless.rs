@@ -1,42 +1,178 @@
 use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
 use crate::backing::table::{DrainFlushQueue, SlotAllocationError};
-use crate::descriptor::MutDesc;
 use crate::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
-	BindlessImageUsage, BufferInterface, BufferSlot, BufferTableAccess, DescriptorCounts, Extent, ImageInterface,
-	RCDesc, SampleCount, Sampler, SamplerInterface, SamplerTableAccess,
+	Bindless, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo, BindlessImageUsage,
+	BufferInterface, BufferSlot, DescriptorCounts, ImageInterface, SamplerInterface,
 };
 use crate::pipeline::access_error::AccessError;
-use crate::pipeline::access_lock::AccessLock;
-use crate::pipeline::access_type::BufferAccess;
 use crate::platform::ash::image_format::FormatExt;
-use crate::platform::ash::{Ash, AshBuffer, AshCreateInfo, AshImage, AshMemoryAllocation};
-use crate::platform::BindlessPlatform;
-use crate::spirv_std::image::{Arrayed, Dimensionality};
-use ash::prelude::VkResult;
-use ash::vk::{
-	BufferUsageFlags, ComponentMapping, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
-	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
-	DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo,
-	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, Extent3D, ImageLayout,
-	ImageSubresourceRange, ImageTiling, ImageUsageFlags, ImageViewCreateInfo, ImageViewType, PipelineLayout,
-	PipelineLayoutCreateInfo, PushConstantRange, SamplerCreateInfo, SharingMode, WriteDescriptorSet,
+use crate::platform::ash::{
+	bindless_image_type_to_vk_image_type, bindless_image_type_to_vk_image_view_type, AshExecutionManager,
 };
-use ash::vk::{ImageType as VkImageType, SampleCountFlags};
-use ash::vk::{PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties};
-use gpu_allocator::vulkan::{AllocationCreateDesc, AllocationScheme};
-use gpu_allocator::{AllocationError, MemoryLocation};
+use crate::platform::BindlessPlatform;
+use ash::vk::{
+	ComponentMapping, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
+	DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo,
+	DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo, DescriptorSetLayoutCreateFlags,
+	DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageSubresourceRange, ImageTiling,
+	ImageViewCreateInfo, PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties, PipelineCache, PipelineLayout,
+	PipelineLayoutCreateInfo, PushConstantRange, ShaderStageFlags, SharingMode, WriteDescriptorSet,
+};
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
+use gpu_allocator::AllocationError;
+use parking_lot::lock_api::MutexGuard;
+use parking_lot::{Mutex, RawMutex};
 use presser::Slab;
 use rangemap::RangeSet;
-use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{
-	BindlessPushConstant, ImageType, MutBuffer, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER,
-	BINDING_STORAGE_IMAGE,
+	BindlessPushConstant, ImageType, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
 };
-use std::mem::size_of;
+use static_assertions::assert_impl_all;
+use std::cell::UnsafeCell;
+use std::mem::{size_of, MaybeUninit};
 use std::ops::Deref;
 use std::sync::Weak;
 use thiserror::Error;
+
+pub struct Ash {
+	pub create_info: AshCreateInfo,
+	pub execution_manager: AshExecutionManager,
+}
+assert_impl_all!(Bindless<Ash>: Send, Sync);
+
+impl Ash {
+	pub fn new(create_info: AshCreateInfo, bindless: &Weak<Bindless<Self>>) -> Self {
+		Ash {
+			execution_manager: AshExecutionManager::new(bindless),
+			create_info,
+		}
+	}
+}
+
+impl Deref for Ash {
+	type Target = AshCreateInfo;
+
+	fn deref(&self) -> &Self::Target {
+		&self.create_info
+	}
+}
+
+impl Drop for Ash {
+	fn drop(&mut self) {
+		self.execution_manager.destroy(&self.create_info.device);
+	}
+}
+
+pub struct AshCreateInfo {
+	pub entry: ash::Entry,
+	pub instance: ash::Instance,
+	pub physical_device: ash::vk::PhysicalDevice,
+	pub device: ash::Device,
+	pub memory_allocator: Option<Mutex<Allocator>>,
+	pub shader_stages: ShaderStageFlags,
+	pub queue_family_index: u32,
+	pub queue: ash::vk::Queue,
+	pub cache: Option<PipelineCache>,
+	pub destroy: Option<Box<dyn FnOnce(&mut AshCreateInfo) + Send + Sync>>,
+}
+
+impl AshCreateInfo {
+	pub fn memory_allocator(&self) -> MutexGuard<'_, RawMutex, Allocator> {
+		self.memory_allocator.as_ref().unwrap().lock()
+	}
+}
+
+impl Drop for AshCreateInfo {
+	fn drop(&mut self) {
+		if let Some(destroy) = self.destroy.take() {
+			destroy(self);
+		}
+	}
+}
+
+/// Wraps gpu-allocator's MemoryAllocation to be able to [`Option::take`] it on drop, but saving the enum flag byte
+/// with [`MaybeUninit`]
+///
+/// # Safety
+/// UnsafeCell: Required to gain mutable access where it is safe to do so, see safety of interface methods.
+/// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after taking it during drop.
+#[derive(Debug)]
+pub struct AshMemoryAllocation(UnsafeCell<MaybeUninit<Allocation>>);
+
+impl AshMemoryAllocation {
+	/// Create a AshMemoryAllocation from a gpu-allocator Allocation
+	///
+	/// # Safety
+	/// You must [`Self::take`] the Allocation and deallocate manually before dropping self
+	pub unsafe fn new(allocation: Allocation) -> Self {
+		Self(UnsafeCell::new(MaybeUninit::new(allocation)))
+	}
+
+	/// Get exclusive mutable access to the Allocation
+	///
+	/// # Safety
+	/// You must ensure you have exclusive mutable access to the Allocation
+	pub unsafe fn get_mut(&self) -> &mut Allocation {
+		unsafe { (&mut *self.0.get()).assume_init_mut() }
+	}
+
+	/// Take the allocation
+	///
+	/// # Safety
+	/// Once the allocation was taken, you must only drop self, any other action is unsafe
+	pub unsafe fn take(&self) -> Allocation {
+		unsafe { (&mut *self.0.get()).assume_init_read() }
+	}
+}
+
+/// Safety: MemoryAllocation is safety Send and Sync, will only uninit on drop
+unsafe impl Send for AshMemoryAllocation {}
+unsafe impl Sync for AshMemoryAllocation {}
+
+pub struct AshBuffer {
+	pub buffer: ash::vk::Buffer,
+	pub allocation: AshMemoryAllocation,
+}
+
+pub struct AshImage {
+	pub image: ash::vk::Image,
+	pub image_view: Option<ash::vk::ImageView>,
+	pub allocation: AshMemoryAllocation,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct AshBindlessDescriptorSet {
+	pub pipeline_layout: PipelineLayout,
+	pub set_layout: DescriptorSetLayout,
+	pub pool: DescriptorPool,
+	pub set: DescriptorSet,
+}
+
+impl Deref for AshBindlessDescriptorSet {
+	type Target = DescriptorSet;
+
+	fn deref(&self) -> &Self::Target {
+		&self.set
+	}
+}
+
+#[derive(Error)]
+pub enum AshAllocationError {
+	#[error("Vk Error: {0}")]
+	Vk(#[from] ash::vk::Result),
+	#[error("Allocator Error: {0}")]
+	Allocation(#[from] AllocationError),
+	#[error("Slot Error: {0}")]
+	Slot(#[from] SlotAllocationError),
+	#[error("Access Error: {0}")]
+	AccessError(#[from] AccessError),
+}
+
+impl core::fmt::Debug for AshAllocationError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Display::fmt(self, f)
+	}
+}
 
 unsafe impl BindlessPlatform for Ash {
 	type PlatformCreateInfo = AshCreateInfo;
@@ -425,253 +561,6 @@ unsafe impl BindlessPlatform for Ash {
 	) {
 		for (_, sampler) in samplers.into_iter() {
 			self.device.destroy_sampler(*sampler, None);
-		}
-	}
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct AshBindlessDescriptorSet {
-	pub pipeline_layout: PipelineLayout,
-	pub set_layout: DescriptorSetLayout,
-	pub pool: DescriptorPool,
-	pub set: DescriptorSet,
-}
-
-impl Deref for AshBindlessDescriptorSet {
-	type Target = DescriptorSet;
-
-	fn deref(&self) -> &Self::Target {
-		&self.set
-	}
-}
-
-#[derive(Error)]
-pub enum AshAllocationError {
-	#[error("Vk Error: {0}")]
-	Vk(#[from] ash::vk::Result),
-	#[error("Allocator Error: {0}")]
-	Allocation(#[from] AllocationError),
-	#[error("Slot Error: {0}")]
-	Slot(#[from] SlotAllocationError),
-	#[error("Access Error: {0}")]
-	AccessError(#[from] AccessError),
-}
-
-impl core::fmt::Debug for AshAllocationError {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		core::fmt::Display::fmt(self, f)
-	}
-}
-
-impl<'a> SamplerTableAccess<'a, Ash> {
-	pub fn alloc_ash(
-		&self,
-		device: &ash::Device,
-		sampler_create_info: &SamplerCreateInfo,
-	) -> VkResult<RCDesc<Ash, Sampler>> {
-		unsafe {
-			let sampler = device.create_sampler(&sampler_create_info, None)?;
-			Ok(self.alloc_slot(sampler))
-		}
-	}
-}
-
-impl BindlessAllocationScheme {
-	pub fn to_gpu_allocator_buffer(&self, buffer: ash::vk::Buffer) -> AllocationScheme {
-		match self {
-			BindlessAllocationScheme::Dedicated => AllocationScheme::DedicatedBuffer(buffer),
-			BindlessAllocationScheme::AllocatorManaged => AllocationScheme::GpuAllocatorManaged,
-		}
-	}
-
-	pub fn to_gpu_allocator_image(&self, image: ash::vk::Image) -> AllocationScheme {
-		match self {
-			BindlessAllocationScheme::Dedicated => AllocationScheme::DedicatedImage(image),
-			BindlessAllocationScheme::AllocatorManaged => AllocationScheme::GpuAllocatorManaged,
-		}
-	}
-}
-
-impl BindlessBufferUsage {
-	pub fn to_ash_buffer_usage_flags(&self) -> BufferUsageFlags {
-		let mut out = BufferUsageFlags::empty();
-		if self.contains(BindlessBufferUsage::TRANSFER_SRC) {
-			out |= BufferUsageFlags::TRANSFER_SRC;
-		}
-		if self.contains(BindlessBufferUsage::TRANSFER_DST) {
-			out |= BufferUsageFlags::TRANSFER_DST;
-		}
-		if self.contains(BindlessBufferUsage::UNIFORM_BUFFER) {
-			out |= BufferUsageFlags::UNIFORM_BUFFER;
-		}
-		if self.contains(BindlessBufferUsage::STORAGE_BUFFER) {
-			out |= BufferUsageFlags::STORAGE_BUFFER;
-		}
-		if self.contains(BindlessBufferUsage::INDEX_BUFFER) {
-			out |= BufferUsageFlags::INDEX_BUFFER;
-		}
-		if self.contains(BindlessBufferUsage::VERTEX_BUFFER) {
-			out |= BufferUsageFlags::VERTEX_BUFFER;
-		}
-		if self.contains(BindlessBufferUsage::INDIRECT_BUFFER) {
-			out |= BufferUsageFlags::INDIRECT_BUFFER;
-		}
-		// empty flags are invalid in vulkan, this is reachable via a buffer that is only host mappable
-		assert!(!self.is_empty());
-		if out.is_empty() {
-			BufferUsageFlags::TRANSFER_SRC
-		} else {
-			out
-		}
-	}
-
-	/// prioritizes MAP_WRITE over MAP_READ
-	pub fn to_gpu_allocator_memory_location(&self) -> MemoryLocation {
-		if self.contains(BindlessBufferUsage::MAP_WRITE) {
-			MemoryLocation::CpuToGpu
-		} else if self.contains(BindlessBufferUsage::MAP_READ) {
-			MemoryLocation::GpuToCpu
-		} else {
-			MemoryLocation::GpuOnly
-		}
-	}
-}
-
-fn bindless_image_type_to_vk_image_type<T: ImageType>() -> Option<VkImageType> {
-	match T::dimensionality() {
-		Dimensionality::OneD => Some(VkImageType::TYPE_1D),
-		Dimensionality::TwoD => Some(VkImageType::TYPE_2D),
-		Dimensionality::ThreeD => Some(VkImageType::TYPE_3D),
-		Dimensionality::Cube => Some(VkImageType::TYPE_2D),
-		Dimensionality::Rect => Some(VkImageType::TYPE_2D),
-		Dimensionality::Buffer => None,
-		Dimensionality::SubpassData => None,
-	}
-}
-
-fn bindless_image_type_to_vk_image_view_type<T: ImageType>() -> Option<ImageViewType> {
-	match (T::dimensionality(), T::arrayed()) {
-		(Dimensionality::OneD, Arrayed::False) => Some(ImageViewType::TYPE_1D),
-		(Dimensionality::OneD, Arrayed::True) => Some(ImageViewType::TYPE_1D_ARRAY),
-		(Dimensionality::TwoD, Arrayed::False) => Some(ImageViewType::TYPE_2D),
-		(Dimensionality::TwoD, Arrayed::True) => Some(ImageViewType::TYPE_2D_ARRAY),
-		(Dimensionality::ThreeD, Arrayed::False) => Some(ImageViewType::TYPE_3D),
-		(Dimensionality::ThreeD, Arrayed::True) => None,
-		(Dimensionality::Cube, Arrayed::False) => Some(ImageViewType::CUBE),
-		(Dimensionality::Cube, Arrayed::True) => Some(ImageViewType::CUBE_ARRAY),
-		(Dimensionality::Rect, Arrayed::False) => Some(ImageViewType::TYPE_2D),
-		(Dimensionality::Rect, Arrayed::True) => Some(ImageViewType::TYPE_2D_ARRAY),
-		(Dimensionality::Buffer, _) => None,
-		(Dimensionality::SubpassData, _) => None,
-	}
-}
-
-impl SampleCount {
-	pub fn to_ash_sample_count_flags(&self) -> SampleCountFlags {
-		match self {
-			SampleCount::Sample1 => SampleCountFlags::TYPE_1,
-			SampleCount::Sample2 => SampleCountFlags::TYPE_2,
-			SampleCount::Sample4 => SampleCountFlags::TYPE_4,
-			SampleCount::Sample8 => SampleCountFlags::TYPE_8,
-			SampleCount::Sample16 => SampleCountFlags::TYPE_16,
-			SampleCount::Sample32 => SampleCountFlags::TYPE_32,
-			SampleCount::Sample64 => SampleCountFlags::TYPE_64,
-		}
-	}
-}
-
-impl From<Extent> for Extent3D {
-	fn from(value: Extent) -> Self {
-		Extent3D {
-			width: value.width,
-			height: value.height,
-			depth: value.depth,
-		}
-	}
-}
-
-impl BindlessImageUsage {
-	pub fn to_ash_image_usage_flags(&self) -> ImageUsageFlags {
-		let mut out = ImageUsageFlags::empty();
-		if self.contains(BindlessImageUsage::TRANSFER_SRC) {
-			out |= ImageUsageFlags::TRANSFER_SRC;
-		}
-		if self.contains(BindlessImageUsage::TRANSFER_DST) {
-			out |= ImageUsageFlags::TRANSFER_DST;
-		}
-		if self.contains(BindlessImageUsage::SAMPLED) {
-			out |= ImageUsageFlags::SAMPLED;
-		}
-		if self.contains(BindlessImageUsage::STORAGE) {
-			out |= ImageUsageFlags::STORAGE;
-		}
-		if self.contains(BindlessImageUsage::COLOR_ATTACHMENT) {
-			out |= ImageUsageFlags::COLOR_ATTACHMENT;
-		}
-		if self.contains(BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT) {
-			out |= ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
-		}
-		// empty flags are invalid in vulkan, but unlike buffer this is unreachable
-		assert!(!out.is_empty());
-		out
-	}
-
-	pub fn to_gpu_allocator_memory_location(&self) -> MemoryLocation {
-		MemoryLocation::GpuOnly
-	}
-
-	pub fn has_image_view(&self) -> bool {
-		self.intersects(
-			BindlessImageUsage::SAMPLED
-				| BindlessImageUsage::STORAGE
-				| BindlessImageUsage::COLOR_ATTACHMENT
-				| BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT,
-		)
-	}
-}
-
-impl<'a> BufferTableAccess<'a, Ash> {
-	/// Create a new buffer directly from an ash's [`BufferCreateInfo`] and the flattened members of GpuAllocator's
-	/// [`AllocationCreateDesc`] to allow for maximum customizability.
-	///
-	/// # Safety
-	/// Size must be sufficient to store `T`. If `T` is a slice, `len` must be its length, otherwise it must be 1.
-	/// Returned buffer will be uninitialized.
-	pub unsafe fn alloc_ash_unchecked<T: BufferContent + ?Sized>(
-		&self,
-		ash_create_info: &ash::vk::BufferCreateInfo,
-		usage: BindlessBufferUsage,
-		location: MemoryLocation,
-		allocation_scheme: BindlessAllocationScheme,
-		len: usize,
-		name: &str,
-		prev_access_type: BufferAccess,
-	) -> Result<MutDesc<Ash, MutBuffer<T>>, AshAllocationError> {
-		unsafe {
-			let buffer = self.0.device.create_buffer(&ash_create_info, None)?;
-			let requirements = self.0.device.get_buffer_memory_requirements(buffer);
-			let memory_allocation = self.0.memory_allocator().allocate(&AllocationCreateDesc {
-				requirements,
-				name,
-				location,
-				allocation_scheme: allocation_scheme.to_gpu_allocator_buffer(buffer),
-				linear: true,
-			})?;
-			self.0
-				.device
-				.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
-			Ok(self.alloc_slot(BufferSlot {
-				platform: AshBuffer {
-					buffer,
-					allocation: AshMemoryAllocation::new(memory_allocation),
-				},
-				len,
-				size: ash_create_info.size,
-				usage,
-				strong_refs: Default::default(),
-				access_lock: AccessLock::new(prev_access_type),
-				debug_name: name.to_string(),
-			})?)
 		}
 	}
 }
