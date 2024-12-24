@@ -10,7 +10,7 @@ use rust_gpu_bindless::pipeline::access_type::{HostAccess, TransferRead, Transfe
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext, RecordingContext};
+use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
 use rust_gpu_bindless::spirv_std::glam::UVec2;
 use std::sync::Arc;
 

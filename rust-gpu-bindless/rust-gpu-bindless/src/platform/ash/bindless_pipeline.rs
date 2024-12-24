@@ -1,4 +1,5 @@
 use crate::descriptor::Bindless;
+use crate::pipeline::recording::{Recording, RecordingError};
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::ash::{
 	ash_record_and_execute, Ash, AshExecutingContext, AshRecordingContext, AshRecordingError,
@@ -56,8 +57,8 @@ unsafe impl BindlessPipelinePlatform for Ash {
 
 	unsafe fn record_and_execute<R: Send + Sync>(
 		bindless: &Arc<Bindless<Self>>,
-		f: impl FnOnce(&mut Self::RecordingContext<'_>) -> Result<R, Self::RecordingError>,
-	) -> Result<Self::ExecutingContext<R>, Self::RecordingError> {
+		f: impl FnOnce(&mut Recording<'_, Self>) -> Result<R, RecordingError<Self>>,
+	) -> Result<Self::ExecutingContext<R>, RecordingError<Self>> {
 		ash_record_and_execute(bindless, f)
 	}
 }

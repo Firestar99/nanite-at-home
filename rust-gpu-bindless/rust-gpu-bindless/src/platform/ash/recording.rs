@@ -1,20 +1,19 @@
+use crate::descriptor::MutDescExt;
 use crate::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame, BufferSlot,
 	ImageSlot,
 };
-use crate::descriptor::{BindlessImageUsage, MutDescExt};
 use crate::pipeline::access_buffer::MutBufferAccess;
-use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{
 	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
 };
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
+use crate::pipeline::recording::{Recording, RecordingError};
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
 use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
-use ash::prelude::VkResult;
 use ash::vk::{
 	BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
 	CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo,
@@ -127,12 +126,16 @@ unsafe impl RecordingResourceContext<Ash> for AshRecordingResourceContext {
 
 pub unsafe fn ash_record_and_execute<R>(
 	bindless: &Arc<Bindless<Ash>>,
-	f: impl FnOnce(&mut AshRecordingContext<'_>) -> Result<R, AshRecordingError>,
-) -> Result<AshExecutingContext<R>, AshRecordingError> {
+	f: impl FnOnce(&mut Recording<'_, Ash>) -> Result<R, RecordingError<Ash>>,
+) -> Result<AshExecutingContext<R>, RecordingError<Ash>> {
 	let resource = AshRecordingResourceContext::default();
-	let mut recording = AshRecordingContext::new(bindless.frame(), bindless.execution_manager.pop(), &resource)?;
+	let mut recording = Recording::new(AshRecordingContext::new(
+		bindless.frame(),
+		bindless.execution_manager.pop(),
+		&resource,
+	)?);
 	let r = f(&mut recording)?;
-	Ok(AshExecutingContext::new(recording.ash_end_submit(), r))
+	Ok(AshExecutingContext::new(recording.into_inner().ash_end_submit(), r))
 }
 
 impl<'a> AshRecordingContext<'a> {
@@ -140,7 +143,7 @@ impl<'a> AshRecordingContext<'a> {
 		frame: Arc<BindlessFrame<Ash>>,
 		exec_resource: AshPooledExecutionResource,
 		resource: &'a AshRecordingResourceContext,
-	) -> VkResult<Self> {
+	) -> Result<Self, AshRecordingError> {
 		unsafe {
 			let device = &exec_resource.bindless.device;
 			let cmd = device.allocate_command_buffer(
@@ -275,11 +278,11 @@ impl<'a> AshRecordingContext<'a> {
 unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
 unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
-	fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
+	unsafe fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
 		self.resource
 	}
 
-	fn copy_buffer_to_image<
+	unsafe fn copy_buffer_to_image<
 		BT: BufferContent + ?Sized,
 		BA: BufferAccessType + TransferReadable,
 		IT: ImageType,
@@ -288,9 +291,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		&mut self,
 		src_buffer: &mut MutBufferAccess<Ash, BT, BA>,
 		dst_image: &mut MutImageAccess<Ash, IT, IA>,
-	) -> Result<(), AccessError> {
-		src_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
-		dst_image.has_required_usage(BindlessImageUsage::TRANSFER_DST)?;
+	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_flush();
 			let device = &self.bindless.platform.device;
@@ -330,9 +331,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		&mut self,
 		src_image: &mut MutImageAccess<Ash, IT, IA>,
 		dst_buffer: &mut MutBufferAccess<Ash, BT, BA>,
-	) -> Result<(), AccessError> {
-		src_image.has_required_usage(BindlessImageUsage::TRANSFER_SRC)?;
-		dst_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
+	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_flush();
 			let device = &self.bindless.platform.device;
@@ -363,7 +362,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		}
 	}
 
-	fn dispatch<T: BufferStruct>(
+	unsafe fn dispatch<T: BufferStruct>(
 		&mut self,
 		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,
 		group_counts: [u32; 3],
@@ -397,12 +396,16 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 pub enum AshRecordingError {
 	#[error("Vk Error: {0}")]
 	Vk(#[from] ash::vk::Result),
-	#[error("AccessError: {0}")]
-	AccessError(#[from] AccessError),
 }
 
 impl Debug for AshRecordingError {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		core::fmt::Display::fmt(self, f)
+	}
+}
+
+impl From<AshRecordingError> for RecordingError<Ash> {
+	fn from(value: AshRecordingError) -> Self {
+		RecordingError::Platform(value)
 	}
 }

@@ -6,6 +6,7 @@ pub mod access_error;
 pub mod access_image;
 pub mod access_lock;
 pub mod access_type;
+pub mod recording;
 pub mod shader;
 // pub mod specialize;
 // pub mod traditional_graphics_pipeline;

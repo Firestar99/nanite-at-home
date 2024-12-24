@@ -3,7 +3,7 @@ use crate::descriptor::buffer_table::{BufferTable, BufferTableAccess};
 use crate::descriptor::descriptor_counts::DescriptorCounts;
 use crate::descriptor::image_table::{ImageTable, ImageTableAccess};
 use crate::descriptor::sampler_table::{SamplerTable, SamplerTableAccess};
-use crate::platform::{BindlessPipelinePlatform, BindlessPlatform};
+use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::buffer_content::Metadata;
 use rust_gpu_bindless_shaders::descriptor::TransientAccess;
 use std::ops::Deref;
@@ -109,15 +109,6 @@ impl<P: BindlessPlatform> Bindless<P> {
 			frame_guard: self.table_sync.frame(),
 			metadata: Metadata,
 		})
-	}
-}
-
-impl<P: BindlessPipelinePlatform> Bindless<P> {
-	pub fn execute<R: Send + Sync>(
-		self: &Arc<Self>,
-		f: impl FnOnce(&mut P::RecordingContext<'_>) -> Result<R, P::RecordingError>,
-	) -> Result<P::ExecutingContext<R>, P::RecordingError> {
-		unsafe { P::record_and_execute(self, f) }
 	}
 }
 
