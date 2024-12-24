@@ -8,7 +8,6 @@ use rust_gpu_bindless::descriptor::{
 };
 use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
 use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderReadWrite};
-use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
@@ -36,7 +35,7 @@ fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	let len = b.len();
 
 	// Pipelines can be created from the shaders and carry the `T` generic which is the param struct of the shader.
-	let pipeline = BindlessComputePipeline::new(&bindless, crate::shader::simple_compute::simple_compute::new())?;
+	let pipeline = bindless.create_compute_pipeline(crate::shader::simple_compute::simple_compute::new())?;
 
 	// buffer_b is a slice of f32s
 	let buffer_b = bindless.buffer().alloc_shared_from_iter(

@@ -143,7 +143,7 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 	/// Dispatch a bindless compute shader
 	pub fn dispatch<T: BufferStruct>(
 		&mut self,
-		pipeline: &Arc<BindlessComputePipeline<P, T>>,
+		pipeline: &BindlessComputePipeline<P, T>,
 		group_counts: [u32; 3],
 		param: T,
 	) -> Result<(), RecordingError<P>> {

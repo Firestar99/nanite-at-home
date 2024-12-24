@@ -6,9 +6,18 @@ use rust_gpu_bindless_shaders::shader_type::ComputeShader;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+impl<P: BindlessPipelinePlatform> Bindless<P> {
+	pub fn create_compute_pipeline<T: BufferStruct>(
+		self: &Arc<Self>,
+		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
+	) -> Result<BindlessComputePipeline<P, T>, P::PipelineCreationError> {
+		BindlessComputePipeline::new(self, compute_shader)
+	}
+}
+
+#[derive(Debug, Clone)]
 pub struct BindlessComputePipeline<P: BindlessPipelinePlatform, T: BufferStruct> {
-	pub bindless: Arc<Bindless<P>>,
-	pub pipeline: P::ComputePipeline,
+	pipeline: Arc<P::ComputePipeline>,
 	_phantom: PhantomData<T>,
 }
 
@@ -16,13 +25,16 @@ impl<P: BindlessPipelinePlatform, T: BufferStruct> BindlessComputePipeline<P, T>
 	pub fn new(
 		bindless: &Arc<Bindless<P>>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
-	) -> Result<Arc<Self>, P::PipelineCreationError> {
+	) -> Result<Self, P::PipelineCreationError> {
 		unsafe {
-			Ok(Arc::new(Self {
-				bindless: bindless.clone(),
-				pipeline: P::create_compute_pipeline(&bindless, compute_shader)?,
+			Ok(Self {
+				pipeline: Arc::new(P::create_compute_pipeline(&bindless, compute_shader)?),
 				_phantom: PhantomData,
-			}))
+			})
 		}
+	}
+
+	pub fn inner(&self) -> &Arc<P::ComputePipeline> {
+		&self.pipeline
 	}
 }

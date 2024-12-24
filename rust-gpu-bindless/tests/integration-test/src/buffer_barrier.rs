@@ -8,7 +8,6 @@ use rust_gpu_bindless::descriptor::{
 };
 use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
 use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderRead, ShaderReadWrite};
-use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
@@ -47,7 +46,7 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	let second = bindless.buffer().alloc_slice(&buffer_ci("second"), len)?;
 	let third = bindless.buffer().alloc_slice(&buffer_ci("third"), len)?;
 
-	let compute = BindlessComputePipeline::new(bindless, crate::shader::buffer_barriers::compute_copy::new())?;
+	let compute = bindless.create_compute_pipeline(crate::shader::buffer_barriers::compute_copy::new())?;
 	let third = bindless
 		.execute(|cmd| unsafe {
 			let first = first.access::<ShaderRead>(cmd);

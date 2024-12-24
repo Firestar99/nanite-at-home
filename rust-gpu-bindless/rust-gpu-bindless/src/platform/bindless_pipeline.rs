@@ -72,7 +72,7 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform> {
 	/// Dispatch a bindless compute shader
 	unsafe fn dispatch<T: BufferStruct>(
 		&mut self,
-		pipeline: &Arc<BindlessComputePipeline<P, T>>,
+		pipeline: &BindlessComputePipeline<P, T>,
 		group_counts: [u32; 3],
 		param: T,
 	) -> Result<(), P::RecordingError>;

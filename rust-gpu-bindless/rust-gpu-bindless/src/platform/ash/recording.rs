@@ -204,15 +204,11 @@ impl<'a> AshRecordingContext<'a> {
 		&self.frame
 	}
 
-	pub unsafe fn ash_bind_compute<T: BufferStruct>(
-		&mut self,
-		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,
-		param: T,
-	) {
+	pub unsafe fn ash_bind_compute<T: BufferStruct>(&mut self, pipeline: &BindlessComputePipeline<Ash, T>, param: T) {
 		unsafe {
 			self.ash_flush();
 			let device = &self.exec_resource.bindless.platform.device;
-			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.pipeline.0.pipeline);
+			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.inner().0.pipeline);
 			if self.compute_bind_descriptors {
 				self.compute_bind_descriptors = false;
 				let desc = self.bindless.global_descriptor_set();
@@ -364,7 +360,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 
 	unsafe fn dispatch<T: BufferStruct>(
 		&mut self,
-		pipeline: &Arc<BindlessComputePipeline<Ash, T>>,
+		pipeline: &BindlessComputePipeline<Ash, T>,
 		group_counts: [u32; 3],
 		param: T,
 	) -> Result<(), <Ash as BindlessPipelinePlatform>::RecordingError> {
