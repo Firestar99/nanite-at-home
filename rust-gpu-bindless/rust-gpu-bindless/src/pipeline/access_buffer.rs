@@ -3,7 +3,8 @@ use crate::descriptor::{BindlessBufferUsage, BufferSlot, BufferTable, DescTable,
 use crate::descriptor::{MutDesc, MutDescExt};
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{BufferAccess, BufferAccessType, ShaderReadWriteable, ShaderReadable};
-use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
+use crate::pipeline::recording::HasResourceContext;
+use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer, TransientDesc};
 use std::marker::PhantomData;

@@ -11,7 +11,12 @@ impl<P: BindlessPipelinePlatform> Bindless<P> {
 		self: &Arc<Self>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
 	) -> Result<BindlessComputePipeline<P, T>, P::PipelineCreationError> {
-		BindlessComputePipeline::new(self, compute_shader)
+		unsafe {
+			Ok(BindlessComputePipeline {
+				pipeline: Arc::new(P::create_compute_pipeline(&self, compute_shader)?),
+				_phantom: PhantomData,
+			})
+		}
 	}
 }
 
@@ -22,18 +27,6 @@ pub struct BindlessComputePipeline<P: BindlessPipelinePlatform, T: BufferStruct>
 }
 
 impl<P: BindlessPipelinePlatform, T: BufferStruct> BindlessComputePipeline<P, T> {
-	pub fn new(
-		bindless: &Arc<Bindless<P>>,
-		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
-	) -> Result<Self, P::PipelineCreationError> {
-		unsafe {
-			Ok(Self {
-				pipeline: Arc::new(P::create_compute_pipeline(&bindless, compute_shader)?),
-				_phantom: PhantomData,
-			})
-		}
-	}
-
 	pub fn inner(&self) -> &Arc<P::ComputePipeline> {
 		&self.pipeline
 	}

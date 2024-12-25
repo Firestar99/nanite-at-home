@@ -1,6 +1,9 @@
 use crate::descriptor::{BindlessAllocationScheme, BindlessBufferUsage, BindlessImageUsage, Extent, SampleCount};
+use crate::pipeline::access_type::ImageAccessType;
+use crate::pipeline::rendering::{ClearValue, LoadOp, RenderingAttachment, StoreOp};
+use crate::platform::ash::Ash;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
-use ash::vk::ImageType as VkImageType;
+use ash::vk::{AttachmentLoadOp, AttachmentStoreOp, ImageLayout, ImageType as VkImageType, RenderingAttachmentInfo};
 use ash::vk::{BufferUsageFlags, Extent3D, ImageUsageFlags, ImageViewType, SampleCountFlags};
 use gpu_allocator::vulkan::AllocationScheme;
 use gpu_allocator::MemoryLocation;
@@ -157,5 +160,51 @@ impl BindlessImageUsage {
 				| BindlessImageUsage::COLOR_ATTACHMENT
 				| BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT,
 		)
+	}
+}
+
+impl LoadOp {
+	pub fn to_ash(&self) -> AttachmentLoadOp {
+		match self {
+			LoadOp::Load => AttachmentLoadOp::LOAD,
+			LoadOp::Clear => AttachmentLoadOp::CLEAR,
+			LoadOp::DontCare => AttachmentLoadOp::DONT_CARE,
+		}
+	}
+}
+
+impl StoreOp {
+	pub fn to_ash(&self) -> AttachmentStoreOp {
+		match self {
+			StoreOp::Store => AttachmentStoreOp::STORE,
+			StoreOp::DontCare => AttachmentStoreOp::DONT_CARE,
+		}
+	}
+}
+
+impl ClearValue {
+	pub fn to_ash(&self) -> ash::vk::ClearValue {
+		let mut ret = ash::vk::ClearValue::default();
+		match *self {
+			ClearValue::ColorF(a) => ret.color.float32 = a,
+			ClearValue::ColorU(a) => ret.color.uint32 = a,
+			ClearValue::ColorI(a) => ret.color.int32 = a,
+			ClearValue::DepthStencil { depth, stencil } => {
+				ret.depth_stencil.depth = depth;
+				ret.depth_stencil.stencil = stencil;
+			}
+		}
+		ret
+	}
+}
+
+impl<'a, 'b, A: ImageAccessType> RenderingAttachment<'a, 'b, Ash, A> {
+	pub unsafe fn to_ash(&self, layout: ImageLayout) -> RenderingAttachmentInfo {
+		RenderingAttachmentInfo::default()
+			.image_view(self.image.inner_slot().image_view.unwrap())
+			.image_layout(layout)
+			.load_op(self.load_op.to_ash())
+			.store_op(self.store_op.to_ash())
+			.clear_value(self.clear_value.to_ash())
 	}
 }

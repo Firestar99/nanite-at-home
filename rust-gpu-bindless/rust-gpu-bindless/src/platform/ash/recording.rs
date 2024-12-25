@@ -9,7 +9,7 @@ use crate::pipeline::access_type::{
 	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
 };
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
-use crate::pipeline::recording::{Recording, RecordingError};
+use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
@@ -34,7 +34,7 @@ pub struct AshRecordingContext<'a> {
 	resource: &'a AshRecordingResourceContext,
 	exec_resource: AshPooledExecutionResource,
 	// mut state
-	cmd: CommandBuffer,
+	pub(super) cmd: CommandBuffer,
 	compute_bind_descriptors: bool,
 }
 
@@ -51,11 +51,17 @@ pub struct AshRecordingResourceContext {
 	inner: RefCell<AshBarrierCollector>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AshBarrierCollector {
 	memory: SmallVec<[MemoryBarrier2<'static>; 0]>,
 	buffers: SmallVec<[BufferMemoryBarrier2<'static>; 10]>,
 	image: SmallVec<[ImageMemoryBarrier2<'static>; 10]>,
+}
+
+impl AshBarrierCollector {
+	pub fn is_empty(&self) -> bool {
+		self.memory.is_empty() && self.buffers.is_empty() && self.image.is_empty()
+	}
 }
 
 impl AshRecordingResourceContext {
@@ -172,6 +178,9 @@ impl<'a> AshRecordingContext<'a> {
 		unsafe {
 			let device = &self.bindless.device;
 			let mut collector = self.resource.inner.borrow_mut();
+			if collector.is_empty() {
+				return;
+			}
 			device.cmd_pipeline_barrier2(
 				self.cmd,
 				&DependencyInfo::default()
@@ -182,6 +191,19 @@ impl<'a> AshRecordingContext<'a> {
 			collector.memory.clear();
 			collector.buffers.clear();
 			collector.image.clear();
+		}
+	}
+
+	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any action
+	/// command is recorded.
+	pub fn ash_must_not_flush(&mut self) -> Result<(), AshRecordingError> {
+		let collector = self.resource.inner.borrow_mut();
+		if collector.is_empty() {
+			Ok(())
+		} else {
+			Err(AshRecordingError::BarrierWhileRendering {
+				collector: collector.clone(),
+			})
 		}
 	}
 
@@ -273,11 +295,13 @@ impl<'a> AshRecordingContext<'a> {
 
 unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
-unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
+unsafe impl<'a> HasResourceContext<'a, Ash> for AshRecordingContext<'a> {
 	unsafe fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
 		self.resource
 	}
+}
 
+unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 	unsafe fn copy_buffer_to_image<
 		BT: BufferContent + ?Sized,
 		BA: BufferAccessType + TransferReadable,
@@ -392,6 +416,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 pub enum AshRecordingError {
 	#[error("Vk Error: {0}")]
 	Vk(#[from] ash::vk::Result),
+	#[error("No barriers must be inserted while rendering: {collector:?}")]
+	BarrierWhileRendering { collector: AshBarrierCollector },
 }
 
 impl Debug for AshRecordingError {

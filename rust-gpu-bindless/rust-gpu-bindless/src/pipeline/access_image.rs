@@ -5,7 +5,8 @@ use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{
 	ImageAccess, ImageAccessType, ShaderReadWriteable, ShaderReadable, ShaderSampleable,
 };
-use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
+use crate::pipeline::recording::HasResourceContext;
+use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage, TransientDesc};
 use std::marker::PhantomData;
 

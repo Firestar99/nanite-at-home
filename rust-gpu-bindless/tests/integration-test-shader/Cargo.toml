@@ -19,11 +19,8 @@ spirv-std = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
-libm = { workspace = true }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
-num-traits = { workspace = true }
-num-derive = { workspace = true }
 
 # other
 static_assertions = { workspace = true }

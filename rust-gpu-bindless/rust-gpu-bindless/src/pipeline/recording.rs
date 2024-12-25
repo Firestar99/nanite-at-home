@@ -4,6 +4,7 @@ use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{BufferAccessType, ImageAccessType, TransferReadable, TransferWriteable};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
+use crate::pipeline::rendering::RenderingError;
 use crate::platform::{BindlessPipelinePlatform, RecordingContext};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
@@ -35,6 +36,16 @@ impl<'a, P: BindlessPipelinePlatform> Deref for Recording<'a, P> {
 	}
 }
 
+pub unsafe trait HasResourceContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> + Sized {
+	unsafe fn resource_context(&self) -> &'a P::RecordingResourceContext;
+}
+
+unsafe impl<'a, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Recording<'a, P> {
+	unsafe fn resource_context(&self) -> &'a P::RecordingResourceContext {
+		unsafe { self.platform.resource_context() }
+	}
+}
+
 impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 	pub unsafe fn new(platform: P::RecordingContext<'a>) -> Self {
 		Self { platform }
@@ -50,10 +61,6 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 
 	pub unsafe fn into_inner(self) -> P::RecordingContext<'a> {
 		self.platform
-	}
-
-	pub fn resource_context(&self) -> &'a P::RecordingResourceContext {
-		unsafe { self.platform.resource_context() }
 	}
 
 	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
@@ -162,6 +169,8 @@ pub enum RecordingError<P: BindlessPipelinePlatform> {
 	Platform(#[source] P::RecordingError),
 	#[error("Copy Error: {0}")]
 	CopyError(#[from] CopyError),
+	#[error("Rendering Error: {0}")]
+	RenderingError(#[from] RenderingError),
 }
 
 impl<P: BindlessPipelinePlatform> Debug for RecordingError<P> {

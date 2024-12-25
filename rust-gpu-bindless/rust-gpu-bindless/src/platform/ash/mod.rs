@@ -16,6 +16,8 @@ mod image_format;
 mod init;
 /// CommandBuffer recording
 mod recording;
+/// CommandBuffer recording of rendering cmds
+mod rendering;
 /// Extending tables with ash specific functionality, usually alloc methods taking ash CreateInfos
 mod table_ext;
 

@@ -12,3 +12,4 @@ extern crate std;
 
 pub mod buffer_barriers;
 pub mod simple_compute;
+pub mod triangle;

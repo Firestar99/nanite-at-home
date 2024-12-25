@@ -1075,6 +1075,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "approx",
+ "ash",
  "integration-test-shader",
  "rust-gpu-bindless",
  "rust-gpu-bindless-shader-builder",
@@ -1087,9 +1088,6 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "glam",
- "libm",
- "num-derive",
- "num-traits",
  "num_enum",
  "rust-gpu-bindless-macros",
  "rust-gpu-bindless-shaders",
