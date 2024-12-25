@@ -3,7 +3,9 @@ use crate::backing::table::{DrainFlushQueue, RcTableSlot, SlotAllocationError, T
 use crate::descriptor::buffer_metadata_cpu::StrongMetadataCpu;
 use crate::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::descriptor::mutdesc::{MutBoxDescExt, MutDesc, MutDescExt};
-use crate::descriptor::{AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts, RCDesc};
+use crate::descriptor::{
+	AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts, RCDesc, RCDescExt,
+};
 use crate::pipeline::access_lock::{AccessLock, AccessLockError};
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::BindlessPlatform;
@@ -318,6 +320,22 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		I::IntoIter: ExactSizeIterator,
 	{
 		unsafe { Ok(self.alloc_from_iter(create_info, iter)?.into_shared_unchecked()) }
+	}
+}
+
+pub trait DescBufferLenExt<P: BindlessPlatform> {
+	fn len(&self) -> usize;
+}
+
+impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for RCDesc<P, Buffer<[T]>> {
+	fn len(&self) -> usize {
+		self.inner_slot().len
+	}
+}
+
+impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for MutDesc<P, Buffer<[T]>> {
+	fn len(&self) -> usize {
+		self.inner_slot().len
 	}
 }
 
