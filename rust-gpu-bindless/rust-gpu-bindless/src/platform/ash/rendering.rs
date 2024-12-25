@@ -1,7 +1,9 @@
 use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
+use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
 use crate::pipeline::recording::HasResourceContext;
 use crate::pipeline::rendering::{RenderPassFormat, RenderingAttachment};
+use crate::platform::ash::bindless_pipeline::AshPipeline;
 use crate::platform::ash::{Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext};
 use crate::platform::RenderingContext;
 use ash::vk::{
@@ -39,15 +41,33 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 		}
 	}
 
+	#[inline]
 	pub unsafe fn ash_bind_graphics<T: BufferStruct>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<Ash, T>,
 		param: T,
 	) -> Result<(), AshRecordingError> {
+		self.ash_bind_any_graphics(&pipeline.inner().0, param)
+	}
+
+	#[inline]
+	pub unsafe fn ash_bind_mesh_graphics<T: BufferStruct>(
+		&mut self,
+		pipeline: &BindlessMeshGraphicsPipeline<Ash, T>,
+		param: T,
+	) -> Result<(), AshRecordingError> {
+		self.ash_bind_any_graphics(&pipeline.inner().0, param)
+	}
+
+	pub unsafe fn ash_bind_any_graphics<T: BufferStruct>(
+		&mut self,
+		pipeline: &AshPipeline,
+		param: T,
+	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_must_not_flush()?;
 			let device = &self.recording.bindless.platform.device;
-			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::GRAPHICS, pipeline.inner().0.pipeline);
+			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 			if self.graphics_bind_descriptors {
 				self.graphics_bind_descriptors = false;
 				let desc = self.bindless.global_descriptor_set();
@@ -145,6 +165,20 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 			self.ash_bind_graphics(pipeline, param)?;
 			let device = &self.bindless.platform.device;
 			device.cmd_draw(self.cmd, vertex_count, instance_count, first_vertex, first_instance);
+			Ok(())
+		}
+	}
+
+	unsafe fn draw_mesh_tasks<T: BufferStruct>(
+		&mut self,
+		pipeline: &BindlessMeshGraphicsPipeline<Ash, T>,
+		group_counts: [u32; 3],
+		param: T,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_bind_mesh_graphics(pipeline, param)?;
+			let device = &self.bindless.platform.extensions.ext_mesh_shader();
+			device.cmd_draw_mesh_tasks(self.cmd, group_counts[0], group_counts[1], group_counts[2]);
 			Ok(())
 		}
 	}

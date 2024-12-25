@@ -2,6 +2,7 @@ use crate::descriptor::{Extent, Format};
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, ImageAccessType};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
+use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::pipeline::rendering::RenderingError::MismatchedColorAttachmentCount;
 use crate::platform::{BindlessPipelinePlatform, RenderingContext};
@@ -185,6 +186,20 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 					first_instance,
 					param,
 				)
+				.map_err(Into::<RecordingError<P>>::into)?;
+			Ok(())
+		}
+	}
+
+	pub fn draw_mesh_tasks<T: BufferStruct>(
+		&mut self,
+		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
+		group_counts: [u32; 3],
+		param: T,
+	) -> Result<(), RecordingError<P>> {
+		unsafe {
+			self.platform
+				.draw_mesh_tasks(pipeline, group_counts, param)
 				.map_err(Into::<RecordingError<P>>::into)?;
 			Ok(())
 		}

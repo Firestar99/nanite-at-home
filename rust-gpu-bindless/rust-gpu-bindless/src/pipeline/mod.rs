@@ -5,6 +5,7 @@ pub mod access_lock;
 pub mod access_type;
 pub mod compute_pipeline;
 pub mod graphics_pipeline;
+pub mod mesh_graphics_pipeline;
 pub mod recording;
 pub mod rendering;
 pub mod shader;

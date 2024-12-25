@@ -28,23 +28,3 @@ pub use convert::*;
 pub use executing::*;
 pub use init::*;
 pub use recording::*;
-
-pub struct RunOnDrop<F: FnOnce()>(Option<F>);
-
-impl<F: FnOnce()> RunOnDrop<F> {
-	pub fn new(f: F) -> Self {
-		Self(Some(f))
-	}
-
-	pub fn take(mut self) -> F {
-		self.0.take().unwrap()
-	}
-}
-
-impl<F: FnOnce()> Drop for RunOnDrop<F> {
-	fn drop(&mut self) {
-		if let Some(f) = self.0.take() {
-			f()
-		}
-	}
-}

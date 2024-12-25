@@ -73,7 +73,20 @@ pub struct AshCreateInfo {
 	pub queue_family_index: u32,
 	pub queue: ash::vk::Queue,
 	pub cache: Option<PipelineCache>,
+	pub extensions: AshExtensions,
 	pub destroy: Option<Box<dyn FnOnce(&mut AshCreateInfo) + Send + Sync>>,
+}
+
+#[derive(Default)]
+#[non_exhaustive]
+pub struct AshExtensions {
+	pub ext_mesh_shader: Option<ash::ext::mesh_shader::Device>,
+}
+
+impl AshExtensions {
+	pub fn ext_mesh_shader(&self) -> &ash::ext::mesh_shader::Device {
+		self.ext_mesh_shader.as_ref().expect("missing ext_mesh_shader")
+	}
 }
 
 impl AshCreateInfo {

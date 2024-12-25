@@ -1,4 +1,4 @@
-use crate::platform::ash::AshCreateInfo;
+use crate::platform::ash::{AshCreateInfo, AshExtensions};
 use anyhow::anyhow;
 use ash::ext::debug_utils;
 use ash::vk::{
@@ -210,6 +210,11 @@ pub fn ash_init_single_graphics_queue(
 		})?;
 		let cache = device.create_pipeline_cache(&PipelineCacheCreateInfo::default(), None)?;
 
+		let mesh_shader_ext = create_info
+			.extensions
+			.contains(&ash::ext::mesh_shader::NAME)
+			.then(|| ash::ext::mesh_shader::Device::new(&instance, &device));
+
 		Ok(AshCreateInfo {
 			entry,
 			instance,
@@ -220,10 +225,15 @@ pub fn ash_init_single_graphics_queue(
 			memory_allocator: Some(Mutex::new(memory_allocator)),
 			shader_stages: create_info.shader_stages,
 			cache: Some(cache),
+			extensions: AshExtensions {
+				ext_mesh_shader: mesh_shader_ext,
+				..AshExtensions::default()
+			},
 			destroy: Some(Box::new(move |create_info| {
 				let instance = &create_info.instance;
 				let device = &create_info.device;
 
+				create_info.extensions = AshExtensions::default();
 				if let Some(cache) = create_info.cache {
 					device.destroy_pipeline_cache(cache, None);
 				}

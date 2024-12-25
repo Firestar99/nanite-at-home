@@ -7,13 +7,14 @@ use crate::pipeline::access_type::{
 };
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::pipeline::graphics_pipeline::{BindlessGraphicsPipeline, GraphicsPipelineCreateInfo};
+use crate::pipeline::mesh_graphics_pipeline::{BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo};
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::pipeline::rendering::{RenderPassFormat, RenderingAttachment};
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
-use rust_gpu_bindless_shaders::shader_type::{ComputeShader, FragmentShader, VertexShader};
+use rust_gpu_bindless_shaders::shader_type::{ComputeShader, FragmentShader, MeshShader, TaskShader, VertexShader};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -44,9 +45,18 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 		bindless: &Arc<Bindless<Self>>,
 		render_pass: &RenderPassFormat,
 		create_info: &GraphicsPipelineCreateInfo,
-		vertex_stage: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
-		fragment_stage: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
+		vertex_shader: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
+		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
 	) -> Result<Self::GraphicsPipeline, Self::PipelineCreationError>;
+
+	unsafe fn create_mesh_graphics_pipeline<T: BufferStruct>(
+		bindless: &Arc<Bindless<Self>>,
+		render_pass: &RenderPassFormat,
+		create_info: &MeshGraphicsPipelineCreateInfo,
+		task_shader: Option<&impl BindlessShader<ShaderType = TaskShader, ParamConstant = T>>,
+		mesh_shader: &impl BindlessShader<ShaderType = MeshShader, ParamConstant = T>,
+		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
+	) -> Result<Self::MeshGraphicsPipeline, Self::PipelineCreationError>;
 }
 
 pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceContext<'a, P> {
@@ -114,6 +124,13 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 		instance_count: u32,
 		first_vertex: u32,
 		first_instance: u32,
+		param: T,
+	) -> Result<(), P::RecordingError>;
+
+	unsafe fn draw_mesh_tasks<T: BufferStruct>(
+		&mut self,
+		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
+		group_counts: [u32; 3],
 		param: T,
 	) -> Result<(), P::RecordingError>;
 }

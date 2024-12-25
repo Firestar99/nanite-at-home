@@ -34,8 +34,8 @@ impl<P: BindlessPipelinePlatform> Bindless<P> {
 		self: &Arc<Self>,
 		render_pass: &RenderPassFormat,
 		create_info: &GraphicsPipelineCreateInfo,
-		vertex_stage: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
-		fragment_stage: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
+		vertex_shader: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
+		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
 	) -> Result<BindlessGraphicsPipeline<P, T>, P::PipelineCreationError> {
 		unsafe {
 			Ok(BindlessGraphicsPipeline {
@@ -43,8 +43,8 @@ impl<P: BindlessPipelinePlatform> Bindless<P> {
 					self,
 					render_pass,
 					create_info,
-					vertex_stage,
-					fragment_stage,
+					vertex_shader,
+					fragment_shader,
 				)?),
 				_phantom: PhantomData,
 			})

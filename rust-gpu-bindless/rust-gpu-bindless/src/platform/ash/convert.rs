@@ -3,11 +3,15 @@ use crate::pipeline::access_type::ImageAccessType;
 use crate::pipeline::rendering::{ClearValue, LoadOp, RenderingAttachment, StoreOp};
 use crate::platform::ash::Ash;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
-use ash::vk::{AttachmentLoadOp, AttachmentStoreOp, ImageLayout, ImageType as VkImageType, RenderingAttachmentInfo};
+use ash::vk::{
+	AttachmentLoadOp, AttachmentStoreOp, ImageLayout, ImageType as VkImageType, RenderingAttachmentInfo,
+	ShaderStageFlags,
+};
 use ash::vk::{BufferUsageFlags, Extent3D, ImageUsageFlags, ImageViewType, SampleCountFlags};
 use gpu_allocator::vulkan::AllocationScheme;
 use gpu_allocator::MemoryLocation;
 use rust_gpu_bindless_shaders::descriptor::ImageType;
+use rust_gpu_bindless_shaders::shader_type::Shader;
 
 impl BindlessAllocationScheme {
 	pub fn to_gpu_allocator_buffer(&self, buffer: ash::vk::Buffer) -> AllocationScheme {
@@ -160,6 +164,25 @@ impl BindlessImageUsage {
 				| BindlessImageUsage::COLOR_ATTACHMENT
 				| BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT,
 		)
+	}
+}
+
+pub trait ShaderAshExt {
+	fn to_ash_shader_stage(&self) -> ShaderStageFlags;
+}
+
+impl ShaderAshExt for Shader {
+	fn to_ash_shader_stage(&self) -> ShaderStageFlags {
+		match self {
+			Shader::VertexShader => ShaderStageFlags::VERTEX,
+			Shader::TesselationControlShader => ShaderStageFlags::TESSELLATION_CONTROL,
+			Shader::TesselationEvaluationShader => ShaderStageFlags::TESSELLATION_EVALUATION,
+			Shader::GeometryShader => ShaderStageFlags::GEOMETRY,
+			Shader::FragmentShader => ShaderStageFlags::FRAGMENT,
+			Shader::ComputeShader => ShaderStageFlags::COMPUTE,
+			Shader::TaskShader => ShaderStageFlags::TASK_EXT,
+			Shader::MeshShader => ShaderStageFlags::MESH_EXT,
+		}
 	}
 }
 

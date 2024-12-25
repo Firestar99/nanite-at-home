@@ -1,22 +1,33 @@
 use crate::descriptor::{Bindless, Format};
-use crate::pipeline::graphics_pipeline::GraphicsPipelineCreateInfo;
+use crate::pipeline::graphics_pipeline::{
+	GraphicsPipelineCreateInfo, PipelineColorBlendStateCreateInfo, PipelineDepthStencilStateCreateInfo,
+	PipelineInputAssemblyStateCreateInfo,
+};
+use crate::pipeline::mesh_graphics_pipeline::MeshGraphicsPipelineCreateInfo;
 use crate::pipeline::recording::{Recording, RecordingError};
 use crate::pipeline::rendering::RenderPassFormat;
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::ash::rendering::AshRenderingContext;
 use crate::platform::ash::{
 	ash_record_and_execute, Ash, AshExecutingContext, AshRecordingContext, AshRecordingError,
-	AshRecordingResourceContext, RunOnDrop,
+	AshRecordingResourceContext, ShaderAshExt,
 };
 use crate::platform::BindlessPipelinePlatform;
+use ash::prelude::VkResult;
 use ash::vk::{
 	ComputePipelineCreateInfo, DynamicState, Extent2D, Offset2D, Pipeline, PipelineCache,
-	PipelineDynamicStateCreateInfo, PipelineMultisampleStateCreateInfo, PipelineRenderingCreateInfo,
-	PipelineShaderStageCreateInfo, PipelineTessellationStateCreateInfo, PipelineVertexInputStateCreateInfo,
-	PipelineViewportStateCreateInfo, Rect2D, SampleCountFlags, ShaderModuleCreateInfo, ShaderStageFlags, Viewport,
+	PipelineDynamicStateCreateInfo, PipelineMultisampleStateCreateInfo, PipelineRasterizationStateCreateInfo,
+	PipelineRenderingCreateInfo, PipelineShaderStageCreateInfo, PipelineTessellationStateCreateInfo,
+	PipelineVertexInputStateCreateInfo, PipelineViewportStateCreateInfo, Rect2D, SampleCountFlags, ShaderModule,
+	ShaderModuleCreateInfo, Viewport,
 };
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
-use rust_gpu_bindless_shaders::shader_type::{ComputeShader, FragmentShader, VertexShader};
+use rust_gpu_bindless_shaders::shader_type::{
+	ComputeShader, FragmentShader, MeshShader, ShaderType, TaskShader, VertexShader,
+};
+use smallvec::SmallVec;
+use std::ffi::CStr;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 unsafe impl BindlessPipelinePlatform for Ash {
@@ -31,23 +42,14 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		bindless: &Arc<Bindless<Self>>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
 	) -> Result<Self::ComputePipeline, Self::PipelineCreationError> {
-		let compute_shader = compute_shader.spirv_binary();
+		let compute = AshShaderModule::new(bindless, compute_shader)?;
 		let device = &bindless.device;
-		let module =
-			device.create_shader_module(&ShaderModuleCreateInfo::default().code(compute_shader.binary), None)?;
-		let _module_drop = RunOnDrop::new(|| device.destroy_shader_module(module, None));
-
 		let pipelines = device
 			.create_compute_pipelines(
 				bindless.cache.unwrap_or(PipelineCache::null()),
 				&[ComputePipelineCreateInfo::default()
 					.layout(bindless.global_descriptor_set().pipeline_layout)
-					.stage(
-						PipelineShaderStageCreateInfo::default()
-							.module(module)
-							.stage(ShaderStageFlags::COMPUTE)
-							.name(compute_shader.entry_point_name),
-					)],
+					.stage(compute.to_shader_stage_create_info())],
 				None,
 			)
 			// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
@@ -73,36 +75,80 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		bindless: &Arc<Bindless<Self>>,
 		render_pass: &RenderPassFormat,
 		create_info: &GraphicsPipelineCreateInfo,
-		vertex_stage: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
-		fragment_stage: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
+		vertex_shader: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
+		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
 	) -> Result<Self::GraphicsPipeline, Self::PipelineCreationError> {
-		let device = &bindless.device;
-		let vertex_stage = vertex_stage.spirv_binary();
-		let vertex_module =
-			device.create_shader_module(&ShaderModuleCreateInfo::default().code(vertex_stage.binary), None)?;
-		let _vertex_drop = RunOnDrop::new(|| device.destroy_shader_module(vertex_module, None));
-		let fragment_stage = fragment_stage.spirv_binary();
-		let fragment_module =
-			device.create_shader_module(&ShaderModuleCreateInfo::default().code(fragment_stage.binary), None)?;
-		let _fragment_drop = RunOnDrop::new(|| device.destroy_shader_module(fragment_module, None));
+		let vertex = AshShaderModule::new(bindless, vertex_shader)?;
+		let fragment = AshShaderModule::new(bindless, fragment_shader)?;
+		Ok(AshGraphicsPipeline(Self::ash_create_abstract_graphics_pipeline::<T>(
+			bindless,
+			render_pass,
+			create_info.input_assembly_state,
+			create_info.rasterization_state,
+			create_info.depth_stencil_state,
+			create_info.color_blend_state,
+			&[
+				vertex.to_shader_stage_create_info(),
+				fragment.to_shader_stage_create_info(),
+			],
+		)?))
+	}
 
+	unsafe fn create_mesh_graphics_pipeline<T: BufferStruct>(
+		bindless: &Arc<Bindless<Self>>,
+		render_pass: &RenderPassFormat,
+		create_info: &MeshGraphicsPipelineCreateInfo,
+		task_shader: Option<&impl BindlessShader<ShaderType = TaskShader, ParamConstant = T>>,
+		mesh_shader: &impl BindlessShader<ShaderType = MeshShader, ParamConstant = T>,
+		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
+	) -> Result<Self::MeshGraphicsPipeline, Self::PipelineCreationError> {
+		let task = task_shader
+			.map(|task_shader| AshShaderModule::new(bindless, task_shader))
+			.transpose()?;
+		let mesh = AshShaderModule::new(bindless, mesh_shader)?;
+		let fragment = AshShaderModule::new(bindless, fragment_shader)?;
+		let stages = [task.as_ref().map(AshShaderModule::to_shader_stage_create_info)]
+			.into_iter()
+			.flatten()
+			.chain([
+				mesh.to_shader_stage_create_info(),
+				fragment.to_shader_stage_create_info(),
+			])
+			.collect::<SmallVec<[_; 3]>>();
+		Ok(AshMeshGraphicsPipeline(
+			Self::ash_create_abstract_graphics_pipeline::<T>(
+				bindless,
+				render_pass,
+				PipelineInputAssemblyStateCreateInfo::default(),
+				create_info.rasterization_state,
+				create_info.depth_stencil_state,
+				create_info.color_blend_state,
+				&stages,
+			)?,
+		))
+	}
+}
+
+impl Ash {
+	#[inline]
+	unsafe fn ash_create_abstract_graphics_pipeline<T: BufferStruct>(
+		bindless: &Arc<Bindless<Self>>,
+		render_pass: &RenderPassFormat,
+		input_assembly_state: PipelineInputAssemblyStateCreateInfo,
+		rasterization_state: PipelineRasterizationStateCreateInfo,
+		depth_stencil_state: PipelineDepthStencilStateCreateInfo,
+		color_blend_state: PipelineColorBlendStateCreateInfo,
+		stages: &[PipelineShaderStageCreateInfo],
+	) -> VkResult<AshPipeline> {
+		let device = &bindless.device;
 		let pipelines = device
 			.create_graphics_pipelines(
 				bindless.cache.unwrap_or(PipelineCache::null()),
 				&[ash::vk::GraphicsPipelineCreateInfo::default()
 					.layout(bindless.global_descriptor_set().pipeline_layout)
-					.stages(&[
-						PipelineShaderStageCreateInfo::default()
-							.module(vertex_module)
-							.stage(ShaderStageFlags::VERTEX)
-							.name(vertex_stage.entry_point_name),
-						PipelineShaderStageCreateInfo::default()
-							.module(fragment_module)
-							.stage(ShaderStageFlags::FRAGMENT)
-							.name(fragment_stage.entry_point_name),
-					])
+					.stages(stages)
 					.vertex_input_state(&PipelineVertexInputStateCreateInfo::default())
-					.input_assembly_state(&create_info.input_assembly_state)
+					.input_assembly_state(&input_assembly_state)
 					.tessellation_state(&PipelineTessellationStateCreateInfo::default())
 					.viewport_state(
 						&PipelineViewportStateCreateInfo::default()
@@ -115,12 +161,12 @@ unsafe impl BindlessPipelinePlatform for Ash {
 								},
 							}]),
 					)
-					.rasterization_state(&create_info.rasterization_state.line_width(1.0))
+					.rasterization_state(&rasterization_state.line_width(1.0))
 					.multisample_state(
 						&PipelineMultisampleStateCreateInfo::default().rasterization_samples(SampleCountFlags::TYPE_1),
 					)
-					.depth_stencil_state(&create_info.depth_stencil_state)
-					.color_blend_state(&create_info.color_blend_state)
+					.depth_stencil_state(&depth_stencil_state)
+					.color_blend_state(&color_blend_state)
 					.dynamic_state(&PipelineDynamicStateCreateInfo::default().dynamic_states(&[DynamicState::VIEWPORT]))
 					.layout(bindless.global_descriptor_set().pipeline_layout)
 					.push_next(
@@ -132,10 +178,49 @@ unsafe impl BindlessPipelinePlatform for Ash {
 			)
 			// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
 			.map_err(|e| e.1)?;
-		Ok(AshGraphicsPipeline(AshPipeline {
+		Ok(AshPipeline {
 			bindless: bindless.clone(),
 			pipeline: pipelines[0],
-		}))
+		})
+	}
+}
+
+pub struct AshShaderModule<'a, S: ShaderType, T: BufferStruct> {
+	bindless: Arc<Bindless<Ash>>,
+	module: ShaderModule,
+	entry_point_name: &'a CStr,
+	_phantom: PhantomData<(S, T)>,
+}
+
+impl<'a, S: ShaderType, T: BufferStruct> AshShaderModule<'a, S, T> {
+	pub fn new(
+		bindless: &Arc<Bindless<Ash>>,
+		shader: &'a impl BindlessShader<ShaderType = S, ParamConstant = T>,
+	) -> VkResult<Self> {
+		unsafe {
+			let device = &bindless.device;
+			let shader = shader.spirv_binary();
+			let module = device.create_shader_module(&ShaderModuleCreateInfo::default().code(shader.binary), None)?;
+			Ok(Self {
+				bindless: bindless.clone(),
+				module,
+				entry_point_name: shader.entry_point_name,
+				_phantom: PhantomData,
+			})
+		}
+	}
+
+	pub fn to_shader_stage_create_info(&self) -> PipelineShaderStageCreateInfo {
+		PipelineShaderStageCreateInfo::default()
+			.module(self.module)
+			.stage(S::SHADER.to_ash_shader_stage())
+			.name(self.entry_point_name)
+	}
+}
+
+impl<'a, S: ShaderType, T: BufferStruct> Drop for AshShaderModule<'a, S, T> {
+	fn drop(&mut self) {
+		unsafe { self.bindless.device.destroy_shader_module(self.module, None) }
 	}
 }
 
