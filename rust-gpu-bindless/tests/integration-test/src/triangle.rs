@@ -4,7 +4,8 @@ use ash::vk::{
 	ColorComponentFlags, CullModeFlags, FrontFace, PipelineColorBlendAttachmentState,
 	PipelineColorBlendStateCreateInfo, PolygonMode, PrimitiveTopology,
 };
-use integration_test_shader::triangle::{Color, Param, Vertex};
+use integration_test_shader::color::ColorEnum;
+use integration_test_shader::triangle::{Param, Vertex};
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, DescBufferLenExt, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt, RCDescExt,
@@ -23,6 +24,11 @@ use rust_gpu_bindless::platform::ash::{
 use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
 use rust_gpu_bindless::spirv_std::glam::{UVec2, Vec2, Vec4};
 use std::sync::Arc;
+
+const R: ColorEnum = ColorEnum::Red;
+const C: ColorEnum = ColorEnum::Cyan;
+const B: ColorEnum = ColorEnum::Black;
+const Y: ColorEnum = ColorEnum::Yellow;
 
 #[test]
 fn test_triangle_ash() -> anyhow::Result<()> {
@@ -46,16 +52,16 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 			allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 		},
 		[
-			Vertex::new(Vec2::new(-1., -1.), Color::Red.color()),
-			Vertex::new(Vec2::new(1., -1.), Color::Red.color()),
-			Vertex::new(Vec2::new(-1., 1.), Color::Red.color()),
-			Vertex::new(Vec2::new(1., -1.), Color::Cyan.color()),
-			Vertex::new(Vec2::new(1., 1.), Color::Cyan.color()),
-			Vertex::new(Vec2::new(-1., -1.), Color::Cyan.color()),
+			Vertex::new(Vec2::new(-1., -1.), R.color()),
+			Vertex::new(Vec2::new(1., -1.), R.color()),
+			Vertex::new(Vec2::new(-1., 1.), R.color()),
+			Vertex::new(Vec2::new(1., -1.), C.color()),
+			Vertex::new(Vec2::new(1., 1.), C.color()),
+			Vertex::new(Vec2::new(-1., -1.), C.color()),
 			// yellow triangle is backface culled
-			Vertex::new(Vec2::new(1., -1.), Color::Yellow.color()),
-			Vertex::new(Vec2::new(-1., -1.), Color::Yellow.color()),
-			Vertex::new(Vec2::new(1., 1.), Color::Yellow.color()),
+			Vertex::new(Vec2::new(1., -1.), Y.color()),
+			Vertex::new(Vec2::new(-1., -1.), Y.color()),
+			Vertex::new(Vec2::new(1., 1.), Y.color()),
 		],
 	)?;
 
@@ -82,6 +88,7 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 
 	let rt_extent = UVec2::new(8, 8);
 	let rt_image = bindless.image().alloc::<Image2d>(&BindlessImageCreateInfo {
+		name: "rt",
 		format: rt_format,
 		extent: Extent::from(rt_extent),
 		usage: BindlessImageUsage::TRANSFER_SRC | BindlessImageUsage::COLOR_ATTACHMENT,
@@ -108,7 +115,7 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 					image: &mut image,
 					load_op: LoadOp::Clear,
 					store_op: StoreOp::Store,
-					clear_value: ClearValue::ColorF(Color::Black.color().to_array()),
+					clear_value: ClearValue::ColorF(B.color().to_array()),
 				}],
 				None,
 				|rp| {
@@ -137,13 +144,9 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 	let result = rt_download
 		.mapped()?
 		.read_iter()
-		.map(|c| Color::parse(Vec4::from_array(c.map(|v| v as f32)) / 255.))
+		.map(|c| ColorEnum::parse(Vec4::from_array(c.map(|v| v as f32)) / 255.))
 		.collect::<Vec<_>>();
 	let result = result.chunks_exact(rt_extent.x as usize).collect::<Vec<_>>();
-
-	const R: Color = Color::Red;
-	const C: Color = Color::Cyan;
-	const B: Color = Color::Black;
 	assert_eq!(
 		&*result,
 		&[
