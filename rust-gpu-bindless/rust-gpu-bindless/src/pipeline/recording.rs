@@ -2,8 +2,11 @@ use crate::descriptor::{Bindless, BindlessBufferUsage, BindlessImageUsage};
 use crate::pipeline::access_buffer::MutBufferAccess;
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
-use crate::pipeline::access_type::{BufferAccessType, ImageAccessType, TransferReadable, TransferWriteable};
+use crate::pipeline::access_type::{
+	BufferAccessType, ImageAccessType, IndirectCommandReadable, TransferReadable, TransferWriteable,
+};
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
+use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::rendering::RenderingError;
 use crate::platform::{BindlessPipelinePlatform, RecordingContext};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
@@ -157,6 +160,21 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		unsafe {
 			self.platform
 				.dispatch(pipeline, group_counts, param)
+				.map_err(Into::<RecordingError<P>>::into)?;
+			Ok(())
+		}
+	}
+
+	/// Dispatch a bindless compute shader
+	pub fn dispatch_indirect<T: BufferStruct, A: BufferAccessType + IndirectCommandReadable>(
+		&mut self,
+		pipeline: &BindlessComputePipeline<P, T>,
+		indirect: impl MutOrSharedBuffer<P, [u32; 3], A>,
+		param: T,
+	) -> Result<(), RecordingError<P>> {
+		unsafe {
+			self.platform
+				.dispatch_indirect(pipeline, indirect, param)
 				.map_err(Into::<RecordingError<P>>::into)?;
 			Ok(())
 		}

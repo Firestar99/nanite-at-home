@@ -1,6 +1,8 @@
 use crate::descriptor::{Extent, Format};
 use crate::pipeline::access_image::MutImageAccess;
-use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, ImageAccessType, IndexReadable};
+use crate::pipeline::access_type::{
+	ColorAttachment, DepthStencilAttachment, ImageAccessType, IndexReadable, IndirectCommandReadable,
+};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
 use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
 use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
@@ -198,6 +200,40 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		}
 	}
 
+	pub fn draw_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<P, T>,
+		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		param: T,
+	) -> Result<(), RecordingError<P>> {
+		unsafe {
+			self.platform
+				.draw_indirect(pipeline, indirect, param)
+				.map_err(Into::<RecordingError<P>>::into)?;
+			Ok(())
+		}
+	}
+
+	pub fn draw_indexed_indirect<
+		T: BufferStruct,
+		IT: IndexTypeTrait,
+		AIR: IndexReadable,
+		AIC: IndirectCommandReadable,
+	>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<P, T>,
+		index_buffer: impl MutOrSharedBuffer<P, [IT], AIR>,
+		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		param: T,
+	) -> Result<(), RecordingError<P>> {
+		unsafe {
+			self.platform
+				.draw_indexed_indirect(pipeline, index_buffer, indirect, param)
+				.map_err(Into::<RecordingError<P>>::into)?;
+			Ok(())
+		}
+	}
+
 	pub fn draw_mesh_tasks<T: BufferStruct>(
 		&mut self,
 		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
@@ -207,6 +243,20 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		unsafe {
 			self.platform
 				.draw_mesh_tasks(pipeline, group_counts, param)
+				.map_err(Into::<RecordingError<P>>::into)?;
+			Ok(())
+		}
+	}
+
+	pub fn draw_mesh_tasks_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
+		&mut self,
+		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
+		indirect: impl MutOrSharedBuffer<P, [[u32; 3]], AIC>,
+		param: T,
+	) -> Result<(), RecordingError<P>> {
+		unsafe {
+			self.platform
+				.draw_mesh_tasks_indirect(pipeline, indirect, param)
 				.map_err(Into::<RecordingError<P>>::into)?;
 			Ok(())
 		}

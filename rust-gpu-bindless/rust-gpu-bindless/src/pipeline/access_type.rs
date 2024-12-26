@@ -122,6 +122,9 @@ pub unsafe trait TransferWriteable {}
 /// AccessType that allows this buffer to be read as an index buffer
 pub unsafe trait IndexReadable {}
 
+/// AccessType that allows this buffer to be read as an index buffer
+pub unsafe trait IndirectCommandReadable {}
+
 macro_rules! access_type {
     (@inner $name:ident: BufferAccess::$access:ident $($tt:tt)*) => {
 		unsafe impl BufferAccessType for $name {
@@ -149,9 +152,9 @@ macro_rules! access_type {
 
 access_type!(pub Undefined: BufferAccess::Undefined ImageAccess::Undefined);
 access_type!(pub General: BufferAccess::General ImageAccess::General ShaderReadable ShaderWriteable ShaderReadWriteable
-	ShaderSampleable TransferReadable TransferWriteable IndexReadable);
+	ShaderSampleable TransferReadable TransferWriteable IndexReadable IndirectCommandReadable);
 access_type!(pub GeneralRead: BufferAccess::GeneralRead ImageAccess::GeneralRead ShaderReadable ShaderSampleable
-	TransferReadable IndexReadable);
+	TransferReadable IndexReadable IndirectCommandReadable);
 access_type!(pub GeneralWrite: BufferAccess::GeneralWrite ImageAccess::GeneralWrite ShaderWriteable TransferWriteable);
 access_type!(pub TransferRead: BufferAccess::TransferRead ImageAccess::TransferRead TransferReadable);
 access_type!(pub TransferWrite: BufferAccess::TransferWrite ImageAccess::TransferWrite TransferWriteable);
@@ -163,7 +166,7 @@ access_type! {
 }
 access_type!(pub ShaderReadWrite: BufferAccess::ShaderReadWrite ShaderReadable ShaderWriteable ShaderReadWriteable);
 access_type!(pub HostAccess: BufferAccess::HostAccess);
-access_type!(pub IndirectCommandRead: BufferAccess::IndirectCommandRead);
+access_type!(pub IndirectCommandRead: BufferAccess::IndirectCommandRead IndirectCommandReadable);
 access_type!(pub IndexRead: BufferAccess::IndexRead IndexReadable);
 access_type!(pub VertexAttributeRead: BufferAccess::VertexAttributeRead);
 

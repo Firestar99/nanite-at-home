@@ -1,4 +1,4 @@
-use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, IndexReadable};
+use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, IndexReadable, IndirectCommandReadable};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
 use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
 use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
@@ -14,6 +14,7 @@ use ash::vk::{
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::TransientAccess;
 use smallvec::SmallVec;
+use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
 
 pub struct AshRenderingContext<'a, 'b> {
@@ -202,6 +203,60 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 		}
 	}
 
+	unsafe fn draw_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<Ash, T>,
+		indirect: impl MutOrSharedBuffer<Ash, [DrawIndirectCommand], AIC>,
+		param: T,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_bind_graphics(pipeline, param)?;
+			let device = &self.bindless.platform.device;
+			let indirect = indirect.inner_slot();
+			device.cmd_draw_indirect(
+				self.cmd,
+				indirect.buffer,
+				0,
+				indirect.len as u32,
+				size_of::<DrawIndirectCommand>() as u32,
+			);
+			Ok(())
+		}
+	}
+
+	unsafe fn draw_indexed_indirect<
+		T: BufferStruct,
+		IT: IndexTypeTrait,
+		AIR: IndexReadable,
+		AIC: IndirectCommandReadable,
+	>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<Ash, T>,
+		index_buffer: impl MutOrSharedBuffer<Ash, [IT], AIR>,
+		indirect: impl MutOrSharedBuffer<Ash, [DrawIndirectCommand], AIC>,
+		param: T,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_bind_graphics(pipeline, param)?;
+			let device = &self.bindless.platform.device;
+			let indirect = indirect.inner_slot();
+			device.cmd_bind_index_buffer(
+				self.cmd,
+				index_buffer.inner_slot().buffer,
+				0,
+				IT::INDEX_TYPE.to_ash_index_type(),
+			);
+			device.cmd_draw_indexed_indirect(
+				self.cmd,
+				indirect.buffer,
+				0,
+				indirect.len as u32,
+				size_of::<DrawIndexedIndirectCommand>() as u32,
+			);
+			Ok(())
+		}
+	}
+
 	unsafe fn draw_mesh_tasks<T: BufferStruct>(
 		&mut self,
 		pipeline: &BindlessMeshGraphicsPipeline<Ash, T>,
@@ -212,6 +267,27 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 			self.ash_bind_mesh_graphics(pipeline, param)?;
 			let device = &self.bindless.platform.extensions.ext_mesh_shader();
 			device.cmd_draw_mesh_tasks(self.cmd, group_counts[0], group_counts[1], group_counts[2]);
+			Ok(())
+		}
+	}
+
+	unsafe fn draw_mesh_tasks_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
+		&mut self,
+		pipeline: &BindlessMeshGraphicsPipeline<Ash, T>,
+		indirect: impl MutOrSharedBuffer<Ash, [[u32; 3]], AIC>,
+		param: T,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_bind_mesh_graphics(pipeline, param)?;
+			let device = &self.bindless.platform.extensions.ext_mesh_shader();
+			let indirect = indirect.inner_slot();
+			device.cmd_draw_mesh_tasks_indirect(
+				self.cmd,
+				indirect.buffer,
+				0,
+				indirect.len as u32,
+				size_of::<[u32; 3]>() as u32,
+			);
 			Ok(())
 		}
 	}

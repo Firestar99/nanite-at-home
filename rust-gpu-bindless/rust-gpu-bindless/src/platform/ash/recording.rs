@@ -6,9 +6,11 @@ use crate::descriptor::{
 use crate::pipeline::access_buffer::MutBufferAccess;
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{
-	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, TransferReadable, TransferWriteable,
+	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, IndirectCommandReadable, TransferReadable,
+	TransferWriteable,
 };
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
+use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::image_format::FormatExt;
@@ -396,20 +398,19 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		}
 	}
 
-	// /// Dispatch a bindless compute shader indirectly
-	// fn dispatch_indirect<T: BufferStruct>(
-	// 	mut self,
-	// 	pipeline: &Arc<BindlessComputePipeline<Self, T>>,
-	// 	indirect_buffer: Desc<MutOrRC, Buffer<DispatchIndirectCommand>>,
-	// 	param: T,
-	// ) -> Result<Self, Ash::RecordingError> {
-	// 	unsafe {
-	// 		self.ash_bind_compute(pipeline, param);
-	// 		let device = &self.bindless.platform.device;
-	// 		device.cmd_dispatch_indirect(self.cmd, indirect_buffer, 0);
-	// 		Ok(self)
-	// 	}
-	// }
+	unsafe fn dispatch_indirect<T: BufferStruct, A: BufferAccessType + IndirectCommandReadable>(
+		&mut self,
+		pipeline: &BindlessComputePipeline<Ash, T>,
+		indirect: impl MutOrSharedBuffer<Ash, [u32; 3], A>,
+		param: T,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_bind_compute(pipeline, param);
+			let device = &self.bindless.platform.device;
+			device.cmd_dispatch_indirect(self.cmd, indirect.inner_slot().buffer, 0);
+			Ok(())
+		}
+	}
 }
 
 #[derive(Error)]
