@@ -18,23 +18,24 @@ use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource}
 use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use ash::vk::{
 	BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
-	CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo,
+	CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo, Fence,
 	ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint,
-	SubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, WHOLE_SIZE,
+	SubmitInfo, TimelineSemaphoreSubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS,
+	WHOLE_SIZE,
 };
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, TransientAccess};
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::fmt::Debug;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
 
 pub struct AshRecordingContext<'a> {
 	frame: Arc<BindlessFrame<Ash>>,
-	resource: &'a AshRecordingResourceContext,
-	exec_resource: AshPooledExecutionResource,
+	resource_context: &'a AshRecordingResourceContext,
+	execution: AshPooledExecutionResource,
 	// mut state
 	pub(super) cmd: CommandBuffer,
 	compute_bind_descriptors: bool,
@@ -44,7 +45,13 @@ impl<'a> Deref for AshRecordingContext<'a> {
 	type Target = AshPooledExecutionResource;
 
 	fn deref(&self) -> &Self::Target {
-		&self.exec_resource
+		&self.execution
+	}
+}
+
+impl<'a> DerefMut for AshRecordingContext<'a> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.execution
 	}
 }
 
@@ -150,7 +157,7 @@ impl<'a> AshRecordingContext<'a> {
 	pub fn new(
 		frame: Arc<BindlessFrame<Ash>>,
 		exec_resource: AshPooledExecutionResource,
-		resource: &'a AshRecordingResourceContext,
+		resource_cxt: &'a AshRecordingResourceContext,
 	) -> Result<Self, AshRecordingError> {
 		unsafe {
 			let device = &exec_resource.bindless.device;
@@ -166,8 +173,8 @@ impl<'a> AshRecordingContext<'a> {
 			)?;
 			Ok(Self {
 				frame,
-				resource,
-				exec_resource,
+				resource_context: resource_cxt,
+				execution: exec_resource,
 				cmd,
 				compute_bind_descriptors: true,
 			})
@@ -179,7 +186,7 @@ impl<'a> AshRecordingContext<'a> {
 	pub fn ash_flush(&mut self) {
 		unsafe {
 			let device = &self.bindless.device;
-			let mut collector = self.resource.inner.borrow_mut();
+			let mut collector = self.resource_context.inner.borrow_mut();
 			if collector.is_empty() {
 				return;
 			}
@@ -199,7 +206,7 @@ impl<'a> AshRecordingContext<'a> {
 	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any action
 	/// command is recorded.
 	pub fn ash_must_not_flush(&mut self) -> Result<(), AshRecordingError> {
-		let collector = self.resource.inner.borrow_mut();
+		let collector = self.resource_context.inner.borrow_mut();
 		if collector.is_empty() {
 			Ok(())
 		} else {
@@ -231,7 +238,7 @@ impl<'a> AshRecordingContext<'a> {
 	pub unsafe fn ash_bind_compute<T: BufferStruct>(&mut self, pipeline: &BindlessComputePipeline<Ash, T>, param: T) {
 		unsafe {
 			self.ash_flush();
-			let device = &self.exec_resource.bindless.platform.device;
+			let device = &self.execution.bindless.platform.device;
 			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.inner().0.pipeline);
 			if self.compute_bind_descriptors {
 				self.compute_bind_descriptors = false;
@@ -276,9 +283,9 @@ impl<'a> AshRecordingContext<'a> {
 		}
 	}
 
-	pub unsafe fn ash_end_submit(self) -> AshPooledExecutionResource {
+	pub unsafe fn ash_end_submit(mut self) -> AshPooledExecutionResource {
 		unsafe {
-			let device = &self.bindless.platform.device;
+			let device = &self.execution.bindless.platform.device;
 			device.end_command_buffer(self.cmd).unwrap();
 			self.bindless.flush();
 			device
@@ -286,11 +293,15 @@ impl<'a> AshRecordingContext<'a> {
 					self.bindless.queue,
 					&[SubmitInfo::default()
 						.command_buffers(&[self.cmd])
-						.signal_semaphores(&[self.semaphore])],
-					self.exec_resource.fence,
+						.signal_semaphores(&[self.execution.semaphore])
+						.push_next(
+							&mut TimelineSemaphoreSubmitInfo::default()
+								.signal_semaphore_values(&[self.execution.inner.increment_timeline_value()]),
+						)],
+					Fence::null(),
 				)
 				.unwrap();
-			self.exec_resource
+			self.execution
 		}
 	}
 }
@@ -299,7 +310,7 @@ unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
 unsafe impl<'a> HasResourceContext<'a, Ash> for AshRecordingContext<'a> {
 	unsafe fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
-		self.resource
+		self.resource_context
 	}
 }
 
