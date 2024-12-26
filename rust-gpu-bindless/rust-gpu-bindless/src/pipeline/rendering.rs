@@ -1,4 +1,4 @@
-use crate::descriptor::{Extent, Format};
+use crate::descriptor::{BindlessBufferUsage, Extent, Format};
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{
 	ColorAttachment, DepthStencilAttachment, ImageAccessType, IndexReadable, IndirectCommandReadable,
@@ -192,6 +192,7 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
+			index_buffer.has_required_usage(BindlessBufferUsage::INDEX_BUFFER)?;
 			Ok(self
 				.platform
 				.draw_indexed(pipeline, index_buffer, count, param)
@@ -206,6 +207,7 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
+			indirect.has_required_usage(BindlessBufferUsage::INDIRECT_BUFFER)?;
 			Ok(self
 				.platform
 				.draw_indirect(pipeline, indirect, param)
@@ -226,6 +228,8 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
+			index_buffer.has_required_usage(BindlessBufferUsage::INDEX_BUFFER)?;
+			indirect.has_required_usage(BindlessBufferUsage::INDIRECT_BUFFER)?;
 			Ok(self
 				.platform
 				.draw_indexed_indirect(pipeline, index_buffer, indirect, param)
@@ -254,6 +258,7 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
+			indirect.has_required_usage(BindlessBufferUsage::INDIRECT_BUFFER)?;
 			Ok(self
 				.platform
 				.draw_mesh_tasks_indirect(pipeline, indirect, param)

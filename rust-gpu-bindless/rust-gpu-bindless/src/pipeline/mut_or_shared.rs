@@ -1,5 +1,6 @@
-use crate::descriptor::{BufferSlot, ImageSlot, RCDesc, RCDescExt};
+use crate::descriptor::{BindlessBufferUsage, BindlessImageUsage, BufferSlot, ImageSlot, RCDesc, RCDescExt};
 use crate::pipeline::access_buffer::MutBufferAccess;
+use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{BufferAccessType, ImageAccessType};
 use crate::platform::{BindlessPipelinePlatform, BindlessPlatform};
@@ -8,6 +9,23 @@ use rust_gpu_bindless_shaders::descriptor::{Buffer, Image, ImageType};
 
 pub unsafe trait MutOrSharedBuffer<P: BindlessPlatform, T: BufferContent + ?Sized, A> {
 	unsafe fn inner_slot(&self) -> &BufferSlot<P>;
+
+	/// Verify that this buffer has all the usages given by param.
+	#[inline]
+	fn has_required_usage(&self, required: BindlessBufferUsage) -> Result<(), AccessError> {
+		unsafe {
+			let slot = self.inner_slot();
+			if !slot.usage.contains(required) {
+				Err(AccessError::MissingBufferUsage {
+					name: slot.debug_name().to_string(),
+					usage: slot.usage,
+					missing_usage: required,
+				})
+			} else {
+				Ok(())
+			}
+		}
+	}
 }
 
 unsafe impl<P: BindlessPlatform, T: BufferContent + ?Sized, A: BufferAccessType> MutOrSharedBuffer<P, T, A>
@@ -28,6 +46,23 @@ unsafe impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAcc
 
 pub unsafe trait MutOrSharedImage<P: BindlessPlatform, T: ImageType, A> {
 	unsafe fn inner_slot(&self) -> &ImageSlot<P>;
+
+	/// Verify that this image has all the usages given by param.
+	#[inline]
+	fn has_required_usage(&self, required: BindlessImageUsage) -> Result<(), AccessError> {
+		unsafe {
+			let slot = self.inner_slot();
+			if !slot.usage.contains(required) {
+				Err(AccessError::MissingImageUsage {
+					name: slot.debug_name().to_string(),
+					usage: slot.usage,
+					missing_usage: required,
+				})
+			} else {
+				Ok(())
+			}
+		}
+	}
 }
 
 unsafe impl<P: BindlessPlatform, T: ImageType, A: ImageAccessType> MutOrSharedImage<P, T, A> for RCDesc<P, Image<T>> {

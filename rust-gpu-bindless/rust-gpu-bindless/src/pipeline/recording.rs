@@ -6,7 +6,7 @@ use crate::pipeline::access_type::{
 	BufferAccessType, ImageAccessType, IndirectCommandReadable, TransferReadable, TransferWriteable,
 };
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
-use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
+use crate::pipeline::mut_or_shared::{MutOrSharedBuffer, MutOrSharedImage};
 use crate::pipeline::rendering::RenderingError;
 use crate::platform::{BindlessPipelinePlatform, RecordingContext};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
@@ -139,6 +139,7 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
+			indirect.has_required_usage(BindlessBufferUsage::INDIRECT_BUFFER)?;
 			Ok(self
 				.platform
 				.dispatch_indirect(pipeline, indirect, param)

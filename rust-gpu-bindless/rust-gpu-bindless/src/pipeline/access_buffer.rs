@@ -3,6 +3,7 @@ use crate::descriptor::{BindlessBufferUsage, BufferSlot, BufferTable, DescTable,
 use crate::descriptor::{MutDesc, MutDescExt};
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{BufferAccess, BufferAccessType, ShaderReadWriteable, ShaderReadable};
+use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::recording::HasResourceContext;
 use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
@@ -96,23 +97,6 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 			};
 			this.transition_inner(f(this.inner_slot().access_lock.try_lock()?), A::BUFFER_ACCESS)?;
 			Ok(this)
-		}
-	}
-
-	/// Verify that this buffer has all the usages given by param.
-	#[inline]
-	pub fn has_required_usage(&self, required: BindlessBufferUsage) -> Result<(), AccessError> {
-		unsafe {
-			let slot = self.inner_slot();
-			if !slot.usage.contains(required) {
-				Err(AccessError::MissingBufferUsage {
-					name: slot.debug_name().to_string(),
-					usage: slot.usage,
-					missing_usage: required,
-				})
-			} else {
-				Ok(())
-			}
 		}
 	}
 

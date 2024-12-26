@@ -5,6 +5,7 @@ use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{
 	ImageAccess, ImageAccessType, ShaderReadWriteable, ShaderReadable, ShaderSampleable,
 };
+use crate::pipeline::mut_or_shared::MutOrSharedImage;
 use crate::pipeline::recording::HasResourceContext;
 use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage, TransientDesc};
@@ -95,23 +96,6 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 			};
 			this.transition_inner(f(this.inner_slot().access_lock.try_lock()?), A::IMAGE_ACCESS)?;
 			Ok(this)
-		}
-	}
-
-	/// Verify that this buffer has all the usages given by param.
-	#[inline]
-	pub fn has_required_usage(&self, required: BindlessImageUsage) -> Result<(), AccessError> {
-		unsafe {
-			let slot = self.inner_slot();
-			if !slot.usage.contains(required) {
-				Err(AccessError::MissingImageUsage {
-					name: slot.debug_name().to_string(),
-					usage: slot.usage,
-					missing_usage: required,
-				})
-			} else {
-				Ok(())
-			}
 		}
 	}
 
