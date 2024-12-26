@@ -78,21 +78,6 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		src_buffer: &mut MutBufferAccess<P, BT, BA>,
 		dst_image: &mut MutImageAccess<P, IT, IA>,
 	) -> Result<(), RecordingError<P>> {
-		self.try_copy_buffer_to_image(src_buffer, dst_image).unwrap()
-	}
-
-	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
-	/// Partial copies and copying to mips other than mip 0 is not yet possible.
-	pub fn try_copy_buffer_to_image<
-		BT: BufferContent + ?Sized,
-		BA: BufferAccessType + TransferReadable,
-		IT: ImageType,
-		IA: ImageAccessType + TransferWriteable,
-	>(
-		&mut self,
-		src_buffer: &mut MutBufferAccess<P, BT, BA>,
-		dst_image: &mut MutImageAccess<P, IT, IA>,
-	) -> Result<Result<(), RecordingError<P>>, AccessError> {
 		src_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
 		dst_image.has_required_usage(BindlessImageUsage::TRANSFER_DST)?;
 		// TODO soundness: missing bounds checks
@@ -100,7 +85,7 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 			Ok(self
 				.platform
 				.copy_buffer_to_image(src_buffer, dst_image)
-				.map_err(Into::<RecordingError<P>>::into))
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -120,25 +105,6 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		src_image: &mut MutImageAccess<P, IT, IA>,
 		dst_buffer: &mut MutBufferAccess<P, BT, BA>,
 	) -> Result<(), RecordingError<P>> {
-		self.try_copy_image_to_buffer(src_image, dst_buffer).unwrap()
-	}
-
-	/// Copy data from an image to a buffer. It is assumed that the image data is tightly packed within the buffer.
-	/// Partial copies and copying to mips other than mip 0 is not yet possible.
-	///
-	/// # Safety
-	/// This allows any data to be written to the buffer, without checking the buffer's type, potentially transmuting
-	/// data.
-	pub unsafe fn try_copy_image_to_buffer<
-		IT: ImageType,
-		IA: ImageAccessType + TransferReadable,
-		BT: BufferContent + ?Sized,
-		BA: BufferAccessType + TransferWriteable,
-	>(
-		&mut self,
-		src_image: &mut MutImageAccess<P, IT, IA>,
-		dst_buffer: &mut MutBufferAccess<P, BT, BA>,
-	) -> Result<Result<(), RecordingError<P>>, AccessError> {
 		src_image.has_required_usage(BindlessImageUsage::TRANSFER_SRC)?;
 		dst_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
 		// TODO soundness: missing bounds checks
@@ -146,7 +112,7 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 			Ok(self
 				.platform
 				.copy_image_to_buffer(src_image, dst_buffer)
-				.map_err(Into::<RecordingError<P>>::into))
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -158,10 +124,10 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.dispatch(pipeline, group_counts, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -173,10 +139,10 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.dispatch_indirect(pipeline, indirect, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 }
@@ -185,6 +151,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 pub enum RecordingError<P: BindlessPipelinePlatform> {
 	#[error("Platform Error: {0}")]
 	Platform(#[source] P::RecordingError),
+	#[error("Access Error: {0}")]
+	AccessError(#[from] AccessError),
 	#[error("Copy Error: {0}")]
 	CopyError(#[from] CopyError),
 	#[error("Rendering Error: {0}")]

@@ -161,11 +161,10 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 				.map_err(Into::<RecordingError<P>>::into)?,
 			};
 			f(&mut rendering)?;
-			rendering
+			Ok(rendering
 				.platform
 				.end_rendering()
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 }
@@ -178,10 +177,10 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.draw(pipeline, count, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -193,10 +192,10 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.draw_indexed(pipeline, index_buffer, count, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -207,10 +206,10 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.draw_indirect(pipeline, indirect, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -227,10 +226,10 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.draw_indexed_indirect(pipeline, index_buffer, indirect, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -241,10 +240,10 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.draw_mesh_tasks(pipeline, group_counts, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 
@@ -255,15 +254,16 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
-			self.platform
+			Ok(self
+				.platform
 				.draw_mesh_tasks_indirect(pipeline, indirect, param)
-				.map_err(Into::<RecordingError<P>>::into)?;
-			Ok(())
+				.map_err(Into::<RecordingError<P>>::into)?)
 		}
 	}
 }
 
 #[derive(Error)]
+#[non_exhaustive]
 pub enum RenderingError {
 	#[error("At least one attachment expected to perform rendering")]
 	NoAttachments,
