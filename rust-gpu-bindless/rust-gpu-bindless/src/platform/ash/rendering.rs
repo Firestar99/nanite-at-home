@@ -1,11 +1,13 @@
-use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment};
+use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, IndexReadable};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
 use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
-use crate::pipeline::recording::HasResourceContext;
-use crate::pipeline::rendering::{RenderPassFormat, RenderingAttachment};
+use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
+use crate::pipeline::recording::{HasResourceContext, RecordingError};
+use crate::pipeline::rendering::{IndexTypeTrait, RenderPassFormat, RenderingAttachment};
 use crate::platform::ash::bindless_pipeline::AshPipeline;
 use crate::platform::ash::{Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext};
 use crate::platform::RenderingContext;
+use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
 use ash::vk::{
 	Extent2D, ImageLayout, Offset2D, PipelineBindPoint, Rect2D, RenderingAttachmentInfo, RenderingInfo, Viewport,
 };
@@ -155,16 +157,47 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 	unsafe fn draw<T: BufferStruct>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<Ash, T>,
-		vertex_count: u32,
-		instance_count: u32,
-		first_vertex: u32,
-		first_instance: u32,
+		count: DrawIndirectCommand,
 		param: T,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_bind_graphics(pipeline, param)?;
 			let device = &self.bindless.platform.device;
-			device.cmd_draw(self.cmd, vertex_count, instance_count, first_vertex, first_instance);
+			device.cmd_draw(
+				self.cmd,
+				count.vertex_count,
+				count.instance_count,
+				count.first_vertex,
+				count.first_instance,
+			);
+			Ok(())
+		}
+	}
+
+	unsafe fn draw_indexed<T: BufferStruct, IT: IndexTypeTrait, AIR: IndexReadable>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<Ash, T>,
+		index_buffer: impl MutOrSharedBuffer<Ash, [IT], AIR>,
+		count: DrawIndexedIndirectCommand,
+		param: T,
+	) -> Result<(), RecordingError<Ash>> {
+		unsafe {
+			self.ash_bind_graphics(pipeline, param)?;
+			let device = &self.bindless.platform.device;
+			device.cmd_bind_index_buffer(
+				self.cmd,
+				index_buffer.inner_slot().buffer,
+				0,
+				IT::INDEX_TYPE.to_ash_index_type(),
+			);
+			device.cmd_draw_indexed(
+				self.cmd,
+				count.index_count,
+				count.instance_count,
+				count.first_index,
+				count.vertex_offset,
+				count.first_instance,
+			);
 			Ok(())
 		}
 	}

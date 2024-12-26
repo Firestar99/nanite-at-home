@@ -3,15 +3,17 @@ use crate::pipeline::access_buffer::MutBufferAccess;
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{
 	BufferAccess, BufferAccessType, ColorAttachment, DepthStencilAttachment, ImageAccess, ImageAccessType,
-	TransferReadable, TransferWriteable,
+	IndexReadable, TransferReadable, TransferWriteable,
 };
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::pipeline::graphics_pipeline::{BindlessGraphicsPipeline, GraphicsPipelineCreateInfo};
 use crate::pipeline::mesh_graphics_pipeline::{BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo};
+use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
-use crate::pipeline::rendering::{RenderPassFormat, RenderingAttachment};
+use crate::pipeline::rendering::{IndexTypeTrait, RenderPassFormat, RenderingAttachment};
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPlatform;
+use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
 use rust_gpu_bindless_shaders::shader_type::{ComputeShader, FragmentShader, MeshShader, TaskShader, VertexShader};
@@ -120,12 +122,17 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 	unsafe fn draw<T: BufferStruct>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
-		vertex_count: u32,
-		instance_count: u32,
-		first_vertex: u32,
-		first_instance: u32,
+		count: DrawIndirectCommand,
 		param: T,
 	) -> Result<(), P::RecordingError>;
+
+	unsafe fn draw_indexed<T: BufferStruct, IT: IndexTypeTrait, AIR: IndexReadable>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<P, T>,
+		index_buffer: impl MutOrSharedBuffer<P, [IT], AIR>,
+		count: DrawIndexedIndirectCommand,
+		param: T,
+	) -> Result<(), RecordingError<P>>;
 
 	unsafe fn draw_mesh_tasks<T: BufferStruct>(
 		&mut self,

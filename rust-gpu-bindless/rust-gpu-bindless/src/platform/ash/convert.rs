@@ -1,6 +1,6 @@
 use crate::descriptor::{BindlessAllocationScheme, BindlessBufferUsage, BindlessImageUsage, Extent, SampleCount};
 use crate::pipeline::access_type::ImageAccessType;
-use crate::pipeline::rendering::{ClearValue, LoadOp, RenderingAttachment, StoreOp};
+use crate::pipeline::rendering::{ClearValue, IndexType, LoadOp, RenderingAttachment, StoreOp};
 use crate::platform::ash::Ash;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
 use ash::vk::{
@@ -229,5 +229,14 @@ impl<'a, 'b, A: ImageAccessType> RenderingAttachment<'a, 'b, Ash, A> {
 			.load_op(self.load_op.to_ash())
 			.store_op(self.store_op.to_ash())
 			.clear_value(self.clear_value.to_ash())
+	}
+}
+
+impl IndexType {
+	pub fn to_ash_index_type(&self) -> ash::vk::IndexType {
+		match self {
+			IndexType::U32 => ash::vk::IndexType::UINT32,
+			IndexType::U16 => ash::vk::IndexType::UINT16,
+		}
 	}
 }

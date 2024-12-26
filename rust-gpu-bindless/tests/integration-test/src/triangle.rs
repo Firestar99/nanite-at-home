@@ -23,6 +23,7 @@ use rust_gpu_bindless::platform::ash::{
 };
 use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
 use rust_gpu_bindless::spirv_std::glam::{UVec2, Vec2, Vec4};
+use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
 use std::sync::Arc;
 
 const R: ColorEnum = ColorEnum::Red;
@@ -121,10 +122,12 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 				|rp| {
 					rp.draw(
 						&pipeline,
-						vertices.len() as u32,
-						1,
-						0,
-						0,
+						DrawIndirectCommand {
+							vertex_count: vertices.len() as u32,
+							instance_count: 1,
+							first_vertex: 0,
+							first_instance: 0,
+						},
 						Param {
 							vertices: vertices.to_transient(rp),
 						},

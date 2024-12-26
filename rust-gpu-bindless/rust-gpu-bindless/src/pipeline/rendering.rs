@@ -1,11 +1,13 @@
 use crate::descriptor::{Extent, Format};
 use crate::pipeline::access_image::MutImageAccess;
-use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, ImageAccessType};
+use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, ImageAccessType, IndexReadable};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
 use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
+use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::pipeline::rendering::RenderingError::MismatchedColorAttachmentCount;
 use crate::platform::{BindlessPipelinePlatform, RenderingContext};
+use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Image2d, TransientAccess};
 use smallvec::SmallVec;
@@ -170,22 +172,27 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 	pub fn draw<T: BufferStruct>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
-		vertex_count: u32,
-		instance_count: u32,
-		first_vertex: u32,
-		first_instance: u32,
+		count: DrawIndirectCommand,
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
 			self.platform
-				.draw(
-					pipeline,
-					vertex_count,
-					instance_count,
-					first_vertex,
-					first_instance,
-					param,
-				)
+				.draw(pipeline, count, param)
+				.map_err(Into::<RecordingError<P>>::into)?;
+			Ok(())
+		}
+	}
+
+	pub fn draw_indexed<T: BufferStruct, IT: IndexTypeTrait, AIR: IndexReadable>(
+		&mut self,
+		pipeline: &BindlessGraphicsPipeline<P, T>,
+		index_buffer: impl MutOrSharedBuffer<P, [IT], AIR>,
+		count: DrawIndexedIndirectCommand,
+		param: T,
+	) -> Result<(), RecordingError<P>> {
+		unsafe {
+			self.platform
+				.draw_indexed(pipeline, index_buffer, count, param)
 				.map_err(Into::<RecordingError<P>>::into)?;
 			Ok(())
 		}
@@ -243,4 +250,21 @@ impl Debug for RenderingError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		Display::fmt(&self, f)
 	}
+}
+
+pub enum IndexType {
+	U32,
+	U16,
+}
+
+pub trait IndexTypeTrait: BufferStruct {
+	const INDEX_TYPE: IndexType;
+}
+
+impl IndexTypeTrait for u32 {
+	const INDEX_TYPE: IndexType = IndexType::U32;
+}
+
+impl IndexTypeTrait for u16 {
+	const INDEX_TYPE: IndexType = IndexType::U16;
 }
