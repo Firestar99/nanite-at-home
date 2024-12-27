@@ -165,11 +165,13 @@ impl TableSync {
 
 		for (table, gc_indices) in self.tables.iter().zip(table_gc_indices) {
 			if let Some(gc_indices) = gc_indices {
-				let table = table.read();
-				if let Some(table) = table.as_ref() {
-					table.gc_drop(gc_indices)
-				} else {
-					unreachable!()
+				if !gc_indices.is_empty() {
+					let table = table.read();
+					if let Some(table) = table.as_ref() {
+						table.gc_drop(gc_indices)
+					} else {
+						unreachable!()
+					}
 				}
 			}
 		}

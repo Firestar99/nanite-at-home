@@ -73,6 +73,10 @@ impl<'a, T> DescriptorIndexRangeSet<'a, T> {
 		self.range_set.insert(descriptor_index_to_range(index));
 	}
 
+	pub fn is_empty(&self) -> bool {
+		self.range_set.is_empty()
+	}
+
 	pub fn table(&self) -> &'a T {
 		self.table
 	}
