@@ -2,16 +2,18 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::buffer_barriers::{CopyParam, COMPUTE_COPY_WG};
+use pollster::block_on;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt,
 };
 use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
 use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderRead, ShaderReadWrite};
+use rust_gpu_bindless::pipeline::recording::HasResourceContext;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use std::sync::Arc;
 
 #[test]
@@ -24,11 +26,12 @@ fn test_semaphore_ash() -> anyhow::Result<()> {
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
 		);
-		test_semaphore(&bindless)
+		block_on(test_semaphore(&bindless))?;
+		Ok(())
 	}
 }
 
-fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
 	let value = (0..1024).map(|i| i as f32).collect::<Vec<_>>();
 	let len = value.len();
 	let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
@@ -66,7 +69,7 @@ fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> a
 		Ok(second.into_desc())
 	})?;
 
-	let third = bindless.execute(|cmd| unsafe {
+	let (third, pending) = bindless.execute(|cmd| unsafe {
 		// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
 		let second = second.access::<ShaderRead>(cmd)?;
 		let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
@@ -82,12 +85,13 @@ fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> a
 			},
 		)?;
 
-		// cmd.
+		let pending = cmd.resource_context().to_pending_execution();
 
-		Ok(third.transition::<HostAccess>()?.into_desc())
+		Ok((third.transition::<HostAccess>()?.into_desc(), pending))
 	})?;
 
 	// 5. downloads the data from `third` and verifies that it hasn't corrupted
+	pending.await;
 	let result = third.mapped()?.read_iter().collect::<Vec<_>>();
 	assert_relative_eq!(&*result, &*value, epsilon = 0.01);
 	Ok(())

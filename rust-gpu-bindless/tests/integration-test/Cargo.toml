@@ -15,6 +15,7 @@ integration-test-shader = { workspace = true }
 ash = { workspace = true }
 
 # other
+pollster = { workspace = true }
 anyhow = { workspace = true }
 approx = { workspace = true }
 

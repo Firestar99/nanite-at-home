@@ -68,6 +68,7 @@ spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f4
 async-std = "1.12.0"
 futures = "0.3"
 rayon = "1.10"
+pollster = "0.4.0"
 
 # codegen
 quote = "1.0"
