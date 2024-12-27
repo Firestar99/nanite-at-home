@@ -7,10 +7,12 @@ use crate::descriptor::{
 use rust_gpu_bindless_shaders::descriptor::ImageType;
 use std::error::Error;
 use std::future::Future;
+use std::sync::Arc;
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 	type PlatformCreateInfo: 'static;
+	type PlatformCreateError: Error + Send + Sync + 'static;
 	type Buffer: 'static + Send + Sync;
 	type Image: 'static + Send + Sync;
 	type Sampler: 'static + Send + Sync;
@@ -30,7 +32,7 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 	unsafe fn create_platform(
 		create_info: Self::PlatformCreateInfo,
 		bindless_cyclic: &std::sync::Weak<Bindless<Self>>,
-	) -> Self;
+	) -> Result<Self, Self::PlatformCreateError>;
 
 	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts;
 
@@ -38,7 +40,7 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 
 	/// Bindless has been fully initialized but not yet returned to the end user. Feel free to do any required
 	/// modifications or buffer allocations here.
-	unsafe fn bindless_initialized(&self, bindless: &mut Bindless<Self>);
+	unsafe fn bindless_initialized(&self, bindless: &Arc<Bindless<Self>>);
 
 	/// Update the [`BindlessDescriptorSet`] with these changed buffers, images and samplers.
 	///

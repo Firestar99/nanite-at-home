@@ -142,7 +142,12 @@ pub unsafe fn ash_record_and_execute<R>(
 	bindless: &Arc<Bindless<Ash>>,
 	f: impl FnOnce(&mut Recording<'_, Ash>) -> Result<R, RecordingError<Ash>>,
 ) -> Result<R, RecordingError<Ash>> {
-	let resource = AshRecordingResourceContext::new(bindless.execution_manager.new_execution());
+	let resource = AshRecordingResourceContext::new(
+		bindless
+			.execution_manager
+			.new_execution()
+			.map_err(AshRecordingError::from)?,
+	);
 	let mut recording = Recording::new(AshRecordingContext::new(&resource)?);
 	let r = f(&mut recording)?;
 	let cmd = recording.into_inner().ash_end()?;
@@ -196,7 +201,7 @@ pub unsafe fn ash_submit(
 	)?;
 	bindless
 		.execution_manager
-		.submit_for_waiting(resource_context.execution);
+		.submit_for_waiting(resource_context.execution)?;
 	Ok(())
 }
 

@@ -34,8 +34,9 @@ impl<P: BindlessPlatform> Bindless<P> {
 	/// * There must only be one global Bindless instance for each [`Device`].
 	/// * The [general bindless safety requirements](crate#safety) apply
 	pub unsafe fn new(ci: P::PlatformCreateInfo, counts: DescriptorCounts) -> Arc<Self> {
-		Arc::new_cyclic(|weak| {
-			let platform = P::create_platform(ci, weak);
+		let bindless = Arc::new_cyclic(|weak| {
+			// TODO propagate error
+			let platform = P::create_platform(ci, weak).unwrap();
 			counts.assert_within_limits::<P>(&platform);
 
 			let table_sync = TableSync::new();
@@ -47,7 +48,9 @@ impl<P: BindlessPlatform> Bindless<P> {
 				table_sync,
 				platform,
 			}
-		})
+		});
+		bindless.platform.bindless_initialized(&bindless);
+		bindless
 	}
 
 	#[inline(never)]

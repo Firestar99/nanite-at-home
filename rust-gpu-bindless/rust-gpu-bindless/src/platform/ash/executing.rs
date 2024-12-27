@@ -1,9 +1,10 @@
 use crate::descriptor::{Bindless, BindlessFrame};
-use crate::platform::ash::Ash;
+use crate::platform::ash::{Ash, AshCreateInfo};
 use crate::platform::PendingExecution;
+use ash::prelude::VkResult;
 use ash::vk::{
-	CommandPoolCreateFlags, CommandPoolCreateInfo, CommandPoolResetFlags, SemaphoreCreateInfo, SemaphoreType,
-	SemaphoreTypeCreateInfo,
+	CommandPoolCreateFlags, CommandPoolCreateInfo, CommandPoolResetFlags, SemaphoreCreateInfo, SemaphoreSignalInfo,
+	SemaphoreType, SemaphoreTypeCreateInfo, SemaphoreWaitFlags, SemaphoreWaitInfo,
 };
 use ash::Device;
 use crossbeam_queue::SegQueue;
@@ -13,10 +14,24 @@ use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::mem;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::{Arc, OnceLock, Weak};
 use std::task::{Context, Poll, Waker};
+use std::thread;
+
+pub fn create_timeline_semaphore(device: &Device, timeline_value: u64) -> VkResult<ash::vk::Semaphore> {
+	unsafe {
+		device.create_semaphore(
+			&SemaphoreCreateInfo::default().push_next(
+				&mut SemaphoreTypeCreateInfo::default()
+					.semaphore_type(SemaphoreType::TIMELINE)
+					.initial_value(timeline_value),
+			),
+			None,
+		)
+	}
+}
 
 #[derive(Debug, Clone)]
 pub struct AshExecutionResource {
@@ -26,28 +41,17 @@ pub struct AshExecutionResource {
 }
 
 impl AshExecutionResource {
-	pub fn new(device: &Device) -> Self {
+	pub fn new(device: &Device) -> VkResult<Self> {
 		unsafe {
 			let timeline_value = 0;
-			Self {
-				command_pool: device
-					.create_command_pool(
-						&CommandPoolCreateInfo::default().flags(CommandPoolCreateFlags::TRANSIENT),
-						None,
-					)
-					.unwrap(),
-				semaphore: device
-					.create_semaphore(
-						&SemaphoreCreateInfo::default().push_next(
-							&mut SemaphoreTypeCreateInfo::default()
-								.semaphore_type(SemaphoreType::TIMELINE)
-								.initial_value(timeline_value),
-						),
-						None,
-					)
-					.unwrap(),
+			Ok(Self {
+				command_pool: device.create_command_pool(
+					&CommandPoolCreateInfo::default().flags(CommandPoolCreateFlags::TRANSIENT),
+					None,
+				)?,
+				semaphore: create_timeline_semaphore(device, timeline_value)?,
 				timeline_value: timeline_value + 1,
-			}
+			})
 		}
 	}
 
@@ -105,15 +109,21 @@ impl AshExecution {
 		self.completed.load(Relaxed)
 	}
 
-	fn set_completed(&self) {
-		let wakers = {
-			let mut guard = self.wakers.lock();
-			// must be set while holding `wakers` to prevent races
-			self.completed.store(true, Relaxed);
-			mem::replace(&mut *guard, SmallVec::new())
-		};
-		for x in wakers {
-			x.wake();
+	fn check_completion(&self, device: &Device) -> bool {
+		let value = unsafe { device.get_semaphore_counter_value(self.resource.semaphore).unwrap() };
+		if value == self.resource.timeline_value {
+			let wakers = {
+				let mut guard = self.wakers.lock();
+				// must be set while holding `wakers` to prevent races
+				self.completed.store(true, Relaxed);
+				mem::replace(&mut *guard, SmallVec::new())
+			};
+			for x in wakers {
+				x.wake();
+			}
+			true
+		} else {
+			false
 		}
 	}
 }
@@ -159,29 +169,41 @@ pub struct AshExecutionManager {
 	bindless: Weak<Bindless<Ash>>,
 	free_pool: SegQueue<AshExecutionResource>,
 	submit_for_waiting: SegQueue<Arc<AshExecution>>,
+	wait_thread_join_handle: OnceLock<thread::JoinHandle<()>>,
+	wait_thread_notify_semaphore: ash::vk::Semaphore,
+	wait_thread_notify_timeline_value_send: Mutex<u64>,
+	wait_thread_notify_timeline_value_receive: AtomicU64,
 }
 
+pub const ASH_WAIT_SEMAPHORE_THREAD_NAME: &'static str = "AshWaitSemaphoreThread";
+
 impl AshExecutionManager {
-	pub fn new(bindless: &Weak<Bindless<Ash>>) -> Self {
-		Self {
+	pub fn new(bindless: &Weak<Bindless<Ash>>, create_info: &AshCreateInfo) -> VkResult<Self> {
+		let initial_value = 0;
+		Ok(Self {
 			bindless: bindless.clone(),
 			free_pool: SegQueue::new(),
 			submit_for_waiting: SegQueue::new(),
-		}
+			wait_thread_join_handle: OnceLock::new(),
+			wait_thread_notify_semaphore: create_timeline_semaphore(&create_info.device, initial_value)?,
+			wait_thread_notify_timeline_value_send: Mutex::new(initial_value),
+			wait_thread_notify_timeline_value_receive: AtomicU64::new(initial_value),
+		})
 	}
 
 	pub fn bindless(&self) -> Arc<Bindless<Ash>> {
 		self.bindless.upgrade().expect("bindless was freed")
 	}
 
-	pub fn new_execution(&self) -> Arc<AshExecution> {
+	pub fn new_execution(&self) -> VkResult<Arc<AshExecution>> {
 		let bindless = self.bindless();
-		Arc::new(AshExecution::new(
+		Ok(Arc::new(AshExecution::new(
 			bindless.frame(),
-			self.free_pool
-				.pop()
-				.unwrap_or_else(|| AshExecutionResource::new(&bindless.device)),
-		))
+			match self.free_pool.pop() {
+				None => AshExecutionResource::new(&bindless.device)?,
+				Some(e) => e,
+			},
+		)))
 	}
 
 	fn push_to_free_pool(&self, bindless: &Arc<Bindless<Ash>>, mut resource: AshExecutionResource) {
@@ -191,13 +213,123 @@ impl AshExecutionManager {
 
 	/// # Safety
 	/// must only submit an execution exactly once
-	pub(super) unsafe fn submit_for_waiting(&self, execution: Arc<AshExecution>) {
+	pub(super) unsafe fn submit_for_waiting(&self, execution: Arc<AshExecution>) -> VkResult<()> {
 		self.submit_for_waiting.push(execution);
-		todo!("notify wait thread")
+		self.notify_wait_semaphore_thread()?;
+		Ok(())
+	}
+
+	pub fn notify_wait_semaphore_thread(&self) -> VkResult<()> {
+		let mut guard = self.wait_thread_notify_timeline_value_send.lock();
+		// no need to send more notifies when one notify is already pending
+		if self.wait_thread_notify_timeline_value_receive.load(Relaxed) == *guard {
+			*guard += 1;
+			unsafe {
+				self.bindless().device.signal_semaphore(
+					&SemaphoreSignalInfo::default()
+						.semaphore(self.wait_thread_notify_semaphore)
+						.value(*guard),
+				)?;
+			}
+		}
+		Ok(())
+	}
+
+	unsafe fn wait_semaphore_thread_main(bindless: Weak<Bindless<Ash>>) {
+		unsafe {
+			let initial_capacity = 64;
+			let mut pending = Vec::with_capacity(initial_capacity);
+			let mut semaphores = Vec::with_capacity(initial_capacity);
+			let mut values = Vec::with_capacity(initial_capacity);
+			let mut notify_timeline_value;
+			while let Some(bindless) = bindless.upgrade() {
+				let execution_manager = &bindless.execution_manager;
+				let device = &bindless.device;
+
+				loop {
+					// update our notify_timeline_value
+					notify_timeline_value = device
+						.get_semaphore_counter_value(execution_manager.wait_thread_notify_semaphore)
+						.unwrap();
+					execution_manager
+						.wait_thread_notify_timeline_value_receive
+						.store(notify_timeline_value, Relaxed);
+
+					// add new semaphores
+					// MUST happen after timeline_value_receive was set
+					while let Some(e) = execution_manager.submit_for_waiting.pop() {
+						if !e.check_completion(&device) {
+							pending.push(e);
+						}
+					}
+
+					// check each semaphore for completion
+					pending.retain(|e| !e.check_completion(&device));
+					if !pending.is_empty() {
+						// wait for any semaphore to complete
+						assert!(semaphores.is_empty() && values.is_empty());
+						semaphores.extend(
+							pending
+								.iter()
+								.map(|e| e.resource.semaphore)
+								.chain([execution_manager.wait_thread_notify_semaphore]),
+						);
+						values.extend(
+							pending
+								.iter()
+								.map(|e| e.resource.timeline_value)
+								.chain([notify_timeline_value + 1]),
+						);
+						let result = device.wait_semaphores(
+							&SemaphoreWaitInfo::default()
+								.flags(SemaphoreWaitFlags::ANY)
+								.semaphores(&semaphores)
+								.values(&values),
+							!0,
+						);
+						semaphores.clear();
+						values.clear();
+						match result {
+							Ok(_) | Err(ash::vk::Result::TIMEOUT) => (),
+							Err(e) => panic!("{:?}", e),
+						}
+					} else {
+						// wait for notify semaphore only
+						// with timeout to back off from the bindless Arc
+						let result = device.wait_semaphores(
+							&SemaphoreWaitInfo::default()
+								.semaphores(&[execution_manager.wait_thread_notify_semaphore])
+								.values(&[notify_timeline_value + 1]),
+							10_000, // nanoseconds = 10ms
+						);
+						match result {
+							Ok(_) => (),
+							// back off: release strong reference to Bindless, allowing it to potentially free
+							Err(ash::vk::Result::TIMEOUT) => break,
+							Err(e) => panic!("{:?}", e),
+						}
+					}
+				}
+			}
+		}
+	}
+
+	pub fn start_wait_semaphore_thread(&self) {
+		self.wait_thread_join_handle.get_or_init(|| {
+			let bindless = self.bindless.clone();
+			thread::Builder::new()
+				.name(ASH_WAIT_SEMAPHORE_THREAD_NAME.to_string())
+				.spawn(|| unsafe { Self::wait_semaphore_thread_main(bindless) })
+				.unwrap()
+		});
 	}
 
 	pub fn destroy(&mut self, device: &Device) {
 		unsafe {
+			if let Some(join_handle) = self.wait_thread_join_handle.take() {
+				join_handle.join().unwrap();
+			}
+			device.destroy_semaphore(self.wait_thread_notify_semaphore, None);
 			if let Some(resource) = self.free_pool.pop() {
 				resource.destroy(device)
 			}
