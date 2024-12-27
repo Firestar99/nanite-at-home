@@ -31,6 +31,7 @@ pub fn required_features_vk12() -> PhysicalDeviceVulkan12Features<'static> {
 		.descriptor_binding_sampled_image_update_after_bind(true)
 		.descriptor_binding_storage_image_update_after_bind(true)
 		.descriptor_binding_uniform_buffer_update_after_bind(true)
+		.timeline_semaphore(true)
 }
 
 pub fn required_features_vk13() -> PhysicalDeviceVulkan13Features<'static> {
