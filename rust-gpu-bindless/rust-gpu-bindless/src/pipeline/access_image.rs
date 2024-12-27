@@ -6,7 +6,7 @@ use crate::pipeline::access_type::{
 	ImageAccess, ImageAccessType, ShaderReadWriteable, ShaderReadable, ShaderSampleable,
 };
 use crate::pipeline::mut_or_shared::MutOrSharedImage;
-use crate::pipeline::recording::HasResourceContext;
+use crate::pipeline::recording::{HasResourceContext, Recording};
 use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage, TransientDesc};
 use std::future::Future;
@@ -14,10 +14,8 @@ use std::marker::PhantomData;
 
 pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescExt<P, MutImage<T>> {
 	/// Access this mutable image to use it for recording.
-	fn access<'a, A: ImageAccessType>(
-		self,
-		cmd: &P::RecordingContext<'a>,
-	) -> Result<MutImageAccess<'a, P, T, A>, AccessError>;
+	fn access<'a, A: ImageAccessType>(self, cmd: &Recording<'a, P>)
+		-> Result<MutImageAccess<'a, P, T, A>, AccessError>;
 
 	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
 	/// uninitialized.
@@ -26,21 +24,21 @@ pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescE
 	/// Must not read uninitialized memory and fully overwrite it within this execution context.
 	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError>;
 }
 
 impl<P: BindlessPipelinePlatform, T: ImageType> MutImageAccessExt<P, T> for MutDesc<P, MutImage<T>> {
 	fn access<'a, A: ImageAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError> {
 		MutImageAccess::from(self, cmd)
 	}
 
 	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError> {
 		MutImageAccess::from_undefined_contents(self, cmd)
 	}
@@ -54,26 +52,25 @@ pub struct MutImageAccess<'a, P: BindlessPipelinePlatform, T: ImageType, A: Imag
 }
 
 impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImageAccess<'a, P, T, A> {
-	pub fn from_undefined_contents(
-		desc: MutDesc<P, MutImage<T>>,
-		cmd: &P::RecordingContext<'a>,
-	) -> Result<Self, AccessError> {
+	pub fn from_undefined_contents(desc: MutDesc<P, MutImage<T>>, cmd: &Recording<'a, P>) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |_| ImageAccess::Undefined)
 	}
 
-	pub fn from(desc: MutDesc<P, MutImage<T>>, cmd: &P::RecordingContext<'a>) -> Result<Self, AccessError> {
+	pub fn from(desc: MutDesc<P, MutImage<T>>, cmd: &Recording<'a, P>) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |x| x)
 	}
 
 	#[inline]
 	fn from_inner(
 		desc: MutDesc<P, MutImage<T>>,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 		f: impl FnOnce(ImageAccess) -> ImageAccess,
 	) -> Result<Self, AccessError> {
 		unsafe {
+			let (slot, last) = desc.into_inner();
+			cmd.resource_context().add_dependency(last);
 			let this = Self {
-				slot: desc.into_rc_slot(),
+				slot,
 				resource_context: cmd.resource_context(),
 				_phantom: PhantomData,
 				_phantom2: PhantomData,

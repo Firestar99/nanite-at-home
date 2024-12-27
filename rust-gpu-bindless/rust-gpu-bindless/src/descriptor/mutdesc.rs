@@ -46,7 +46,7 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq 
 
 	fn rc_slot(&self) -> &RcTableSlot;
 
-	fn into_rc_slot(self) -> RcTableSlot;
+	fn into_inner(self) -> (RcTableSlot, P::PendingExecution);
 
 	// TODO soundness: these functions aren't exactly safe
 	#[inline]
@@ -71,8 +71,8 @@ impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> 
 		&self.r.slot
 	}
 
-	fn into_rc_slot(self) -> RcTableSlot {
-		self.r.slot
+	fn into_inner(self) -> (RcTableSlot, P::PendingExecution) {
+		(self.r.slot, self.r.last)
 	}
 }
 

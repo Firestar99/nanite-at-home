@@ -20,8 +20,8 @@ use ash::vk::{
 	BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
 	CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo, Fence,
 	ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint,
-	SubmitInfo, TimelineSemaphoreSubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS,
-	WHOLE_SIZE,
+	PipelineStageFlags, SubmitInfo, TimelineSemaphoreSubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS,
+	REMAINING_MIP_LEVELS, WHOLE_SIZE,
 };
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, TransientAccess};
@@ -31,10 +31,10 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use thiserror::Error;
 
-#[derive(Debug)]
 pub struct AshRecordingResourceContext {
-	pub(super) execution: Arc<AshExecution>,
 	inner: RefCell<AshBarrierCollector>,
+	pub(super) execution: Arc<AshExecution>,
+	dependencies: RefCell<SmallVec<[AshPendingExecution; 4]>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -53,8 +53,9 @@ impl AshBarrierCollector {
 impl AshRecordingResourceContext {
 	pub fn new(execution: Arc<AshExecution>) -> Self {
 		Self {
+			inner: RefCell::new(AshBarrierCollector::default()),
 			execution,
-			inner: Default::default(),
+			dependencies: RefCell::new(SmallVec::new()),
 		}
 	}
 
@@ -81,6 +82,11 @@ unsafe impl<'a> TransientAccess<'a> for &'a AshRecordingResourceContext {}
 unsafe impl RecordingResourceContext<Ash> for AshRecordingResourceContext {
 	fn to_transient_access(&self) -> impl TransientAccess<'_> {
 		self
+	}
+
+	fn add_dependency(&self, pending: AshPendingExecution) {
+		// TODO is it efficient to check here if dependencies completed?
+		self.dependencies.borrow_mut().push(pending);
 	}
 
 	fn to_pending_execution(&self) -> AshPendingExecution {
@@ -139,9 +145,59 @@ pub unsafe fn ash_record_and_execute<R>(
 	let resource = AshRecordingResourceContext::new(bindless.execution_manager.new_execution());
 	let mut recording = Recording::new(AshRecordingContext::new(&resource)?);
 	let r = f(&mut recording)?;
-	recording.into_inner().ash_end_and_submit();
-	bindless.execution_manager.submit_for_waiting(resource.execution);
+	let cmd = recording.into_inner().ash_end()?;
+	ash_submit(bindless, resource, cmd)?;
 	Ok(r)
+}
+
+pub unsafe fn ash_submit(
+	bindless: &Arc<Bindless<Ash>>,
+	resource_context: AshRecordingResourceContext,
+	cmd: CommandBuffer,
+) -> Result<(), AshRecordingError> {
+	let device = &bindless.platform.device;
+	// Safety: dependencies keeps the semaphores alive
+	let dependencies = resource_context
+		.dependencies
+		.into_inner()
+		.iter()
+		.filter_map(|a| a.upgrade_ash_resource())
+		.filter(|a| !a.completed())
+		.collect::<SmallVec<[_; 4]>>();
+	let wait_semaphores = dependencies
+		.iter()
+		.map(|d| d.resource().semaphore)
+		.collect::<SmallVec<[_; 4]>>();
+	let wait_dst_stage_mask = dependencies
+		.iter()
+		// TODO ALL_COMMANDS should not be necessary here if we bind AccessFlags to PendingExecution
+		.map(|_| PipelineStageFlags::ALL_COMMANDS)
+		.collect::<SmallVec<[_; 4]>>();
+	let wait_values = dependencies
+		.iter()
+		.map(|d| d.resource().timeline_value)
+		.collect::<SmallVec<[_; 4]>>();
+
+	bindless.flush();
+	let execution_resource = resource_context.execution.resource();
+	device.queue_submit(
+		bindless.queue,
+		&[SubmitInfo::default()
+			.command_buffers(&[cmd])
+			.wait_semaphores(&wait_semaphores)
+			.wait_dst_stage_mask(&wait_dst_stage_mask)
+			.signal_semaphores(&[execution_resource.semaphore])
+			.push_next(
+				&mut TimelineSemaphoreSubmitInfo::default()
+					.wait_semaphore_values(&wait_values)
+					.signal_semaphore_values(&[execution_resource.timeline_value]),
+			)],
+		Fence::null(),
+	)?;
+	bindless
+		.execution_manager
+		.submit_for_waiting(resource_context.execution);
+	Ok(())
 }
 
 pub struct AshRecordingContext<'a> {
@@ -280,25 +336,11 @@ impl<'a> AshRecordingContext<'a> {
 		}
 	}
 
-	pub unsafe fn ash_end_and_submit(self) {
+	pub unsafe fn ash_end(self) -> Result<CommandBuffer, AshRecordingError> {
 		unsafe {
 			let device = &self.bindless.platform.device;
-			device.end_command_buffer(self.cmd).unwrap();
-			self.bindless.flush();
-			let execution_resource = self.resource_context.execution.resource();
-			device
-				.queue_submit(
-					self.bindless.queue,
-					&[SubmitInfo::default()
-						.command_buffers(&[self.cmd])
-						.signal_semaphores(&[execution_resource.semaphore])
-						.push_next(
-							&mut TimelineSemaphoreSubmitInfo::default()
-								.signal_semaphore_values(&[execution_resource.timeline_value]),
-						)],
-					Fence::null(),
-				)
-				.unwrap();
+			device.end_command_buffer(self.cmd)?;
+			Ok(self.cmd)
 		}
 	}
 }

@@ -110,6 +110,9 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 
 pub unsafe trait RecordingResourceContext<P: BindlessPipelinePlatform>: 'static {
 	fn to_transient_access(&self) -> impl TransientAccess<'_>;
+	/// Declares that the execution must wait for `pending` to complete before executing
+	fn add_dependency(&self, pending: P::PendingExecution);
+	/// Returns the [`PendingExecution`] of this execution
 	fn to_pending_execution(&self) -> P::PendingExecution;
 	unsafe fn transition_buffer(&self, buffer: &BufferSlot<P>, src: BufferAccess, dst: BufferAccess);
 	unsafe fn transition_image(&self, image: &ImageSlot<P>, src: ImageAccess, dst: ImageAccess);

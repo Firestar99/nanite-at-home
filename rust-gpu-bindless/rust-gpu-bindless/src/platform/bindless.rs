@@ -101,7 +101,9 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 	);
 }
 
-pub unsafe trait PendingExecution<P: BindlessPlatform>: Future<Output = ()> + Send + Sync + 'static {
+pub unsafe trait PendingExecution<P: BindlessPlatform>:
+	Future<Output = ()> + Clone + Send + Sync + 'static
+{
 	/// Creates a completed [`PendingExecution`] execution. Blocking on it will always immediately return.
 	fn completed() -> Self;
 }

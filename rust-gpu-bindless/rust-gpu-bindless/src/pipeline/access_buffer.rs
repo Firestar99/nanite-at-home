@@ -4,7 +4,7 @@ use crate::descriptor::{MutDesc, MutDescExt};
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{BufferAccess, BufferAccessType, ShaderReadWriteable, ShaderReadable};
 use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
-use crate::pipeline::recording::HasResourceContext;
+use crate::pipeline::recording::{HasResourceContext, Recording};
 use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer, TransientDesc};
@@ -17,7 +17,7 @@ pub trait MutBufferAccessExt<P: BindlessPipelinePlatform, T: BufferContent + ?Si
 	/// Access this mutable buffer to use it for recording.
 	fn access<'a, A: BufferAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError>;
 
 	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
@@ -27,21 +27,21 @@ pub trait MutBufferAccessExt<P: BindlessPipelinePlatform, T: BufferContent + ?Si
 	/// Must not read uninitialized memory and fully overwrite it within this execution context.
 	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError>;
 }
 
 impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized> MutBufferAccessExt<P, T> for MutDesc<P, MutBuffer<T>> {
 	fn access<'a, A: BufferAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
 		MutBufferAccess::from(self, cmd)
 	}
 
 	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
 		MutBufferAccess::from_undefined_contents(self, cmd)
 	}
@@ -57,24 +57,26 @@ pub struct MutBufferAccess<'a, P: BindlessPipelinePlatform, T: BufferContent + ?
 impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccessType> MutBufferAccess<'a, P, T, A> {
 	pub fn from_undefined_contents(
 		desc: MutDesc<P, MutBuffer<T>>,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 	) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |_| BufferAccess::Undefined)
 	}
 
-	pub fn from(desc: MutDesc<P, MutBuffer<T>>, cmd: &P::RecordingContext<'a>) -> Result<Self, AccessError> {
+	pub fn from(desc: MutDesc<P, MutBuffer<T>>, cmd: &Recording<'a, P>) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |x| x)
 	}
 
 	#[inline]
 	fn from_inner(
 		desc: MutDesc<P, MutBuffer<T>>,
-		cmd: &P::RecordingContext<'a>,
+		cmd: &Recording<'a, P>,
 		f: impl FnOnce(BufferAccess) -> BufferAccess,
 	) -> Result<Self, AccessError> {
 		unsafe {
+			let (slot, last) = desc.into_inner();
+			cmd.resource_context().add_dependency(last);
 			let this = Self {
-				slot: desc.into_rc_slot(),
+				slot,
 				resource_context: cmd.resource_context(),
 				_phantom: PhantomData,
 				_phantom2: PhantomData,

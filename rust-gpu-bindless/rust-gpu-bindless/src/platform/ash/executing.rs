@@ -217,8 +217,8 @@ impl AshPendingExecution {
 		}
 	}
 
-	pub fn ash_resource(&self) -> &Option<Weak<AshExecution>> {
-		&self.execution
+	pub fn upgrade_ash_resource(&self) -> Option<Arc<AshExecution>> {
+		self.execution.as_ref().and_then(|weak| weak.upgrade())
 	}
 }
 
@@ -233,7 +233,7 @@ impl Future for AshPendingExecution {
 	type Output = ();
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		if let Some(execution) = self.execution.as_ref().and_then(|weak| weak.upgrade()) {
+		if let Some(execution) = self.upgrade_ash_resource() {
 			// fast fail
 			if execution.completed.load(Relaxed) {
 				Poll::Ready(())
