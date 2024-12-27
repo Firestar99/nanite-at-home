@@ -2,6 +2,7 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::simple_compute::{add_calculation, Indirection, Param};
+use pollster::block_on;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt, RCDescExt,
@@ -11,7 +12,7 @@ use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderReadWrite};
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
+use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use std::sync::Arc;
 
 #[test]
@@ -24,11 +25,12 @@ fn test_simple_compute_ash() -> anyhow::Result<()> {
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
 		);
-		test_simple_compute(&bindless)
+		block_on(test_simple_compute(&bindless))?;
+		Ok(())
 	}
 }
 
-fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
 	let a = 42.2;
 	let b = [1., 2., 3.];
 	let c = 69.3;
@@ -72,7 +74,7 @@ fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 		// buffer_indirection is
 	};
 
-	let execution_context = bindless.execute(|recording_context| {
+	let out = bindless.execute(|recording_context| {
 		// b and indirection are read-only accessors to their respective buffers that only live for as long as
 		// (the lifetime 'a on) recording_context does. By passing in recording_context by reference, it is ensured
 		// you can't leak the accessors outside this block (apart from reentrant recording)
@@ -119,12 +121,8 @@ fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 		// returning makes us loose the reference on recording_context, so no accessors can leak beyond here
 	})?;
 
-	// wait for result and get back the data returned from the closure
-	let out = execution_context.block_on();
-
-	// unsafely map the buffer to read data from it. Just like the executing, the end user has to ensure no concurrent
-	// access by some other execution or map operation.
-	let result = out.mapped()?.read_iter().collect::<Vec<_>>();
+	// Wait for execution to finish to map the buffer to read data from it.
+	let result = out.mapped().await?.read_iter().collect::<Vec<_>>();
 	let expected = b.iter().copied().map(|b| add_calculation(a, b, c)).collect::<Vec<_>>();
 	println!("result: {:?}", result);
 	println!("expected: {:?}", expected);

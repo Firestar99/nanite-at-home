@@ -2,6 +2,7 @@
 
 use approx::assert_relative_eq;
 use integration_test_shader::buffer_barriers::{CopyParam, COMPUTE_COPY_WG};
+use pollster::block_on;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
 	MutDescBufferExt,
@@ -11,7 +12,7 @@ use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderRead, ShaderRea
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
+use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use std::sync::Arc;
 
 #[test]
@@ -24,11 +25,12 @@ fn test_buffer_barrier_ash() -> anyhow::Result<()> {
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
 		);
-		test_buffer_barrier(&bindless)
+		block_on(test_buffer_barrier(&bindless))?;
+		Ok(())
 	}
 }
 
-fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
 	let value = (0..1024).map(|i| i as f32).collect::<Vec<_>>();
 	let len = value.len();
 
@@ -47,44 +49,42 @@ fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	let third = bindless.buffer().alloc_slice(&buffer_ci("third"), len)?;
 
 	let compute = bindless.create_compute_pipeline(crate::shader::buffer_barriers::compute_copy::new())?;
-	let third = bindless
-		.execute(|cmd| unsafe {
-			let first = first.access::<ShaderRead>(cmd)?;
-			let second = second.access_undefined_contents::<ShaderReadWrite>(cmd)?;
+	let third = bindless.execute(|cmd| unsafe {
+		let first = first.access::<ShaderRead>(cmd)?;
+		let second = second.access_undefined_contents::<ShaderReadWrite>(cmd)?;
 
-			// 2. does a dispatch to copy from `first` to `second`
-			let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
-			cmd.dispatch(
-				&compute,
-				[wgs, 1, 1],
-				CopyParam {
-					input: first.to_transient()?,
-					output: second.to_mut_transient()?,
-					len: len as u32,
-				},
-			)?;
+		// 2. does a dispatch to copy from `first` to `second`
+		let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
+		cmd.dispatch(
+			&compute,
+			[wgs, 1, 1],
+			CopyParam {
+				input: first.to_transient()?,
+				output: second.to_mut_transient()?,
+				len: len as u32,
+			},
+		)?;
 
-			// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
-			let second = second.transition::<ShaderRead>()?;
-			let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
+		// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
+		let second = second.transition::<ShaderRead>()?;
+		let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
 
-			// 4. another dispatch to copy from `second` to `third`
-			cmd.dispatch(
-				&compute,
-				[wgs, 1, 1],
-				CopyParam {
-					input: second.to_transient()?,
-					output: third.to_mut_transient()?,
-					len: len as u32,
-				},
-			)?;
+		// 4. another dispatch to copy from `second` to `third`
+		cmd.dispatch(
+			&compute,
+			[wgs, 1, 1],
+			CopyParam {
+				input: second.to_transient()?,
+				output: third.to_mut_transient()?,
+				len: len as u32,
+			},
+		)?;
 
-			Ok(third.transition::<HostAccess>()?.into_desc())
-		})?
-		.block_on();
+		Ok(third.transition::<HostAccess>()?.into_desc())
+	})?;
 
 	// 5. downloads the data from `third` and verifies that it hasn't corrupted
-	let result = third.mapped()?.read_iter().collect::<Vec<_>>();
+	let result = third.mapped().await?.read_iter().collect::<Vec<_>>();
 	assert_relative_eq!(&*result, &*value, epsilon = 0.01);
 	Ok(())
 }

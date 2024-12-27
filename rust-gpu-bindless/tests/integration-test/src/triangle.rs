@@ -6,6 +6,7 @@ use ash::vk::{
 };
 use integration_test_shader::color::ColorEnum;
 use integration_test_shader::triangle::{Param, Vertex};
+use pollster::block_on;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, DescBufferLenExt, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt, RCDescExt,
@@ -21,7 +22,7 @@ use rust_gpu_bindless::pipeline::rendering::{ClearValue, LoadOp, RenderPassForma
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
+use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::{UVec2, Vec2, Vec4};
 use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
 use std::sync::Arc;
@@ -41,11 +42,12 @@ fn test_triangle_ash() -> anyhow::Result<()> {
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
 		);
-		test_triangle(&bindless)
+		block_on(test_triangle(&bindless))?;
+		Ok(())
 	}
 }
 
-fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
 	let vertices = bindless.buffer().alloc_shared_from_iter(
 		&BindlessBufferCreateInfo {
 			name: "vertices",
@@ -106,46 +108,45 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 		rt_size,
 	)?;
 
-	let rt_download = bindless
-		.execute(|cmd| {
-			let mut rt_download = rt_download.access::<TransferWrite>(cmd)?;
-			let mut image = rt_image.access::<ColorAttachment>(cmd)?;
-			cmd.begin_rendering(
-				render_pass_format,
-				&[RenderingAttachment {
-					image: &mut image,
-					load_op: LoadOp::Clear,
-					store_op: StoreOp::Store,
-					clear_value: ClearValue::ColorF(B.color().to_array()),
-				}],
-				None,
-				|rp| {
-					rp.draw(
-						&pipeline,
-						DrawIndirectCommand {
-							vertex_count: vertices.len() as u32,
-							instance_count: 1,
-							first_vertex: 0,
-							first_instance: 0,
-						},
-						Param {
-							vertices: vertices.to_transient(rp),
-						},
-					)?;
-					Ok(())
-				},
-			)?;
+	let rt_download = bindless.execute(|cmd| {
+		let mut rt_download = rt_download.access::<TransferWrite>(cmd)?;
+		let mut image = rt_image.access::<ColorAttachment>(cmd)?;
+		cmd.begin_rendering(
+			render_pass_format,
+			&[RenderingAttachment {
+				image: &mut image,
+				load_op: LoadOp::Clear,
+				store_op: StoreOp::Store,
+				clear_value: ClearValue::ColorF(B.color().to_array()),
+			}],
+			None,
+			|rp| {
+				rp.draw(
+					&pipeline,
+					DrawIndirectCommand {
+						vertex_count: vertices.len() as u32,
+						instance_count: 1,
+						first_vertex: 0,
+						first_instance: 0,
+					},
+					Param {
+						vertices: vertices.to_transient(rp),
+					},
+				)?;
+				Ok(())
+			},
+		)?;
 
-			let mut image = image.transition::<TransferRead>()?;
-			unsafe { cmd.copy_image_to_buffer(&mut image, &mut rt_download)? };
+		let mut image = image.transition::<TransferRead>()?;
+		unsafe { cmd.copy_image_to_buffer(&mut image, &mut rt_download)? };
 
-			Ok(rt_download.transition::<HostAccess>()?.into_desc())
-		})?
-		.block_on();
+		Ok(rt_download.transition::<HostAccess>()?.into_desc())
+	})?;
 
 	// 5. downloads the data from `staging_download` and verify the contents
 	let result = rt_download
-		.mapped()?
+		.mapped()
+		.await?
 		.read_iter()
 		.map(|c| ColorEnum::parse(Vec4::from_array(c.map(|v| v as f32)) / 255.))
 		.collect::<Vec<_>>();
