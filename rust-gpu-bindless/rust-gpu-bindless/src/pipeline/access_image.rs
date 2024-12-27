@@ -1,5 +1,5 @@
 use crate::backing::table::RcTableSlot;
-use crate::descriptor::{BindlessImageUsage, DescTable, ImageSlot, ImageTable, RCDesc, RCDescExt};
+use crate::descriptor::{BindlessImageUsage, BufferTable, DescTable, ImageSlot, ImageTable, RCDesc, RCDescExt};
 use crate::descriptor::{MutDesc, MutDescExt};
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_type::{
@@ -9,6 +9,7 @@ use crate::pipeline::mut_or_shared::MutOrSharedImage;
 use crate::pipeline::recording::HasResourceContext;
 use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage, TransientDesc};
+use std::future::Future;
 use std::marker::PhantomData;
 
 pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescExt<P, MutImage<T>> {
@@ -113,18 +114,23 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 	pub fn into_desc(self) -> MutDesc<P, MutImage<T>> {
 		unsafe {
 			self.inner_slot().access_lock.unlock(A::IMAGE_ACCESS);
-			MutDesc::new(self.slot)
+			MutDesc::new(self.slot, self.resource_context.to_pending_execution())
 		}
 	}
 
 	/// Turns this mutable access to a [`MutImage`] into a shared [`RCDesc`]
-	pub fn into_shared(self) -> RCDesc<P, Image<T>> {
+	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Image<T>>> {
 		unsafe {
 			// cannot fail
 			self.transition_inner(A::IMAGE_ACCESS, ImageAccess::GeneralRead)
 				.unwrap();
-			self.inner_slot().access_lock.unlock_to_shared();
-			RCDesc::new(self.slot)
+			let pending_execution = self.resource_context.to_pending_execution();
+			let slot = self.slot;
+			async move {
+				pending_execution.await;
+				BufferTable::<P>::get_slot(&slot).access_lock.unlock_to_shared();
+				RCDesc::new(slot)
+			}
 		}
 	}
 }

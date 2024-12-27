@@ -27,7 +27,6 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	type RecordingResourceContext: RecordingResourceContext<Self>;
 	type RecordingContext<'a>: RecordingContext<'a, Self>;
 	type RecordingError: 'static + Error + Send + Sync + Into<RecordingError<Self>>;
-	type ExecutingContext<R: Send + Sync>: ExecutingContext<Self, R>;
 
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
 		bindless: &Arc<Bindless<Self>>,
@@ -37,7 +36,7 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 	unsafe fn record_and_execute<R: Send + Sync>(
 		bindless: &Arc<Bindless<Self>>,
 		f: impl FnOnce(&mut Recording<'_, Self>) -> Result<R, RecordingError<Self>>,
-	) -> Result<Self::ExecutingContext<R>, RecordingError<Self>>;
+	) -> Result<R, RecordingError<Self>>;
 
 	type GraphicsPipeline: 'static + Send + Sync;
 	type MeshGraphicsPipeline: 'static + Send + Sync;
@@ -110,9 +109,9 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 }
 
 pub unsafe trait RecordingResourceContext<P: BindlessPipelinePlatform>: 'static {
-	unsafe fn to_transient_access(&self) -> impl TransientAccess<'_>;
+	fn to_transient_access(&self) -> impl TransientAccess<'_>;
+	fn to_pending_execution(&self) -> P::PendingExecution;
 	unsafe fn transition_buffer(&self, buffer: &BufferSlot<P>, src: BufferAccess, dst: BufferAccess);
-
 	unsafe fn transition_image(&self, image: &ImageSlot<P>, src: ImageAccess, dst: ImageAccess);
 }
 
@@ -175,9 +174,4 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 		indirect: impl MutOrSharedBuffer<P, [[u32; 3]], AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
-}
-
-pub unsafe trait ExecutingContext<P: BindlessPipelinePlatform, R: Send + Sync>: Send + Sync {
-	/// Stopgap solution to wait for execution to finish
-	fn block_on(self) -> R;
 }

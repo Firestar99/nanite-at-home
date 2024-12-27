@@ -11,7 +11,7 @@ use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderRead, ShaderRea
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, ExecutingContext};
+use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use std::sync::Arc;
 
 #[test]
@@ -48,46 +48,44 @@ fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> a
 	let third = bindless.buffer().alloc_slice(&buffer_ci("third"), len)?;
 
 	let compute = bindless.create_compute_pipeline(crate::shader::buffer_barriers::compute_copy::new())?;
-	let second = bindless
-		.execute(|cmd| unsafe {
-			let first = first.access::<ShaderRead>(cmd)?;
-			let second = second.access_undefined_contents::<ShaderReadWrite>(cmd)?;
+	let second = bindless.execute(|cmd| unsafe {
+		let first = first.access::<ShaderRead>(cmd)?;
+		let second = second.access_undefined_contents::<ShaderReadWrite>(cmd)?;
 
-			// 2. does a dispatch to copy from `first` to `second`
-			cmd.dispatch(
-				&compute,
-				[wgs, 1, 1],
-				CopyParam {
-					input: first.to_transient()?,
-					output: second.to_mut_transient()?,
-					len: len as u32,
-				},
-			)?;
+		// 2. does a dispatch to copy from `first` to `second`
+		cmd.dispatch(
+			&compute,
+			[wgs, 1, 1],
+			CopyParam {
+				input: first.to_transient()?,
+				output: second.to_mut_transient()?,
+				len: len as u32,
+			},
+		)?;
 
-			Ok(second.into_desc())
-		})?
-		.block_on();
+		Ok(second.into_desc())
+	})?;
 
-	let third = bindless
-		.execute(|cmd| unsafe {
-			// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
-			let second = second.access::<ShaderRead>(cmd)?;
-			let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
+	let third = bindless.execute(|cmd| unsafe {
+		// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
+		let second = second.access::<ShaderRead>(cmd)?;
+		let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
 
-			// 4. another dispatch to copy from `second` to `third`
-			cmd.dispatch(
-				&compute,
-				[wgs, 1, 1],
-				CopyParam {
-					input: second.to_transient()?,
-					output: third.to_mut_transient()?,
-					len: len as u32,
-				},
-			)?;
+		// 4. another dispatch to copy from `second` to `third`
+		cmd.dispatch(
+			&compute,
+			[wgs, 1, 1],
+			CopyParam {
+				input: second.to_transient()?,
+				output: third.to_mut_transient()?,
+				len: len as u32,
+			},
+		)?;
 
-			Ok(third.transition::<HostAccess>()?.into_desc())
-		})?
-		.block_on();
+		// cmd.
+
+		Ok(third.transition::<HostAccess>()?.into_desc())
+	})?;
 
 	// 5. downloads the data from `third` and verifies that it hasn't corrupted
 	let result = third.mapped()?.read_iter().collect::<Vec<_>>();

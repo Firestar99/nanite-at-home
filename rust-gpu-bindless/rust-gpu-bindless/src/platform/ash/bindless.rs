@@ -8,6 +8,7 @@ use crate::descriptor::{
 use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{
 	bindless_image_type_to_vk_image_type, bindless_image_type_to_vk_image_view_type, AshExecutionManager,
+	AshPendingExecution,
 };
 use crate::platform::BindlessPlatform;
 use ash::vk::{
@@ -204,6 +205,7 @@ unsafe impl BindlessPlatform for Ash {
 	type Sampler = ash::vk::Sampler;
 	type AllocationError = AshAllocationError;
 	type BindlessDescriptorSet = AshBindlessDescriptorSet;
+	type PendingExecution = AshPendingExecution;
 
 	unsafe fn create_platform(create_info: Self::PlatformCreateInfo, bindless_cyclic: &Weak<Bindless<Self>>) -> Self {
 		Ash::new(create_info, bindless_cyclic)

@@ -21,7 +21,7 @@ impl<P: BindlessPipelinePlatform> Bindless<P> {
 	pub fn execute<R: Send + Sync>(
 		self: &Arc<Self>,
 		f: impl FnOnce(&mut Recording<'_, P>) -> Result<R, RecordingError<P>>,
-	) -> Result<P::ExecutingContext<R>, RecordingError<P>> {
+	) -> Result<R, RecordingError<P>> {
 		unsafe { P::record_and_execute(self, f) }
 	}
 }

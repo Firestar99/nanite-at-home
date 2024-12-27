@@ -8,6 +8,7 @@ mod image_table;
 mod mutdesc;
 mod rc;
 mod sampler_table;
+// mod pending;
 
 pub use bindless::*;
 pub use buffer_metadata_cpu::*;

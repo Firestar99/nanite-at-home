@@ -8,7 +8,7 @@ use crate::descriptor::{
 };
 use crate::pipeline::access_lock::{AccessLock, AccessLockError};
 use crate::pipeline::access_type::BufferAccess;
-use crate::platform::BindlessPlatform;
+use crate::platform::{BindlessPlatform, PendingExecution};
 use parking_lot::Mutex;
 use presser::Slab;
 use rust_gpu_bindless_shaders::buffer_content::Metadata;
@@ -221,7 +221,12 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		&self,
 		buffer: BufferSlot<P>,
 	) -> Result<MutDesc<P, MutBuffer<T>>, SlotAllocationError> {
-		unsafe { Ok(MutDesc::new(self.table.alloc_slot(buffer)?)) }
+		unsafe {
+			Ok(MutDesc::new(
+				self.table.alloc_slot(buffer)?,
+				PendingExecution::<P>::completed(),
+			))
+		}
 	}
 
 	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, BufferInterface<P>> {

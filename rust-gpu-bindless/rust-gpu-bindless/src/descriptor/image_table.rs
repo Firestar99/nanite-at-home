@@ -5,7 +5,7 @@ use crate::descriptor::mutdesc::{MutDesc, MutDescExt};
 use crate::descriptor::{Bindless, BindlessAllocationScheme, DescriptorCounts, Extent};
 use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::ImageAccess;
-use crate::platform::BindlessPlatform;
+use crate::platform::{BindlessPlatform, PendingExecution};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
@@ -210,7 +210,12 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 		&self,
 		image: ImageSlot<P>,
 	) -> Result<MutDesc<P, MutImage<T>>, SlotAllocationError> {
-		unsafe { Ok(MutDesc::new(self.table.alloc_slot(image)?)) }
+		unsafe {
+			Ok(MutDesc::new(
+				self.table.alloc_slot(image)?,
+				PendingExecution::<P>::completed(),
+			))
+		}
 	}
 
 	pub(crate) fn flush_queue(&self) -> DrainFlushQueue<'_, ImageInterface<P>> {

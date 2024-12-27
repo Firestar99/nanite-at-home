@@ -6,6 +6,7 @@ use crate::descriptor::{
 };
 use rust_gpu_bindless_shaders::descriptor::ImageType;
 use std::error::Error;
+use std::future::Future;
 
 /// Internal interface for bindless API calls, may change at any time!
 pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
@@ -20,6 +21,7 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 		+ Into<BufferAllocationError<Self>>
 		+ Into<ImageAllocationError<Self>>;
 	type BindlessDescriptorSet: 'static + Send + Sync;
+	type PendingExecution: PendingExecution<Self>;
 
 	/// Create an [`Self::Platform`] from the supplied [`Self::PlatformCreateInfo`]. Typically, [`Self::PlatformCreateInfo`] wrap the
 	/// implementation's instance, device and other objects required to be initialized by the end user.
@@ -97,4 +99,9 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 		global_descriptor_set: &Self::BindlessDescriptorSet,
 		samplers: impl DescriptorIndexIterator<'a, SamplerInterface<Self>>,
 	);
+}
+
+pub unsafe trait PendingExecution<P: BindlessPlatform>: Future<Output = ()> + Send + Sync + 'static {
+	/// Creates a completed [`PendingExecution`] execution. Blocking on it will always immediately return.
+	fn completed() -> Self;
 }

@@ -9,8 +9,7 @@ use crate::pipeline::rendering::RenderPassFormat;
 use crate::pipeline::shader::BindlessShader;
 use crate::platform::ash::rendering::AshRenderingContext;
 use crate::platform::ash::{
-	ash_record_and_execute, Ash, AshExecutingContext, AshRecordingContext, AshRecordingError,
-	AshRecordingResourceContext, ShaderAshExt,
+	ash_record_and_execute, Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext, ShaderAshExt,
 };
 use crate::platform::BindlessPipelinePlatform;
 use ash::prelude::VkResult;
@@ -36,7 +35,6 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	type RecordingResourceContext = AshRecordingResourceContext;
 	type RecordingContext<'a> = AshRecordingContext<'a>;
 	type RecordingError = AshRecordingError;
-	type ExecutingContext<R: Send + Sync> = AshExecutingContext<R>;
 
 	unsafe fn create_compute_pipeline<T: BufferStruct>(
 		bindless: &Arc<Bindless<Self>>,
@@ -63,7 +61,7 @@ unsafe impl BindlessPipelinePlatform for Ash {
 	unsafe fn record_and_execute<R: Send + Sync>(
 		bindless: &Arc<Bindless<Self>>,
 		f: impl FnOnce(&mut Recording<'_, Self>) -> Result<R, RecordingError<Self>>,
-	) -> Result<Self::ExecutingContext<R>, RecordingError<Self>> {
+	) -> Result<R, RecordingError<Self>> {
 		ash_record_and_execute(bindless, f)
 	}
 

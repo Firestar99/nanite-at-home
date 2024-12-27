@@ -4,11 +4,10 @@ use crate::platform::BindlessPlatform;
 use rust_gpu_bindless_shaders::descriptor::{DescRef, DescriptorId, MutDescRef};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
 
 pub struct Mut<P: BindlessPlatform> {
 	slot: RcTableSlot,
-	_phantom: PhantomData<P>,
+	last: P::PendingExecution,
 }
 
 impl<P: BindlessPlatform> DescRef for Mut<P> {}
@@ -43,7 +42,7 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq 
 	/// # Safety
 	/// The C generic must match the content that the [`DescRef`] points to.
 	/// Except when Self is [`AnyMutSlot`], then this is always safe.
-	unsafe fn new(slot: RcTableSlot) -> Self;
+	unsafe fn new(slot: RcTableSlot, last: P::PendingExecution) -> Self;
 
 	fn rc_slot(&self) -> &RcTableSlot;
 
@@ -63,11 +62,8 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq 
 
 impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> {
 	#[inline]
-	unsafe fn new(slot: RcTableSlot) -> Self {
-		Desc::new_inner(Mut {
-			slot,
-			_phantom: PhantomData {},
-		})
+	unsafe fn new(slot: RcTableSlot, last: P::PendingExecution) -> Self {
+		Desc::new_inner(Mut { slot, last })
 	}
 
 	#[inline]

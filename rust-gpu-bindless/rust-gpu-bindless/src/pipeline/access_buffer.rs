@@ -8,6 +8,7 @@ use crate::pipeline::recording::HasResourceContext;
 use crate::platform::{BindlessPipelinePlatform, RecordingResourceContext};
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer, TransientDesc};
+use std::future::Future;
 use std::marker::PhantomData;
 
 pub trait MutBufferAccessExt<P: BindlessPipelinePlatform, T: BufferContent + ?Sized>:
@@ -117,18 +118,23 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	pub fn into_desc(self) -> MutDesc<P, MutBuffer<T>> {
 		unsafe {
 			self.inner_slot().access_lock.unlock(A::BUFFER_ACCESS);
-			MutDesc::new(self.slot)
+			MutDesc::new(self.slot, self.resource_context.to_pending_execution())
 		}
 	}
 
 	/// Turns this mutable access to a [`MutBuffer`] into a shared [`RCDesc`]
-	pub fn into_shared(self) -> RCDesc<P, Buffer<T>> {
+	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Buffer<T>>> {
 		unsafe {
 			// cannot fail
 			self.transition_inner(A::BUFFER_ACCESS, BufferAccess::GeneralRead)
 				.unwrap();
-			self.inner_slot().access_lock.unlock_to_shared();
-			RCDesc::new(self.slot)
+			let pending_execution = self.resource_context.to_pending_execution();
+			let slot = self.slot;
+			async move {
+				pending_execution.await;
+				BufferTable::<P>::get_slot(&slot).access_lock.unlock_to_shared();
+				RCDesc::new(slot)
+			}
 		}
 	}
 }
