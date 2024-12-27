@@ -1,6 +1,7 @@
 use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{Desc, DescContent, DescRef, TransientAccess};
 use bytemuck_derive::{Pod, Zeroable};
+use core::fmt::{Debug, Formatter};
 use core::mem;
 use core::ops::Sub;
 use rust_gpu_bindless_macros::BufferStruct;
@@ -33,7 +34,7 @@ const_assert_eq!(ID_TYPE_MASK << ID_TYPE_SHIFT & ID_VERSION_MASK << ID_VERSION_S
 /// The raw unsafe descriptor identifier to locate a resource. Internally it's a bit packed u32 containing the
 /// [`DescriptorType`], [`DescriptorIndex`] and version. All other descriptors use `DescriptorId` internally.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Zeroable, Pod, BufferStruct)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Zeroable, Pod, BufferStruct)]
 pub struct DescriptorId(u32);
 const_assert_eq!(mem::size_of::<DescriptorId>(), 4);
 
@@ -59,6 +60,16 @@ impl DescriptorId {
 
 	pub const fn version(&self) -> DescriptorVersion {
 		DescriptorVersion((self.0 >> ID_VERSION_SHIFT) & ID_VERSION_MASK)
+	}
+}
+
+impl Debug for DescriptorId {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("DescriptorId")
+			.field("type", &self.desc_type())
+			.field("index", &self.index())
+			.field("version", &self.version())
+			.finish()
 	}
 }
 
