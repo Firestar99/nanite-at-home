@@ -6,11 +6,12 @@ use crate::pipeline::access_lock::AccessLock;
 use crate::pipeline::access_type::BufferAccess;
 use crate::platform::ash::{Ash, AshAllocationError, AshBuffer, AshMemoryAllocation};
 use ash::prelude::VkResult;
-use ash::vk::SamplerCreateInfo;
+use ash::vk::{DebugUtilsObjectNameInfoEXT, SamplerCreateInfo};
 use gpu_allocator::vulkan::AllocationCreateDesc;
 use gpu_allocator::MemoryLocation;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::MutBuffer;
+use std::ffi::CString;
 
 impl<'a> SamplerTableAccess<'a, Ash> {
 	pub fn alloc_ash(
@@ -48,6 +49,15 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				.device
 				.create_buffer(&ash_create_info, None)
 				.map_err(AshAllocationError::from)?;
+			if let Some(debug_marker) = self.0.extensions.ext_debug_utils.as_ref() {
+				debug_marker
+					.set_debug_utils_object_name(
+						&DebugUtilsObjectNameInfoEXT::default()
+							.object_handle(buffer)
+							.object_name(&CString::new(name).unwrap()),
+					)
+					.map_err(AshAllocationError::from)?;
+			}
 			let requirements = self.0.device.get_buffer_memory_requirements(buffer);
 			let memory_allocation = self
 				.0

@@ -11,12 +11,12 @@ use crate::platform::ash::{
 };
 use crate::platform::BindlessPlatform;
 use ash::vk::{
-	ComponentMapping, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
-	DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo,
-	DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo, DescriptorSetLayoutCreateFlags,
-	DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageSubresourceRange, ImageTiling,
-	ImageViewCreateInfo, PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties, PipelineCache, PipelineLayout,
-	PipelineLayoutCreateInfo, PushConstantRange, ShaderStageFlags, SharingMode, WriteDescriptorSet,
+	ComponentMapping, DebugUtilsObjectNameInfoEXT, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
+	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
+	DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo,
+	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageSubresourceRange,
+	ImageTiling, ImageViewCreateInfo, PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties, PipelineCache,
+	PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange, ShaderStageFlags, SharingMode, WriteDescriptorSet,
 };
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::AllocationError;
@@ -29,6 +29,7 @@ use rust_gpu_bindless_shaders::descriptor::{
 };
 use static_assertions::assert_impl_all;
 use std::cell::UnsafeCell;
+use std::ffi::CString;
 use std::mem::{size_of, MaybeUninit};
 use std::ops::Deref;
 use std::sync::Weak;
@@ -80,6 +81,7 @@ pub struct AshCreateInfo {
 #[derive(Default)]
 #[non_exhaustive]
 pub struct AshExtensions {
+	pub ext_debug_utils: Option<ash::ext::debug_utils::Device>,
 	pub ext_mesh_shader: Option<ash::ext::mesh_shader::Device>,
 }
 
@@ -461,6 +463,13 @@ unsafe impl BindlessPlatform for Ash {
 				.sharing_mode(SharingMode::EXCLUSIVE),
 			None,
 		)?;
+		if let Some(debug_marker) = self.extensions.ext_debug_utils.as_ref() {
+			debug_marker.set_debug_utils_object_name(
+				&DebugUtilsObjectNameInfoEXT::default()
+					.object_handle(buffer)
+					.object_name(&CString::new(create_info.name).unwrap()),
+			)?;
+		}
 		let requirements = self.device.get_buffer_memory_requirements(buffer);
 		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
 			requirements,
@@ -498,6 +507,13 @@ unsafe impl BindlessPlatform for Ash {
 				.initial_layout(ImageLayout::UNDEFINED),
 			None,
 		)?;
+		if let Some(debug_marker) = self.extensions.ext_debug_utils.as_ref() {
+			debug_marker.set_debug_utils_object_name(
+				&DebugUtilsObjectNameInfoEXT::default()
+					.object_handle(image)
+					.object_name(&CString::new(create_info.name).unwrap()),
+			)?;
+		}
 		let requirements = self.device.get_image_memory_requirements(image);
 		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
 			requirements,
@@ -509,23 +525,29 @@ unsafe impl BindlessPlatform for Ash {
 		self.device
 			.bind_image_memory(image, memory_allocation.memory(), memory_allocation.offset())?;
 		let image_view = if create_info.usage.has_image_view() {
-			Some(
-				self.device.create_image_view(
-					&ImageViewCreateInfo::default()
-						.image(image)
-						.view_type(image_view_type)
-						.format(create_info.format)
-						.components(ComponentMapping::default()) // identity
-						.subresource_range(ImageSubresourceRange {
-							aspect_mask: create_info.format.aspect(),
-							base_mip_level: 0,
-							level_count: create_info.mip_levels,
-							base_array_layer: 0,
-							layer_count: create_info.array_layers,
-						}),
-					None,
-				)?,
-			)
+			let image_view = self.device.create_image_view(
+				&ImageViewCreateInfo::default()
+					.image(image)
+					.view_type(image_view_type)
+					.format(create_info.format)
+					.components(ComponentMapping::default()) // identity
+					.subresource_range(ImageSubresourceRange {
+						aspect_mask: create_info.format.aspect(),
+						base_mip_level: 0,
+						level_count: create_info.mip_levels,
+						base_array_layer: 0,
+						layer_count: create_info.array_layers,
+					}),
+				None,
+			)?;
+			if let Some(debug_marker) = self.extensions.ext_debug_utils.as_ref() {
+				debug_marker.set_debug_utils_object_name(
+					&DebugUtilsObjectNameInfoEXT::default()
+						.object_handle(image_view)
+						.object_name(&CString::new(create_info.name).unwrap()),
+				)?;
+			}
+			Some(image_view)
 		} else {
 			None
 		};
