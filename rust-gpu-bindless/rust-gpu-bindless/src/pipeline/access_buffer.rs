@@ -13,49 +13,32 @@ use std::marker::PhantomData;
 pub trait MutBufferAccessExt<P: BindlessPipelinePlatform, T: BufferContent + ?Sized>:
 	MutDescExt<P, MutBuffer<T>>
 {
-	/// Access this mutable buffer to use it for recording. Panics if an [`AccessError`] occurred.
-	fn access<'a, A: BufferAccessType>(self, cmd: &P::RecordingContext<'a>) -> MutBufferAccess<'a, P, T, A> {
-		self.try_access(cmd).unwrap()
-	}
-
 	/// Access this mutable buffer to use it for recording.
-	fn try_access<'a, A: BufferAccessType>(
+	fn access<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError>;
-
-	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
-	/// uninitialized. Panics if an [`AccessError`] occurred.
-	///
-	/// # Safety
-	/// Must not read uninitialized memory and fully overwrite it within this execution context.
-	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
-		self,
-		cmd: &P::RecordingContext<'a>,
-	) -> MutBufferAccess<'a, P, T, A> {
-		self.try_access_undefined_contents(cmd).unwrap()
-	}
 
 	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
 	/// uninitialized.
 	///
 	/// # Safety
 	/// Must not read uninitialized memory and fully overwrite it within this execution context.
-	unsafe fn try_access_undefined_contents<'a, A: BufferAccessType>(
+	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError>;
 }
 
 impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized> MutBufferAccessExt<P, T> for MutDesc<P, MutBuffer<T>> {
-	fn try_access<'a, A: BufferAccessType>(
+	fn access<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
 		MutBufferAccess::from(self, cmd)
 	}
 
-	unsafe fn try_access_undefined_contents<'a, A: BufferAccessType>(
+	unsafe fn access_undefined_contents<'a, A: BufferAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
@@ -100,14 +83,8 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 		}
 	}
 
-	/// Transition this Buffer from one [`BufferAccessType`] to another and inserts appropriate barriers. Panics if an
-	/// [`AccessError`] occurred.
-	pub fn transition<B: BufferAccessType>(self) -> MutBufferAccess<'a, P, T, B> {
-		self.try_transition::<B>().unwrap()
-	}
-
 	/// Transition this Buffer from one [`BufferAccessType`] to another and inserts appropriate barriers.
-	pub fn try_transition<B: BufferAccessType>(self) -> Result<MutBufferAccess<'a, P, T, B>, AccessError> {
+	pub fn transition<B: BufferAccessType>(self) -> Result<MutBufferAccess<'a, P, T, B>, AccessError> {
 		self.transition_inner(A::BUFFER_ACCESS, B::BUFFER_ACCESS)?;
 		Ok(MutBufferAccess {
 			slot: self.slot,
@@ -159,11 +136,7 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccessType + ShaderReadable>
 	MutBufferAccess<'a, P, T, A>
 {
-	pub fn to_transient(&self) -> TransientDesc<Buffer<T>> {
-		self.try_to_transient().unwrap()
-	}
-
-	pub fn try_to_transient(&self) -> Result<TransientDesc<Buffer<T>>, AccessError> {
+	pub fn to_transient(&self) -> Result<TransientDesc<Buffer<T>>, AccessError> {
 		self.has_required_usage(BindlessBufferUsage::STORAGE_BUFFER)?;
 		// Safety: mutable resource is in a layout that implements ShaderReadable, so it is readable by a shader
 		unsafe {
@@ -178,11 +151,7 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccessType + ShaderReadWriteable>
 	MutBufferAccess<'a, P, T, A>
 {
-	pub fn to_mut_transient(&self) -> TransientDesc<MutBuffer<T>> {
-		self.try_to_mut_transient().unwrap()
-	}
-
-	pub fn try_to_mut_transient(&self) -> Result<TransientDesc<MutBuffer<T>>, AccessError> {
+	pub fn to_mut_transient(&self) -> Result<TransientDesc<MutBuffer<T>>, AccessError> {
 		self.has_required_usage(BindlessBufferUsage::STORAGE_BUFFER)?;
 		// Safety: mutable resource is in a layout that implements ShaderReadWriteable, so it is readable and writeable
 		// by a shader

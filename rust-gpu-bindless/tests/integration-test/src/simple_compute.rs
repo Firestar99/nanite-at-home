@@ -96,7 +96,7 @@ fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 				len,
 			)
 			.unwrap();
-		let out = buffer_out.access::<ShaderReadWrite>(recording_context);
+		let out = buffer_out.access::<ShaderReadWrite>(recording_context)?;
 
 		// Enqueueing some dispatch takes in a user-supplied param struct that may contain any number of buffer
 		// accesses. This method will internally "remove" the lifetime of the param struct, as the lifetime of the
@@ -109,12 +109,12 @@ fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 				a,
 				b,
 				indirection,
-				out: out.to_mut_transient(),
+				out: out.to_mut_transient()?,
 			},
 		)?;
 
 		// you can return arbitrary data here, that can only be accessed once the execution has finished
-		Ok(out.transition::<HostAccess>().into_desc())
+		Ok(out.transition::<HostAccess>()?.into_desc())
 
 		// returning makes us loose the reference on recording_context, so no accessors can leak beyond here
 	})?;

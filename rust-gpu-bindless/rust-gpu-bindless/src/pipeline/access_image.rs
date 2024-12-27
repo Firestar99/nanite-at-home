@@ -12,49 +12,32 @@ use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage, Transien
 use std::marker::PhantomData;
 
 pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescExt<P, MutImage<T>> {
-	/// Access this mutable image to use it for recording. Panics if an [`AccessError`] occurred.
-	fn access<'a, A: ImageAccessType>(self, cmd: &P::RecordingContext<'a>) -> MutImageAccess<'a, P, T, A> {
-		self.try_access(cmd).unwrap()
-	}
-
 	/// Access this mutable image to use it for recording.
-	fn try_access<'a, A: ImageAccessType>(
+	fn access<'a, A: ImageAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError>;
-
-	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
-	/// uninitialized. Panics if an [`AccessError`] occurred.
-	///
-	/// # Safety
-	/// Must not read uninitialized memory and fully overwrite it within this execution context.
-	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
-		self,
-		cmd: &P::RecordingContext<'a>,
-	) -> MutImageAccess<'a, P, T, A> {
-		self.try_access_undefined_contents(cmd).unwrap()
-	}
 
 	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
 	/// uninitialized.
 	///
 	/// # Safety
 	/// Must not read uninitialized memory and fully overwrite it within this execution context.
-	unsafe fn try_access_undefined_contents<'a, A: ImageAccessType>(
+	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError>;
 }
 
 impl<P: BindlessPipelinePlatform, T: ImageType> MutImageAccessExt<P, T> for MutDesc<P, MutImage<T>> {
-	fn try_access<'a, A: ImageAccessType>(
+	fn access<'a, A: ImageAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError> {
 		MutImageAccess::from(self, cmd)
 	}
 
-	unsafe fn try_access_undefined_contents<'a, A: ImageAccessType>(
+	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
 		self,
 		cmd: &P::RecordingContext<'a>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError> {
@@ -100,12 +83,7 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 	}
 
 	/// Transition this Image from one [`ImageAccessType`] to another and inserts appropriate barriers.
-	pub fn transition<B: ImageAccessType>(self) -> MutImageAccess<'a, P, T, B> {
-		self.try_transition::<B>().unwrap()
-	}
-
-	/// Transition this Image from one [`ImageAccessType`] to another and inserts appropriate barriers.
-	pub fn try_transition<B: ImageAccessType>(self) -> Result<MutImageAccess<'a, P, T, B>, AccessError> {
+	pub fn transition<B: ImageAccessType>(self) -> Result<MutImageAccess<'a, P, T, B>, AccessError> {
 		self.transition_inner(A::IMAGE_ACCESS, B::IMAGE_ACCESS)?;
 		Ok(MutImageAccess {
 			slot: self.slot,
@@ -153,11 +131,7 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 
 // TODO soundness: general layout may create Mut and ReadOnly Desc of a single Image. Aliasing them is UB in vulkan.
 impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType + ShaderReadable> MutImageAccess<'a, P, T, A> {
-	pub fn to_transient_storage(&self) -> TransientDesc<Image<T>> {
-		self.try_to_transient_storage().unwrap()
-	}
-
-	pub fn try_to_transient_storage(&self) -> Result<TransientDesc<Image<T>>, AccessError> {
+	pub fn to_transient_storage(&self) -> Result<TransientDesc<Image<T>>, AccessError> {
 		self.has_required_usage(BindlessImageUsage::STORAGE)?;
 		// Safety: mutable resource is in a layout that implements ShaderReadable, so it is readable by a shader
 		unsafe {
@@ -170,11 +144,7 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType + ShaderR
 }
 
 impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType + ShaderSampleable> MutImageAccess<'a, P, T, A> {
-	pub fn to_transient_sampled(&self) -> TransientDesc<Image<T>> {
-		self.try_to_transient_sampled().unwrap()
-	}
-
-	pub fn try_to_transient_sampled(&self) -> Result<TransientDesc<Image<T>>, AccessError> {
+	pub fn to_transient_sampled(&self) -> Result<TransientDesc<Image<T>>, AccessError> {
 		self.has_required_usage(BindlessImageUsage::SAMPLED)?;
 		// Safety: mutable resource is in a layout that implements ShaderReadable, so it is readable by a shader
 		unsafe {

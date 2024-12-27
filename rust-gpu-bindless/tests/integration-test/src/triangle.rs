@@ -108,8 +108,8 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 
 	let rt_download = bindless
 		.execute(|cmd| {
-			let mut rt_download = rt_download.access::<TransferWrite>(cmd);
-			let mut image = rt_image.access::<ColorAttachment>(cmd);
+			let mut rt_download = rt_download.access::<TransferWrite>(cmd)?;
+			let mut image = rt_image.access::<ColorAttachment>(cmd)?;
 			cmd.begin_rendering(
 				render_pass_format,
 				&[RenderingAttachment {
@@ -136,10 +136,10 @@ fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> an
 				},
 			)?;
 
-			let mut image = image.transition::<TransferRead>();
+			let mut image = image.transition::<TransferRead>()?;
 			unsafe { cmd.copy_image_to_buffer(&mut image, &mut rt_download)? };
 
-			Ok(rt_download.transition::<HostAccess>().into_desc())
+			Ok(rt_download.transition::<HostAccess>()?.into_desc())
 		})?
 		.block_on();
 
