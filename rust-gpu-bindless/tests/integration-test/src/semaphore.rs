@@ -9,11 +9,10 @@ use rust_gpu_bindless::descriptor::{
 };
 use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
 use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderRead, ShaderReadWrite};
-use rust_gpu_bindless::pipeline::recording::HasResourceContext;
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless::platform::{BindlessPipelinePlatform, RecordingResourceContext};
+use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use std::sync::Arc;
 
 #[test]
@@ -69,7 +68,7 @@ async fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>
 		Ok(second.into_desc())
 	})?;
 
-	let (third, pending) = bindless.execute(|cmd| unsafe {
+	let third = bindless.execute(|cmd| unsafe {
 		// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
 		let second = second.access::<ShaderRead>(cmd)?;
 		let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
@@ -84,15 +83,11 @@ async fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>
 				len: len as u32,
 			},
 		)?;
-
-		let pending = cmd.resource_context().to_pending_execution();
-
-		Ok((third.transition::<HostAccess>()?.into_desc(), pending))
+		Ok(third.transition::<HostAccess>()?.into_desc())
 	})?;
 
 	// 5. downloads the data from `third` and verifies that it hasn't corrupted
-	pending.await;
-	let result = third.mapped()?.read_iter().collect::<Vec<_>>();
+	let result = third.mapped().await?.read_iter().collect::<Vec<_>>();
 	assert_relative_eq!(&*result, &*value, epsilon = 0.01);
 	Ok(())
 }

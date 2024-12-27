@@ -356,8 +356,15 @@ impl AshPendingExecution {
 
 unsafe impl PendingExecution<Ash> for AshPendingExecution {
 	#[inline]
-	fn completed() -> Self {
+	fn new_completed() -> Self {
 		Self { execution: None }
+	}
+
+	fn completed(&self) -> bool {
+		match self.upgrade_ash_resource() {
+			None => true,
+			Some(e) => e.completed(),
+		}
 	}
 }
 

@@ -16,6 +16,7 @@ use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
+use std::future::Future;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ops::Deref;
@@ -224,7 +225,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		unsafe {
 			Ok(MutDesc::new(
 				self.table.alloc_slot(buffer)?,
-				PendingExecution::<P>::completed(),
+				PendingExecution::<P>::new_completed(),
 			))
 		}
 	}
@@ -288,7 +289,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 		data: T,
 	) -> Result<MutDesc<P, MutBuffer<T>>, BufferAllocationError<P>> {
 		let buffer = self.alloc_sized(create_info)?;
-		buffer.mapped().unwrap().write_data(data);
+		buffer.mapped_immediate().unwrap().write_data(data);
 		Ok(buffer)
 	}
 
@@ -311,7 +312,7 @@ impl<'a, P: BindlessPlatform> BufferTableAccess<'a, P> {
 	{
 		let iter = iter.into_iter();
 		let buffer = self.alloc_slice(create_info, iter.len())?;
-		buffer.mapped().unwrap().overwrite_from_iter_exact(iter);
+		buffer.mapped_immediate().unwrap().overwrite_from_iter_exact(iter);
 		Ok(buffer)
 	}
 
@@ -346,11 +347,22 @@ impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for MutDesc<P, Bu
 
 pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
 	/// Map and access the buffer's contents on the host
-	fn mapped(&self) -> Result<MappedBuffer<P, T>, MapError>;
+	fn mapped(&self) -> impl Future<Output = Result<MappedBuffer<P, T>, MapError>>;
+
+	/// Map and access the buffer's contents on the host
+	fn mapped_immediate(&self) -> Result<MappedBuffer<P, T>, MapError>;
 }
 
 impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for MutDesc<P, MutBuffer<T>> {
-	fn mapped(&self) -> Result<MappedBuffer<P, T>, MapError> {
+	async fn mapped(&self) -> Result<MappedBuffer<P, T>, MapError> {
+		self.pending_execution().clone().await;
+		self.mapped_immediate()
+	}
+
+	fn mapped_immediate(&self) -> Result<MappedBuffer<P, T>, MapError> {
+		if !self.pending_execution().completed() {
+			return Err(MapError::PendingExecution);
+		}
 		let slot = self.inner_slot();
 		if !slot.usage.is_mappable() {
 			return Err(MapError::MissingBufferUsage);
@@ -371,6 +383,8 @@ impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for 
 
 #[derive(Debug, Error)]
 pub enum MapError {
+	#[error("An execution is pending on the buffer that has not yet finished")]
+	PendingExecution,
 	#[error("Buffer is not mappable, BufferUsage is missing `MAP_WRITE` or `MAP_READ` flags")]
 	MissingBufferUsage,
 	#[error("Buffer must be in BufferAccess::HostAccess or General, but is in {0:?} access")]

@@ -107,5 +107,9 @@ pub unsafe trait PendingExecution<P: BindlessPlatform>:
 	Future<Output = ()> + Clone + Send + Sync + 'static
 {
 	/// Creates a completed [`PendingExecution`] execution. Blocking on it will always immediately return.
-	fn completed() -> Self;
+	fn new_completed() -> Self;
+
+	/// Check if self has completed. If true is returned just once, it must keep returning true. May switch to returning
+	/// true at any point, a returned false should be considered out of date immediately.
+	fn completed(&self) -> bool;
 }

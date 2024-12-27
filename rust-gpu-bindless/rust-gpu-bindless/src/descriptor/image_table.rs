@@ -213,7 +213,7 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 		unsafe {
 			Ok(MutDesc::new(
 				self.table.alloc_slot(image)?,
-				PendingExecution::<P>::completed(),
+				PendingExecution::<P>::new_completed(),
 			))
 		}
 	}
