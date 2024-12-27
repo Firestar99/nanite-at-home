@@ -1,4 +1,4 @@
-use crate::descriptor::Bindless;
+use crate::descriptor::{Bindless, BindlessFrame};
 use crate::platform::ash::Ash;
 use crate::platform::ExecutingContext;
 use ash::vk::{
@@ -7,10 +7,9 @@ use ash::vk::{
 };
 use ash::Device;
 use crossbeam_queue::SegQueue;
-use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Weak};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct AshExecutionResource {
 	pub command_pool: ash::vk::CommandPool,
 	pub semaphore: ash::vk::Semaphore,
@@ -38,21 +37,17 @@ impl AshExecutionResource {
 						None,
 					)
 					.unwrap(),
-				timeline_value,
+				timeline_value: timeline_value + 1,
 			}
 		}
 	}
 
-	pub fn increment_timeline_value(&mut self) -> u64 {
-		self.timeline_value += 1;
-		self.timeline_value
-	}
-
-	pub fn reset(&self, device: &Device) {
+	pub fn reset(&mut self, device: &Device) {
 		unsafe {
 			device
 				.reset_command_pool(self.command_pool, CommandPoolResetFlags::RELEASE_RESOURCES)
 				.unwrap();
+			self.timeline_value += 1;
 		}
 	}
 
@@ -64,33 +59,39 @@ impl AshExecutionResource {
 	}
 }
 
-pub struct AshPooledExecutionResource {
-	pub bindless: Arc<Bindless<Ash>>,
-	pub inner: AshExecutionResource,
+pub struct AshExecution {
+	frame: Arc<BindlessFrame<Ash>>,
+	resource: AshExecutionResource,
 }
 
-impl Deref for AshPooledExecutionResource {
-	type Target = AshExecutionResource;
+impl AshExecution {
+	#[inline]
+	pub fn frame(&self) -> &Arc<BindlessFrame<Ash>> {
+		&self.frame
+	}
 
-	fn deref(&self) -> &Self::Target {
-		&self.inner
+	#[inline]
+	pub fn bindless(&self) -> &Arc<Bindless<Ash>> {
+		&self.frame.bindless
+	}
+
+	#[inline]
+	pub fn resource(&self) -> &AshExecutionResource {
+		&self.resource
 	}
 }
 
-impl DerefMut for AshPooledExecutionResource {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.inner
-	}
-}
-
-impl Drop for AshPooledExecutionResource {
+impl Drop for AshExecution {
 	fn drop(&mut self) {
-		self.bindless.execution_manager.push(&self.bindless, self.inner)
+		self.frame
+			.bindless
+			.execution_manager
+			.push(&self.frame.bindless, self.resource.clone())
 	}
 }
 
 pub struct AshExecutionManager {
-	pub bindless: Weak<Bindless<Ash>>,
+	bindless: Weak<Bindless<Ash>>,
 	free_pool: SegQueue<AshExecutionResource>,
 }
 
@@ -102,16 +103,22 @@ impl AshExecutionManager {
 		}
 	}
 
-	pub fn pop(&self) -> AshPooledExecutionResource {
-		let bindless = self.bindless.upgrade().expect("bindless was freed");
-		let reuse = self.free_pool.pop();
-		AshPooledExecutionResource {
-			inner: reuse.unwrap_or_else(|| AshExecutionResource::new(&bindless.device)),
-			bindless,
-		}
+	pub fn bindless(&self) -> Arc<Bindless<Ash>> {
+		self.bindless.upgrade().expect("bindless was freed")
 	}
 
-	fn push(&self, bindless: &Arc<Bindless<Ash>>, resource: AshExecutionResource) {
+	pub fn pop(&self) -> Arc<AshExecution> {
+		let bindless = self.bindless();
+		Arc::new(AshExecution {
+			resource: self
+				.free_pool
+				.pop()
+				.unwrap_or_else(|| AshExecutionResource::new(&bindless.device)),
+			frame: bindless.frame(),
+		})
+	}
+
+	fn push(&self, bindless: &Arc<Bindless<Ash>>, mut resource: AshExecutionResource) {
 		resource.reset(&bindless.device);
 		self.free_pool.push(resource);
 	}
@@ -126,32 +133,29 @@ impl AshExecutionManager {
 }
 
 pub struct AshExecutingContext<R> {
-	resource: AshPooledExecutionResource,
+	execution: Arc<AshExecution>,
 	r: R,
 }
 
 impl<R> AshExecutingContext<R> {
-	pub unsafe fn new(resource: AshPooledExecutionResource, r: R) -> Self {
-		Self { resource, r }
+	pub unsafe fn new(execution: Arc<AshExecution>, r: R) -> Self {
+		Self { execution, r }
 	}
-}
 
-impl<R> Deref for AshExecutingContext<R> {
-	type Target = AshPooledExecutionResource;
-	fn deref(&self) -> &Self::Target {
-		&self.resource
+	pub unsafe fn ash_resource(&self) -> &Arc<AshExecution> {
+		&self.execution
 	}
 }
 
 unsafe impl<R: Send + Sync> ExecutingContext<Ash, R> for AshExecutingContext<R> {
 	fn block_on(self) -> R {
 		unsafe {
-			let device = &self.resource.bindless.device;
+			let device = &self.execution.frame.bindless.device;
 			device
 				.wait_semaphores(
 					&SemaphoreWaitInfo::default()
-						.semaphores(&[self.semaphore])
-						.values(&[self.timeline_value]),
+						.semaphores(&[self.execution.resource.semaphore])
+						.values(&[self.execution.resource.timeline_value]),
 					!0,
 				)
 				.unwrap();

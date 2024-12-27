@@ -1,4 +1,4 @@
-use crate::descriptor::{Bindless, BindlessBufferUsage, BindlessImageUsage};
+use crate::descriptor::{Bindless, BindlessBufferUsage, BindlessFrame, BindlessImageUsage};
 use crate::pipeline::access_buffer::MutBufferAccess;
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
@@ -8,6 +8,7 @@ use crate::pipeline::access_type::{
 use crate::pipeline::compute_pipeline::BindlessComputePipeline;
 use crate::pipeline::mut_or_shared::{MutOrSharedBuffer, MutOrSharedImage};
 use crate::pipeline::rendering::RenderingError;
+use crate::platform::ash::Ash;
 use crate::platform::{BindlessPipelinePlatform, RecordingContext};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
@@ -40,12 +41,29 @@ impl<'a, P: BindlessPipelinePlatform> Deref for Recording<'a, P> {
 }
 
 pub unsafe trait HasResourceContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> + Sized {
-	unsafe fn resource_context(&self) -> &'a P::RecordingResourceContext;
+	/// Gets the [`BindlessFrame`] of this execution
+	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>>;
+
+	/// Gets the [`Bindless`] of this execution
+	fn bindless(&self) -> &Bindless<Ash>;
+
+	fn resource_context(&self) -> &'a P::RecordingResourceContext;
 }
 
 unsafe impl<'a, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Recording<'a, P> {
-	unsafe fn resource_context(&self) -> &'a P::RecordingResourceContext {
-		unsafe { self.platform.resource_context() }
+	#[inline]
+	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
+		self.platform.bindless_frame()
+	}
+
+	#[inline]
+	fn bindless(&self) -> &Bindless<Ash> {
+		self.platform.bindless()
+	}
+
+	#[inline]
+	fn resource_context(&self) -> &'a P::RecordingResourceContext {
+		self.platform.resource_context()
 	}
 }
 

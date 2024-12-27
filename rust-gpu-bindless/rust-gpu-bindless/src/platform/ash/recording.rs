@@ -14,7 +14,7 @@ use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::platform::ash::ash_ext::DeviceExt;
 use crate::platform::ash::image_format::FormatExt;
-use crate::platform::ash::{Ash, AshExecutingContext, AshPooledExecutionResource};
+use crate::platform::ash::{Ash, AshExecutingContext, AshExecution};
 use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use ash::vk::{
 	BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
@@ -28,32 +28,8 @@ use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, Tra
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
-
-pub struct AshRecordingContext<'a> {
-	frame: Arc<BindlessFrame<Ash>>,
-	resource_context: &'a AshRecordingResourceContext,
-	execution: AshPooledExecutionResource,
-	// mut state
-	pub(super) cmd: CommandBuffer,
-	compute_bind_descriptors: bool,
-}
-
-impl<'a> Deref for AshRecordingContext<'a> {
-	type Target = AshPooledExecutionResource;
-
-	fn deref(&self) -> &Self::Target {
-		&self.execution
-	}
-}
-
-impl<'a> DerefMut for AshRecordingContext<'a> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.execution
-	}
-}
 
 #[derive(Debug, Default)]
 pub struct AshRecordingResourceContext {
@@ -144,26 +120,33 @@ pub unsafe fn ash_record_and_execute<R>(
 	f: impl FnOnce(&mut Recording<'_, Ash>) -> Result<R, RecordingError<Ash>>,
 ) -> Result<AshExecutingContext<R>, RecordingError<Ash>> {
 	let resource = AshRecordingResourceContext::default();
-	let mut recording = Recording::new(AshRecordingContext::new(
-		bindless.frame(),
-		bindless.execution_manager.pop(),
-		&resource,
-	)?);
+	let mut recording = Recording::new(AshRecordingContext::new(bindless.execution_manager.pop(), &resource)?);
 	let r = f(&mut recording)?;
 	Ok(AshExecutingContext::new(recording.into_inner().ash_end_submit(), r))
 }
 
+pub struct AshRecordingContext<'a> {
+	/// The same bindless as `self.execution.frame.bindless` but with only 1 instead of 3 indirections.
+	/// Also less typing.
+	pub(super) bindless: Arc<Bindless<Ash>>,
+	pub(super) resource_context: &'a AshRecordingResourceContext,
+	pub(super) execution: Arc<AshExecution>,
+	// mut state
+	pub(super) cmd: CommandBuffer,
+	compute_bind_descriptors: bool,
+}
+
 impl<'a> AshRecordingContext<'a> {
 	pub fn new(
-		frame: Arc<BindlessFrame<Ash>>,
-		exec_resource: AshPooledExecutionResource,
-		resource_cxt: &'a AshRecordingResourceContext,
+		execution: Arc<AshExecution>,
+		resource_context: &'a AshRecordingResourceContext,
 	) -> Result<Self, AshRecordingError> {
 		unsafe {
-			let device = &exec_resource.bindless.device;
+			let bindless = execution.bindless().clone();
+			let device = &bindless.device;
 			let cmd = device.allocate_command_buffer(
 				&CommandBufferAllocateInfo::default()
-					.command_pool(exec_resource.command_pool)
+					.command_pool(execution.resource().command_pool)
 					.level(CommandBufferLevel::PRIMARY)
 					.command_buffer_count(1),
 			)?;
@@ -172,13 +155,26 @@ impl<'a> AshRecordingContext<'a> {
 				&CommandBufferBeginInfo::default().flags(CommandBufferUsageFlags::ONE_TIME_SUBMIT),
 			)?;
 			Ok(Self {
-				frame,
-				resource_context: resource_cxt,
-				execution: exec_resource,
+				bindless,
+				resource_context,
+				execution,
 				cmd,
 				compute_bind_descriptors: true,
 			})
 		}
+	}
+
+	/// Gets the command buffer to allow inserting custom ash commands directly.
+	///
+	/// # Safety
+	/// Use [`Self::ash_flush`] and [`Self::ash_invalidate`] appropriately
+	pub unsafe fn ash_command_buffer(&self) -> CommandBuffer {
+		self.cmd
+	}
+
+	/// Gets the [`AshExecution`] of this execution
+	pub fn ash_execution(&self) -> &Arc<AshExecution> {
+		&self.execution
 	}
 
 	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any action
@@ -222,23 +218,10 @@ impl<'a> AshRecordingContext<'a> {
 		self.compute_bind_descriptors = true;
 	}
 
-	/// Gets the command buffer to allow inserting custom ash commands directly.
-	///
-	/// # Safety
-	/// Use [`Self::ash_flush`] and [`Self::ash_invalidate`] appropriately
-	pub unsafe fn ash_get_command_buffer(&self) -> CommandBuffer {
-		self.cmd
-	}
-
-	/// Gets the [`BindlessFrame`] which implements [`TransientAccess`] and this allows creating `TransientDesc`'s
-	pub fn ash_get_bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
-		&self.frame
-	}
-
 	pub unsafe fn ash_bind_compute<T: BufferStruct>(&mut self, pipeline: &BindlessComputePipeline<Ash, T>, param: T) {
 		unsafe {
 			self.ash_flush();
-			let device = &self.execution.bindless.platform.device;
+			let device = &self.bindless.platform.device;
 			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::COMPUTE, pipeline.inner().0.pipeline);
 			if self.compute_bind_descriptors {
 				self.compute_bind_descriptors = false;
@@ -283,20 +266,21 @@ impl<'a> AshRecordingContext<'a> {
 		}
 	}
 
-	pub unsafe fn ash_end_submit(mut self) -> AshPooledExecutionResource {
+	pub unsafe fn ash_end_submit(self) -> Arc<AshExecution> {
 		unsafe {
-			let device = &self.execution.bindless.platform.device;
+			let device = &self.bindless.platform.device;
 			device.end_command_buffer(self.cmd).unwrap();
 			self.bindless.flush();
+			let execution_resource = self.execution.resource();
 			device
 				.queue_submit(
 					self.bindless.queue,
 					&[SubmitInfo::default()
 						.command_buffers(&[self.cmd])
-						.signal_semaphores(&[self.execution.semaphore])
+						.signal_semaphores(&[execution_resource.semaphore])
 						.push_next(
 							&mut TimelineSemaphoreSubmitInfo::default()
-								.signal_semaphore_values(&[self.execution.inner.increment_timeline_value()]),
+								.signal_semaphore_values(&[execution_resource.timeline_value]),
 						)],
 					Fence::null(),
 				)
@@ -309,7 +293,18 @@ impl<'a> AshRecordingContext<'a> {
 unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
 unsafe impl<'a> HasResourceContext<'a, Ash> for AshRecordingContext<'a> {
-	unsafe fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
+	#[inline]
+	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
+		self.execution.frame()
+	}
+
+	#[inline]
+	fn bindless(&self) -> &Bindless<Ash> {
+		&self.bindless
+	}
+
+	#[inline]
+	fn resource_context(&self) -> &'a <Ash as BindlessPipelinePlatform>::RecordingResourceContext {
 		self.resource_context
 	}
 }
