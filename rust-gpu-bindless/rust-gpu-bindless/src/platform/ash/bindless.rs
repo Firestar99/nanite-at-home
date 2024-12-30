@@ -32,7 +32,7 @@ use rust_gpu_bindless_shaders::descriptor::{
 use static_assertions::assert_impl_all;
 use std::cell::UnsafeCell;
 use std::ffi::CString;
-use std::mem::{size_of, MaybeUninit};
+use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use thiserror::Error;
@@ -114,31 +114,33 @@ impl Drop for AshCreateInfo {
 /// UnsafeCell: Required to gain mutable access where it is safe to do so, see safety of interface methods.
 /// MaybeUninit: The Allocation is effectively always initialized, it only becomes uninit after taking it during drop.
 #[derive(Debug)]
-pub struct AshMemoryAllocation(UnsafeCell<MaybeUninit<Allocation>>);
+pub struct AshMemoryAllocation(UnsafeCell<Option<Allocation>>);
 
 impl AshMemoryAllocation {
-	/// Create a AshMemoryAllocation from a gpu-allocator Allocation
+	/// Create a `AshMemoryAllocation` from a gpu-allocator Allocation
 	///
 	/// # Safety
 	/// You must [`Self::take`] the Allocation and deallocate manually before dropping self
 	pub unsafe fn new(allocation: Allocation) -> Self {
-		Self(UnsafeCell::new(MaybeUninit::new(allocation)))
+		Self(UnsafeCell::new(Some(allocation)))
 	}
 
-	/// Get exclusive mutable access to the Allocation
+	/// Create a `AshMemoryAllocation` without a backing allocation
+	pub fn none() -> Self {
+		Self(UnsafeCell::new(None))
+	}
+
+	/// Get exclusive mutable access to the `AshMemoryAllocation`
 	///
 	/// # Safety
 	/// You must ensure you have exclusive mutable access to the Allocation
 	pub unsafe fn get_mut(&self) -> &mut Allocation {
-		unsafe { (&mut *self.0.get()).assume_init_mut() }
+		unsafe { (&mut *self.0.get()).as_mut().unwrap() }
 	}
 
-	/// Take the allocation
-	///
-	/// # Safety
-	/// Once the allocation was taken, you must only drop self, any other action is unsafe
-	pub unsafe fn take(&self) -> Allocation {
-		unsafe { (&mut *self.0.get()).assume_init_read() }
+	/// Take the `AshMemoryAllocation`
+	pub fn take(&self) -> Option<Allocation> {
+		unsafe { (&mut *self.0.get()).take() }
 	}
 }
 
@@ -581,8 +583,9 @@ unsafe impl BindlessPlatform for Ash {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
-			let allocation = buffer.allocation.take();
-			allocator.free(allocation).unwrap();
+			if let Some(allocation) = buffer.allocation.take() {
+				allocator.free(allocation).unwrap();
+			}
 			self.device.destroy_buffer(buffer.buffer, None);
 		}
 	}
@@ -597,8 +600,9 @@ unsafe impl BindlessPlatform for Ash {
 			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
 			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
 			// it ourselves.
-			let allocation = image.allocation.take();
-			allocator.free(allocation).unwrap();
+			if let Some(allocation) = image.allocation.take() {
+				allocator.free(allocation).unwrap();
+			}
 			if let Some(imageview) = image.image_view {
 				self.device.destroy_image_view(imageview, None);
 			}
