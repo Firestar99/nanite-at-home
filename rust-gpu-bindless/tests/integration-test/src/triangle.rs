@@ -115,9 +115,8 @@ async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 			render_pass_format,
 			&[RenderingAttachment {
 				image: &mut image,
-				load_op: LoadOp::Clear,
+				load_op: LoadOp::Clear(ClearValue::ColorF(B.color().to_array())),
 				store_op: StoreOp::Store,
-				clear_value: ClearValue::ColorF(B.color().to_array()),
 			}],
 			None,
 			|rp| {

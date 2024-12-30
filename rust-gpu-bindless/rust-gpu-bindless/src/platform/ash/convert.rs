@@ -190,8 +190,15 @@ impl LoadOp {
 	pub fn to_ash(&self) -> AttachmentLoadOp {
 		match self {
 			LoadOp::Load => AttachmentLoadOp::LOAD,
-			LoadOp::Clear => AttachmentLoadOp::CLEAR,
+			LoadOp::Clear(_) => AttachmentLoadOp::CLEAR,
 			LoadOp::DontCare => AttachmentLoadOp::DONT_CARE,
+		}
+	}
+
+	pub fn to_ash_clear_color(&self) -> ash::vk::ClearValue {
+		match self {
+			LoadOp::Clear(c) => c.to_ash(),
+			LoadOp::Load | LoadOp::DontCare => ash::vk::ClearValue::default(),
 		}
 	}
 }
@@ -228,7 +235,7 @@ impl<'a, 'b, A: ImageAccessType> RenderingAttachment<'a, 'b, Ash, A> {
 			.image_layout(layout)
 			.load_op(self.load_op.to_ash())
 			.store_op(self.store_op.to_ash())
-			.clear_value(self.clear_value.to_ash())
+			.clear_value(self.load_op.to_ash_clear_color())
 	}
 }
 

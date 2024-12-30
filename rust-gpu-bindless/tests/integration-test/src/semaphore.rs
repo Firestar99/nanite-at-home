@@ -52,7 +52,7 @@ async fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>
 	let compute = bindless.create_compute_pipeline(crate::shader::buffer_barriers::compute_copy::new())?;
 	let second = bindless.execute(|cmd| unsafe {
 		let first = first.access::<ShaderRead>(cmd)?;
-		let second = second.access_undefined_contents::<ShaderReadWrite>(cmd)?;
+		let second = second.access_as_undefined::<ShaderReadWrite>(cmd)?;
 
 		// 2. does a dispatch to copy from `first` to `second`
 		cmd.dispatch(
@@ -71,7 +71,7 @@ async fn test_semaphore<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>
 	let third = bindless.execute(|cmd| unsafe {
 		// 3. adds some barriers to ensure the data just written in `second` is visible in the next operation
 		let second = second.access::<ShaderRead>(cmd)?;
-		let third = third.access_undefined_contents::<ShaderReadWrite>(cmd)?;
+		let third = third.access_as_undefined::<ShaderReadWrite>(cmd)?;
 
 		// 4. another dispatch to copy from `second` to `third`
 		cmd.dispatch(

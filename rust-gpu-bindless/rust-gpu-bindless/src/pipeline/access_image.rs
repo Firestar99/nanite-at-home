@@ -17,12 +17,9 @@ pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescE
 	fn access<'a, A: ImageAccessType>(self, cmd: &Recording<'a, P>)
 		-> Result<MutImageAccess<'a, P, T, A>, AccessError>;
 
-	/// Access this mutable buffer to use it for recording. Discards the contents of this buffer and as if it were
+	/// Access this mutable image to use it for recording. Discards the contents of this buffer and acts as if it were
 	/// uninitialized.
-	///
-	/// # Safety
-	/// Must not read uninitialized memory and fully overwrite it within this execution context.
-	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
+	fn access_dont_care<'a, A: ImageAccessType>(
 		self,
 		cmd: &Recording<'a, P>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError>;
@@ -36,11 +33,11 @@ impl<P: BindlessPipelinePlatform, T: ImageType> MutImageAccessExt<P, T> for MutD
 		MutImageAccess::from(self, cmd)
 	}
 
-	unsafe fn access_undefined_contents<'a, A: ImageAccessType>(
+	fn access_dont_care<'a, A: ImageAccessType>(
 		self,
 		cmd: &Recording<'a, P>,
 	) -> Result<MutImageAccess<'a, P, T, A>, AccessError> {
-		MutImageAccess::from_undefined_contents(self, cmd)
+		MutImageAccess::from_dont_care(self, cmd)
 	}
 }
 
@@ -52,7 +49,7 @@ pub struct MutImageAccess<'a, P: BindlessPipelinePlatform, T: ImageType, A: Imag
 }
 
 impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImageAccess<'a, P, T, A> {
-	pub fn from_undefined_contents(desc: MutDesc<P, MutImage<T>>, cmd: &Recording<'a, P>) -> Result<Self, AccessError> {
+	pub fn from_dont_care(desc: MutDesc<P, MutImage<T>>, cmd: &Recording<'a, P>) -> Result<Self, AccessError> {
 		Self::from_inner(desc, cmd, |_| ImageAccess::Undefined)
 	}
 

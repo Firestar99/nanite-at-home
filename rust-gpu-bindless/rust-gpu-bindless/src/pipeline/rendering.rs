@@ -42,14 +42,14 @@ impl RenderPassFormat {
 	}
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub enum LoadOp {
 	Load,
-	Clear,
+	Clear(ClearValue),
 	DontCare,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub enum StoreOp {
 	Store,
 	DontCare,
@@ -67,7 +67,6 @@ pub struct RenderingAttachment<'a, 'b, P: BindlessPipelinePlatform, A: ImageAcce
 	pub image: &'b mut MutImageAccess<'a, P, Image2d, A>,
 	pub load_op: LoadOp,
 	pub store_op: StoreOp,
-	pub clear_value: ClearValue,
 }
 
 pub struct Rendering<'a: 'b, 'b, P: BindlessPipelinePlatform> {
