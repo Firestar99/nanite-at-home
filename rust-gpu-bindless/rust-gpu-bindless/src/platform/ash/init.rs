@@ -227,7 +227,7 @@ pub fn ash_init_single_graphics_queue(
 			physical_device,
 			device,
 			queue_family_index,
-			queue,
+			queue: Mutex::new(queue),
 			memory_allocator: Some(Mutex::new(memory_allocator)),
 			shader_stages: create_info.shader_stages,
 			cache: Some(cache),

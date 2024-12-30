@@ -184,21 +184,26 @@ pub unsafe fn ash_submit(
 		.collect::<SmallVec<[_; 4]>>();
 
 	bindless.flush();
-	let execution_resource = resource_context.execution.resource();
-	device.queue_submit(
-		bindless.queue,
-		&[SubmitInfo::default()
-			.command_buffers(&[cmd])
-			.wait_semaphores(&wait_semaphores)
-			.wait_dst_stage_mask(&wait_dst_stage_mask)
-			.signal_semaphores(&[execution_resource.semaphore])
-			.push_next(
-				&mut TimelineSemaphoreSubmitInfo::default()
-					.wait_semaphore_values(&wait_values)
-					.signal_semaphore_values(&[execution_resource.timeline_value]),
-			)],
-		Fence::null(),
-	)?;
+
+	{
+		let execution_resource = resource_context.execution.resource();
+		let queue = bindless.queue.lock();
+		device.queue_submit(
+			*queue,
+			&[SubmitInfo::default()
+				.command_buffers(&[cmd])
+				.wait_semaphores(&wait_semaphores)
+				.wait_dst_stage_mask(&wait_dst_stage_mask)
+				.signal_semaphores(&[execution_resource.semaphore])
+				.push_next(
+					&mut TimelineSemaphoreSubmitInfo::default()
+						.wait_semaphore_values(&wait_values)
+						.signal_semaphore_values(&[execution_resource.timeline_value]),
+				)],
+			Fence::null(),
+		)?;
+	}
+
 	bindless
 		.execution_manager
 		.submit_for_waiting(resource_context.execution)?;

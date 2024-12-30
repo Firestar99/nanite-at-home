@@ -74,7 +74,7 @@ pub struct AshCreateInfo {
 	pub memory_allocator: Option<Mutex<Allocator>>,
 	pub shader_stages: ShaderStageFlags,
 	pub queue_family_index: u32,
-	pub queue: ash::vk::Queue,
+	pub queue: Mutex<ash::vk::Queue>,
 	pub cache: Option<PipelineCache>,
 	pub extensions: AshExtensions,
 	pub destroy: Option<Box<dyn FnOnce(&mut AshCreateInfo) + Send + Sync>>,
