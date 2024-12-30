@@ -18,9 +18,10 @@ use ash::vk::{
 	ComponentMapping, DebugUtilsObjectNameInfoEXT, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
 	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
 	DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo,
-	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, ImageLayout, ImageSubresourceRange,
-	ImageTiling, ImageViewCreateInfo, PhysicalDeviceProperties2, PhysicalDeviceVulkan12Properties, PipelineCache,
-	PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange, ShaderStageFlags, SharingMode, WriteDescriptorSet,
+	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, Handle, ImageLayout,
+	ImageSubresourceRange, ImageTiling, ImageViewCreateInfo, PhysicalDeviceProperties2,
+	PhysicalDeviceVulkan12Properties, PipelineCache, PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange,
+	ShaderStageFlags, SharingMode, WriteDescriptorSet,
 };
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::AllocationError;
@@ -50,6 +51,46 @@ impl Ash {
 		Ok(Ash {
 			execution_manager: AshExecutionManager::new(bindless, &create_info)?,
 			create_info,
+		})
+	}
+
+	pub unsafe fn set_debug_object_name(&self, handle: impl Handle, name: &str) -> VkResult<()> {
+		if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
+			debug_marker.set_debug_utils_object_name(
+				&DebugUtilsObjectNameInfoEXT::default()
+					.object_handle(handle)
+					.object_name(&CString::new(name).unwrap()),
+			)?;
+		}
+		Ok(())
+	}
+
+	pub unsafe fn create_image_view<T: ImageType>(
+		&self,
+		image: ash::vk::Image,
+		create_info: &BindlessImageCreateInfo<T>,
+	) -> Result<Option<ash::vk::ImageView>, <Ash as BindlessPlatform>::AllocationError> {
+		let image_view_type = bindless_image_type_to_vk_image_view_type::<T>().expect("Unsupported ImageType");
+		Ok(if create_info.usage.has_image_view() {
+			let image_view = self.device.create_image_view(
+				&ImageViewCreateInfo::default()
+					.image(image)
+					.view_type(image_view_type)
+					.format(create_info.format)
+					.components(ComponentMapping::default()) // identity
+					.subresource_range(ImageSubresourceRange {
+						aspect_mask: create_info.format.aspect(),
+						base_mip_level: 0,
+						level_count: create_info.mip_levels,
+						base_array_layer: 0,
+						layer_count: create_info.array_layers,
+					}),
+				None,
+			)?;
+			self.set_debug_object_name(image_view, create_info.name)?;
+			Some(image_view)
+		} else {
+			None
 		})
 	}
 }
@@ -490,13 +531,7 @@ unsafe impl BindlessPlatform for Ash {
 				.sharing_mode(SharingMode::EXCLUSIVE),
 			None,
 		)?;
-		if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
-			debug_marker.set_debug_utils_object_name(
-				&DebugUtilsObjectNameInfoEXT::default()
-					.object_handle(buffer)
-					.object_name(&CString::new(create_info.name).unwrap()),
-			)?;
-		}
+		self.set_debug_object_name(buffer, create_info.name)?;
 		let requirements = self.device.get_buffer_memory_requirements(buffer);
 		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
 			requirements,
@@ -518,7 +553,6 @@ unsafe impl BindlessPlatform for Ash {
 		create_info: &BindlessImageCreateInfo<T>,
 	) -> Result<Self::Image, Self::AllocationError> {
 		let image_type = bindless_image_type_to_vk_image_type::<T>().expect("Unsupported ImageType");
-		let image_view_type = bindless_image_type_to_vk_image_view_type::<T>().expect("Unsupported ImageType");
 		let image = self.device.create_image(
 			&ash::vk::ImageCreateInfo::default()
 				.flags(ash::vk::ImageCreateFlags::empty())
@@ -534,13 +568,7 @@ unsafe impl BindlessPlatform for Ash {
 				.initial_layout(ImageLayout::UNDEFINED),
 			None,
 		)?;
-		if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
-			debug_marker.set_debug_utils_object_name(
-				&DebugUtilsObjectNameInfoEXT::default()
-					.object_handle(image)
-					.object_name(&CString::new(create_info.name).unwrap()),
-			)?;
-		}
+		self.set_debug_object_name(image, create_info.name)?;
 		let requirements = self.device.get_image_memory_requirements(image);
 		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
 			requirements,
@@ -551,33 +579,7 @@ unsafe impl BindlessPlatform for Ash {
 		})?;
 		self.device
 			.bind_image_memory(image, memory_allocation.memory(), memory_allocation.offset())?;
-		let image_view = if create_info.usage.has_image_view() {
-			let image_view = self.device.create_image_view(
-				&ImageViewCreateInfo::default()
-					.image(image)
-					.view_type(image_view_type)
-					.format(create_info.format)
-					.components(ComponentMapping::default()) // identity
-					.subresource_range(ImageSubresourceRange {
-						aspect_mask: create_info.format.aspect(),
-						base_mip_level: 0,
-						level_count: create_info.mip_levels,
-						base_array_layer: 0,
-						layer_count: create_info.array_layers,
-					}),
-				None,
-			)?;
-			if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
-				debug_marker.set_debug_utils_object_name(
-					&DebugUtilsObjectNameInfoEXT::default()
-						.object_handle(image_view)
-						.object_name(&CString::new(create_info.name).unwrap()),
-				)?;
-			}
-			Some(image_view)
-		} else {
-			None
-		};
+		let image_view = self.create_image_view(image, &create_info)?;
 		Ok(AshImage {
 			image,
 			image_view,
