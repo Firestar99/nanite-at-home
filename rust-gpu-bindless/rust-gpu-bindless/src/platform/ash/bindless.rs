@@ -11,6 +11,8 @@ use crate::platform::ash::{
 	AshPendingExecution,
 };
 use crate::platform::BindlessPlatform;
+use ash::ext::{debug_utils, mesh_shader};
+use ash::khr::{surface, swapchain};
 use ash::prelude::VkResult;
 use ash::vk::{
 	ComponentMapping, DebugUtilsObjectNameInfoEXT, DescriptorBindingFlags, DescriptorBufferInfo, DescriptorImageInfo,
@@ -83,13 +85,27 @@ pub struct AshCreateInfo {
 #[derive(Default)]
 #[non_exhaustive]
 pub struct AshExtensions {
-	pub ext_debug_utils: Option<ash::ext::debug_utils::Device>,
-	pub ext_mesh_shader: Option<ash::ext::mesh_shader::Device>,
+	pub debug_utils: Option<debug_utils::Device>,
+	pub mesh_shader: Option<mesh_shader::Device>,
+	pub surface: Option<surface::Instance>,
+	pub swapchain: Option<swapchain::Device>,
 }
 
 impl AshExtensions {
-	pub fn ext_mesh_shader(&self) -> &ash::ext::mesh_shader::Device {
-		self.ext_mesh_shader.as_ref().expect("missing ext_mesh_shader")
+	pub fn debug_utils(&self) -> &debug_utils::Device {
+		self.debug_utils.as_ref().expect("missing ext_debug_utils")
+	}
+
+	pub fn mesh_shader(&self) -> &mesh_shader::Device {
+		self.mesh_shader.as_ref().expect("missing ext_mesh_shader")
+	}
+
+	pub fn surface(&self) -> &surface::Instance {
+		self.surface.as_ref().expect("missing khr_surface")
+	}
+
+	pub fn swapchain(&self) -> &swapchain::Device {
+		self.swapchain.as_ref().expect("missing khr_swapchain")
 	}
 }
 
@@ -474,7 +490,7 @@ unsafe impl BindlessPlatform for Ash {
 				.sharing_mode(SharingMode::EXCLUSIVE),
 			None,
 		)?;
-		if let Some(debug_marker) = self.extensions.ext_debug_utils.as_ref() {
+		if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
 			debug_marker.set_debug_utils_object_name(
 				&DebugUtilsObjectNameInfoEXT::default()
 					.object_handle(buffer)
@@ -518,7 +534,7 @@ unsafe impl BindlessPlatform for Ash {
 				.initial_layout(ImageLayout::UNDEFINED),
 			None,
 		)?;
-		if let Some(debug_marker) = self.extensions.ext_debug_utils.as_ref() {
+		if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
 			debug_marker.set_debug_utils_object_name(
 				&DebugUtilsObjectNameInfoEXT::default()
 					.object_handle(image)
@@ -551,7 +567,7 @@ unsafe impl BindlessPlatform for Ash {
 					}),
 				None,
 			)?;
-			if let Some(debug_marker) = self.extensions.ext_debug_utils.as_ref() {
+			if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
 				debug_marker.set_debug_utils_object_name(
 					&DebugUtilsObjectNameInfoEXT::default()
 						.object_handle(image_view)

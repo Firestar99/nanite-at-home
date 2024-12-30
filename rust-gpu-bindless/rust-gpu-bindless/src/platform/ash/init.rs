@@ -1,6 +1,7 @@
 use crate::platform::ash::{AshCreateInfo, AshExtensions};
 use anyhow::anyhow;
 use ash::ext::{debug_utils, mesh_shader};
+use ash::khr::{surface, swapchain};
 use ash::vk::{
 	ApplicationInfo, Bool32, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT,
 	DebugUtilsMessengerCallbackDataEXT, DebugUtilsMessengerCreateInfoEXT, DeviceCreateInfo, DeviceQueueCreateInfo,
@@ -211,15 +212,25 @@ pub fn ash_init_single_graphics_queue(
 		})?;
 		let cache = device.create_pipeline_cache(&PipelineCacheCreateInfo::default(), None)?;
 
-		let ext_mesh_shader = create_info
+		let debug_utils = create_info
+			.extensions
+			.contains(&debug_utils::NAME)
+			.then(|| debug_utils::Device::new(&instance, &device));
+
+		let mesh_shader = create_info
 			.extensions
 			.contains(&mesh_shader::NAME)
 			.then(|| mesh_shader::Device::new(&instance, &device));
 
-		let ext_debug_utils = create_info
+		let surface = create_info
 			.extensions
-			.contains(&debug_utils::NAME)
-			.then(|| debug_utils::Device::new(&instance, &device));
+			.contains(&surface::NAME)
+			.then(|| surface::Instance::new(&entry, &instance));
+
+		let swapchain = create_info
+			.extensions
+			.contains(&swapchain::NAME)
+			.then(|| swapchain::Device::new(&instance, &device));
 
 		Ok(AshCreateInfo {
 			entry,
@@ -232,8 +243,10 @@ pub fn ash_init_single_graphics_queue(
 			shader_stages: create_info.shader_stages,
 			cache: Some(cache),
 			extensions: AshExtensions {
-				ext_mesh_shader,
-				ext_debug_utils,
+				mesh_shader,
+				debug_utils,
+				surface,
+				swapchain,
 				..AshExtensions::default()
 			},
 			destroy: Some(Box::new(move |create_info| {

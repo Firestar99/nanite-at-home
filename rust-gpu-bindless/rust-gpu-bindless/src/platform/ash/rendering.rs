@@ -278,7 +278,7 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_bind_mesh_graphics(pipeline, param)?;
-			let device = &self.bindless.platform.extensions.ext_mesh_shader();
+			let device = &self.bindless.platform.extensions.mesh_shader();
 			device.cmd_draw_mesh_tasks(self.cmd, group_counts[0], group_counts[1], group_counts[2]);
 			Ok(())
 		}
@@ -292,7 +292,7 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_bind_mesh_graphics(pipeline, param)?;
-			let device = &self.bindless.platform.extensions.ext_mesh_shader();
+			let device = &self.bindless.platform.extensions.mesh_shader();
 			let indirect = indirect.inner_slot();
 			device.cmd_draw_mesh_tasks_indirect(
 				self.cmd,

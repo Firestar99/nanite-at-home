@@ -49,7 +49,7 @@ impl<'a> BufferTableAccess<'a, Ash> {
 				.device
 				.create_buffer(&ash_create_info, None)
 				.map_err(AshAllocationError::from)?;
-			if let Some(debug_marker) = self.0.extensions.ext_debug_utils.as_ref() {
+			if let Some(debug_marker) = self.0.extensions.debug_utils.as_ref() {
 				debug_marker
 					.set_debug_utils_object_name(
 						&DebugUtilsObjectNameInfoEXT::default()
