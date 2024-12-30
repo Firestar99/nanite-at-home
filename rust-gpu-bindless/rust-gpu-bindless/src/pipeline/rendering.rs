@@ -21,8 +21,8 @@ use thiserror::Error;
 /// A RenderPass defines the formats of the color and depth attachments.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct RenderPassFormat {
-	color_attachments: SmallVec<[Format; 5]>,
-	depth_attachment: Option<Format>,
+	pub color_attachments: SmallVec<[Format; 5]>,
+	pub depth_attachment: Option<Format>,
 }
 
 impl RenderPassFormat {
@@ -31,14 +31,6 @@ impl RenderPassFormat {
 			color_attachments: SmallVec::from(color_attachments),
 			depth_attachment,
 		}
-	}
-
-	pub fn color_attachments(&self) -> &[Format] {
-		&self.color_attachments
-	}
-
-	pub fn depth_attachment(&self) -> Option<Format> {
-		self.depth_attachment
 	}
 }
 

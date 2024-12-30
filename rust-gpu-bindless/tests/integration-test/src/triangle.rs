@@ -25,6 +25,7 @@ use rust_gpu_bindless::platform::ash::{
 use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::{UVec2, Vec2, Vec4};
 use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
+use smallvec::SmallVec;
 use std::sync::Arc;
 
 const R: ColorEnum = ColorEnum::Red;
@@ -69,7 +70,10 @@ async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	)?;
 
 	let rt_format = Format::R8G8B8A8_UNORM;
-	let render_pass_format = RenderPassFormat::new(&[rt_format], None);
+	let render_pass_format = RenderPassFormat {
+		color_attachments: SmallVec::from_slice(&[rt_format]),
+		depth_attachment: None,
+	};
 
 	let pipeline = bindless.create_graphics_pipeline(
 		&render_pass_format,

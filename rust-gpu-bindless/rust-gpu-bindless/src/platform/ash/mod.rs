@@ -1,3 +1,4 @@
+/// Conversion of `BufferAccess` and `ImageAccess`
 mod access_type;
 /// Extensions to ash directly. Usually functions that would return a `Vec<_>`, but are often called with only one
 /// element, optimized to not allocate a `Vec`.

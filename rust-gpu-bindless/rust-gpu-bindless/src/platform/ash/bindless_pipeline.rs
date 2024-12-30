@@ -169,8 +169,8 @@ impl Ash {
 					.layout(bindless.global_descriptor_set().pipeline_layout)
 					.push_next(
 						&mut PipelineRenderingCreateInfo::default()
-							.color_attachment_formats(render_pass.color_attachments())
-							.depth_attachment_format(render_pass.depth_attachment().unwrap_or(Format::default())),
+							.color_attachment_formats(&render_pass.color_attachments)
+							.depth_attachment_format(render_pass.depth_attachment.unwrap_or(Format::default())),
 					)],
 				None,
 			)

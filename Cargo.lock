@@ -1080,6 +1080,7 @@ dependencies = [
  "pollster",
  "rust-gpu-bindless",
  "rust-gpu-bindless-shader-builder",
+ "smallvec",
 ]
 
 [[package]]
