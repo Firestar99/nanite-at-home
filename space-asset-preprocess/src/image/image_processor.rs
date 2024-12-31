@@ -133,7 +133,10 @@ impl<'a> ImageProcessor<'a> {
 			bytes: Arc<[u8]>,
 			settings: EncodeSettings,
 		) -> anyhow::Result<Image2DDisk<IMAGE_TYPE>> {
-			profiling::scope!("into_optimal()", format!("{:?}", ImageType::try_from_const(IMAGE_TYPE)));
+			profiling::scope!(
+				"into_optimal()",
+				&format!("{:?}", ImageType::try_from_const(IMAGE_TYPE))
+			);
 			Image2DDisk {
 				metadata: Image2DMetadata {
 					size,
