@@ -66,7 +66,7 @@ impl<'a> ImageProcessor<'a> {
 						let buffer = gltf.buffer(view.buffer()).ok_or(GltfImageError::MissingBuffer)?;
 						Scheme::Slice(
 							buffer
-								.get(view.offset()..view.length())
+								.get(view.offset()..(view.offset() + view.length()))
 								.ok_or(GltfImageError::BufferViewOutOfBounds)?,
 						)
 					}
