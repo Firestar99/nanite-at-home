@@ -346,8 +346,9 @@ impl<'a> AshRecordingContext<'a> {
 		}
 	}
 
-	pub unsafe fn ash_end(self) -> Result<CommandBuffer, AshRecordingError> {
+	pub unsafe fn ash_end(mut self) -> Result<CommandBuffer, AshRecordingError> {
 		unsafe {
+			self.ash_flush();
 			let device = &self.bindless.platform.device;
 			device.end_command_buffer(self.cmd)?;
 			Ok(self.cmd)
