@@ -20,7 +20,7 @@ fn test_buffer_barrier_ash() -> anyhow::Result<()> {
 	unsafe {
 		let bindless = Bindless::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
-				debug: Debuggers::Validation,
+				debug: Debuggers::GpuAssistedValidation,
 				..AshSingleGraphicsQueueCreateInfo::default()
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,

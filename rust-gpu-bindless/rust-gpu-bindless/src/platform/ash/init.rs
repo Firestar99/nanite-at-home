@@ -49,6 +49,7 @@ pub enum Debuggers {
 	None,
 	RenderDoc,
 	Validation,
+	GpuAssistedValidation,
 	DebugPrintf,
 }
 
@@ -104,23 +105,27 @@ pub fn ash_init_single_graphics_queue(
 			let mut layers = SmallVec::<[_; 1]>::new();
 			let mut validation_features = SmallVec::<[_; 4]>::new();
 
-			if let Some(validation_feature_ext) = match create_info.debug {
-				Debuggers::Validation => Some(ValidationFeatureEnableEXT::GPU_ASSISTED),
-				Debuggers::DebugPrintf => Some(ValidationFeatureEnableEXT::DEBUG_PRINTF),
-				_ => None,
-			} {
+			let (debug_enable, validation_feature) = match create_info.debug {
+				Debuggers::Validation => (true, None),
+				Debuggers::GpuAssistedValidation => (true, Some(ValidationFeatureEnableEXT::GPU_ASSISTED)),
+				Debuggers::DebugPrintf => (true, Some(ValidationFeatureEnableEXT::DEBUG_PRINTF)),
+				_ => (false, None),
+			};
+			if debug_enable {
 				// these features may be required for anything gpu assisted to work, at least without it's complaining
 				// about them missing
 				create_info.features_vk12 = create_info
 					.features_vk12
 					.vulkan_memory_model(true)
 					.vulkan_memory_model_device_scope(true);
-
 				layers.push(LAYER_VALIDATION.as_ptr());
-				validation_features.extend_from_slice(&[
-					validation_feature_ext,
-					ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT,
-				]);
+
+				if let Some(validation_feature) = validation_feature {
+					validation_features.extend_from_slice(&[
+						validation_feature,
+						ValidationFeatureEnableEXT::GPU_ASSISTED_RESERVE_BINDING_SLOT,
+					]);
+				}
 			}
 
 			let extensions = create_info
