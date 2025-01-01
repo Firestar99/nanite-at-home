@@ -16,7 +16,14 @@ impl<A: Copy + FromPrimitive + ToPrimitive> AccessLock<A> {
 
 	pub fn new(a: A) -> Self {
 		Self {
-			atomic: AtomicU32::new(a.to_u32().unwrap()),
+			atomic: AtomicU32::new(Self::a_to_u32(a)),
+			_phantom: PhantomData,
+		}
+	}
+
+	pub fn new_locked() -> Self {
+		Self {
+			atomic: AtomicU32::new(Self::LOCKED),
 			_phantom: PhantomData,
 		}
 	}
@@ -36,7 +43,7 @@ impl<A: Copy + FromPrimitive + ToPrimitive> AccessLock<A> {
 	}
 
 	pub fn unlock(&self, a: A) {
-		self.unlock_inner(a.to_u32().unwrap());
+		self.unlock_inner(Self::a_to_u32(a));
 	}
 
 	pub fn unlock_to_shared(&self) {
@@ -48,6 +55,14 @@ impl<A: Copy + FromPrimitive + ToPrimitive> AccessLock<A> {
 		self.atomic
 			.compare_exchange(Self::LOCKED, a, Relaxed, Relaxed)
 			.expect("double unlock");
+	}
+
+	fn a_to_u32(a: A) -> u32 {
+		let i = a.to_u32().unwrap();
+		if i == Self::SHARED || i == Self::LOCKED {
+			panic!("enum value {} overlaps locked or shared", i)
+		}
+		i
 	}
 }
 

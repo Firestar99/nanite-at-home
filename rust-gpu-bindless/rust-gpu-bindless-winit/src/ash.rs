@@ -14,7 +14,7 @@ use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageAllocationError, ImageSlot,
 	MutDesc, MutDescExt, MutImage, SampleCount, SwapchainImageId,
 };
-use rust_gpu_bindless::pipeline::access_lock::AccessLock;
+use rust_gpu_bindless::pipeline::access_lock::{AccessLock, AccessLockError};
 use rust_gpu_bindless::pipeline::access_type::ImageAccess;
 use rust_gpu_bindless::platform::ash::{Ash, AshAllocationError, AshImage, AshMemoryAllocation, AshPendingExecution};
 use std::ffi::CStr;
@@ -291,7 +291,7 @@ impl AshSwapchain {
 				extent,
 				mip_levels: 1,
 				array_layers: 1,
-				access_lock: AccessLock::new(ImageAccess::Undefined),
+				access_lock: AccessLock::new_locked(),
 				debug_name,
 				swapchain_image_id: SwapchainImageId::new(id),
 			})?;
@@ -397,7 +397,9 @@ impl AshSwapchain {
 						if let Some(e) = self.image_semaphores[id as usize].replace(semaphore) {
 							self.semaphore_pool.push(e);
 						}
-						return Ok(MutDesc::new(image, pending));
+						let desc = MutDesc::<Ash, MutImage<Image2d>>::new(image, pending);
+						desc.inner_slot().access_lock.unlock(ImageAccess::Present);
+						return Ok(desc);
 					}
 					Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
 						self.should_recreate = true;
@@ -416,14 +418,21 @@ impl AshSwapchain {
 		unsafe {
 			profiling::scope!("present_image");
 			let id = {
-				let image_slot = image.inner_slot();
-				// TODO this does not verify image layout. Maybe use some AccessLock trickery?
-				let id = image_slot
+				let slot = image.inner_slot();
+				if !slot.usage.contains(BindlessImageUsage::SWAPCHAIN) {
+					return Err(PresentError::NotASwapchainImage(slot.debug_name.clone()));
+				}
+				let id = slot
 					.swapchain_image_id
 					.get()
-					.ok_or_else(|| PresentError::NotASwapchainImage(image_slot.debug_name.clone()))?;
+					.expect("Swapchain usage without swapchain_image_id set");
 				if let Some(_) = self.images[id as usize] {
 					return Err(PresentError::SwapchainIdOccupied(id));
+				}
+				let access = slot.access_lock.try_lock()?;
+				if !matches!(access, ImageAccess::Present | ImageAccess::General) {
+					slot.access_lock.unlock(access);
+					return Err(PresentError::IncorrectLayout(slot.debug_name.clone(), access));
 				}
 				id
 			};
@@ -480,8 +489,12 @@ impl AshSwapchain {
 pub enum PresentError {
 	#[error("Vk Error: {0}")]
 	Vk(#[from] ash::vk::Result),
+	#[error("AccessLockError: {0}")]
+	AccessLockError(#[from] AccessLockError),
 	#[error("Image {0} must be a swapchain image of this swapchain to be presentable")]
 	NotASwapchainImage(String),
+	#[error("Image {0} must be in ImageAccess::Present or General, but is in {1:?} access")]
+	IncorrectLayout(String, ImageAccess),
 	#[error("Swapchain Image id {0} was already occupied by another image")]
 	SwapchainIdOccupied(u32),
 }
