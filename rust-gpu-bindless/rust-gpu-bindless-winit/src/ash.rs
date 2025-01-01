@@ -454,13 +454,17 @@ impl AshSwapchain {
 						)],
 					Fence::null(),
 				)?;
-				swapchain_ext.queue_present(
+				match swapchain_ext.queue_present(
 					*queue,
 					&PresentInfoKHR::default()
 						.wait_semaphores(&[*semaphore])
 						.swapchains(&[self.swapchain])
 						.image_indices(&[id]),
-				)?
+				) {
+					Ok(e) => Ok(e),
+					Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => Ok(true),
+					Err(e) => Err(e),
+				}?
 			};
 			if suboptimal {
 				self.should_recreate = true;
