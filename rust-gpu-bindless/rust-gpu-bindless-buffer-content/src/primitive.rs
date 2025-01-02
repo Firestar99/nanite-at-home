@@ -1,3 +1,4 @@
+use crate::BufferStructIdentity;
 use crate::BufferStructPlain;
 use bytemuck::Pod;
 use core::marker::PhantomData;
@@ -6,19 +7,7 @@ use spirv_std::arch::IndexUnchecked;
 
 macro_rules! identity {
 	($t:ty) => {
-		unsafe impl BufferStructPlain for $t {
-			type Transfer = $t;
-
-			#[inline]
-			unsafe fn write(self) -> Self::Transfer {
-				self
-			}
-
-			#[inline]
-			unsafe fn read(from: Self::Transfer) -> Self {
-				from
-			}
-		}
+		unsafe impl BufferStructIdentity for $t {}
 	};
 }
 
@@ -46,7 +35,8 @@ identity!(spirv_std::indirect_command::DrawIndexedIndirectCommand);
 identity!(spirv_std::indirect_command::DispatchIndirectCommand);
 identity!(spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT);
 identity!(spirv_std::indirect_command::TraceRaysIndirectCommandKHR);
-identity!(spirv_std::indirect_command::TraceRaysIndirectCommand2KHR);
+// not pod
+// identity!(spirv_std::indirect_command::TraceRaysIndirectCommand2KHR);
 
 unsafe impl<T: BufferStructPlain> BufferStructPlain for Wrapping<T>
 where
