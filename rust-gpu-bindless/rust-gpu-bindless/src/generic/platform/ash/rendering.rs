@@ -1,12 +1,9 @@
 use crate::generic::descriptor::Bindless;
-use crate::generic::pipeline::access_type::{
-	ColorAttachment, DepthStencilAttachment, IndexReadable, IndirectCommandReadable,
+use crate::generic::pipeline::{
+	BindlessGraphicsPipeline, BindlessMeshGraphicsPipeline, ColorAttachment, DepthStencilAttachment,
+	HasResourceContext, IndexReadable, IndexTypeTrait, IndirectCommandReadable, MutOrSharedBuffer, RecordingError,
+	RenderPassFormat, RenderingAttachment,
 };
-use crate::generic::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
-use crate::generic::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
-use crate::generic::pipeline::mut_or_shared::MutOrSharedBuffer;
-use crate::generic::pipeline::recording::{HasResourceContext, RecordingError};
-use crate::generic::pipeline::rendering::{IndexTypeTrait, RenderPassFormat, RenderingAttachment};
 use crate::generic::platform::ash::bindless_pipeline::AshPipeline;
 use crate::generic::platform::ash::{Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext};
 use crate::generic::platform::RenderingContext;

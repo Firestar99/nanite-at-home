@@ -2,15 +2,11 @@ use crate::generic::descriptor::MutDescExt;
 use crate::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferSlot, ImageSlot,
 };
-use crate::generic::pipeline::access_buffer::MutBufferAccess;
-use crate::generic::pipeline::access_image::MutImageAccess;
-use crate::generic::pipeline::access_type::{
-	BufferAccess, BufferAccessType, ImageAccess, ImageAccessType, IndirectCommandReadable, TransferReadable,
-	TransferWriteable,
+use crate::generic::pipeline::{
+	BindlessComputePipeline, BufferAccess, BufferAccessType, HasResourceContext, ImageAccess, ImageAccessType,
+	IndirectCommandReadable, MutBufferAccess, MutImageAccess, MutOrSharedBuffer, Recording, RecordingError,
+	TransferReadable, TransferWriteable,
 };
-use crate::generic::pipeline::compute_pipeline::BindlessComputePipeline;
-use crate::generic::pipeline::mut_or_shared::MutOrSharedBuffer;
-use crate::generic::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::generic::platform::ash::ash_ext::DeviceExt;
 use crate::generic::platform::ash::image_format::FormatExt;
 use crate::generic::platform::ash::{Ash, AshExecution, AshPendingExecution};

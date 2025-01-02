@@ -2,8 +2,7 @@ use crate::generic::descriptor::{
 	BindlessAllocationScheme, BindlessBufferUsage, BufferAllocationError, BufferSlot, BufferTableAccess, MutDesc,
 	RCDesc, Sampler, SamplerTableAccess,
 };
-use crate::generic::pipeline::access_lock::AccessLock;
-use crate::generic::pipeline::access_type::BufferAccess;
+use crate::generic::pipeline::{AccessLock, BufferAccess};
 use crate::generic::platform::ash::{Ash, AshAllocationError, AshBuffer, AshMemoryAllocation};
 use ash::prelude::VkResult;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, SamplerCreateInfo};

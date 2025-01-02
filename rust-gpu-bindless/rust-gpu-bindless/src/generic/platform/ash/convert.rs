@@ -1,8 +1,7 @@
 use crate::generic::descriptor::{
 	BindlessAllocationScheme, BindlessBufferUsage, BindlessImageUsage, Extent, SampleCount,
 };
-use crate::generic::pipeline::access_type::ImageAccessType;
-use crate::generic::pipeline::rendering::{ClearValue, IndexType, LoadOp, RenderingAttachment, StoreOp};
+use crate::generic::pipeline::{ClearValue, ImageAccessType, IndexType, LoadOp, RenderingAttachment, StoreOp};
 use crate::generic::platform::ash::Ash;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
 use ash::vk::{

@@ -14,8 +14,7 @@ use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageAllocationError, ImageSlot,
 	MutDesc, MutDescExt, MutImage, SampleCount, SwapchainImageId,
 };
-use rust_gpu_bindless::generic::pipeline::access_lock::{AccessLock, AccessLockError};
-use rust_gpu_bindless::generic::pipeline::access_type::ImageAccess;
+use rust_gpu_bindless::generic::pipeline::{AccessLock, AccessLockError, ImageAccess};
 use rust_gpu_bindless::generic::platform::ash::{
 	Ash, AshAllocationError, AshImage, AshMemoryAllocation, AshPendingExecution,
 };

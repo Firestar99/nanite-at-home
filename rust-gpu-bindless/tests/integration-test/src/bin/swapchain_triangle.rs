@@ -9,15 +9,10 @@ use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageUsage,
 	DescriptorCounts, Format, Image2d, MutBuffer, MutDesc, MutDescBufferExt, MutImage,
 };
-use rust_gpu_bindless::generic::pipeline::access_buffer::MutBufferAccessExt;
-use rust_gpu_bindless::generic::pipeline::access_image::MutImageAccessExt;
-use rust_gpu_bindless::generic::pipeline::access_type::{ColorAttachment, HostAccess, Present, ShaderRead};
-use rust_gpu_bindless::generic::pipeline::graphics_pipeline::{
-	BindlessGraphicsPipeline, GraphicsPipelineCreateInfo, PipelineDepthStencilStateCreateInfo,
-	PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
-};
-use rust_gpu_bindless::generic::pipeline::rendering::{
-	ClearValue, LoadOp, RenderPassFormat, RenderingAttachment, StoreOp,
+use rust_gpu_bindless::generic::pipeline::{
+	BindlessGraphicsPipeline, ClearValue, ColorAttachment, GraphicsPipelineCreateInfo, HostAccess, LoadOp,
+	MutBufferAccessExt, MutImageAccessExt, PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo,
+	PipelineRasterizationStateCreateInfo, Present, RenderPassFormat, RenderingAttachment, ShaderRead, StoreOp,
 };
 use rust_gpu_bindless::generic::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,

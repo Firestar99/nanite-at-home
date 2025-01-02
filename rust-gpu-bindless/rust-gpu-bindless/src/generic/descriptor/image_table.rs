@@ -5,8 +5,7 @@ use crate::generic::backing::table::{
 use crate::generic::descriptor::descriptor_content::{DescContentCpu, DescTable};
 use crate::generic::descriptor::mutdesc::{MutDesc, MutDescExt};
 use crate::generic::descriptor::{Bindless, BindlessAllocationScheme, DescriptorCounts, Extent};
-use crate::generic::pipeline::access_lock::AccessLock;
-use crate::generic::pipeline::access_type::ImageAccess;
+use crate::generic::pipeline::{AccessLock, ImageAccess};
 use crate::generic::platform::{BindlessPlatform, PendingExecution};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage};
 use std::fmt::{Debug, Display, Formatter};

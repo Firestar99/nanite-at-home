@@ -8,8 +8,7 @@ use crate::generic::descriptor::mutdesc::{MutBoxDescExt, MutDesc, MutDescExt};
 use crate::generic::descriptor::{
 	AnyRCDesc, Bindless, BindlessAllocationScheme, DescContentMutCpu, DescriptorCounts, RCDesc, RCDescExt,
 };
-use crate::generic::pipeline::access_lock::{AccessLock, AccessLockError};
-use crate::generic::pipeline::access_type::BufferAccess;
+use crate::generic::pipeline::{AccessLock, AccessLockError, BufferAccess};
 use crate::generic::platform::{BindlessPlatform, PendingExecution};
 use parking_lot::Mutex;
 use presser::Slab;

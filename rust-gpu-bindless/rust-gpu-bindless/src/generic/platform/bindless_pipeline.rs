@@ -1,16 +1,11 @@
 use crate::generic::descriptor::{Bindless, BufferSlot, ImageSlot};
-use crate::generic::pipeline::access_buffer::MutBufferAccess;
-use crate::generic::pipeline::access_image::MutImageAccess;
-use crate::generic::pipeline::access_type::{
-	BufferAccess, BufferAccessType, ColorAttachment, DepthStencilAttachment, ImageAccess, ImageAccessType,
-	IndexReadable, IndirectCommandReadable, TransferReadable, TransferWriteable,
+use crate::generic::pipeline::{
+	BindlessComputePipeline, BindlessGraphicsPipeline, BindlessMeshGraphicsPipeline, BufferAccess, BufferAccessType,
+	ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, HasResourceContext, ImageAccess,
+	ImageAccessType, IndexReadable, IndexTypeTrait, IndirectCommandReadable, MeshGraphicsPipelineCreateInfo,
+	MutBufferAccess, MutImageAccess, MutOrSharedBuffer, Recording, RecordingError, RenderPassFormat,
+	RenderingAttachment, TransferReadable, TransferWriteable,
 };
-use crate::generic::pipeline::compute_pipeline::BindlessComputePipeline;
-use crate::generic::pipeline::graphics_pipeline::{BindlessGraphicsPipeline, GraphicsPipelineCreateInfo};
-use crate::generic::pipeline::mesh_graphics_pipeline::{BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo};
-use crate::generic::pipeline::mut_or_shared::MutOrSharedBuffer;
-use crate::generic::pipeline::recording::{HasResourceContext, Recording, RecordingError};
-use crate::generic::pipeline::rendering::{IndexTypeTrait, RenderPassFormat, RenderingAttachment};
 use crate::generic::platform::BindlessPlatform;
 use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};

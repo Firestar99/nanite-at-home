@@ -6,9 +6,9 @@ use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt,
 };
-use rust_gpu_bindless::generic::pipeline::access_buffer::MutBufferAccessExt;
-use rust_gpu_bindless::generic::pipeline::access_image::MutImageAccessExt;
-use rust_gpu_bindless::generic::pipeline::access_type::{HostAccess, TransferRead, TransferWrite};
+use rust_gpu_bindless::generic::pipeline::{
+	HostAccess, MutBufferAccessExt, MutImageAccessExt, TransferRead, TransferWrite,
+};
 use rust_gpu_bindless::generic::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
 };

@@ -1,11 +1,9 @@
 use crate::generic::descriptor::{Bindless, Format};
-use crate::generic::pipeline::graphics_pipeline::{
-	GraphicsPipelineCreateInfo, PipelineColorBlendStateCreateInfo, PipelineDepthStencilStateCreateInfo,
-	PipelineInputAssemblyStateCreateInfo,
+use crate::generic::pipeline::{
+	GraphicsPipelineCreateInfo, MeshGraphicsPipelineCreateInfo, PipelineColorBlendStateCreateInfo,
+	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, Recording, RecordingError,
+	RenderPassFormat,
 };
-use crate::generic::pipeline::mesh_graphics_pipeline::MeshGraphicsPipelineCreateInfo;
-use crate::generic::pipeline::recording::{Recording, RecordingError};
-use crate::generic::pipeline::rendering::RenderPassFormat;
 use crate::generic::platform::ash::rendering::AshRenderingContext;
 use crate::generic::platform::ash::{
 	ash_record_and_execute, Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext, ShaderAshExt,

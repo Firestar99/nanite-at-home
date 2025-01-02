@@ -1,4 +1,4 @@
-use crate::generic::pipeline::access_type::{BufferAccess, ImageAccess};
+use crate::generic::pipeline::{BufferAccess, ImageAccess};
 use ash::vk::{AccessFlags2, ImageLayout, PipelineStageFlags2};
 
 pub struct AshBufferAccess {
