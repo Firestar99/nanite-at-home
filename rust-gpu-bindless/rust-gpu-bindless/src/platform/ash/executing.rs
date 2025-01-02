@@ -300,7 +300,7 @@ impl AshExecutionManager {
 							&SemaphoreWaitInfo::default()
 								.semaphores(&[execution_manager.wait_thread_notify_semaphore])
 								.values(&[notify_timeline_value + 1]),
-							10_000, // nanoseconds = 10ms
+							10_000_000, // nanoseconds = 10ms
 						);
 						match result {
 							Ok(_) => (),
