@@ -1,7 +1,9 @@
-pub mod backing;
-pub mod descriptor;
-pub mod pipeline;
-pub mod platform;
+pub mod generic {
+	pub mod backing;
+	pub mod descriptor;
+	pub mod pipeline;
+	pub mod platform;
+}
 
 pub use rust_gpu_bindless_shaders::buffer_content;
 pub use rust_gpu_bindless_shaders::shader;

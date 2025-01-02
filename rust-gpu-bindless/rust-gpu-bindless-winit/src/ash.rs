@@ -9,14 +9,16 @@ use ash::vk::{
 	SemaphoreCreateInfo, SharingMode, SubmitInfo, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR,
 	TimelineSemaphoreSubmitInfo,
 };
-use rust_gpu_bindless::backing::table::RcTableSlot;
-use rust_gpu_bindless::descriptor::{
+use rust_gpu_bindless::generic::backing::table::RcTableSlot;
+use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageAllocationError, ImageSlot,
 	MutDesc, MutDescExt, MutImage, SampleCount, SwapchainImageId,
 };
-use rust_gpu_bindless::pipeline::access_lock::{AccessLock, AccessLockError};
-use rust_gpu_bindless::pipeline::access_type::ImageAccess;
-use rust_gpu_bindless::platform::ash::{Ash, AshAllocationError, AshImage, AshMemoryAllocation, AshPendingExecution};
+use rust_gpu_bindless::generic::pipeline::access_lock::{AccessLock, AccessLockError};
+use rust_gpu_bindless::generic::pipeline::access_type::ImageAccess;
+use rust_gpu_bindless::generic::platform::ash::{
+	Ash, AshAllocationError, AshImage, AshMemoryAllocation, AshPendingExecution,
+};
 use std::ffi::CStr;
 use std::fmt::Display;
 use std::fmt::{Debug, Formatter};

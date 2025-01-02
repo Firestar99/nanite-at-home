@@ -2,15 +2,17 @@
 
 use crate::debugger;
 use pollster::block_on;
-use rust_gpu_bindless::descriptor::{
+use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt,
 };
-use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
-use rust_gpu_bindless::pipeline::access_image::MutImageAccessExt;
-use rust_gpu_bindless::pipeline::access_type::{HostAccess, TransferRead, TransferWrite};
-use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
-use rust_gpu_bindless::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless::generic::pipeline::access_buffer::MutBufferAccessExt;
+use rust_gpu_bindless::generic::pipeline::access_image::MutImageAccessExt;
+use rust_gpu_bindless::generic::pipeline::access_type::{HostAccess, TransferRead, TransferWrite};
+use rust_gpu_bindless::generic::platform::ash::{
+	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
+};
+use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::UVec2;
 use std::sync::Arc;
 

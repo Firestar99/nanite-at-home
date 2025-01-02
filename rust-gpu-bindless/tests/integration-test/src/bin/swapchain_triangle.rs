@@ -5,20 +5,24 @@ use ash::vk::{
 use integration_test::debugger;
 use integration_test_shader::color::ColorEnum;
 use integration_test_shader::triangle::{Param, Vertex};
-use rust_gpu_bindless::descriptor::{
+use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageUsage,
 	DescriptorCounts, Format, Image2d, MutBuffer, MutDesc, MutDescBufferExt, MutImage,
 };
-use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
-use rust_gpu_bindless::pipeline::access_image::MutImageAccessExt;
-use rust_gpu_bindless::pipeline::access_type::{ColorAttachment, HostAccess, Present, ShaderRead};
-use rust_gpu_bindless::pipeline::graphics_pipeline::{
+use rust_gpu_bindless::generic::pipeline::access_buffer::MutBufferAccessExt;
+use rust_gpu_bindless::generic::pipeline::access_image::MutImageAccessExt;
+use rust_gpu_bindless::generic::pipeline::access_type::{ColorAttachment, HostAccess, Present, ShaderRead};
+use rust_gpu_bindless::generic::pipeline::graphics_pipeline::{
 	BindlessGraphicsPipeline, GraphicsPipelineCreateInfo, PipelineDepthStencilStateCreateInfo,
 	PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
 };
-use rust_gpu_bindless::pipeline::rendering::{ClearValue, LoadOp, RenderPassFormat, RenderingAttachment, StoreOp};
-use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
-use rust_gpu_bindless::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless::generic::pipeline::rendering::{
+	ClearValue, LoadOp, RenderPassFormat, RenderingAttachment, StoreOp,
+};
+use rust_gpu_bindless::generic::platform::ash::{
+	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
+};
+use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::{Vec2, Vec4};
 use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
 use rust_gpu_bindless_winit::ash::{ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams};
