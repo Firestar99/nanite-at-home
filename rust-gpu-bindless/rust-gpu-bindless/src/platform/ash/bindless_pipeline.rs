@@ -6,7 +6,6 @@ use crate::pipeline::graphics_pipeline::{
 use crate::pipeline::mesh_graphics_pipeline::MeshGraphicsPipelineCreateInfo;
 use crate::pipeline::recording::{Recording, RecordingError};
 use crate::pipeline::rendering::RenderPassFormat;
-use crate::pipeline::shader::BindlessShader;
 use crate::platform::ash::rendering::AshRenderingContext;
 use crate::platform::ash::{
 	ash_record_and_execute, Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext, ShaderAshExt,
@@ -21,6 +20,7 @@ use ash::vk::{
 	ShaderModuleCreateInfo, Viewport,
 };
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
+use rust_gpu_bindless_shaders::shader::BindlessShader;
 use rust_gpu_bindless_shaders::shader_type::{
 	ComputeShader, FragmentShader, MeshShader, ShaderType, TaskShader, VertexShader,
 };

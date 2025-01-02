@@ -9,4 +9,3 @@ pub mod mesh_graphics_pipeline;
 pub mod mut_or_shared;
 pub mod recording;
 pub mod rendering;
-pub mod shader;

@@ -3,9 +3,9 @@ use crate::pipeline::graphics_pipeline::{
 	PipelineColorBlendStateCreateInfo, PipelineDepthStencilStateCreateInfo, PipelineRasterizationStateCreateInfo,
 };
 use crate::pipeline::rendering::RenderPassFormat;
-use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
+use rust_gpu_bindless_shaders::shader::BindlessShader;
 use rust_gpu_bindless_shaders::shader_type::{FragmentShader, MeshShader, TaskShader};
 use std::marker::PhantomData;
 use std::sync::Arc;

@@ -1,7 +1,7 @@
 use crate::descriptor::Bindless;
-use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
+use rust_gpu_bindless_shaders::shader::BindlessShader;
 use rust_gpu_bindless_shaders::shader_type::ComputeShader;
 use std::marker::PhantomData;
 use std::sync::Arc;

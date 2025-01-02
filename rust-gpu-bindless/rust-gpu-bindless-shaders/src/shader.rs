@@ -1,6 +1,6 @@
-use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
-use rust_gpu_bindless_shaders::shader_type::ShaderType;
-use std::ffi::CStr;
+use crate::buffer_content::BufferStruct;
+use crate::shader_type::ShaderType;
+use core::ffi::CStr;
 
 pub trait BindlessShader {
 	type ShaderType: ShaderType;

@@ -7,6 +7,7 @@ extern crate alloc;
 
 pub mod buffer_content;
 pub mod descriptor;
+pub mod shader;
 pub mod shader_type;
 
 pub use bytemuck;

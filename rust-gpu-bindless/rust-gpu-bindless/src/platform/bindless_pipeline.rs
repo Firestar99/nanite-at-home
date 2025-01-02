@@ -11,11 +11,11 @@ use crate::pipeline::mesh_graphics_pipeline::{BindlessMeshGraphicsPipeline, Mesh
 use crate::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::pipeline::recording::{HasResourceContext, Recording, RecordingError};
 use crate::pipeline::rendering::{IndexTypeTrait, RenderPassFormat, RenderingAttachment};
-use crate::pipeline::shader::BindlessShader;
 use crate::platform::BindlessPlatform;
 use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
+use rust_gpu_bindless_shaders::shader::BindlessShader;
 use rust_gpu_bindless_shaders::shader_type::{ComputeShader, FragmentShader, MeshShader, TaskShader, VertexShader};
 use std::error::Error;
 use std::sync::Arc;
