@@ -1417,6 +1417,7 @@ dependencies = [
  "profiling",
  "puffin_http",
  "rust-gpu-bindless",
+ "rust-gpu-bindless-winit",
  "space-asset-disk",
  "space-asset-rt",
  "space-asset-shader",
@@ -2430,9 +2431,10 @@ dependencies = [
 name = "space-asset-rt"
 version = "0.1.0"
 dependencies = [
- "async-std",
+ "anyhow",
  "futures",
  "glam",
+ "pollster",
  "profiling",
  "rayon",
  "rkyv",

@@ -14,7 +14,8 @@ space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
-rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true, features = ["ash"] }
+rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
 
 # device
 winit = { workspace = true }

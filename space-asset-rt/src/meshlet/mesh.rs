@@ -1,12 +1,11 @@
 use crate::material::pbr::PbrMaterials;
 use crate::upload_traits::ToStrong;
-use crate::uploader::{deserialize_infallible, UploadError, Uploader};
+use crate::uploader::{deserialize_infallible, Uploader};
 use rust_gpu_bindless::descriptor::{RCDescExt, RC};
 use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::meshlet::mesh::ArchivedMeshletMeshDisk;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use std::future::Future;
-use vulkano::Validated;
 
 impl ToStrong for MeshletMesh<RC> {
 	type StrongType = MeshletMesh<Strong>;
@@ -29,7 +28,7 @@ pub fn upload_mesh<'a>(
 	this: &'a ArchivedMeshletMeshDisk,
 	uploader: &'a Uploader,
 	pbr_materials: &'a PbrMaterials<'a>,
-) -> impl Future<Output = Result<MeshletMesh<RC>, Validated<UploadError>>> + 'a {
+) -> impl Future<Output = anyhow::Result<MeshletMesh<RC>>> + 'a {
 	let meshlets = uploader.upload_buffer_iter(this.lod_mesh.meshlets.iter().map(deserialize_infallible));
 	let draw_vertices = uploader.upload_buffer_iter(this.lod_mesh.draw_vertices.iter().map(deserialize_infallible));
 	let triangles = uploader.upload_buffer_iter(this.lod_mesh.triangles.iter().map(deserialize_infallible));
