@@ -56,6 +56,7 @@ pub struct AshSingleGraphicsQueueCreateInfo<'a> {
 	pub app_name: &'a CStr,
 	pub app_version: u32,
 	pub shader_stages: ShaderStageFlags,
+	pub instance_extensions: &'a [&'a CStr],
 	pub extensions: &'a [&'a CStr],
 	pub features: PhysicalDeviceFeatures,
 	pub features_vk11: PhysicalDeviceVulkan11Features<'static>,
@@ -71,6 +72,7 @@ impl Default for AshSingleGraphicsQueueCreateInfo<'_> {
 			app_name: c"Unknown App",
 			app_version: 0,
 			shader_stages: ShaderStageFlags::ALL_GRAPHICS | ShaderStageFlags::COMPUTE,
+			instance_extensions: &[],
 			extensions: &[],
 			features: PhysicalDeviceFeatures::default(),
 			features_vk11: required_features_vk11(),
@@ -100,7 +102,6 @@ pub fn ash_init_single_graphics_queue(
 
 		let instance = {
 			let mut layers = SmallVec::<[_; 1]>::new();
-			let mut extensions = SmallVec::<[_; 10]>::new();
 			let mut validation_features = SmallVec::<[_; 4]>::new();
 
 			if let Some(validation_feature_ext) = match create_info.debug {
@@ -122,7 +123,13 @@ pub fn ash_init_single_graphics_queue(
 				]);
 			}
 
-			extensions.push(debug_utils::NAME.as_ptr());
+			let extensions = create_info
+				.instance_extensions
+				.iter()
+				.copied()
+				.chain([debug_utils::NAME])
+				.map(|c| c.as_ptr())
+				.collect::<SmallVec<[_; 3]>>();
 
 			entry.create_instance(
 				&InstanceCreateInfo::default()
@@ -223,7 +230,7 @@ pub fn ash_init_single_graphics_queue(
 			.then(|| mesh_shader::Device::new(&instance, &device));
 
 		let surface = create_info
-			.extensions
+			.instance_extensions
 			.contains(&surface::NAME)
 			.then(|| surface::Instance::new(&entry, &instance));
 
