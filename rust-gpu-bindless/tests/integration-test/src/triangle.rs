@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use crate::debugger;
 use ash::vk::{
 	ColorComponentFlags, CullModeFlags, FrontFace, PipelineColorBlendAttachmentState,
 	PipelineColorBlendStateCreateInfo, PolygonMode, PrimitiveTopology,
@@ -19,9 +20,7 @@ use rust_gpu_bindless::pipeline::graphics_pipeline::{
 	PipelineRasterizationStateCreateInfo,
 };
 use rust_gpu_bindless::pipeline::rendering::{ClearValue, LoadOp, RenderPassFormat, RenderingAttachment, StoreOp};
-use rust_gpu_bindless::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
-};
+use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::{UVec2, Vec2, Vec4};
 use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
@@ -38,7 +37,7 @@ fn test_triangle_ash() -> anyhow::Result<()> {
 	unsafe {
 		let bindless = Bindless::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
-				debug: Debuggers::Validation,
+				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,

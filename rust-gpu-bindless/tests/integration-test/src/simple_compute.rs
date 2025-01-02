@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use crate::debugger;
 use approx::assert_relative_eq;
 use integration_test_shader::simple_compute::{add_calculation, Indirection, Param};
 use pollster::block_on;
@@ -9,9 +10,7 @@ use rust_gpu_bindless::descriptor::{
 };
 use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
 use rust_gpu_bindless::pipeline::access_type::{HostAccess, ShaderReadWrite};
-use rust_gpu_bindless::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
-};
+use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use std::sync::Arc;
 
@@ -20,7 +19,7 @@ fn test_simple_compute_ash() -> anyhow::Result<()> {
 	unsafe {
 		let bindless = Bindless::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
-				debug: Debuggers::GpuAssistedValidation,
+				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,

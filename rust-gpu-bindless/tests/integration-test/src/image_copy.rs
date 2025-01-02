@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use crate::debugger;
 use pollster::block_on;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
@@ -8,9 +9,7 @@ use rust_gpu_bindless::descriptor::{
 use rust_gpu_bindless::pipeline::access_buffer::MutBufferAccessExt;
 use rust_gpu_bindless::pipeline::access_image::MutImageAccessExt;
 use rust_gpu_bindless::pipeline::access_type::{HostAccess, TransferRead, TransferWrite};
-use rust_gpu_bindless::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
-};
+use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::UVec2;
 use std::sync::Arc;
@@ -20,7 +19,7 @@ fn test_image_copy_ash() -> anyhow::Result<()> {
 	unsafe {
 		let bindless = Bindless::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
-				debug: Debuggers::GpuAssistedValidation,
+				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,

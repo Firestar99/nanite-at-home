@@ -2,6 +2,7 @@ use ash::vk::{
 	ColorComponentFlags, CullModeFlags, FrontFace, PipelineColorBlendAttachmentState,
 	PipelineColorBlendStateCreateInfo, PolygonMode, PrimitiveTopology,
 };
+use integration_test::debugger;
 use integration_test_shader::color::ColorEnum;
 use integration_test_shader::triangle::{Param, Vertex};
 use rust_gpu_bindless::descriptor::{
@@ -16,9 +17,7 @@ use rust_gpu_bindless::pipeline::graphics_pipeline::{
 	PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
 };
 use rust_gpu_bindless::pipeline::rendering::{ClearValue, LoadOp, RenderPassFormat, RenderingAttachment, StoreOp};
-use rust_gpu_bindless::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
-};
+use rust_gpu_bindless::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::{Vec2, Vec4};
 use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
@@ -54,7 +53,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				instance_extensions: window_extensions,
 				extensions: &[ash::khr::swapchain::NAME],
-				debug: Debuggers::Validation,
+				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
 			})?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
