@@ -6,6 +6,14 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+# Enable the ash platform to be available.
+ash-platform = []
+# Reexport a primary platform to be used by dependents. Must specify exactly one primary platform, like ash.
+primary = []
+# Select ash as the single primary platform. Only the final binary crate should enable this feature.
+ash = ["primary", "ash-platform"]
+
 [dependencies]
 # members
 rust-gpu-bindless-shaders = { workspace = true }

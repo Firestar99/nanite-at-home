@@ -6,12 +6,15 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+ash = ["rust-gpu-bindless/ash-platform", "dep:ash", "dep:ash-window"]
+
 [dependencies]
 # members
 rust-gpu-bindless = { workspace = true }
 winit = { workspace = true }
-ash = { workspace = true }
-ash-window = { workspace = true }
+ash = { workspace = true, optional = true }
+ash-window = { workspace = true, optional = true }
 
 # other
 static_assertions = { workspace = true }
