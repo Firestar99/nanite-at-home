@@ -9,13 +9,7 @@ pub mod triangle;
 
 /// the global setting on which debugger to use for integration tests
 pub fn debugger() -> Debuggers {
-	// On Linux RADV gpu assisted validation is segfaulting on graphics pipeline creation
-	#[cfg(target_os = "linux")]
-	{
-		return Debuggers::Validation;
-	}
-	#[cfg(not(target_os = "linux"))]
-	{
-		return Debuggers::GpuAssistedValidation;
-	}
+	// Validation layer does not yet support timelime semaphores properly, leading to many false positives.
+	// On Linux RADV gpu assisted validation even segfaulting on graphics pipeline creation.
+	Debuggers::Validation
 }
