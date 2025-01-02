@@ -1,219 +1,261 @@
-use crate::renderer::lighting::lighting_render_task::LightingRenderTask;
-use crate::renderer::meshlet::meshlet_render_task::MeshletRenderTask;
-use crate::renderer::render_graph::context::{FrameContext, RenderContext, RenderContextNewFrame};
-use crate::renderer::renderers::main::ImageNotSupportedError::{ExtendMismatch, FormatMismatch, ImageNot2D};
-use crate::renderer::Init;
-use rust_gpu_bindless::frame_manager::PrevFrameFuture;
+use crate::renderer::compacting_alloc_buffer::CompactingAllocBuffer;
+use crate::renderer::frame_context::FrameContext;
+use crate::renderer::lighting::lighting_compute::LightingCompute;
+use crate::renderer::lighting::sky_shader_compute::SkyShaderCompute;
+use crate::renderer::meshlet::instance_cull_compute::InstanceCullCompute;
+use crate::renderer::meshlet::meshlet_draw::MeshletDraw;
+use anyhow::anyhow;
+use rust_gpu_bindless::descriptor::{
+	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageDescExt, MutDesc, MutImage,
+};
+use rust_gpu_bindless::pipeline::{
+	ClearValue, ColorAttachment, DepthStencilAttachment, ImageAccessType, LoadOp, MutImageAccess, MutImageAccessExt,
+	Recording, RenderPassFormat, RenderingAttachment, SampledRead, StorageReadWrite, StoreOp,
+};
+use space_asset_rt::meshlet::scene::MeshletSceneCpu;
+use space_asset_shader::meshlet::instance::MeshletInstance;
 use space_engine_shader::renderer::frame_data::FrameData;
+use space_engine_shader::renderer::g_buffer::GBuffer;
 use std::sync::Arc;
-use vulkano::format::Format;
-use vulkano::image::view::ImageView;
-use vulkano::image::{Image, ImageCreateFlags, ImageCreateInfo, ImageUsage};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocatePreference, MemoryTypeFilter};
-use vulkano::pipeline::graphics::viewport::Viewport;
-use vulkano::sync::future::FenceSignalFuture;
-use vulkano::sync::GpuFuture;
 
-pub struct RenderPipelineMain {
-	pub init: Arc<Init>,
-
+#[derive(Copy, Clone, Debug)]
+pub struct RenderPipelineMainFormat {
 	pub output_format: Format,
 	pub g_albedo_format: Format,
 	pub g_normal_format: Format,
 	pub g_rm_format: Format,
 	pub depth_format: Format,
+}
 
-	pub meshlet_task: MeshletRenderTask,
-	pub lighting_task: LightingRenderTask,
+impl RenderPipelineMainFormat {
+	pub fn to_g_buffer_rp(&self) -> RenderPassFormat {
+		RenderPassFormat::new(
+			&[self.g_albedo_format, self.g_normal_format, self.g_rm_format],
+			Some(self.depth_format),
+		)
+	}
+}
+
+pub struct RenderPipelineMain {
+	pub bindless: Arc<Bindless>,
+	pub format: RenderPipelineMainFormat,
+	pub meshlet_instance_capacity: usize,
+	pub instance_cull: InstanceCullCompute,
+	pub meshlet_draw: MeshletDraw,
+	pub lighting: LightingCompute,
+	pub sky_shader: SkyShaderCompute,
 }
 
 impl RenderPipelineMain {
-	pub fn new(init: &Arc<Init>, output_format: Format) -> Arc<Self> {
+	pub fn new(
+		bindless: &Arc<Bindless>,
+		output_format: Format,
+		meshlet_instance_capacity: usize,
+	) -> anyhow::Result<Arc<Self>> {
 		// all formats are always available
-		let depth_format = Format::D32_SFLOAT;
-		let g_albedo_format = Format::R8G8B8A8_SRGB;
-		let g_normal_format = Format::R16G16B16A16_SFLOAT;
-		let g_rm_format = Format::R16G16_SFLOAT;
-
-		let meshlet_task = MeshletRenderTask::new(init, g_albedo_format, g_normal_format, g_rm_format, depth_format);
-		let lighting_task = LightingRenderTask::new(init);
-		Arc::new(Self {
-			init: init.clone(),
+		let format = RenderPipelineMainFormat {
 			output_format,
-			g_albedo_format,
-			g_normal_format,
-			g_rm_format,
-			depth_format,
-			meshlet_task,
-			lighting_task,
-		})
+			depth_format: Format::D32_SFLOAT,
+			g_albedo_format: Format::R8G8B8A8_SRGB,
+			g_normal_format: Format::R16G16B16A16_SFLOAT,
+			g_rm_format: Format::R16G16_SFLOAT,
+		};
+
+		Ok(Arc::new(Self {
+			bindless: bindless.clone(),
+			format,
+			meshlet_instance_capacity,
+			instance_cull: InstanceCullCompute::new(bindless)?,
+			meshlet_draw: MeshletDraw::new(bindless, format.to_g_buffer_rp())?,
+			lighting: LightingCompute::new(bindless)?,
+			sky_shader: SkyShaderCompute::new(bindless)?,
+		}))
 	}
 
-	pub fn new_renderer(self: &Arc<Self>, extend: [u32; 3], frames_in_flight: u32) -> RendererMain {
-		RendererMain::new(self.clone(), extend, frames_in_flight)
+	pub fn new_renderer(self: &Arc<Self>) -> anyhow::Result<RendererMain> {
+		RendererMain::new(self.clone())
 	}
 }
 
 pub struct RendererMain {
 	pub pipeline: Arc<RenderPipelineMain>,
-	render_context_new_frame: RenderContextNewFrame,
-	resources: RendererMainResources,
+	resources: Option<RendererMainResources>,
 }
 
 struct RendererMainResources {
-	g_albedo_image: Arc<ImageView>,
-	g_normal_image: Arc<ImageView>,
-	g_roughness_metallic_image: Arc<ImageView>,
-	depth_image: Arc<ImageView>,
-	extent: [u32; 3],
+	extent: Extent,
+	g_albedo: MutDesc<MutImage<Image2d>>,
+	g_normal: MutDesc<MutImage<Image2d>>,
+	g_roughness_metallic: MutDesc<MutImage<Image2d>>,
+	depth_image: MutDesc<MutImage<Image2d>>,
+	compacting_meshlet_instances: CompactingAllocBuffer<MeshletInstance>,
+}
+
+impl RendererMainResources {
+	pub fn new(pipeline: &Arc<RenderPipelineMain>, extent: Extent) -> anyhow::Result<Self> {
+		let g_albedo = pipeline.bindless.image().alloc(&BindlessImageCreateInfo {
+			format: pipeline.format.g_albedo_format,
+			extent,
+			usage: BindlessImageUsage::COLOR_ATTACHMENT | BindlessImageUsage::SAMPLED,
+			name: "g_albedo",
+			..Default::default()
+		})?;
+		let g_normal = pipeline.bindless.image().alloc(&BindlessImageCreateInfo {
+			format: pipeline.format.g_normal_format,
+			extent,
+			usage: BindlessImageUsage::COLOR_ATTACHMENT | BindlessImageUsage::SAMPLED,
+			name: "g_normal",
+			..Default::default()
+		})?;
+		let g_roughness_metallic = pipeline.bindless.image().alloc(&BindlessImageCreateInfo {
+			format: pipeline.format.g_rm_format,
+			extent,
+			usage: BindlessImageUsage::COLOR_ATTACHMENT | BindlessImageUsage::SAMPLED,
+			name: "g_roughness_metallic",
+			..Default::default()
+		})?;
+		let depth_image = pipeline.bindless.image().alloc(&BindlessImageCreateInfo {
+			format: pipeline.format.depth_format,
+			extent,
+			usage: BindlessImageUsage::DEPTH_STENCIL_ATTACHMENT | BindlessImageUsage::SAMPLED,
+			name: "g_depth",
+			..Default::default()
+		})?;
+		let compacting_meshlet_instances = CompactingAllocBuffer::new(
+			&pipeline.bindless,
+			pipeline.meshlet_instance_capacity,
+			[0, 1, 1],
+			"compacting_meshlet_instances",
+		)?;
+		Ok(RendererMainResources {
+			extent,
+			depth_image,
+			g_albedo,
+			g_normal,
+			g_roughness_metallic,
+			compacting_meshlet_instances,
+		})
+	}
 }
 
 impl RendererMain {
-	fn new(pipeline: Arc<RenderPipelineMain>, extent: [u32; 3], frames_in_flight: u32) -> Self {
-		let init = &pipeline.init;
-		let (_, render_context_new_frame) = RenderContext::new(init.clone(), frames_in_flight);
-
-		let create_image = |format: Format, usage: ImageUsage, flags: ImageCreateFlags| {
-			Image::new(
-				init.memory_allocator.clone(),
-				ImageCreateInfo {
-					flags,
-					format,
-					extent,
-					usage,
-					..ImageCreateInfo::default()
-				},
-				AllocationCreateInfo {
-					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-					allocate_preference: MemoryAllocatePreference::AlwaysAllocate,
-					..AllocationCreateInfo::default()
-				},
-			)
-			.unwrap()
-		};
-
-		let g_albedo_image = ImageView::new_default(create_image(
-			pipeline.g_albedo_format,
-			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
-			ImageCreateFlags::empty(),
-		))
-		.unwrap();
-		let g_normal_image = ImageView::new_default(create_image(
-			pipeline.g_normal_format,
-			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
-			ImageCreateFlags::empty(),
-		))
-		.unwrap();
-		let g_roughness_metallic_image = ImageView::new_default(create_image(
-			pipeline.g_rm_format,
-			ImageUsage::COLOR_ATTACHMENT | ImageUsage::SAMPLED,
-			ImageCreateFlags::empty(),
-		))
-		.unwrap();
-		let depth_image = ImageView::new_default(create_image(
-			pipeline.depth_format,
-			ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::SAMPLED,
-			ImageCreateFlags::empty(),
-		))
-		.unwrap();
-
-		Self {
+	fn new(pipeline: Arc<RenderPipelineMain>) -> anyhow::Result<Self> {
+		Ok(Self {
 			pipeline,
-			render_context_new_frame,
-			resources: RendererMainResources {
-				extent,
-				depth_image,
-				g_albedo_image,
-				g_normal_image,
-				g_roughness_metallic_image,
-			},
-		}
+			resources: None,
+		})
 	}
 
-	pub fn new_frame<F>(&mut self, frame_data: FrameData, output_image: Arc<ImageView>, f: F)
-	where
-		F: FnOnce(&FrameContext, PrevFrameFuture, RendererMainFrame) -> Option<FenceSignalFuture<Box<dyn GpuFuture>>>,
-	{
-		self.image_supported(&output_image).unwrap();
-		let extent = output_image.image().extent();
-		let viewport = Viewport {
-			offset: [0f32; 2],
-			extent: [extent[0] as f32, extent[1] as f32],
-			depth_range: 0f32..=1f32,
+	pub fn new_frame(
+		&mut self,
+		cmd: &mut Recording<'_>,
+		frame_data: FrameData,
+		scene: &MeshletSceneCpu,
+		output_image: &MutImageAccess<'_, Image2d, StorageReadWrite>,
+	) -> anyhow::Result<()> {
+		self.image_supported(output_image)?;
+		let resources = {
+			let extent = output_image.extent();
+			let resources = if let Some(resources) = self.resources.take() {
+				if resources.extent == extent {
+					Some(resources)
+				} else {
+					drop(resources);
+					None
+				}
+			} else {
+				None
+			};
+			if let Some(resources) = resources {
+				resources
+			} else {
+				RendererMainResources::new(&self.pipeline, extent)?
+			}
 		};
-		self.render_context_new_frame
-			.new_frame(viewport, frame_data, |frame_context, prev_frame_future| {
-				f(
-					frame_context,
-					prev_frame_future,
-					RendererMainFrame {
-						pipeline: &self.pipeline,
-						frame_context,
-						resources: &self.resources,
-						output_image,
-					},
-				)
-			});
+		let frame_context = FrameContext::new(cmd, frame_data)?;
+
+		let meshlet_instances = resources.compacting_meshlet_instances.transition_writing(cmd)?;
+		self.pipeline
+			.instance_cull
+			.dispatch(cmd, &frame_context, scene, &meshlet_instances)?;
+
+		let meshlet_instances = meshlet_instances.transition_reading()?;
+		let mut g_albedo = resources.g_albedo.access_dont_care::<ColorAttachment>(&cmd)?;
+		let mut g_normal = resources.g_normal.access_dont_care::<ColorAttachment>(&cmd)?;
+		let mut g_roughness_metallic = resources
+			.g_roughness_metallic
+			.access_dont_care::<ColorAttachment>(&cmd)?;
+		let mut depth_image = resources.depth_image.access_dont_care::<DepthStencilAttachment>(&cmd)?;
+		cmd.begin_rendering(
+			self.pipeline.format.to_g_buffer_rp(),
+			&[
+				RenderingAttachment {
+					image: &mut g_albedo,
+					load_op: LoadOp::Clear(ClearValue::ColorF([0., 0., 0., 0.])),
+					store_op: StoreOp::Store,
+				},
+				RenderingAttachment {
+					image: &mut g_normal,
+					load_op: LoadOp::DontCare,
+					store_op: StoreOp::Store,
+				},
+				RenderingAttachment {
+					image: &mut g_roughness_metallic,
+					load_op: LoadOp::DontCare,
+					store_op: StoreOp::Store,
+				},
+			],
+			Some(RenderingAttachment {
+				image: &mut depth_image,
+				load_op: LoadOp::Clear(ClearValue::DepthStencil { depth: 0., stencil: 0 }),
+				store_op: StoreOp::Store,
+			}),
+			|rendering| {
+				self.pipeline
+					.meshlet_draw
+					.draw(rendering, &frame_context, scene, &meshlet_instances)?;
+				Ok(())
+			},
+		)?;
+
+		let g_albedo = g_albedo.transition::<SampledRead>()?;
+		let g_normal = g_normal.transition::<SampledRead>()?;
+		let g_roughness_metallic = g_roughness_metallic.transition::<SampledRead>()?;
+		let depth_image = depth_image.transition::<SampledRead>()?;
+		let g_buffer = GBuffer {
+			g_albedo: g_albedo.to_transient_sampled()?,
+			g_normal: g_normal.to_transient_sampled()?,
+			g_roughness_metallic: g_roughness_metallic.to_transient_sampled()?,
+			depth_image: depth_image.to_transient_sampled()?,
+		};
+		self.pipeline
+			.sky_shader
+			.dispatch(cmd, &frame_context, g_buffer, output_image.to_mut_transient())?;
+		self.pipeline
+			.lighting
+			.dispatch(cmd, &frame_context, g_buffer, output_image.to_mut_transient())?;
+
+		self.resources = Some(RendererMainResources {
+			extent: resources.extent,
+			g_albedo: g_albedo.into_desc(),
+			g_normal: g_normal.into_desc(),
+			g_roughness_metallic: g_roughness_metallic.into_desc(),
+			depth_image: depth_image.into_desc(),
+			compacting_meshlet_instances: meshlet_instances.transition_reset(),
+		});
+		Ok(())
 	}
-}
 
-pub struct RendererMainFrame<'a> {
-	pipeline: &'a RenderPipelineMain,
-	frame_context: &'a FrameContext<'a>,
-	resources: &'a RendererMainResources,
-	output_image: Arc<ImageView>,
-}
-
-impl<'a> RendererMainFrame<'a> {
-	#[profiling::function]
-	pub fn record(self, future: impl GpuFuture) -> impl GpuFuture {
-		let r = self.resources;
-		let p = self.pipeline;
-		let c = self.frame_context;
-
-		let future = p.meshlet_task.record(
-			c,
-			&r.g_albedo_image,
-			&r.g_normal_image,
-			&r.g_roughness_metallic_image,
-			&r.depth_image,
-			future,
-		);
-
-		p.lighting_task.record(
-			c,
-			&r.g_albedo_image,
-			&r.g_normal_image,
-			&r.g_roughness_metallic_image,
-			&r.depth_image,
-			&self.output_image,
-			future,
-		)
-	}
-}
-
-#[derive(Debug)]
-pub enum ImageNotSupportedError {
-	FormatMismatch { renderer: Format, image: Format },
-	ImageNot2D { extent: [u32; 3] },
-	ExtendMismatch { renderer: [u32; 3], image: [u32; 3] },
-}
-
-impl RendererMain {
-	pub fn image_supported(&self, output_image: &Arc<ImageView>) -> Result<(), ImageNotSupportedError> {
-		let extent = output_image.image().extent();
-		if output_image.format() != self.pipeline.output_format {
-			Err(FormatMismatch {
-				renderer: self.pipeline.output_format,
-				image: output_image.format(),
-			})
-		} else if extent[2] != 1 {
-			Err(ImageNot2D { extent })
-		} else if self.resources.extent != extent {
-			Err(ExtendMismatch {
-				renderer: self.resources.extent,
-				image: extent,
-			})
+	pub fn image_supported(&self, output_image: &MutImageAccess<Image2d, impl ImageAccessType>) -> anyhow::Result<()> {
+		let extent = output_image.extent();
+		if output_image.format() != self.pipeline.format.output_format {
+			Err(anyhow!(
+				"Expected format {:?} but output_image has format {:?}",
+				self.pipeline.format.output_format,
+				output_image.format()
+			))
+		} else if extent.depth != 1 {
+			Err(anyhow!("Image was not 2D"))
 		} else {
 			Ok(())
 		}

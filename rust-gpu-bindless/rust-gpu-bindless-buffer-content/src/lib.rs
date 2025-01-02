@@ -18,7 +18,7 @@ pub use static_assertions;
 /// # Safety
 /// The associated type Transfer must be the same on all targets. Writing followed by reading back a value must result
 /// in the same value.
-pub unsafe trait BufferStructPlain: Copy + Send + Sync {
+pub unsafe trait BufferStructPlain: Copy + Send + Sync + 'static {
 	type Transfer: AnyBitPattern + Send + Sync;
 
 	/// # Safety

@@ -1,5 +1,5 @@
 use crate::affine_transform::AffineTransform;
-use rust_gpu_bindless_macros::BufferStruct;
+use rust_gpu_bindless_macros::{BufferStruct, BufferStructPlain};
 use space_asset_disk_shader::range::RangeU32;
 
 #[repr(C)]
@@ -10,7 +10,7 @@ pub struct MeshInstance {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Default, Debug, BufferStruct)]
+#[derive(Copy, Clone, Default, Debug, BufferStructPlain)]
 pub struct MeshletInstance {
 	pub instance_id: u32,
 	pub mesh_id: u32,

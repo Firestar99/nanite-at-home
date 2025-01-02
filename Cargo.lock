@@ -2460,6 +2460,8 @@ dependencies = [
 name = "space-engine"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "ash",
  "bytemuck",
  "bytemuck_derive",
  "futures",
