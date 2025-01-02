@@ -12,8 +12,8 @@ use crate::generic::pipeline::{AccessLock, AccessLockError, BufferAccess};
 use crate::generic::platform::{BindlessPlatform, PendingExecution};
 use parking_lot::Mutex;
 use presser::Slab;
-use rust_gpu_bindless_shaders::buffer_content::Metadata;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use rust_gpu_bindless_shaders::buffer_content::{BufferStructIdentity, Metadata};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
@@ -546,6 +546,24 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 			let slab = P::mapped_buffer_to_slab(&self.slot);
 			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes());
 			t.iter().take(self.len()).copied().map(|t| T::read(t, Metadata {}))
+		}
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStructIdentity> MappedBuffer<'a, P, T> {
+	pub fn deref_mut(&mut self) -> &mut T {
+		unsafe {
+			let slab = P::mapped_buffer_to_slab(&self.slot);
+			&mut bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())[0]
+		}
+	}
+}
+
+impl<'a, P: BindlessPlatform, T: BufferStructIdentity> MappedBuffer<'a, P, [T]> {
+	pub fn as_mut_slice(&mut self) -> &mut [T] {
+		unsafe {
+			let slab = P::mapped_buffer_to_slab(&self.slot);
+			bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())
 		}
 	}
 }
