@@ -53,9 +53,44 @@ pub enum Debuggers {
 	DebugPrintf,
 }
 
+pub struct AppConfig<'a> {
+	pub name: &'a CStr,
+	pub version: u32,
+}
+
+impl<'a> Default for AppConfig<'a> {
+	fn default() -> Self {
+		Self {
+			name: c"Unknown App",
+			version: 0,
+		}
+	}
+}
+
+pub const fn compile_time_parse(input: &'static str) -> u32 {
+	match konst::primitive::parse_u32(input) {
+		Ok(e) => e,
+		Err(_) => unreachable!(),
+	}
+}
+
+#[macro_export]
+macro_rules! app_config_from_cargo {
+	() => {
+		$crate::generic::platform::ash::init::AppConfig {
+			name: env!("CARGO_PKG_NAME"),
+			version: $crate::make_api_version(
+				0,
+				$crate::generic::platform::ash::init::compile_time_parse(env!("CARGO_PKG_VERSION_MAJOR")),
+				$crate::generic::platform::ash::init::compile_time_parse(env!("CARGO_PKG_VERSION_MINOR")),
+				$crate::generic::platform::ash::init::compile_time_parse(env!("CARGO_PKG_VERSION_PATCH")),
+			),
+		}
+	};
+}
+
 pub struct AshSingleGraphicsQueueCreateInfo<'a> {
-	pub app_name: &'a CStr,
-	pub app_version: u32,
+	pub app: AppConfig<'a>,
 	pub shader_stages: ShaderStageFlags,
 	pub instance_extensions: &'a [&'a CStr],
 	pub extensions: &'a [&'a CStr],
@@ -70,8 +105,7 @@ pub struct AshSingleGraphicsQueueCreateInfo<'a> {
 impl Default for AshSingleGraphicsQueueCreateInfo<'_> {
 	fn default() -> Self {
 		Self {
-			app_name: c"Unknown App",
-			app_version: 0,
+			app: Default::default(),
 			shader_stages: ShaderStageFlags::ALL_GRAPHICS | ShaderStageFlags::COMPUTE,
 			instance_extensions: &[],
 			extensions: &[],
@@ -140,8 +174,8 @@ pub fn ash_init_single_graphics_queue(
 				&InstanceCreateInfo::default()
 					.application_info(
 						&ApplicationInfo::default()
-							.application_name(create_info.app_name)
-							.application_version(create_info.app_version)
+							.application_name(create_info.app.name)
+							.application_version(create_info.app.version)
 							.engine_name(c"rust-gpu-bindless")
 							.engine_version(1)
 							.api_version(ash::vk::make_api_version(0, 1, 3, 0)),

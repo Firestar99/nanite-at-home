@@ -5,6 +5,7 @@ pub mod generic {
 	pub mod platform;
 }
 
+pub use ash::vk::make_api_version;
 pub use rust_gpu_bindless_shaders::buffer_content;
 pub use rust_gpu_bindless_shaders::shader;
 pub use rust_gpu_bindless_shaders::shader_type;
