@@ -4,7 +4,7 @@ use crate::pipeline::rendering::{ClearValue, IndexType, LoadOp, RenderingAttachm
 use crate::platform::ash::Ash;
 use crate::spirv_std::image::{Arrayed, Dimensionality};
 use ash::vk::{
-	AttachmentLoadOp, AttachmentStoreOp, ImageLayout, ImageType as VkImageType, RenderingAttachmentInfo,
+	AttachmentLoadOp, AttachmentStoreOp, Extent2D, ImageLayout, ImageType as VkImageType, RenderingAttachmentInfo,
 	ShaderStageFlags,
 };
 use ash::vk::{BufferUsageFlags, Extent3D, ImageUsageFlags, ImageViewType, SampleCountFlags};
@@ -123,6 +123,15 @@ impl From<Extent> for Extent3D {
 			width: value.width,
 			height: value.height,
 			depth: value.depth,
+		}
+	}
+}
+
+impl From<Extent> for Extent2D {
+	fn from(value: Extent) -> Self {
+		Extent2D {
+			width: value.width,
+			height: value.height,
 		}
 	}
 }

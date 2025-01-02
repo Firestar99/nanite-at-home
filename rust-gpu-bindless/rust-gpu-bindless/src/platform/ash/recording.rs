@@ -1,7 +1,6 @@
 use crate::descriptor::MutDescExt;
 use crate::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessFrame, BufferSlot,
-	ImageSlot,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BufferSlot, ImageSlot,
 };
 use crate::pipeline::access_buffer::MutBufferAccess;
 use crate::pipeline::access_image::MutImageAccess;
@@ -359,11 +358,6 @@ impl<'a> AshRecordingContext<'a> {
 unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
 unsafe impl<'a> HasResourceContext<'a, Ash> for AshRecordingContext<'a> {
-	#[inline]
-	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
-		self.resource_context.execution.frame()
-	}
-
 	#[inline]
 	fn bindless(&self) -> &Bindless<Ash> {
 		&self.bindless

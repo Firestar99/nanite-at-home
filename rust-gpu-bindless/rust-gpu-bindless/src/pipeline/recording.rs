@@ -1,4 +1,4 @@
-use crate::descriptor::{Bindless, BindlessBufferUsage, BindlessFrame, BindlessImageUsage};
+use crate::descriptor::{Bindless, BindlessBufferUsage, BindlessImageUsage};
 use crate::pipeline::access_buffer::MutBufferAccess;
 use crate::pipeline::access_error::AccessError;
 use crate::pipeline::access_image::MutImageAccess;
@@ -41,9 +41,6 @@ impl<'a, P: BindlessPipelinePlatform> Deref for Recording<'a, P> {
 }
 
 pub unsafe trait HasResourceContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> + Sized {
-	/// Gets the [`BindlessFrame`] of this execution
-	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>>;
-
 	/// Gets the [`Bindless`] of this execution
 	fn bindless(&self) -> &Bindless<Ash>;
 
@@ -51,11 +48,6 @@ pub unsafe trait HasResourceContext<'a, P: BindlessPipelinePlatform>: TransientA
 }
 
 unsafe impl<'a, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Recording<'a, P> {
-	#[inline]
-	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
-		self.platform.bindless_frame()
-	}
-
 	#[inline]
 	fn bindless(&self) -> &Bindless<Ash> {
 		self.platform.bindless()

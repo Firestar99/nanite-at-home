@@ -73,22 +73,22 @@ impl AshExecutionResource {
 }
 
 pub struct AshExecution {
-	frame: Arc<BindlessFrame<Ash>>,
+	bindless: Arc<Bindless<Ash>>,
 	resource: AshExecutionResource,
 	/// To ensure no racing may happen, `wakers` must be held while this is checked for consistent results.
 	completed: AtomicBool,
-	wakers: Mutex<SmallVec<[Waker; 1]>>,
+	mutex: Mutex<MutexedAshExecution>,
+}
+
+pub struct MutexedAshExecution {
+	frame: Option<Arc<BindlessFrame<Ash>>>,
+	wakers: SmallVec<[Waker; 1]>,
 }
 
 impl AshExecution {
 	#[inline]
-	pub fn frame(&self) -> &Arc<BindlessFrame<Ash>> {
-		&self.frame
-	}
-
-	#[inline]
 	pub fn bindless(&self) -> &Arc<Bindless<Ash>> {
-		&self.frame.bindless
+		&self.bindless
 	}
 
 	#[inline]
@@ -96,12 +96,27 @@ impl AshExecution {
 		&self.resource
 	}
 
-	pub fn new(frame: Arc<BindlessFrame<Ash>>, resource: AshExecutionResource) -> Self {
+	pub fn new(resource: AshExecutionResource, frame: Arc<BindlessFrame<Ash>>) -> Self {
 		Self {
-			frame,
+			bindless: frame.bindless.clone(),
 			resource,
 			completed: AtomicBool::new(false),
-			wakers: Mutex::new(SmallVec::new()),
+			mutex: Mutex::new(MutexedAshExecution {
+				frame: Some(frame),
+				wakers: SmallVec::new(),
+			}),
+		}
+	}
+
+	pub unsafe fn new_no_frame(resource: AshExecutionResource, bindless: Arc<Bindless<Ash>>) -> Self {
+		Self {
+			bindless,
+			resource,
+			completed: AtomicBool::new(false),
+			mutex: Mutex::new(MutexedAshExecution {
+				frame: None,
+				wakers: SmallVec::new(),
+			}),
 		}
 	}
 
@@ -113,10 +128,12 @@ impl AshExecution {
 		let value = unsafe { device.get_semaphore_counter_value(self.resource.semaphore).unwrap() };
 		if value == self.resource.timeline_value {
 			let wakers = {
-				let mut guard = self.wakers.lock();
+				let mut guard = self.mutex.lock();
 				// must be set while holding `wakers` to prevent races
 				self.completed.store(true, Relaxed);
-				mem::replace(&mut *guard, SmallVec::new())
+				// frame has finished, drop frame to start resource reclamation
+				drop(guard.frame.take());
+				mem::replace(&mut guard.wakers, SmallVec::new())
 			};
 			for x in wakers {
 				x.wake();
@@ -124,6 +141,22 @@ impl AshExecution {
 			true
 		} else {
 			false
+		}
+	}
+
+	fn poll(&self, cx: &mut Context<'_>) -> Poll<()> {
+		// fast fail
+		if self.completed.load(Relaxed) {
+			Poll::Ready(())
+		} else {
+			let mut guard = self.mutex.lock();
+			// consistent check
+			if self.completed.load(Relaxed) {
+				Poll::Ready(())
+			} else {
+				guard.wakers.push(cx.waker().clone());
+				Poll::Pending
+			}
 		}
 	}
 }
@@ -136,32 +169,12 @@ impl Debug for AshExecution {
 	}
 }
 
-impl Future for AshExecution {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		// fast fail
-		if self.completed.load(Relaxed) {
-			Poll::Ready(())
-		} else {
-			let mut guard = self.wakers.lock();
-			// consistent check
-			if self.completed.load(Relaxed) {
-				Poll::Ready(())
-			} else {
-				guard.push(cx.waker().clone());
-				Poll::Pending
-			}
-		}
-	}
-}
-
 impl Drop for AshExecution {
 	fn drop(&mut self) {
-		self.frame
-			.bindless
+		let bindless = self.bindless();
+		bindless
 			.execution_manager
-			.push_to_free_pool(&self.frame.bindless, self.resource.clone())
+			.push_to_free_pool(&bindless, self.resource.clone())
 	}
 }
 
@@ -198,12 +211,24 @@ impl AshExecutionManager {
 	pub fn new_execution(&self) -> VkResult<Arc<AshExecution>> {
 		let bindless = self.bindless();
 		Ok(Arc::new(AshExecution::new(
+			self.pop_free_pool(&bindless)?,
 			bindless.frame(),
-			match self.free_pool.pop() {
-				None => AshExecutionResource::new(&bindless.device)?,
-				Some(e) => e,
-			},
 		)))
+	}
+
+	pub unsafe fn new_execution_no_frame(&self) -> VkResult<Arc<AshExecution>> {
+		let bindless = self.bindless();
+		Ok(Arc::new(AshExecution::new_no_frame(
+			self.pop_free_pool(&bindless)?,
+			bindless,
+		)))
+	}
+
+	fn pop_free_pool(&self, bindless: &Arc<Bindless<Ash>>) -> VkResult<AshExecutionResource> {
+		Ok(match self.free_pool.pop() {
+			None => AshExecutionResource::new(&bindless.device)?,
+			Some(e) => e,
+		})
 	}
 
 	fn push_to_free_pool(&self, bindless: &Arc<Bindless<Ash>>, mut resource: AshExecutionResource) {
@@ -212,8 +237,8 @@ impl AshExecutionManager {
 	}
 
 	/// # Safety
-	/// must only submit an execution exactly once
-	pub(super) unsafe fn submit_for_waiting(&self, execution: Arc<AshExecution>) -> VkResult<()> {
+	/// must only submit an execution acquired from [`Self::new_execution`] exactly once
+	pub unsafe fn submit_for_waiting(&self, execution: Arc<AshExecution>) -> VkResult<()> {
 		self.submit_for_waiting.push(execution);
 		self.notify_wait_semaphore_thread()?;
 		Ok(())
@@ -373,19 +398,7 @@ impl Future for AshPendingExecution {
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		if let Some(execution) = self.upgrade_ash_resource() {
-			// fast fail
-			if execution.completed.load(Relaxed) {
-				Poll::Ready(())
-			} else {
-				let mut guard = execution.wakers.lock();
-				// consistent check
-				if execution.completed.load(Relaxed) {
-					Poll::Ready(())
-				} else {
-					guard.push(cx.waker().clone());
-					Poll::Pending
-				}
-			}
+			execution.poll(cx)
 		} else {
 			Poll::Ready(())
 		}

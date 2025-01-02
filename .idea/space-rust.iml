@@ -22,6 +22,7 @@
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-macro-utils/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/tests/integration-test-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/tests/integration-test/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-winit/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

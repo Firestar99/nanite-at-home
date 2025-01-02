@@ -1,5 +1,5 @@
 [package]
-name = "integration-test"
+name = "rust-gpu-bindless-winit"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -10,18 +10,15 @@ repository.workspace = true
 # members
 rust-gpu-bindless = { workspace = true }
 winit = { workspace = true }
-rust-gpu-bindless-winit = { workspace = true }
-integration-test-shader = { workspace = true }
-
-# vulkan
 ash = { workspace = true }
+ash-window = { workspace = true }
 
 # other
-smallvec = { workspace = true }
+static_assertions = { workspace = true }
+parking_lot = { workspace = true }
+num_enum = { workspace = true }
 pollster = { workspace = true }
+smallvec = { workspace = true }
 anyhow = { workspace = true }
-approx = { workspace = true }
-
-[build-dependencies]
-anyhow = { workspace = true }
-rust-gpu-bindless-shader-builder = { workspace = true }
+thiserror = { workspace = true }
+profiling = { workspace = true }

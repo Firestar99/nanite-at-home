@@ -1,4 +1,4 @@
-use crate::descriptor::{Bindless, BindlessBufferUsage, BindlessFrame, Extent, Format};
+use crate::descriptor::{Bindless, BindlessBufferUsage, Extent, Format};
 use crate::pipeline::access_image::MutImageAccess;
 use crate::pipeline::access_type::{
 	ColorAttachment, DepthStencilAttachment, ImageAccessType, IndexReadable, IndirectCommandReadable,
@@ -15,7 +15,6 @@ use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Image2d, TransientAccess};
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
 use thiserror::Error;
 
 /// A RenderPass defines the formats of the color and depth attachments.
@@ -68,11 +67,6 @@ pub struct Rendering<'a: 'b, 'b, P: BindlessPipelinePlatform> {
 unsafe impl<'a, 'b, P: BindlessPipelinePlatform> TransientAccess<'a> for Rendering<'a, 'b, P> {}
 
 unsafe impl<'a: 'b, 'b, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Rendering<'a, 'b, P> {
-	#[inline]
-	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
-		self.platform.bindless_frame()
-	}
-
 	#[inline]
 	fn bindless(&self) -> &Bindless<Ash> {
 		self.platform.bindless()

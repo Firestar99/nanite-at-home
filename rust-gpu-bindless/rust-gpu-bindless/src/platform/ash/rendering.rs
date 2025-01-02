@@ -1,4 +1,4 @@
-use crate::descriptor::{Bindless, BindlessFrame};
+use crate::descriptor::Bindless;
 use crate::pipeline::access_type::{ColorAttachment, DepthStencilAttachment, IndexReadable, IndirectCommandReadable};
 use crate::pipeline::graphics_pipeline::BindlessGraphicsPipeline;
 use crate::pipeline::mesh_graphics_pipeline::BindlessMeshGraphicsPipeline;
@@ -17,7 +17,6 @@ use rust_gpu_bindless_shaders::descriptor::TransientAccess;
 use smallvec::SmallVec;
 use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 
 pub struct AshRenderingContext<'a, 'b> {
 	recording: &'b mut AshRecordingContext<'a>,
@@ -94,11 +93,6 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 unsafe impl<'a, 'b> TransientAccess<'a> for AshRenderingContext<'a, 'b> {}
 
 unsafe impl<'a, 'b> HasResourceContext<'a, Ash> for AshRenderingContext<'a, 'b> {
-	#[inline]
-	fn bindless_frame(&self) -> &Arc<BindlessFrame<Ash>> {
-		self.recording.bindless_frame()
-	}
-
 	#[inline]
 	fn bindless(&self) -> &Bindless<Ash> {
 		self.recording.bindless()

@@ -1,7 +1,7 @@
-use crate::window::event_loop::TaskState::*;
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::FromPrimitive;
+use crate::event_loop::TaskState::*;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use parking_lot::Mutex;
+use pollster::block_on;
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::future::Future;
@@ -23,7 +23,7 @@ trait EventLoopTaskTrait: Send + Sync {
 }
 
 #[repr(u8)]
-#[derive(FromPrimitive, ToPrimitive)]
+#[derive(TryFromPrimitive, IntoPrimitive)]
 enum TaskState {
 	WakerSubmitted,
 	WakerSubmitting,
@@ -68,7 +68,7 @@ where
 
 		let mut state_old = self.state.load(Relaxed);
 		loop {
-			state_old = match TaskState::from_u8(state_old).unwrap() {
+			state_old = match TaskState::try_from(state_old).unwrap() {
 				WakerSubmitted => {
 					// AcqRel instead of just Release so we can read Waker
 					match self
@@ -122,7 +122,7 @@ where
 	fn poll(&self, cx: &Context<'_>) -> Poll<R> {
 		let mut state_old = self.state.load(Relaxed);
 		loop {
-			state_old = match TaskState::from_u8(state_old).unwrap() {
+			state_old = match TaskState::try_from(state_old).unwrap() {
 				// WakerSubmitted | WakerSubmitting => unreachable!("poll called with waker already present"),
 				WakerSubmitting => {
 					// wait for Waker to be written to self.waker
@@ -182,7 +182,7 @@ where
 	R: Send + 'static,
 {
 	fn drop(&mut self) {
-		match TaskState::from_u8(self.state.load(Relaxed)).unwrap() {
+		match TaskState::try_from(self.state.load(Relaxed)).unwrap() {
 			WakerSubmitted => {
 				// SAFETY: WakerSubmitted means that this Future never finished and thus never consumed Waker
 				unsafe { self.waker.get_mut().assume_init_drop() }
@@ -277,9 +277,10 @@ impl Drop for EventLoopExecutor {
 	}
 }
 
-pub fn event_loop_init<F>(launch: F)
+pub fn event_loop_init<F, R>(launch: F)
 where
-	F: FnOnce(EventLoopExecutor, Receiver<Event<()>>) + Send + 'static,
+	F: FnOnce(EventLoopExecutor, Receiver<Event<()>>) -> R + Send + 'static,
+	R: Future<Output = ()>,
 {
 	// plain setup
 	let (exec_tx, exec_rx) = channel();
@@ -287,7 +288,7 @@ where
 	let mut render_join_handle = Some(
 		thread::Builder::new()
 			.name("RenderThread".into())
-			.spawn(|| launch(EventLoopExecutor::new(exec_tx), event_rx))
+			.spawn(|| block_on(launch(EventLoopExecutor::new(exec_tx), event_rx)))
 			.unwrap(),
 	);
 
@@ -304,7 +305,7 @@ where
 
 		// EventLoop setup
 		// FIXME replace with log
-		println!("[Info] Main: transitioning to Queue with EventLoop");
+		println!("EventLoop: transitioning to Queue with EventLoop");
 		event_loop = EventLoop::new().unwrap();
 		{
 			let notify = event_loop.create_proxy();

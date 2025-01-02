@@ -29,6 +29,28 @@ impl<P: BindlessPlatform> DescTable<P> for ImageTable<P> {
 	}
 }
 
+pub struct SwapchainImageId(u32);
+
+impl SwapchainImageId {
+	pub fn new(id: u32) -> Self {
+		Self(id)
+	}
+
+	pub fn get(&self) -> Option<u32> {
+		if self.0 != !0 {
+			Some(self.0)
+		} else {
+			None
+		}
+	}
+}
+
+impl Default for SwapchainImageId {
+	fn default() -> Self {
+		Self(!0)
+	}
+}
+
 pub struct ImageSlot<P: BindlessPlatform> {
 	pub platform: P::Image,
 	pub usage: BindlessImageUsage,
@@ -45,6 +67,7 @@ pub struct ImageSlot<P: BindlessPlatform> {
 	/// This may be replaced with a platform-specific getter, once you can query the name from gpu-allocator to not
 	/// unnecessarily duplicate the String (see my PR https://github.com/Traverse-Research/gpu-allocator/pull/257)
 	pub debug_name: String,
+	pub swapchain_image_id: SwapchainImageId,
 }
 
 impl<P: BindlessPlatform> Deref for ImageSlot<P> {
@@ -188,7 +211,8 @@ pub enum ImageAllocationError<P: BindlessPlatform> {
 	Slot(#[from] SlotAllocationError),
 	#[error("Image {name} must have at least one usage must be declared")]
 	NoUsageDeclared { name: String },
-	#[error("Image {name} must not be created with {swapchain:?}, instead swapchain images must be acquired from a swapchain", swapchain = BindlessImageUsage::SWAPCHAIN)]
+	#[error("Image {name} must not be created with {swapchain:?}, instead swapchain images must be acquired from a swapchain", swapchain = BindlessImageUsage::SWAPCHAIN
+	)]
 	SwapchainUsage { name: String },
 }
 
@@ -242,6 +266,7 @@ impl<'a, P: BindlessPlatform> ImageTableAccess<'a, P> {
 				array_layers: create_info.array_layers,
 				access_lock: AccessLock::new(create_info.usage.initial_image_access()),
 				debug_name: create_info.name.to_string(),
+				swapchain_image_id: SwapchainImageId::default(),
 			})?)
 		}
 	}
