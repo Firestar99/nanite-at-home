@@ -10,9 +10,10 @@ use crate::generic::descriptor::{
 };
 use crate::generic::pipeline::{AccessLock, AccessLockError, BufferAccess};
 use crate::generic::platform::{BindlessPlatform, PendingExecution};
+use bytemuck::Pod;
 use parking_lot::Mutex;
 use presser::Slab;
-use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct, BufferStructPlain};
 use rust_gpu_bindless_shaders::buffer_content::{BufferStructIdentity, Metadata};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
 use smallvec::SmallVec;
@@ -340,9 +341,31 @@ impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for RCDesc<P, Buf
 	}
 }
 
-impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for MutDesc<P, Buffer<[T]>> {
+impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for MutDesc<P, MutBuffer<[T]>> {
 	fn len(&self) -> usize {
 		self.inner_slot().len
+	}
+}
+
+impl<P: BindlessPlatform, T: BufferStructPlain, const N: usize> DescBufferLenExt<P> for RCDesc<P, Buffer<[T; N]>>
+where
+	// see `impl BufferStructPlain for [T; N]`
+	T: Default,
+	T::Transfer: Pod + Default,
+{
+	fn len(&self) -> usize {
+		N
+	}
+}
+
+impl<P: BindlessPlatform, T: BufferStructPlain, const N: usize> DescBufferLenExt<P> for MutDesc<P, MutBuffer<[T; N]>>
+where
+	// see `impl BufferStructPlain for [T; N]`
+	T: Default,
+	T::Transfer: Pod + Default,
+{
+	fn len(&self) -> usize {
+		N
 	}
 }
 
