@@ -69,6 +69,42 @@ impl From<u32> for Extent {
 	}
 }
 
+impl From<Extent> for [u32; 3] {
+	fn from(value: Extent) -> Self {
+		[value.width, value.height, value.depth]
+	}
+}
+
+impl From<Extent> for [u32; 2] {
+	fn from(value: Extent) -> Self {
+		[value.width, value.height]
+	}
+}
+
+impl From<Extent> for [u32; 1] {
+	fn from(value: Extent) -> Self {
+		[value.width]
+	}
+}
+
+impl From<Extent> for UVec3 {
+	fn from(value: Extent) -> Self {
+		UVec3::new(value.width, value.height, value.depth)
+	}
+}
+
+impl From<Extent> for UVec2 {
+	fn from(value: Extent) -> Self {
+		UVec2::new(value.width, value.height)
+	}
+}
+
+impl From<Extent> for u32 {
+	fn from(value: Extent) -> Self {
+		value.width
+	}
+}
+
 impl Default for Extent {
 	fn default() -> Self {
 		Extent {
@@ -155,5 +191,41 @@ impl Default for Offset {
 			height: 1,
 			depth: 1,
 		}
+	}
+}
+
+impl From<Offset> for [i32; 3] {
+	fn from(value: Offset) -> Self {
+		[value.width, value.height, value.depth]
+	}
+}
+
+impl From<Offset> for [i32; 2] {
+	fn from(value: Offset) -> Self {
+		[value.width, value.height]
+	}
+}
+
+impl From<Offset> for [i32; 1] {
+	fn from(value: Offset) -> Self {
+		[value.width]
+	}
+}
+
+impl From<Offset> for IVec3 {
+	fn from(value: Offset) -> Self {
+		IVec3::new(value.width, value.height, value.depth)
+	}
+}
+
+impl From<Offset> for IVec2 {
+	fn from(value: Offset) -> Self {
+		IVec2::new(value.width, value.height)
+	}
+}
+
+impl From<Offset> for i32 {
+	fn from(value: Offset) -> Self {
+		value.width
 	}
 }
