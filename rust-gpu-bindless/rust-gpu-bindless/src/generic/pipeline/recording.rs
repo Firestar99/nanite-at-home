@@ -83,8 +83,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		DA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &mut impl MutOrSharedBuffer<P, T, SA>,
-		dst: &mut MutBufferAccess<P, T, DA>,
+		src: impl MutOrSharedBuffer<P, T, SA>,
+		dst: &MutBufferAccess<P, T, DA>,
 	) -> Result<(), RecordingError<P>> {
 		src.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
 		dst.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
@@ -103,8 +103,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		DA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &mut impl MutOrSharedBuffer<P, [T], SA>,
-		dst: &mut MutBufferAccess<P, [T], DA>,
+		src: impl MutOrSharedBuffer<P, [T], SA>,
+		dst: &MutBufferAccess<P, [T], DA>,
 	) -> Result<(), RecordingError<P>> {
 		src.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
 		dst.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
@@ -125,8 +125,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		IA: ImageAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src_buffer: &mut MutBufferAccess<P, BT, BA>,
-		dst_image: &mut MutImageAccess<P, IT, IA>,
+		src_buffer: &MutBufferAccess<P, BT, BA>,
+		dst_image: &MutImageAccess<P, IT, IA>,
 	) -> Result<(), RecordingError<P>> {
 		src_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
 		dst_image.has_required_usage(BindlessImageUsage::TRANSFER_DST)?;
@@ -152,8 +152,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		BA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src_image: &mut MutImageAccess<P, IT, IA>,
-		dst_buffer: &mut MutBufferAccess<P, BT, BA>,
+		src_image: &MutImageAccess<P, IT, IA>,
+		dst_buffer: &MutBufferAccess<P, BT, BA>,
 	) -> Result<(), RecordingError<P>> {
 		src_image.has_required_usage(BindlessImageUsage::TRANSFER_SRC)?;
 		dst_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;

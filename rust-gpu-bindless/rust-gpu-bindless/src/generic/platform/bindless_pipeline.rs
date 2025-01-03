@@ -63,8 +63,8 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 		DA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &impl MutOrSharedBuffer<P, T, SA>,
-		dst: &mut MutBufferAccess<P, T, DA>,
+		src: impl MutOrSharedBuffer<P, T, SA>,
+		dst: &MutBufferAccess<P, T, DA>,
 	) -> Result<(), P::RecordingError>;
 
 	/// Copy the entire contents of one buffer of a slice to another buffer of the same slice.
@@ -74,8 +74,8 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 		DA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &impl MutOrSharedBuffer<P, [T], SA>,
-		dst: &mut MutBufferAccess<P, [T], DA>,
+		src: impl MutOrSharedBuffer<P, [T], SA>,
+		dst: &MutBufferAccess<P, [T], DA>,
 	) -> Result<(), P::RecordingError>;
 
 	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
@@ -87,8 +87,8 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 		IA: ImageAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &mut MutBufferAccess<P, BT, BA>,
-		dst: &mut MutImageAccess<P, IT, IA>,
+		src: &MutBufferAccess<P, BT, BA>,
+		dst: &MutImageAccess<P, IT, IA>,
 	) -> Result<(), P::RecordingError>;
 
 	/// Copy data from an image to a buffer. It is assumed that the image data is tightly packed within the buffer.
@@ -104,8 +104,8 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 		BA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &mut MutImageAccess<P, IT, IA>,
-		dst: &mut MutBufferAccess<P, BT, BA>,
+		src: &MutImageAccess<P, IT, IA>,
+		dst: &MutBufferAccess<P, BT, BA>,
 	) -> Result<(), P::RecordingError>;
 
 	/// Dispatch a bindless compute shader

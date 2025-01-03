@@ -372,8 +372,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		DA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &impl MutOrSharedBuffer<Ash, T, SA>,
-		dst: &mut MutBufferAccess<Ash, T, DA>,
+		src: impl MutOrSharedBuffer<Ash, T, SA>,
+		dst: &MutBufferAccess<Ash, T, DA>,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_flush();
@@ -400,8 +400,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		DA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &impl MutOrSharedBuffer<Ash, [T], SA>,
-		dst: &mut MutBufferAccess<Ash, [T], DA>,
+		src: impl MutOrSharedBuffer<Ash, [T], SA>,
+		dst: &MutBufferAccess<Ash, [T], DA>,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_flush();
@@ -429,8 +429,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		IA: ImageAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src_buffer: &mut MutBufferAccess<Ash, BT, BA>,
-		dst_image: &mut MutImageAccess<Ash, IT, IA>,
+		src_buffer: &MutBufferAccess<Ash, BT, BA>,
+		dst_image: &MutImageAccess<Ash, IT, IA>,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_flush();
@@ -469,8 +469,8 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 		BA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src_image: &mut MutImageAccess<Ash, IT, IA>,
-		dst_buffer: &mut MutBufferAccess<Ash, BT, BA>,
+		src_image: &MutImageAccess<Ash, IT, IA>,
+		dst_buffer: &MutBufferAccess<Ash, BT, BA>,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_flush();
