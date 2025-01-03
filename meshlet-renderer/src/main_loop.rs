@@ -66,7 +66,10 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 				},
 				Some(&mut PhysicalDeviceMeshShaderFeaturesEXT::default().mesh_shader(true)),
 			)?,
-			DescriptorCounts::REASONABLE_DEFAULTS,
+			DescriptorCounts {
+				buffers: 100_000,
+				..DescriptorCounts::REASONABLE_DEFAULTS
+			},
 		)
 	};
 
