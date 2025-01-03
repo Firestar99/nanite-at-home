@@ -2,9 +2,10 @@ use crate::generic::backing::range_set::DescriptorIndexIterator;
 use crate::generic::backing::table::{
 	DrainFlushQueue, RcTableSlot, SlotAllocationError, Table, TableInterface, TableSync,
 };
-use crate::generic::descriptor::descriptor_content::{DescContentCpu, DescTable};
-use crate::generic::descriptor::mutdesc::{MutDesc, MutDescExt};
-use crate::generic::descriptor::{Bindless, BindlessAllocationScheme, DescriptorCounts, Extent};
+use crate::generic::descriptor::{
+	Bindless, BindlessAllocationScheme, DescContentCpu, DescTable, DescriptorCounts, Extent, MutDesc, MutDescExt,
+	RCDesc, RCDescExt,
+};
 use crate::generic::pipeline::{AccessLock, ImageAccess};
 use crate::generic::platform::{BindlessPlatform, PendingExecution};
 use rust_gpu_bindless_shaders::descriptor::{Image, ImageType, MutImage};
@@ -82,6 +83,31 @@ impl<P: BindlessPlatform> Deref for ImageSlot<P> {
 impl<P: BindlessPlatform> ImageSlot<P> {
 	pub fn debug_name(&self) -> &str {
 		&self.debug_name
+	}
+}
+
+pub trait ImageDescExt {
+	fn extent(&self) -> Extent;
+	fn format(&self) -> Format;
+}
+
+impl<P: BindlessPlatform, T: ImageType> ImageDescExt for RCDesc<P, Image<T>> {
+	fn extent(&self) -> Extent {
+		self.inner_slot().extent
+	}
+
+	fn format(&self) -> Format {
+		self.inner_slot().format
+	}
+}
+
+impl<P: BindlessPlatform, T: ImageType> ImageDescExt for MutDesc<P, MutImage<T>> {
+	fn extent(&self) -> Extent {
+		self.inner_slot().extent
+	}
+
+	fn format(&self) -> Format {
+		self.inner_slot().format
 	}
 }
 

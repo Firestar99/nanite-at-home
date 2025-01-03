@@ -1,6 +1,6 @@
 use crate::generic::backing::table::RcTableSlot;
 use crate::generic::descriptor::{
-	BindlessImageUsage, BufferTable, DescTable, ImageSlot, ImageTable, RCDesc, RCDescExt,
+	BindlessImageUsage, BufferTable, DescTable, Extent, Format, ImageDescExt, ImageSlot, ImageTable, RCDesc, RCDescExt,
 };
 use crate::generic::descriptor::{MutDesc, MutDescExt};
 use crate::generic::pipeline::access_error::AccessError;
@@ -128,6 +128,16 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 				RCDesc::new(slot)
 			}
 		}
+	}
+}
+
+impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> ImageDescExt for MutImageAccess<'a, P, T, A> {
+	fn extent(&self) -> Extent {
+		unsafe { self.inner_slot().extent }
+	}
+
+	fn format(&self) -> Format {
+		unsafe { self.inner_slot().format }
 	}
 }
 
