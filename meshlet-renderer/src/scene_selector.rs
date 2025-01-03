@@ -1,7 +1,7 @@
+use rust_gpu_bindless::descriptor::Bindless;
 use space_asset_disk::meshlet::scene::MeshletSceneFile;
 use space_asset_rt::meshlet::scene::{upload_scene, MeshletSceneCpu};
 use space_asset_rt::uploader::Uploader;
-use space_engine::renderer::Init;
 use std::io;
 use std::sync::Arc;
 use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
@@ -11,7 +11,7 @@ pub struct SceneSelector<'a, F>
 where
 	F: FnMut(Arc<MeshletSceneCpu>),
 {
-	init: Arc<Init>,
+	bindless: Arc<Bindless>,
 	scenes: Vec<MeshletSceneFile<'a>>,
 	submit_scene: F,
 	selected: i32,
@@ -21,10 +21,10 @@ impl<'a, F> SceneSelector<'a, F>
 where
 	F: FnMut(Arc<MeshletSceneCpu>),
 {
-	pub async fn new(init: Arc<Init>, scenes: Vec<MeshletSceneFile<'a>>, submit_scene: F) -> io::Result<Self> {
+	pub async fn new(bindless: Arc<Bindless>, scenes: Vec<MeshletSceneFile<'a>>, submit_scene: F) -> io::Result<Self> {
 		assert!(!scenes.is_empty());
 		let mut this = Self {
-			init,
+			bindless,
 			scenes,
 			submit_scene,
 			selected: -1,
@@ -41,7 +41,7 @@ where
 		self.selected = selected;
 		let new_scene = self.scenes[selected as usize];
 		println!("loading scene {:?}", new_scene);
-		let scene = load_scene(&self.init, new_scene).await?;
+		let scene = load_scene(&self.bindless, new_scene).await?;
 		{
 			let num_instances = scene.num_instances;
 			println!("{} instances", num_instances);
@@ -79,14 +79,9 @@ where
 }
 
 #[profiling::function]
-async fn load_scene(init: &Arc<Init>, scene_file: MeshletSceneFile<'_>) -> io::Result<Arc<MeshletSceneCpu>> {
+async fn load_scene(bindless: &Arc<Bindless>, scene_file: MeshletSceneFile<'_>) -> io::Result<Arc<MeshletSceneCpu>> {
 	let scene = scene_file.load()?;
-	let uploader = Uploader::new(
-		init.bindless.clone(),
-		init.memory_allocator.clone(),
-		init.cmd_buffer_allocator.clone(),
-		init.queues.client.transfer.clone(),
-	);
+	let uploader = Uploader::new(bindless.clone());
 	let cpu = upload_scene(scene.root(), &uploader).await.unwrap();
 	Ok(Arc::new(cpu))
 }

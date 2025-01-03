@@ -1,6 +1,5 @@
-use async_std::task::block_on;
-use meshlet_renderer::main_loop::run;
-use space_engine::event_loop_init;
+use meshlet_renderer::main_loop::main_loop;
+use rust_gpu_bindless_winit::event_loop::event_loop_init;
 
 fn main() {
 	#[cfg(feature = "profile-with-puffin")]
@@ -10,5 +9,5 @@ fn main() {
 		puffin_http::Server::new(&server_addr).unwrap()
 	};
 
-	event_loop_init(|event_loop, input| block_on(run(event_loop, input)));
+	event_loop_init(|event_loop, input| async { main_loop(event_loop, input).await.unwrap() });
 }
