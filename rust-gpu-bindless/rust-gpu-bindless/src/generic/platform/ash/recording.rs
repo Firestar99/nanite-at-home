@@ -387,7 +387,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 				&[BufferCopy {
 					src_offset: 0,
 					dst_offset: 0,
-					size: WHOLE_SIZE,
+					size: src.size,
 				}],
 			);
 			Ok(())
@@ -415,7 +415,7 @@ unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
 				&[BufferCopy {
 					src_offset: 0,
 					dst_offset: 0,
-					size: WHOLE_SIZE,
+					size: src.size,
 				}],
 			);
 			Ok(())
