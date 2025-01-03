@@ -1,6 +1,6 @@
 use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferReading;
 use crate::renderer::frame_context::FrameContext;
-use ash::vk::{ColorComponentFlags, Filter, PipelineColorBlendAttachmentState, SamplerCreateInfo};
+use ash::vk::{ColorComponentFlags, CompareOp, Filter, PipelineColorBlendAttachmentState, SamplerCreateInfo};
 use rust_gpu_bindless::descriptor::{Bindless, RCDesc, RCDescExt, Sampler};
 use rust_gpu_bindless::pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo, PipelineColorBlendStateCreateInfo,
@@ -24,13 +24,16 @@ impl MeshletDraw {
 		let pipeline = bindless.create_mesh_graphics_pipeline::<Param<'static>>(
 			&g_buffer_format,
 			&MeshGraphicsPipelineCreateInfo {
-				rasterization_state: PipelineRasterizationStateCreateInfo::default(),
+				rasterization_state: PipelineRasterizationStateCreateInfo::default().line_width(1.),
 				color_blend_state: PipelineColorBlendStateCreateInfo::default().attachments(&[
 					PipelineColorBlendAttachmentState::default().color_write_mask(ColorComponentFlags::RGBA),
 					PipelineColorBlendAttachmentState::default().color_write_mask(ColorComponentFlags::RGBA),
 					PipelineColorBlendAttachmentState::default().color_write_mask(ColorComponentFlags::RGBA),
 				]),
-				depth_stencil_state: PipelineDepthStencilStateCreateInfo::default(),
+				depth_stencil_state: PipelineDepthStencilStateCreateInfo::default()
+					.depth_test_enable(true)
+					.depth_write_enable(true)
+					.depth_compare_op(CompareOp::LESS),
 			},
 			Option::<&FakeTaskShader>::None,
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_mesh::new(),

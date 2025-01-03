@@ -29,13 +29,19 @@ use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::{CursorGrabMode, WindowBuilder};
 
-const DEBUGGER: Debuggers = Debuggers::Validation;
+const DEBUGGER: Debuggers = Debuggers::RenderDoc;
 
 // how many meshlet instances can be dynamically allocated, 1 << 17 = 131072
 // about double what bistro needs if all meshlets rendered
 const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
 
 pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) -> anyhow::Result<()> {
+	if matches!(DEBUGGER, Debuggers::RenderDoc) {
+		// renderdoc does not yet support wayland
+		std::env::remove_var("WAYLAND_DISPLAY");
+		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+	}
+
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
 			let window = WindowBuilder::new().with_title("Nanite at home").build(e)?;
