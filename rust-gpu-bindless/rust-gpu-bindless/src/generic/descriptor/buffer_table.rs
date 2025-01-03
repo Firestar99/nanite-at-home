@@ -405,7 +405,7 @@ impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for 
 	}
 }
 
-#[derive(Debug, Error)]
+#[derive(Error)]
 pub enum MapError {
 	#[error("An execution is pending on the buffer that has not yet finished")]
 	PendingExecution,
@@ -415,6 +415,12 @@ pub enum MapError {
 	IncorrectLayout(BufferAccess),
 	#[error("AccessLockError: {0}")]
 	AccessLock(AccessLockError),
+}
+
+impl Debug for MapError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		Display::fmt(self, f)
+	}
 }
 
 impl From<AccessLockError> for MapError {
@@ -586,7 +592,7 @@ impl<'a, P: BindlessPlatform, T: BufferStructIdentity> MappedBuffer<'a, P, [T]> 
 	pub fn as_mut_slice(&mut self) -> &mut [T] {
 		unsafe {
 			let slab = P::mapped_buffer_to_slab(&self.slot);
-			bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())
+			&mut bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())[0..self.slot.len]
 		}
 	}
 }
