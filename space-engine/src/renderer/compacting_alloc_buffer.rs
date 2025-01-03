@@ -42,7 +42,9 @@ impl<T: BufferStructPlain> CompactingAllocBuffer<T> {
 		})?;
 		let indirect_args_default = bindless.buffer().alloc_shared_from_data(
 			&BindlessBufferCreateInfo {
-				usage: BindlessBufferUsage::STORAGE_BUFFER | BindlessBufferUsage::TRANSFER_SRC,
+				usage: BindlessBufferUsage::STORAGE_BUFFER
+					| BindlessBufferUsage::TRANSFER_SRC
+					| BindlessBufferUsage::MAP_WRITE,
 				name: &format!("CompactingAllocBuffer {} indirect args", name),
 				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 			},
