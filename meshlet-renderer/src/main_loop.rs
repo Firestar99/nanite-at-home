@@ -13,7 +13,9 @@ use rust_gpu_bindless::pipeline::{MutImageAccessExt, Present};
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
-use rust_gpu_bindless_winit::ash::{ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams};
+use rust_gpu_bindless_winit::ash::{
+	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
+};
 use rust_gpu_bindless_winit::event_loop::EventLoopExecutor;
 use rust_gpu_bindless_winit::window_ref::WindowRef;
 use space_asset_shader::affine_transform::AffineTransform;
@@ -56,10 +58,14 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	};
 
 	let mut swapchain = unsafe {
-		let swapchain_image_usage = BindlessImageUsage::STORAGE;
 		let bindless2 = bindless.clone();
 		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
-			AshSwapchainParams::automatic_best(&bindless2, surface, swapchain_image_usage)
+			AshSwapchainParams::automatic_best(
+				&bindless2,
+				surface,
+				BindlessImageUsage::STORAGE,
+				SwapchainImageFormatPreference::UNORM,
+			)
 		})
 	}
 	.await?;
