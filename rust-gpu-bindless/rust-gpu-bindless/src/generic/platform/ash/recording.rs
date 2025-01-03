@@ -12,11 +12,11 @@ use crate::generic::platform::ash::image_format::FormatExt;
 use crate::generic::platform::ash::{Ash, AshExecution, AshPendingExecution};
 use crate::generic::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use ash::vk::{
-	BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
-	CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo, Fence,
-	ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint,
-	PipelineStageFlags, SubmitInfo, TimelineSemaphoreSubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS,
-	REMAINING_MIP_LEVELS, WHOLE_SIZE,
+	BufferCopy, BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo,
+	CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2,
+	CopyImageToBufferInfo2, DependencyInfo, Fence, ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange,
+	MemoryBarrier2, Offset3D, PipelineBindPoint, PipelineStageFlags, SubmitInfo, TimelineSemaphoreSubmitInfo,
+	QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, WHOLE_SIZE,
 };
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, TransientAccess};
@@ -366,6 +366,62 @@ unsafe impl<'a> HasResourceContext<'a, Ash> for AshRecordingContext<'a> {
 }
 
 unsafe impl<'a> RecordingContext<'a, Ash> for AshRecordingContext<'a> {
+	unsafe fn copy_buffer_to_buffer<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &impl MutOrSharedBuffer<Ash, T, SA>,
+		dst: &mut MutBufferAccess<Ash, T, DA>,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_flush();
+			let device = &self.bindless.platform.device;
+			let src = src.inner_slot();
+			let dst = dst.inner_slot();
+			device.cmd_copy_buffer(
+				self.cmd,
+				src.buffer,
+				dst.buffer,
+				&[BufferCopy {
+					src_offset: 0,
+					dst_offset: 0,
+					size: WHOLE_SIZE,
+				}],
+			);
+			Ok(())
+		}
+	}
+
+	unsafe fn copy_buffer_to_buffer_slice<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &impl MutOrSharedBuffer<Ash, [T], SA>,
+		dst: &mut MutBufferAccess<Ash, [T], DA>,
+	) -> Result<(), AshRecordingError> {
+		unsafe {
+			self.ash_flush();
+			let device = &self.bindless.platform.device;
+			let src = src.inner_slot();
+			let dst = dst.inner_slot();
+			device.cmd_copy_buffer(
+				self.cmd,
+				src.buffer,
+				dst.buffer,
+				&[BufferCopy {
+					src_offset: 0,
+					dst_offset: 0,
+					size: WHOLE_SIZE,
+				}],
+			);
+			Ok(())
+		}
+	}
+
 	unsafe fn copy_buffer_to_image<
 		BT: BufferContent + ?Sized,
 		BA: BufferAccessType + TransferReadable,

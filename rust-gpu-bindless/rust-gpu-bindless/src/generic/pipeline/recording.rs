@@ -76,6 +76,46 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		self.platform
 	}
 
+	/// Copy the entire contents of one buffer of some sized value to another buffer of the same value.
+	pub fn copy_buffer_to_buffer<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &mut impl MutOrSharedBuffer<P, T, SA>,
+		dst: &mut MutBufferAccess<P, T, DA>,
+	) -> Result<(), RecordingError<P>> {
+		src.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
+		dst.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
+		unsafe {
+			Ok(self
+				.platform
+				.copy_buffer_to_buffer(src, dst)
+				.map_err(Into::<RecordingError<P>>::into)?)
+		}
+	}
+
+	/// Copy the entire contents of one buffer of a slice to another buffer of the same slice.
+	pub fn copy_buffer_to_buffer_slice<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &mut impl MutOrSharedBuffer<P, [T], SA>,
+		dst: &mut MutBufferAccess<P, [T], DA>,
+	) -> Result<(), RecordingError<P>> {
+		src.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
+		dst.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
+		unsafe {
+			Ok(self
+				.platform
+				.copy_buffer_to_buffer_slice(src, dst)
+				.map_err(Into::<RecordingError<P>>::into)?)
+		}
+	}
+
 	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
 	/// Partial copies and copying to mips other than mip 0 is not yet possible.
 	pub fn copy_buffer_to_image<

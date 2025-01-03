@@ -56,6 +56,28 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 }
 
 pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceContext<'a, P> {
+	/// Copy the entire contents of one buffer of some sized value to another buffer of the same value.
+	unsafe fn copy_buffer_to_buffer<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &impl MutOrSharedBuffer<P, T, SA>,
+		dst: &mut MutBufferAccess<P, T, DA>,
+	) -> Result<(), P::RecordingError>;
+
+	/// Copy the entire contents of one buffer of a slice to another buffer of the same slice.
+	unsafe fn copy_buffer_to_buffer_slice<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: &impl MutOrSharedBuffer<P, [T], SA>,
+		dst: &mut MutBufferAccess<P, [T], DA>,
+	) -> Result<(), P::RecordingError>;
+
 	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
 	/// Partial copies and copying to mips other than mip 0 is not yet possible.
 	unsafe fn copy_buffer_to_image<
