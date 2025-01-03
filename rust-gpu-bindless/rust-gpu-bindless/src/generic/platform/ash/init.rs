@@ -5,9 +5,9 @@ use ash::khr::{surface, swapchain};
 use ash::vk::{
 	ApplicationInfo, Bool32, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT,
 	DebugUtilsMessengerCallbackDataEXT, DebugUtilsMessengerCreateInfoEXT, DeviceCreateInfo, DeviceQueueCreateInfo,
-	InstanceCreateInfo, PhysicalDeviceFeatures, PhysicalDeviceType, PhysicalDeviceVulkan11Features,
-	PhysicalDeviceVulkan12Features, PhysicalDeviceVulkan13Features, PipelineCacheCreateInfo, QueueFlags,
-	ShaderStageFlags, ValidationFeatureEnableEXT, ValidationFeaturesEXT,
+	ExtendsDeviceCreateInfo, InstanceCreateInfo, PhysicalDeviceFeatures, PhysicalDeviceType,
+	PhysicalDeviceVulkan11Features, PhysicalDeviceVulkan12Features, PhysicalDeviceVulkan13Features,
+	PipelineCacheCreateInfo, QueueFlags, ShaderStageFlags, ValidationFeatureEnableEXT, ValidationFeaturesEXT,
 };
 use ash::Entry;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
@@ -124,8 +124,13 @@ impl Default for AshSingleGraphicsQueueCreateInfo<'_> {
 ///
 /// If any of the steps were to fail during initialization, this method currently does not clean up after itself
 /// correctly. It will only destroy itself correctly if the entire initialization succeeds.
-pub fn ash_init_single_graphics_queue(
+pub fn ash_init_single_graphics_queue(create_info: AshSingleGraphicsQueueCreateInfo) -> anyhow::Result<AshCreateInfo> {
+	ash_init_single_graphics_queue_with_push_next(create_info, None::<&mut PhysicalDeviceVulkan11Features>)
+}
+
+pub fn ash_init_single_graphics_queue_with_push_next(
 	mut create_info: AshSingleGraphicsQueueCreateInfo,
+	device_push_next: Option<&mut impl ExtendsDeviceCreateInfo>,
 ) -> anyhow::Result<AshCreateInfo> {
 	unsafe {
 		if matches!(create_info.debug, Debuggers::RenderDoc) {
@@ -232,9 +237,13 @@ pub fn ash_init_single_graphics_queue(
 
 		let device = {
 			let extensions = create_info.extensions.iter().map(|x| x.as_ptr()).collect::<Vec<_>>();
+			let mut device_create_info = DeviceCreateInfo::default();
+			if let Some(device_push_next) = device_push_next {
+				device_create_info = device_create_info.push_next(device_push_next);
+			}
 			instance.create_device(
 				physical_device,
-				&DeviceCreateInfo::default()
+				&device_create_info
 					.enabled_features(&create_info.features)
 					.enabled_extension_names(&extensions)
 					.push_next(&mut create_info.features_vk11)

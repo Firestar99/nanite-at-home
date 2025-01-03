@@ -5,13 +5,14 @@ use crate::lod_selector::LodSelector;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::{eval_ambient_light, eval_sun};
+use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
 use glam::{vec4, Mat4, UVec3, Vec3Swizzles};
 use parking_lot::Mutex;
 use rust_gpu_bindless::descriptor::{BindlessImageUsage, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::generic::descriptor::Bindless;
 use rust_gpu_bindless::pipeline::{MutImageAccessExt, Present};
 use rust_gpu_bindless::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
+	ash_init_single_graphics_queue_with_push_next, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
 use rust_gpu_bindless_winit::ash::{
 	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
@@ -47,12 +48,18 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 
 	let bindless = unsafe {
 		Bindless::<Ash>::new(
-			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
-				instance_extensions: window_extensions,
-				extensions: &[ash::khr::swapchain::NAME],
-				debug: DEBUGGER,
-				..AshSingleGraphicsQueueCreateInfo::default()
-			})?,
+			ash_init_single_graphics_queue_with_push_next(
+				AshSingleGraphicsQueueCreateInfo {
+					instance_extensions: window_extensions,
+					extensions: &[ash::khr::swapchain::NAME, ash::ext::mesh_shader::NAME],
+					shader_stages: ShaderStageFlags::ALL_GRAPHICS
+						| ShaderStageFlags::COMPUTE
+						| ShaderStageFlags::MESH_EXT,
+					debug: DEBUGGER,
+					..AshSingleGraphicsQueueCreateInfo::default()
+				},
+				Some(&mut PhysicalDeviceMeshShaderFeaturesEXT::default().mesh_shader(true)),
+			)?,
 			DescriptorCounts::REASONABLE_DEFAULTS,
 		)
 	};
