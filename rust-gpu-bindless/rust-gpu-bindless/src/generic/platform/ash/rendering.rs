@@ -213,20 +213,14 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 	unsafe fn draw_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<Ash, T>,
-		indirect: impl MutOrSharedBuffer<Ash, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<Ash, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_bind_graphics(pipeline, param)?;
 			let device = &self.bindless.platform.device;
 			let indirect = indirect.inner_slot();
-			device.cmd_draw_indirect(
-				self.cmd,
-				indirect.buffer,
-				0,
-				indirect.len as u32,
-				size_of::<DrawIndirectCommand>() as u32,
-			);
+			device.cmd_draw_indirect(self.cmd, indirect.buffer, 0, 1, size_of::<DrawIndirectCommand>() as u32);
 			Ok(())
 		}
 	}
@@ -240,7 +234,7 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<Ash, T>,
 		index_buffer: impl MutOrSharedBuffer<Ash, [IT], AIR>,
-		indirect: impl MutOrSharedBuffer<Ash, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<Ash, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
@@ -257,7 +251,7 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 				self.cmd,
 				indirect.buffer,
 				0,
-				indirect.len as u32,
+				1,
 				size_of::<DrawIndexedIndirectCommand>() as u32,
 			);
 			Ok(())
@@ -281,20 +275,14 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 	unsafe fn draw_mesh_tasks_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessMeshGraphicsPipeline<Ash, T>,
-		indirect: impl MutOrSharedBuffer<Ash, [[u32; 3]], AIC>,
+		indirect: impl MutOrSharedBuffer<Ash, [u32; 3], AIC>,
 		param: T,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
 			self.ash_bind_mesh_graphics(pipeline, param)?;
 			let device = &self.bindless.platform.extensions.mesh_shader();
 			let indirect = indirect.inner_slot();
-			device.cmd_draw_mesh_tasks_indirect(
-				self.cmd,
-				indirect.buffer,
-				0,
-				indirect.len as u32,
-				size_of::<[u32; 3]>() as u32,
-			);
+			device.cmd_draw_mesh_tasks_indirect(self.cmd, indirect.buffer, 0, 1, size_of::<[u32; 3]>() as u32);
 			Ok(())
 		}
 	}

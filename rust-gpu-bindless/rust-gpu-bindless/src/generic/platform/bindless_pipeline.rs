@@ -164,7 +164,7 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 	unsafe fn draw_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
-		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<P, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
 
@@ -177,7 +177,7 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
 		index_buffer: impl MutOrSharedBuffer<P, [IT], AIR>,
-		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<P, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
 
@@ -191,7 +191,7 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 	unsafe fn draw_mesh_tasks_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
-		indirect: impl MutOrSharedBuffer<P, [[u32; 3]], AIC>,
+		indirect: impl MutOrSharedBuffer<P, [u32; 3], AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
 }
