@@ -15,6 +15,7 @@ use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Image2d, TransientAccess};
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use thiserror::Error;
 
 /// A RenderPass defines the formats of the color and depth attachments.
@@ -68,7 +69,7 @@ unsafe impl<'a, 'b, P: BindlessPipelinePlatform> TransientAccess<'a> for Renderi
 
 unsafe impl<'a: 'b, 'b, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Rendering<'a, 'b, P> {
 	#[inline]
-	fn bindless(&self) -> &Bindless<Ash> {
+	fn bindless(&self) -> &Arc<Bindless<Ash>> {
 		self.platform.bindless()
 	}
 

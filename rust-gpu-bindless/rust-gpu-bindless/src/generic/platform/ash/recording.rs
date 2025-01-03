@@ -355,7 +355,7 @@ unsafe impl<'a> TransientAccess<'a> for AshRecordingContext<'a> {}
 
 unsafe impl<'a> HasResourceContext<'a, Ash> for AshRecordingContext<'a> {
 	#[inline]
-	fn bindless(&self) -> &Bindless<Ash> {
+	fn bindless(&self) -> &Arc<Bindless<Ash>> {
 		&self.bindless
 	}
 

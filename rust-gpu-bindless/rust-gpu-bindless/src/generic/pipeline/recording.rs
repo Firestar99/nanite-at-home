@@ -42,14 +42,14 @@ impl<'a, P: BindlessPipelinePlatform> Deref for Recording<'a, P> {
 
 pub unsafe trait HasResourceContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> + Sized {
 	/// Gets the [`Bindless`] of this execution
-	fn bindless(&self) -> &Bindless<Ash>;
+	fn bindless(&self) -> &Arc<Bindless<Ash>>;
 
 	fn resource_context(&self) -> &'a P::RecordingResourceContext;
 }
 
 unsafe impl<'a, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Recording<'a, P> {
 	#[inline]
-	fn bindless(&self) -> &Bindless<Ash> {
+	fn bindless(&self) -> &Arc<Bindless<Ash>> {
 		self.platform.bindless()
 	}
 
