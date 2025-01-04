@@ -56,23 +56,29 @@ pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) 
 	let instances = {
 		profiling::scope!("instances upload");
 		uploader
-			.upload_buffer_iter(this.instances.iter().map(|instance| MeshInstance {
-				transform: AffineTransform::new(instance.transform),
-				mesh_ids: deserialize_infallible::<ArchivedRangeU32, RangeU32>(&instance.mesh_ids),
-			}))
+			.upload_buffer_iter(
+				"instances",
+				this.instances.iter().map(|instance| MeshInstance {
+					transform: AffineTransform::new(instance.transform),
+					mesh_ids: deserialize_infallible::<ArchivedRangeU32, RangeU32>(&instance.mesh_ids),
+				}),
+			)
 			.await?
 	};
 
 	let scene = {
 		profiling::scope!("scene upload");
 		let meshes_buffer = uploader
-			.upload_buffer_iter(meshes.iter().map(|m| m.to_strong()))
+			.upload_buffer_iter("meshes", meshes.iter().map(|m| m.to_strong()))
 			.await?;
 		uploader
-			.upload_buffer_data(MeshletScene::<Strong> {
-				meshes: meshes_buffer.to_strong(),
-				instances: instances.to_strong(),
-			})
+			.upload_buffer_data(
+				"scene",
+				MeshletScene::<Strong> {
+					meshes: meshes_buffer.to_strong(),
+					instances: instances.to_strong(),
+				},
+			)
 			.await?
 	};
 	Ok(MeshletSceneCpu {

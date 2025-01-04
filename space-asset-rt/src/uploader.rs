@@ -33,7 +33,7 @@ impl Uploader {
 			default_normal_texture: None,
 		};
 
-		let default_texture = |uploader: &Uploader, color: Vec4| {
+		let default_texture = |uploader: &Uploader, name: &str, color: Vec4| {
 			let color = color.to_array().map(|f| (f * 255.) as u8);
 			let bytes = Vec::from(color).into();
 			let disk = Image2DDisk::<{ ImageType::RGBA_LINEAR as u32 }> {
@@ -43,23 +43,24 @@ impl Uploader {
 				},
 				bytes,
 			};
-			block_on(upload_image2d_disk(&disk, &uploader)).unwrap()
+			block_on(upload_image2d_disk(&disk, name, &uploader)).unwrap()
 		};
 
-		uploader.default_white_texture = Some(default_texture(&uploader, Vec4::splat(1.)));
-		uploader.default_normal_texture = Some(default_texture(&uploader, Vec4::splat(0.5)));
+		uploader.default_white_texture = Some(default_texture(&uploader, "default_white_texture", Vec4::splat(1.)));
+		uploader.default_normal_texture = Some(default_texture(&uploader, "default_normal_texture", Vec4::splat(0.5)));
 		uploader
 	}
 
 	// TODO eventually these should use a staging buffer to upload to non-host accessible memory, if required
 	pub fn upload_buffer_data<T: BufferStruct + 'static>(
 		&self,
+		name: &str,
 		data: T,
 	) -> impl Future<Output = anyhow::Result<RCDesc<Buffer<T>>>> + '_ {
 		let buffer = self.bindless.buffer().alloc_shared_from_data(
 			&BindlessBufferCreateInfo {
 				usage: BindlessBufferUsage::STORAGE_BUFFER | BindlessBufferUsage::MAP_WRITE,
-				name: "asset-rt-buffer",
+				name,
 				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 			},
 			data,
@@ -69,6 +70,7 @@ impl Uploader {
 
 	pub fn upload_buffer_iter<T: BufferStruct + 'static, I>(
 		&self,
+		name: &str,
 		iter: I,
 	) -> impl Future<Output = anyhow::Result<RCDesc<Buffer<[T]>>>> + '_
 	where
@@ -78,7 +80,7 @@ impl Uploader {
 		let buffer = self.bindless.buffer().alloc_shared_from_iter(
 			&BindlessBufferCreateInfo {
 				usage: BindlessBufferUsage::STORAGE_BUFFER | BindlessBufferUsage::MAP_WRITE,
-				name: "asset-rt-buffer",
+				name,
 				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 			},
 			iter,

@@ -36,12 +36,15 @@ pub fn upload_pbr_material<'a>(
 	let base_color = this
 		.base_color
 		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, uploader));
-	let normal = this.normal.as_ref().map(|tex| upload_image2d_archive(tex, uploader));
+		.map(|tex| upload_image2d_archive(tex, "base_color", uploader));
+	let normal = this
+		.normal
+		.as_ref()
+		.map(|tex| upload_image2d_archive(tex, "normal", uploader));
 	let occlusion_roughness_metallic = this
 		.occlusion_roughness_metallic
 		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, uploader));
+		.map(|tex| upload_image2d_archive(tex, "occlusion_roughness_metallic", uploader));
 	async {
 		Ok(PbrMaterial {
 			base_color: uploader

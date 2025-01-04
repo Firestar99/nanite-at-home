@@ -11,21 +11,24 @@ use std::future::Future;
 
 pub fn upload_image2d_archive<'a, const IMAGE_TYPE: u32>(
 	this: &'a ArchivedImage2DDisk<IMAGE_TYPE>,
+	name: &str,
 	uploader: &'a Uploader,
 ) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
-	upload_image2d(&this.metadata.deserialize(), &this.bytes, uploader)
+	upload_image2d(&this.metadata.deserialize(), &this.bytes, name, uploader)
 }
 
 pub fn upload_image2d_disk<'a, const IMAGE_TYPE: u32>(
 	this: &'a Image2DDisk<IMAGE_TYPE>,
+	name: &str,
 	uploader: &'a Uploader,
 ) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
-	upload_image2d(&this.metadata, &this.bytes, uploader)
+	upload_image2d(&this.metadata, &this.bytes, name, uploader)
 }
 
 fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 	this: &Image2DMetadata<IMAGE_TYPE>,
 	src: &'a [u8],
+	name: &str,
 	uploader: &'a Uploader,
 ) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
 	let result: anyhow::Result<_> = (|| {
@@ -35,7 +38,7 @@ fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 			let upload_buffer = bindless.buffer().alloc_slice(
 				&BindlessBufferCreateInfo {
 					usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::TRANSFER_SRC,
-					name: "staging image",
+					name: &format!("staging image: {name}"),
 					allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 				},
 				this.decompressed_bytes(),
@@ -49,6 +52,7 @@ fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 			format: select_format(this),
 			extent: Extent::from(UVec2::from(this.size)),
 			usage: BindlessImageUsage::SAMPLED | BindlessImageUsage::TRANSFER_DST,
+			name,
 			..BindlessImageCreateInfo::default()
 		})?;
 		Ok(bindless.execute(|cmd| {
