@@ -10,7 +10,7 @@ use rust_gpu_bindless::pipeline::{
 use rust_gpu_bindless::shader::{BindlessShader, SpirvBinary};
 use rust_gpu_bindless::shader_type::TaskShader;
 use space_asset_rt::meshlet::scene::MeshletSceneCpu;
-use space_asset_shader::meshlet::instance::MeshletInstance;
+use space_engine_shader::renderer::meshlet::intermediate::MeshletInstance;
 use space_engine_shader::renderer::meshlet::mesh_shader::Param;
 use std::sync::Arc;
 

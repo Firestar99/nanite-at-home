@@ -1,11 +1,12 @@
 use crate::renderer::camera::Camera;
 use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferWriter;
 use crate::renderer::frame_data::FrameData;
+use crate::renderer::meshlet::intermediate::MeshletGroupInstance;
 use core::ops::Range;
 use glam::UVec3;
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
-use space_asset_shader::meshlet::instance::{MeshInstance, MeshletInstance};
+use space_asset_shader::meshlet::instance::MeshInstance;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use static_assertions::const_assert_eq;
@@ -15,7 +16,7 @@ pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub scene: TransientDesc<'a, Buffer<MeshletScene<Strong>>>,
 	pub num_instances: u32,
-	pub compacting_alloc_buffer: CompactingAllocBufferWriter<'a, MeshletInstance>,
+	pub compacting_groups_out: CompactingAllocBufferWriter<'a, MeshletGroupInstance>,
 }
 
 pub const INSTANCE_CULL_WG_SIZE: u32 = 32;
@@ -43,15 +44,21 @@ pub fn instance_cull_compute(
 			let lod_ranges = mesh.lod_ranges.access(&descriptors);
 			let lod_level = u32::clamp(frame_data.debug_lod_level, 0, mesh.num_lod_ranges - 1) as usize;
 			let meshlet_range = lod_ranges.load(lod_level)..lod_ranges.load(lod_level + 1);
-			for meshlet_id in meshlet_range {
-				let _ = params.compacting_alloc_buffer.allocate(&mut descriptors).write(
+
+			let mut meshlet_id = meshlet_range.start;
+			while meshlet_id < meshlet_range.end {
+				let next_meshlet_id =
+					u32::clamp(meshlet_id + MeshletGroupInstance::MAX_MESHLET_CNT, 0, meshlet_range.end);
+				let _ = params.compacting_groups_out.allocate(&mut descriptors).write(
 					&mut descriptors,
-					MeshletInstance {
+					MeshletGroupInstance {
 						instance_id,
 						mesh_id,
 						meshlet_id,
+						meshlet_cnt: next_meshlet_id - meshlet_id,
 					},
 				);
+				meshlet_id = next_meshlet_id;
 			}
 		}
 	}

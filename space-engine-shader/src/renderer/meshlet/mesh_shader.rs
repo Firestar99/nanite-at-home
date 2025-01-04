@@ -1,11 +1,11 @@
 use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
 use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferReader;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
+use crate::renderer::meshlet::intermediate::MeshletInstance;
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
-use space_asset_shader::meshlet::instance::MeshletInstance;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use space_asset_shader::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
