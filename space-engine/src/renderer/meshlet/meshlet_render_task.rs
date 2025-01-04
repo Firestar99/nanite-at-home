@@ -1,4 +1,6 @@
+use crate::renderer::meshlet::instance_cull_compute::InstanceCullCompute;
 use crate::renderer::meshlet::mesh_pipeline::MeshDrawPipeline;
+use crate::renderer::meshlet::meshlet_allocation_buffer::MeshletAllocationBuffer;
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
 use parking_lot::Mutex;
@@ -15,9 +17,15 @@ use vulkano::sync::GpuFuture;
 
 pub struct MeshletRenderTask {
 	init: Arc<Init>,
+	alloc_buffer: MeshletAllocationBuffer,
+	instance_cull_compute: InstanceCullCompute,
 	mesh_pipeline: MeshDrawPipeline,
-	pub scenes: Mutex<Vec<Arc<MeshletSceneCpu>>>,
+	pub scene: Mutex<Option<Arc<MeshletSceneCpu>>>,
 }
+
+// how many meshlet instances can be dynamically allocated, 1 << 17 = 131072
+// about double what bistro needs if all meshlets rendered
+const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
 
 impl MeshletRenderTask {
 	pub fn new(
@@ -27,8 +35,11 @@ impl MeshletRenderTask {
 		g_roughness_metallic_format: Format,
 		depth_format: Format,
 	) -> Self {
+		let alloc_buffer = MeshletAllocationBuffer::new(init, MESHLET_INSTANCE_CAPACITY);
+		let instance_cull_compute = InstanceCullCompute::new(init, &alloc_buffer);
 		let mesh_pipeline = MeshDrawPipeline::new(
 			init,
+			&alloc_buffer,
 			g_albedo_format_srgb,
 			g_normal_format,
 			g_roughness_metallic_format,
@@ -37,8 +48,10 @@ impl MeshletRenderTask {
 
 		Self {
 			init: init.clone(),
+			alloc_buffer,
 			mesh_pipeline,
-			scenes: Mutex::new(Vec::new()),
+			instance_cull_compute,
+			scene: Mutex::new(None),
 		}
 	}
 
@@ -54,6 +67,8 @@ impl MeshletRenderTask {
 	) -> impl GpuFuture {
 		let init = &self.init;
 		let graphics = &init.queues.client.graphics_main;
+		let scene = self.scene.lock().clone();
+		self.alloc_buffer.reset();
 
 		let mut cmd = RecordingCommandBuffer::new(
 			init.cmd_buffer_allocator.clone(),
@@ -65,6 +80,12 @@ impl MeshletRenderTask {
 			},
 		)
 		.unwrap();
+
+		if let Some(scene) = scene.as_ref() {
+			self.instance_cull_compute
+				.dispatch(frame_context, &mut cmd, &self.alloc_buffer, &scene);
+		}
+
 		cmd.begin_rendering(RenderingInfo {
 			color_attachments: vec![
 				Some(RenderingAttachmentInfo {
@@ -96,17 +117,13 @@ impl MeshletRenderTask {
 			..RenderingInfo::default()
 		})
 		.unwrap();
-		let scenes = self.scenes.lock().clone();
-		#[allow(clippy::unused_enumerate_index)]
-		for (_id, scene) in scenes.iter().enumerate() {
-			profiling::scope!("draw scene", _id.to_string());
-			for mesh2instance in &scene.mesh2instances {
-				self.mesh_pipeline.draw(frame_context, &mut cmd, mesh2instance);
-			}
+		if let Some(scene) = scene.as_ref() {
+			self.mesh_pipeline
+				.draw(frame_context, &mut cmd, &self.alloc_buffer, &scene);
 		}
 		cmd.end_rendering().unwrap();
-		let cmd = cmd.end().unwrap();
 
+		let cmd = cmd.end().unwrap();
 		future.then_execute(graphics.clone(), cmd).unwrap()
 	}
 }

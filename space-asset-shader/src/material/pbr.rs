@@ -3,7 +3,7 @@ use vulkano_bindless_shaders::descriptor::{Desc, DescRef};
 use vulkano_bindless_shaders::spirv_std::image::Image2d;
 
 #[repr(C)]
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, Debug, BufferContent)]
 pub struct PbrMaterial<R: DescRef> {
 	pub base_color: Desc<R, Image2d>,
 	pub base_color_factor: [f32; 4],

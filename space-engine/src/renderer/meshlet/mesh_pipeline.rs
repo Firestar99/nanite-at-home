@@ -1,8 +1,8 @@
+use crate::renderer::meshlet::meshlet_allocation_buffer::MeshletAllocationBuffer;
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
-use space_asset_rt::meshlet::mesh2instance::MeshletMesh2InstanceCpu;
-use space_asset_shader::meshlet::mesh2instance::MeshletMesh2Instance;
-use space_engine_shader::renderer::meshlet::mesh_shader::{Params, TASK_WG_SIZE};
+use space_asset_rt::meshlet::scene::MeshletSceneCpu;
+use space_engine_shader::renderer::meshlet::mesh_shader::Params;
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
@@ -16,7 +16,8 @@ use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::subpass::{PipelineRenderingCreateInfo, PipelineSubpassType};
 use vulkano::pipeline::graphics::viewport::ViewportState;
-use vulkano::pipeline::DynamicState;
+use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
+use vulkano::pipeline::{DynamicState, Pipeline, PipelineBindPoint, PipelineLayout};
 use vulkano_bindless::descriptor::{RCDesc, RCDescExt, Sampler};
 use vulkano_bindless::pipeline::mesh_graphics_pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo,
@@ -30,14 +31,14 @@ pub struct MeshDrawPipeline {
 impl MeshDrawPipeline {
 	pub fn new(
 		init: &Arc<Init>,
+		alloc_buffer: &MeshletAllocationBuffer,
 		g_albedo_format_srgb: Format,
 		g_normal_format: Format,
 		g_roughness_metallic_format: Format,
 		depth_format: Format,
 	) -> Self {
-		let pipeline = BindlessMeshGraphicsPipeline::new_task(
+		let pipeline = BindlessMeshGraphicsPipeline::new_mesh(
 			init.bindless.clone(),
-			crate::shader::renderer::meshlet::mesh_shader::meshlet_task::new(),
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_mesh::new(),
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_fragment_g_buffer::new(),
 			MeshGraphicsPipelineCreateInfo {
@@ -83,7 +84,20 @@ impl MeshDrawPipeline {
 				conservative_rasterization_state: None,
 			},
 			Some(init.pipeline_cache.deref().clone()),
-			None,
+			Some(
+				PipelineLayout::new(
+					init.device.clone(),
+					PipelineLayoutCreateInfo {
+						set_layouts: Vec::from([
+							init.bindless.descriptor_set_layout.clone(),
+							alloc_buffer.descriptor_set.layout().clone(),
+						]),
+						push_constant_ranges: init.bindless.get_push_constant::<Params<'static>>(),
+						..PipelineLayoutCreateInfo::default()
+					},
+				)
+				.unwrap(),
+			),
 		)
 		.unwrap();
 
@@ -101,21 +115,26 @@ impl MeshDrawPipeline {
 		&self,
 		frame_context: &FrameContext,
 		cmd: &mut RecordingCommandBuffer,
-		mesh2instance: &MeshletMesh2InstanceCpu,
+		alloc_buffer: &MeshletAllocationBuffer,
+		scene: &MeshletSceneCpu,
 	) {
 		unsafe {
-			let groups_x = (mesh2instance.num_meshlets + TASK_WG_SIZE - 1) / TASK_WG_SIZE;
 			self.pipeline
-				.draw_mesh_tasks(
+				.draw_mesh_tasks_indirect(
 					cmd,
-					[groups_x, mesh2instance.instances.len() as u32, 1],
-					frame_context.modify(),
+					alloc_buffer.indirect_draw_args.clone().reinterpret(),
+					|cmd| {
+						cmd.bind_descriptor_sets(
+							PipelineBindPoint::Graphics,
+							self.pipeline.layout().clone(),
+							1,
+							alloc_buffer.descriptor_set.clone(),
+						)?;
+						frame_context.modify()(cmd)
+					},
 					Params {
 						frame_data: frame_context.frame_data_desc,
-						mesh2instance: MeshletMesh2Instance {
-							mesh: mesh2instance.mesh.to_transient(frame_context.fif),
-							instances: mesh2instance.instances.to_transient(frame_context.fif),
-						},
+						scene: scene.scene.to_transient(frame_context.fif),
 						sampler: self.sampler.to_transient(frame_context.fif),
 					},
 				)
