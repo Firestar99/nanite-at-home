@@ -267,10 +267,7 @@ pub fn ash_init_single_graphics_queue_with_push_next(
 		})?;
 		let cache = device.create_pipeline_cache(&PipelineCacheCreateInfo::default(), None)?;
 
-		let debug_utils = create_info
-			.extensions
-			.contains(&debug_utils::NAME)
-			.then(|| debug_utils::Device::new(&instance, &device));
+		let debug_utils = Some(debug_utils::Device::new(&instance, &device));
 
 		let mesh_shader = create_info
 			.extensions
