@@ -45,7 +45,9 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
 			let window = WindowBuilder::new().with_title("Nanite at home").build(e)?;
-			window.set_cursor_grab(CursorGrabMode::Locked).ok();
+			if let Err(_) = window.set_cursor_grab(CursorGrabMode::Confined) {
+				window.set_cursor_grab(CursorGrabMode::Locked).ok();
+			}
 			window.set_cursor_visible(false);
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
 			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
