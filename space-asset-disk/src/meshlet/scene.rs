@@ -66,6 +66,7 @@ impl<'a> MeshletSceneFile<'a> {
 		Ok(file)
 	}
 
+	#[profiling::function]
 	pub fn load(&self) -> io::Result<LoadedMeshletScene> {
 		let path = self.absolute_path()?;
 		let mut file = fs::File::open(&path)?;
@@ -78,6 +79,7 @@ impl<'a> MeshletSceneFile<'a> {
 
 		let mut bytes_read = 0;
 		loop {
+			profiling::scope!("File::read");
 			match file.read(&mut vec[bytes_read..]) {
 				Ok(e) => {
 					bytes_read += e;

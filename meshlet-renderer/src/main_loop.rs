@@ -29,7 +29,7 @@ use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::{CursorGrabMode, WindowBuilder};
 
-const DEBUGGER: Debuggers = Debuggers::RenderDoc;
+const DEBUGGER: Debuggers = Debuggers::None;
 
 // how many meshlet instances can be dynamically allocated, 1 << 17 = 131072
 // about double what bistro needs if all meshlets rendered
