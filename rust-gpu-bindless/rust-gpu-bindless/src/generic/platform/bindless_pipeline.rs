@@ -56,6 +56,28 @@ pub unsafe trait BindlessPipelinePlatform: BindlessPlatform {
 }
 
 pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceContext<'a, P> {
+	/// Copy the entire contents of one buffer of some sized value to another buffer of the same value.
+	unsafe fn copy_buffer_to_buffer<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: impl MutOrSharedBuffer<P, T, SA>,
+		dst: &MutBufferAccess<P, T, DA>,
+	) -> Result<(), P::RecordingError>;
+
+	/// Copy the entire contents of one buffer of a slice to another buffer of the same slice.
+	unsafe fn copy_buffer_to_buffer_slice<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: impl MutOrSharedBuffer<P, [T], SA>,
+		dst: &MutBufferAccess<P, [T], DA>,
+	) -> Result<(), P::RecordingError>;
+
 	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
 	/// Partial copies and copying to mips other than mip 0 is not yet possible.
 	unsafe fn copy_buffer_to_image<
@@ -65,8 +87,8 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 		IA: ImageAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &mut MutBufferAccess<P, BT, BA>,
-		dst: &mut MutImageAccess<P, IT, IA>,
+		src: &MutBufferAccess<P, BT, BA>,
+		dst: &MutImageAccess<P, IT, IA>,
 	) -> Result<(), P::RecordingError>;
 
 	/// Copy data from an image to a buffer. It is assumed that the image data is tightly packed within the buffer.
@@ -82,8 +104,8 @@ pub unsafe trait RecordingContext<'a, P: BindlessPipelinePlatform>: HasResourceC
 		BA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src: &mut MutImageAccess<P, IT, IA>,
-		dst: &mut MutBufferAccess<P, BT, BA>,
+		src: &MutImageAccess<P, IT, IA>,
+		dst: &MutBufferAccess<P, BT, BA>,
 	) -> Result<(), P::RecordingError>;
 
 	/// Dispatch a bindless compute shader
@@ -142,7 +164,7 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 	unsafe fn draw_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
-		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<P, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
 
@@ -155,7 +177,7 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
 		index_buffer: impl MutOrSharedBuffer<P, [IT], AIR>,
-		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<P, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
 
@@ -169,7 +191,7 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 	unsafe fn draw_mesh_tasks_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
-		indirect: impl MutOrSharedBuffer<P, [[u32; 3]], AIC>,
+		indirect: impl MutOrSharedBuffer<P, [u32; 3], AIC>,
 		param: T,
 	) -> Result<(), P::RecordingError>;
 }

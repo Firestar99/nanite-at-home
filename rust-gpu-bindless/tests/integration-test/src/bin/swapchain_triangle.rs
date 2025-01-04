@@ -20,7 +20,9 @@ use rust_gpu_bindless::generic::platform::ash::{
 use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless::spirv_std::glam::{Vec2, Vec4};
 use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
-use rust_gpu_bindless_winit::ash::{ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams};
+use rust_gpu_bindless_winit::ash::{
+	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
+};
 use rust_gpu_bindless_winit::event_loop::{event_loop_init, EventLoopExecutor};
 use rust_gpu_bindless_winit::window_ref::WindowRef;
 use smallvec::SmallVec;
@@ -60,10 +62,14 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 	};
 
 	let mut swapchain = unsafe {
-		let swapchain_image_usage = BindlessImageUsage::COLOR_ATTACHMENT;
 		let bindless2 = bindless.clone();
 		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
-			AshSwapchainParams::automatic_best(&bindless2, surface, swapchain_image_usage)
+			AshSwapchainParams::automatic_best(
+				&bindless2,
+				surface,
+				BindlessImageUsage::COLOR_ATTACHMENT,
+				SwapchainImageFormatPreference::SRGB,
+			)
 		})
 	}
 	.await?;

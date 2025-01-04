@@ -53,6 +53,33 @@ pub struct AshSwapchainParams {
 	pub composite_alpha: CompositeAlphaFlagsKHR,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum SwapchainImageFormatPreference {
+	UNORM,
+	SRGB,
+}
+
+impl SwapchainImageFormatPreference {
+	pub fn value_format(&self, format: Format) -> i32 {
+		match self {
+			SwapchainImageFormatPreference::UNORM => match format {
+				Format::R8G8B8A8_UNORM => 50,
+				Format::B8G8R8A8_UNORM => 40,
+				Format::R8G8B8A8_SRGB => 30,
+				Format::B8G8R8A8_SRGB => 20,
+				_ => 0,
+			},
+			SwapchainImageFormatPreference::SRGB => match format {
+				Format::R8G8B8A8_SRGB => 50,
+				Format::B8G8R8A8_SRGB => 40,
+				Format::R8G8B8A8_UNORM => 30,
+				Format::B8G8R8A8_UNORM => 20,
+				_ => 0,
+			},
+		}
+	}
+}
+
 impl AshSwapchainParams {
 	fn create_info(&self, surface: ash::vk::SurfaceKHR, extent: Extent) -> SwapchainCreateInfoKHR {
 		SwapchainCreateInfoKHR::default()
@@ -74,6 +101,7 @@ impl AshSwapchainParams {
 		bindless: &Arc<Bindless<Ash>>,
 		surface: &ash::vk::SurfaceKHR,
 		image_usage: BindlessImageUsage,
+		format_preference: SwapchainImageFormatPreference,
 	) -> anyhow::Result<Self> {
 		unsafe {
 			let surface_ext = bindless.extensions.surface();
@@ -85,13 +113,7 @@ impl AshSwapchainParams {
 				.into_iter()
 				.map(|e| (e.format, e.color_space))
 				.filter(|(_, c)| *c == ColorSpaceKHR::SRGB_NONLINEAR)
-				.max_by_key(|(format, _)| match *format {
-					Format::R8G8B8A8_SRGB => 50,
-					Format::B8G8R8A8_SRGB => 40,
-					Format::R8G8B8A8_UNORM => 30,
-					Format::B8G8R8A8_UNORM => 20,
-					_ => 0,
-				})
+				.max_by_key(|(format, _)| format_preference.value_format(*format))
 				.context("No SRGB_NONLINEAR surface format available")?;
 
 			let present_mode = surface_ext

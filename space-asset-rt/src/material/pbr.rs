@@ -1,12 +1,11 @@
 use crate::image::upload::upload_image2d_archive;
 use crate::upload_traits::ToStrong;
-use crate::uploader::{UploadError, Uploader};
+use crate::uploader::Uploader;
 use rust_gpu_bindless::descriptor::{RCDescExt, RC};
 use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::material::pbr::ArchivedPbrMaterialDisk;
 use space_asset_shader::material::pbr::PbrMaterial;
 use std::future::Future;
-use vulkano::Validated;
 
 pub struct PbrMaterials<'a> {
 	pub pbr_materials: &'a [PbrMaterial<RC>],
@@ -33,16 +32,19 @@ impl ToStrong for PbrMaterial<RC> {
 pub fn upload_pbr_material<'a>(
 	this: &'a ArchivedPbrMaterialDisk,
 	uploader: &'a Uploader,
-) -> impl Future<Output = Result<PbrMaterial<RC>, Validated<UploadError>>> + 'a {
+) -> impl Future<Output = anyhow::Result<PbrMaterial<RC>>> + 'a {
 	let base_color = this
 		.base_color
 		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, uploader));
-	let normal = this.normal.as_ref().map(|tex| upload_image2d_archive(tex, uploader));
+		.map(|tex| upload_image2d_archive(tex, "base_color", uploader));
+	let normal = this
+		.normal
+		.as_ref()
+		.map(|tex| upload_image2d_archive(tex, "normal", uploader));
 	let occlusion_roughness_metallic = this
 		.occlusion_roughness_metallic
 		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, uploader));
+		.map(|tex| upload_image2d_archive(tex, "occlusion_roughness_metallic", uploader));
 	async {
 		Ok(PbrMaterial {
 			base_color: uploader

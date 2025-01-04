@@ -68,7 +68,6 @@ spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a3
 spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", features = ["bytemuck"] }
 
 # async
-async-std = "1.12.0"
 futures = "0.3"
 rayon = "1.10"
 pollster = "0.4.0"

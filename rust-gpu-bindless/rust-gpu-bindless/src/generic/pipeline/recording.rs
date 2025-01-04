@@ -42,14 +42,14 @@ impl<'a, P: BindlessPipelinePlatform> Deref for Recording<'a, P> {
 
 pub unsafe trait HasResourceContext<'a, P: BindlessPipelinePlatform>: TransientAccess<'a> + Sized {
 	/// Gets the [`Bindless`] of this execution
-	fn bindless(&self) -> &Bindless<Ash>;
+	fn bindless(&self) -> &Arc<Bindless<Ash>>;
 
 	fn resource_context(&self) -> &'a P::RecordingResourceContext;
 }
 
 unsafe impl<'a, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Recording<'a, P> {
 	#[inline]
-	fn bindless(&self) -> &Bindless<Ash> {
+	fn bindless(&self) -> &Arc<Bindless<Ash>> {
 		self.platform.bindless()
 	}
 
@@ -76,6 +76,46 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		self.platform
 	}
 
+	/// Copy the entire contents of one buffer of some sized value to another buffer of the same value.
+	pub fn copy_buffer_to_buffer<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: impl MutOrSharedBuffer<P, T, SA>,
+		dst: &MutBufferAccess<P, T, DA>,
+	) -> Result<(), RecordingError<P>> {
+		src.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
+		dst.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
+		unsafe {
+			Ok(self
+				.platform
+				.copy_buffer_to_buffer(src, dst)
+				.map_err(Into::<RecordingError<P>>::into)?)
+		}
+	}
+
+	/// Copy the entire contents of one buffer of a slice to another buffer of the same slice.
+	pub fn copy_buffer_to_buffer_slice<
+		T: BufferStruct,
+		SA: BufferAccessType + TransferReadable,
+		DA: BufferAccessType + TransferWriteable,
+	>(
+		&mut self,
+		src: impl MutOrSharedBuffer<P, [T], SA>,
+		dst: &MutBufferAccess<P, [T], DA>,
+	) -> Result<(), RecordingError<P>> {
+		src.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
+		dst.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;
+		unsafe {
+			Ok(self
+				.platform
+				.copy_buffer_to_buffer_slice(src, dst)
+				.map_err(Into::<RecordingError<P>>::into)?)
+		}
+	}
+
 	/// Copy data from a buffer to an image. It is assumed that the image data is tightly packed within the buffer.
 	/// Partial copies and copying to mips other than mip 0 is not yet possible.
 	pub fn copy_buffer_to_image<
@@ -85,8 +125,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		IA: ImageAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src_buffer: &mut MutBufferAccess<P, BT, BA>,
-		dst_image: &mut MutImageAccess<P, IT, IA>,
+		src_buffer: &MutBufferAccess<P, BT, BA>,
+		dst_image: &MutImageAccess<P, IT, IA>,
 	) -> Result<(), RecordingError<P>> {
 		src_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_SRC)?;
 		dst_image.has_required_usage(BindlessImageUsage::TRANSFER_DST)?;
@@ -112,8 +152,8 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 		BA: BufferAccessType + TransferWriteable,
 	>(
 		&mut self,
-		src_image: &mut MutImageAccess<P, IT, IA>,
-		dst_buffer: &mut MutBufferAccess<P, BT, BA>,
+		src_image: &MutImageAccess<P, IT, IA>,
+		dst_buffer: &MutBufferAccess<P, BT, BA>,
 	) -> Result<(), RecordingError<P>> {
 		src_image.has_required_usage(BindlessImageUsage::TRANSFER_SRC)?;
 		dst_buffer.has_required_usage(BindlessBufferUsage::TRANSFER_DST)?;

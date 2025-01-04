@@ -10,7 +10,7 @@ repository.workspace = true
 # members
 space-asset-disk = { workspace = true }
 space-asset-shader = { workspace = true }
-rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true, features = ["primary"] }
 rust-gpu-bindless-shaders = { workspace = true }
 
 # model loader
@@ -24,8 +24,11 @@ rkyv = { workspace = true }
 
 # async
 futures = { workspace = true }
-async-std = { workspace = true }
 rayon = { workspace = true }
+pollster = { workspace = true }
 
 # profiling
 profiling = { workspace = true }
+
+# other
+anyhow = { workspace = true }

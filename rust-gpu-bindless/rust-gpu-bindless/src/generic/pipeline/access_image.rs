@@ -1,6 +1,6 @@
 use crate::generic::backing::table::RcTableSlot;
 use crate::generic::descriptor::{
-	BindlessImageUsage, BufferTable, DescTable, ImageSlot, ImageTable, RCDesc, RCDescExt,
+	BindlessImageUsage, DescTable, Extent, Format, ImageDescExt, ImageSlot, ImageTable, RCDesc, RCDescExt,
 };
 use crate::generic::descriptor::{MutDesc, MutDescExt};
 use crate::generic::pipeline::access_error::AccessError;
@@ -19,7 +19,7 @@ pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescE
 	fn access<'a, A: ImageAccessType>(self, cmd: &Recording<'a, P>)
 		-> Result<MutImageAccess<'a, P, T, A>, AccessError>;
 
-	/// Access this mutable image to use it for recording. Discards the contents of this buffer and acts as if it were
+	/// Access this mutable image to use it for recording. Discards the contents of this image and acts as if it were
 	/// uninitialized.
 	fn access_dont_care<'a, A: ImageAccessType>(
 		self,
@@ -124,10 +124,20 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 			let slot = self.slot;
 			async move {
 				pending_execution.await;
-				BufferTable::<P>::get_slot(&slot).access_lock.unlock_to_shared();
+				ImageTable::<P>::get_slot(&slot).access_lock.unlock_to_shared();
 				RCDesc::new(slot)
 			}
 		}
+	}
+}
+
+impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> ImageDescExt for MutImageAccess<'a, P, T, A> {
+	fn extent(&self) -> Extent {
+		unsafe { self.inner_slot().extent }
+	}
+
+	fn format(&self) -> Format {
+		unsafe { self.inner_slot().format }
 	}
 }
 

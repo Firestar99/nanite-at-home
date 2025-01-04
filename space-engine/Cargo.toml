@@ -9,11 +9,12 @@ repository.workspace = true
 [dependencies]
 # members
 space-engine-shader = { workspace = true }
-rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true, features = ["primary"] }
 space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 
-# device
+# vulkan
+ash = { workspace = true }
 winit = { workspace = true }
 
 # async
@@ -37,6 +38,7 @@ profiling = { workspace = true }
 parking_lot = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
+anyhow = { workspace = true }
 once_cell = { workspace = true }
 
 [build-dependencies]

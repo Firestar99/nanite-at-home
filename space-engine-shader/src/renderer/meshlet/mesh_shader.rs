@@ -1,5 +1,5 @@
 use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
-use crate::renderer::allocation_buffer::AllocationBufferReader;
+use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferReader;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
@@ -10,7 +10,6 @@ use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use space_asset_shader::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use spirv_std::arch::{set_mesh_outputs_ext, IndexUnchecked};
-use spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT;
 use spirv_std::Sampler;
 use static_assertions::const_assert_eq;
 
@@ -19,6 +18,7 @@ pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub scene: TransientDesc<'a, Buffer<MeshletScene<Strong>>>,
 	pub sampler: TransientDesc<'a, Sampler>,
+	pub compacting_alloc_buffer: CompactingAllocBufferReader<'a, MeshletInstance>,
 }
 
 #[allow(dead_code)]
@@ -40,9 +40,6 @@ const_assert_eq!(MESHLET_MAX_TRIANGLES, 124);
 pub fn meshlet_mesh(
 	#[bindless(descriptors)] descriptors: Descriptors,
 	#[bindless(param)] param: &Param<'static>,
-	#[spirv(storage_buffer, descriptor_set = 1, binding = 0)] out_meshlet_instances_buffer: &[u32],
-	#[spirv(storage_buffer, descriptor_set = 1, binding = 1)]
-	out_meshlet_indirect_draw_args: &DrawMeshTasksIndirectCommandEXT,
 	#[spirv(workgroup_id)] wg_id: UVec3,
 	#[spirv(local_invocation_id)] inv_id: UVec3,
 	#[spirv(primitive_triangle_indices_ext)] prim_indices: &mut [UVec3; MESHLET_MAX_TRIANGLES as usize],
@@ -56,13 +53,10 @@ pub fn meshlet_mesh(
 
 	let frame_data = param.frame_data.access(&descriptors).load();
 	let scene = param.scene.access(&descriptors).load();
-	let meshlet_instance = unsafe {
-		AllocationBufferReader::<MeshletInstance>::new(
-			out_meshlet_instances_buffer,
-			&out_meshlet_indirect_draw_args.group_count_x,
-		)
-		.read(meshlet_instance_id)
-	};
+	let meshlet_instance = param
+		.compacting_alloc_buffer
+		.access(&descriptors)
+		.read(meshlet_instance_id);
 	let instance = scene
 		.instances
 		.access(&descriptors)

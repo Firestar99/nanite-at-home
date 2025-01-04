@@ -6,7 +6,8 @@ use crate::generic::pipeline::access_type::{BufferAccess, BufferAccessType, Shad
 use crate::generic::pipeline::mut_or_shared::MutOrSharedBuffer;
 use crate::generic::pipeline::recording::{HasResourceContext, Recording};
 use crate::generic::platform::{BindlessPipelinePlatform, RecordingResourceContext};
-use rust_gpu_bindless_shaders::buffer_content::BufferContent;
+use bytemuck::Pod;
+use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct, BufferStructPlain};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer, TransientDesc};
 use std::future::Future;
 use std::marker::PhantomData;
@@ -136,6 +137,24 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 				RCDesc::new(slot)
 			}
 		}
+	}
+}
+
+impl<'a, P: BindlessPipelinePlatform, T: BufferStruct, A: BufferAccessType> MutBufferAccess<'a, P, [T], A> {
+	pub fn len(&self) -> usize {
+		unsafe { self.inner_slot().len }
+	}
+}
+
+impl<'a, P: BindlessPipelinePlatform, T: BufferStructPlain, A: BufferAccessType, const N: usize>
+	MutBufferAccess<'a, P, [T; N], A>
+where
+	// see `impl BufferStructPlain for [T; N]`
+	T: Default,
+	T::Transfer: Pod + Default,
+{
+	pub const fn len(&self) -> usize {
+		N
 	}
 }
 

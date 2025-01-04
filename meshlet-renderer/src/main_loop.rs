@@ -5,97 +5,96 @@ use crate::lod_selector::LodSelector;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::{eval_ambient_light, eval_sun};
+use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
 use glam::{vec4, Mat4, UVec3, Vec3Swizzles};
-use rust_gpu_bindless::descriptor::descriptor_counts::DescriptorCounts;
+use parking_lot::Mutex;
+use rust_gpu_bindless::descriptor::{BindlessImageUsage, DescriptorCounts, ImageDescExt};
+use rust_gpu_bindless::generic::descriptor::Bindless;
+use rust_gpu_bindless::pipeline::{MutImageAccessExt, Present};
+use rust_gpu_bindless::platform::ash::{
+	ash_init_single_graphics_queue_with_push_next, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
+};
+use rust_gpu_bindless_winit::ash::{
+	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
+};
+use rust_gpu_bindless_winit::event_loop::EventLoopExecutor;
+use rust_gpu_bindless_winit::window_ref::WindowRef;
 use space_asset_shader::affine_transform::AffineTransform;
-use space_engine::device::init::Plugin;
-use space_engine::device::plugins::rust_gpu_bindless::VulkanoBindless;
-use space_engine::device::plugins::rust_gpu_workaround::RustGpuWorkaround;
-use space_engine::device::plugins::standard_validation_layer_plugin::StandardValidationLayerPlugin;
-use space_engine::generate_application_config;
-use space_engine::renderer::queue_allocation::SpaceQueueAllocator;
-use space_engine::renderer::renderer_plugin::RendererPlugin;
-use space_engine::renderer::renderers::main::{RenderPipelineMain, RendererMain};
-use space_engine::renderer::Init;
-use space_engine::window::event_loop::EventLoopExecutor;
-use space_engine::window::swapchain::Swapchain;
-use space_engine::window::window_plugin::WindowPlugin;
-use space_engine::window::window_ref::WindowRef;
+use space_engine::renderer::renderers::main::RenderPipelineMain;
 use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
-use vulkano::shader::ShaderStages;
-use vulkano::sync::GpuFuture;
 use winit::event::{Event, WindowEvent};
+use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::{CursorGrabMode, WindowBuilder};
 
-pub enum Debugger {
-	None,
-	Validation,
-	RenderDoc,
-}
+const DEBUGGER: Debuggers = Debuggers::None;
 
-const DEBUGGER: Debugger = Debugger::None;
+// how many meshlet instances can be dynamically allocated, 1 << 17 = 131072
+// about double what bistro needs if all meshlets rendered
+const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
 
-pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
-	if matches!(DEBUGGER, Debugger::RenderDoc) {
+pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) -> anyhow::Result<()> {
+	if matches!(DEBUGGER, Debuggers::RenderDoc) {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
 		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
 	}
 
-	let init;
-	{
-		let window_plugin = WindowPlugin::new(&event_loop).await;
-		let mut vec: Vec<&dyn Plugin> = vec![&RendererPlugin, &RustGpuWorkaround, &VulkanoBindless, &window_plugin];
-		if matches!(DEBUGGER, Debugger::Validation) {
-			vec.push(&StandardValidationLayerPlugin);
-		}
+	let (window, window_extensions) = event_loop
+		.spawn(|e| {
+			let window = WindowBuilder::new().with_title("Nanite at home").build(e)?;
+			window.set_cursor_grab(CursorGrabMode::Locked).ok();
+			window.set_cursor_visible(false);
+			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
+			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
+		})
+		.await?;
 
-		let stages = ShaderStages::TASK
-			| ShaderStages::MESH
-			| ShaderStages::VERTEX
-			| ShaderStages::FRAGMENT
-			| ShaderStages::COMPUTE;
-		init = Init::new(
-			generate_application_config!(),
-			&vec,
-			SpaceQueueAllocator::new(),
-			stages,
-			|phy| {
-				DescriptorCounts {
-					buffers: 100_000,
-					..DescriptorCounts::reasonable_defaults(phy)
-				}
-				.min(DescriptorCounts::limits(phy))
+	let bindless = unsafe {
+		Bindless::<Ash>::new(
+			ash_init_single_graphics_queue_with_push_next(
+				AshSingleGraphicsQueueCreateInfo {
+					instance_extensions: window_extensions,
+					extensions: &[ash::khr::swapchain::NAME, ash::ext::mesh_shader::NAME],
+					shader_stages: ShaderStageFlags::ALL_GRAPHICS
+						| ShaderStageFlags::COMPUTE
+						| ShaderStageFlags::MESH_EXT,
+					debug: DEBUGGER,
+					..AshSingleGraphicsQueueCreateInfo::default()
+				},
+				Some(&mut PhysicalDeviceMeshShaderFeaturesEXT::default().mesh_shader(true)),
+			)?,
+			DescriptorCounts {
+				buffers: 100_000,
+				..DescriptorCounts::REASONABLE_DEFAULTS
 			},
 		)
-		.await;
-	}
-	let graphics_main = &init.queues.client.graphics_main;
+	};
 
-	// window
-	let window = event_loop
-		.spawn(move |event_loop| {
-			WindowRef::new({
-				let window = WindowBuilder::new().build(event_loop).unwrap();
-				window.set_cursor_grab(CursorGrabMode::Locked).ok();
-				window.set_cursor_visible(false);
-				window
-			})
+	let mut swapchain = unsafe {
+		let bindless2 = bindless.clone();
+		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
+			AshSwapchainParams::automatic_best(
+				&bindless2,
+				surface,
+				BindlessImageUsage::STORAGE,
+				SwapchainImageFormatPreference::UNORM,
+			)
 		})
-		.await;
-	let (swapchain, mut swapchain_controller) = Swapchain::new(graphics_main.clone(), event_loop, window.clone()).await;
+	}
+	.await?;
 
 	// renderer
-	let render_pipeline_main = RenderPipelineMain::new(&init, swapchain.format());
-	let mut renderer_main: Option<RendererMain> = None;
+	let render_pipeline_main =
+		RenderPipelineMain::new(&bindless, swapchain.params().format, MESHLET_INSTANCE_CAPACITY)?;
+	let mut renderer_main = render_pipeline_main.new_renderer()?;
 
 	// model loading
-	let mut scene_selector = SceneSelector::new(init.clone(), sample_scenes(), |scene| {
-		let mut guard = render_pipeline_main.meshlet_task.scene.lock();
-		*guard = Some(scene);
+	let scene = Mutex::new(None);
+	let mut scene_selector = SceneSelector::new(bindless.clone(), sample_scenes(), |s| {
+		*scene.lock() = Some(s);
 	})
 	.await
 	.unwrap();
@@ -108,12 +107,13 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 	'outer: loop {
 		profiling::finish_frame!();
 		profiling::scope!("frame");
+
 		// event handling
 		for event in inputs.try_iter() {
-			swapchain_controller.handle_input(&event);
+			swapchain.handle_input(&event);
 			camera_controls.handle_input(&event);
 			debug_settings_selector.handle_input(&event);
-			scene_selector.handle_input(&event).await.unwrap();
+			scene_selector.handle_input(&event).await?;
 			lod_selector.handle_input(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
@@ -125,20 +125,11 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 		}
 
 		// renderer
-		let (swapchain_acquire, acquired_image) = swapchain_controller.acquire_image(None).await;
-		if renderer_main.as_ref().map_or(true, |renderer| {
-			renderer.image_supported(acquired_image.image_view()).is_err()
-		}) {
-			profiling::scope!("recreate renderer");
-			// drop then recreate to better recycle memory
-			drop(renderer_main.take());
-			renderer_main = Some(render_pipeline_main.new_renderer(acquired_image.image_view().image().extent(), 2));
-		}
-
 		profiling::scope!("render");
+		let output_image = swapchain.acquire_image(None).await?;
 		let frame_data = {
 			let delta_time = last_frame.next();
-			let out_extent = UVec3::from_array(acquired_image.image_view().image().extent());
+			let out_extent = UVec3::from(output_image.extent());
 			let projection = Mat4::perspective_rh(
 				90. / 360. * 2. * PI,
 				out_extent.x as f32 / out_extent.y as f32,
@@ -164,15 +155,16 @@ pub async fn run(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) {
 			}
 		};
 
-		renderer_main.as_mut().unwrap().new_frame(
-			frame_data,
-			acquired_image.image_view().clone(),
-			|frame, prev_frame_future, main_frame| {
-				let future = main_frame.record(swapchain_acquire.join(prev_frame_future));
-				acquired_image.present(frame.frame, future)
-			},
-		);
-	}
+		let output_image = bindless.execute(|cmd| {
+			let mut output_image = output_image.access_dont_care(&cmd)?;
+			if let Err(e) = renderer_main.new_frame(cmd, frame_data, &scene.lock().as_ref().unwrap(), &mut output_image)
+			{
+				return Ok(Err(e));
+			}
+			Ok(Ok(output_image.transition::<Present>()?.into_desc()))
+		})??;
 
-	init.pipeline_cache.write().ok();
+		swapchain.present_image(output_image)?;
+	}
+	Ok(())
 }

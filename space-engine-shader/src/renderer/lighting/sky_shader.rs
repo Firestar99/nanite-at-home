@@ -2,12 +2,12 @@
 //! Ported to Rust from <https://github.com/Tw1ddle/Sky-Shader/blob/master/src/shaders/glsl/sky.fragment>
 
 use crate::renderer::frame_data::FrameData;
+use crate::renderer::g_buffer::GBuffer;
 use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
 use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
-use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
-use spirv_std::image::{Image2d, StorageImage2d};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Image2d, MutImage, Transient, TransientDesc};
 #[cfg(target_arch = "spirv")]
 use spirv_std::num_traits::Float;
 use static_assertions::const_assert_eq;
@@ -135,6 +135,8 @@ pub fn preetham_sky(dir: Vec3, sun_position: Vec3) -> Vec3 {
 #[derive(Copy, Clone, BufferStruct)]
 pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
+	pub g_buffer: GBuffer<Transient<'a>>,
+	pub output_image: TransientDesc<'a, MutImage<Image2d>>,
 }
 
 pub const SKY_SHADER_WG_SIZE: UVec2 = UVec2::new(8, 8);
@@ -145,8 +147,6 @@ const_assert_eq!(SKY_SHADER_WG_SIZE.y, 8);
 pub fn sky_shader_cs(
 	#[bindless(descriptors)] descriptors: Descriptors,
 	#[bindless(param)] param: &Param<'static>,
-	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
-	#[spirv(descriptor_set = 1, binding = 4)] output_image: &StorageImage2d,
 	#[spirv(global_invocation_id)] inv_id: UVec3,
 ) {
 	let frame_data = param.frame_data.access(&descriptors).load();
@@ -155,7 +155,7 @@ pub fn sky_shader_cs(
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
 	#[allow(clippy::useless_conversion)]
-	let albedo_alpha = Vec4::from(g_albedo.fetch(pixel)).w;
+	let albedo_alpha = Vec4::from(param.g_buffer.g_albedo.access(&descriptors).fetch(pixel)).w;
 	let skybox = is_skybox(albedo_alpha);
 
 	let normal = frame_data
@@ -166,7 +166,7 @@ pub fn sky_shader_cs(
 	let color = tonemap(color.clamp(Vec3::splat(0.0), Vec3::splat(1024.0)));
 	if pixel_inbounds && skybox {
 		unsafe {
-			output_image.write(pixel, color.extend(1.0));
+			param.output_image.access(&descriptors).write(pixel, color.extend(1.0));
 		}
 	}
 }

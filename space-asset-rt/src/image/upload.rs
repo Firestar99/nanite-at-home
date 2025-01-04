@@ -1,116 +1,70 @@
-use crate::uploader::{UploadError, Uploader, ValidatedFrom};
-use rust_gpu_bindless::descriptor::RC;
-use rust_gpu_bindless::spirv_std::image::Image2d;
-use rust_gpu_bindless_shaders::descriptor::Desc;
+use crate::uploader::Uploader;
+use glam::UVec2;
+use rust_gpu_bindless::descriptor::{
+	BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
+	BindlessImageUsage, Extent, Format, MutDescBufferExt, RCDesc,
+};
+use rust_gpu_bindless::pipeline::{MutBufferAccessExt, MutImageAccessExt, TransferRead, TransferWrite};
+use rust_gpu_bindless_shaders::descriptor::{Image, Image2d};
 use space_asset_disk::image::{ArchivedImage2DDisk, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression};
 use std::future::Future;
-use vulkano::buffer::Buffer as VBuffer;
-use vulkano::buffer::{BufferCreateInfo, BufferUsage};
-use vulkano::command_buffer::{
-	CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsage, CopyBufferToImageInfo, RecordingCommandBuffer,
-};
-use vulkano::format::Format;
-use vulkano::image::view::ImageView;
-use vulkano::image::Image as VImage;
-use vulkano::image::{ImageCreateInfo, ImageUsage};
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
-use vulkano::sync::GpuFuture;
-use vulkano::{DeviceSize, Validated};
 
 pub fn upload_image2d_archive<'a, const IMAGE_TYPE: u32>(
 	this: &'a ArchivedImage2DDisk<IMAGE_TYPE>,
+	name: &str,
 	uploader: &'a Uploader,
-) -> impl Future<Output = Result<Desc<RC, Image2d>, Validated<UploadError>>> + 'a {
-	upload_image2d(&this.metadata.deserialize(), &this.bytes, uploader)
+) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
+	upload_image2d(&this.metadata.deserialize(), &this.bytes, name, uploader)
 }
 
 pub fn upload_image2d_disk<'a, const IMAGE_TYPE: u32>(
 	this: &'a Image2DDisk<IMAGE_TYPE>,
+	name: &str,
 	uploader: &'a Uploader,
-) -> impl Future<Output = Result<Desc<RC, Image2d>, Validated<UploadError>>> + 'a {
-	upload_image2d(&this.metadata, &this.bytes, uploader)
+) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
+	upload_image2d(&this.metadata, &this.bytes, name, uploader)
 }
 
 fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 	this: &Image2DMetadata<IMAGE_TYPE>,
 	src: &'a [u8],
+	name: &str,
 	uploader: &'a Uploader,
-) -> impl Future<Output = Result<Desc<RC, Image2d>, Validated<UploadError>>> + 'a {
-	let result: Result<_, Validated<UploadError>> = (|| {
+) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
+	let result: anyhow::Result<_> = (|| {
+		let bindless = &uploader.bindless;
 		let upload_buffer = {
 			profiling::scope!("image decode to host buffer");
-			let upload_buffer = VBuffer::new_slice::<u8>(
-				uploader.memory_allocator.clone(),
-				BufferCreateInfo {
-					usage: BufferUsage::TRANSFER_SRC,
-					..BufferCreateInfo::default()
+			let upload_buffer = bindless.buffer().alloc_slice(
+				&BindlessBufferCreateInfo {
+					usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::TRANSFER_SRC,
+					name: &format!("staging image: {name}"),
+					allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 				},
-				AllocationCreateInfo {
-					memory_type_filter: MemoryTypeFilter::PREFER_HOST | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-					..AllocationCreateInfo::default()
-				},
-				this.decompressed_bytes() as DeviceSize,
-			)
-			.map_err(UploadError::from_validated)?;
-			this.decode_into(src, &mut upload_buffer.write().unwrap())
-				.map_err(UploadError::from_validated)?;
+				this.decompressed_bytes(),
+			)?;
+			this.decode_into(src, upload_buffer.mapped_immediate()?.as_mut_slice())?;
 			upload_buffer
 		};
 
-		let perm_image = {
-			profiling::scope!("image copy cmd");
-			VImage::new(
-				uploader.memory_allocator.clone(),
-				ImageCreateInfo {
-					image_type: vulkano::image::ImageType::Dim2d,
-					format: vulkano_format(this),
-					extent: [this.size.width, this.size.height, 1],
-					usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-					..ImageCreateInfo::default()
-				},
-				AllocationCreateInfo {
-					memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-					..AllocationCreateInfo::default()
-				},
-			)
-			.map_err(UploadError::from_validated)?
-		};
-
-		let fence = {
-			let cmd = {
-				let mut cmd = RecordingCommandBuffer::new(
-					uploader.cmd_allocator.clone(),
-					uploader.transfer_queue.queue_family_index(),
-					CommandBufferLevel::Primary,
-					CommandBufferBeginInfo {
-						usage: CommandBufferUsage::OneTimeSubmit,
-						..CommandBufferBeginInfo::default()
-					},
-				)
-				.map_err(UploadError::from_validated)?;
-				cmd.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(upload_buffer, perm_image.clone()))
-					.map_err(UploadError::from_validated)?;
-				cmd.end().map_err(UploadError::from_validated)?
-			};
-			cmd.execute(uploader.transfer_queue.clone())
-				.map_err(UploadError::from_validated)?
-				.then_signal_fence_and_flush()
-				.map_err(UploadError::from_validated)?
-		};
-		Ok((perm_image, fence))
+		profiling::scope!("image copy cmd");
+		let image = bindless.image().alloc(&BindlessImageCreateInfo {
+			format: select_format(this),
+			extent: Extent::from(UVec2::from(this.size)),
+			usage: BindlessImageUsage::SAMPLED | BindlessImageUsage::TRANSFER_DST,
+			name,
+			..BindlessImageCreateInfo::default()
+		})?;
+		Ok(bindless.execute(|cmd| {
+			let mut image = image.access::<TransferWrite>(&cmd)?;
+			cmd.copy_buffer_to_image(&mut upload_buffer.access::<TransferRead>(&cmd)?, &mut image)?;
+			Ok(image.into_shared())
+		})?)
 	})();
-
-	async {
-		let (perm_image, fence) = result?;
-		fence.await.map_err(UploadError::from_validated)?;
-		Ok(uploader
-			.bindless
-			.image()
-			.alloc_slot_2d(ImageView::new_default(perm_image).map_err(UploadError::from_validated)?))
-	}
+	async { Ok(result?.await) }
 }
 
-pub fn vulkano_format<const IMAGE_TYPE: u32>(this: &Image2DMetadata<IMAGE_TYPE>) -> Format {
+pub fn select_format<const IMAGE_TYPE: u32>(this: &Image2DMetadata<IMAGE_TYPE>) -> Format {
 	match this.runtime_compression() {
 		RuntimeImageCompression::None => match this.image_type() {
 			ImageType::R_VALUES => Format::R8_UNORM,

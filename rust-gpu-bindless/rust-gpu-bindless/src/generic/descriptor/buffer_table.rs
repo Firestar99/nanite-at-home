@@ -10,9 +10,10 @@ use crate::generic::descriptor::{
 };
 use crate::generic::pipeline::{AccessLock, AccessLockError, BufferAccess};
 use crate::generic::platform::{BindlessPlatform, PendingExecution};
+use bytemuck::Pod;
 use parking_lot::Mutex;
 use presser::Slab;
-use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
+use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct, BufferStructPlain};
 use rust_gpu_bindless_shaders::buffer_content::{BufferStructIdentity, Metadata};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, MutBuffer};
 use smallvec::SmallVec;
@@ -340,9 +341,31 @@ impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for RCDesc<P, Buf
 	}
 }
 
-impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for MutDesc<P, Buffer<[T]>> {
+impl<P: BindlessPlatform, T: BufferStruct> DescBufferLenExt<P> for MutDesc<P, MutBuffer<[T]>> {
 	fn len(&self) -> usize {
 		self.inner_slot().len
+	}
+}
+
+impl<P: BindlessPlatform, T: BufferStructPlain, const N: usize> DescBufferLenExt<P> for RCDesc<P, Buffer<[T; N]>>
+where
+	// see `impl BufferStructPlain for [T; N]`
+	T: Default,
+	T::Transfer: Pod + Default,
+{
+	fn len(&self) -> usize {
+		N
+	}
+}
+
+impl<P: BindlessPlatform, T: BufferStructPlain, const N: usize> DescBufferLenExt<P> for MutDesc<P, MutBuffer<[T; N]>>
+where
+	// see `impl BufferStructPlain for [T; N]`
+	T: Default,
+	T::Transfer: Pod + Default,
+{
+	fn len(&self) -> usize {
+		N
 	}
 }
 
@@ -382,7 +405,7 @@ impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for 
 	}
 }
 
-#[derive(Debug, Error)]
+#[derive(Error)]
 pub enum MapError {
 	#[error("An execution is pending on the buffer that has not yet finished")]
 	PendingExecution,
@@ -392,6 +415,12 @@ pub enum MapError {
 	IncorrectLayout(BufferAccess),
 	#[error("AccessLockError: {0}")]
 	AccessLock(AccessLockError),
+}
+
+impl Debug for MapError {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		Display::fmt(self, f)
+	}
 }
 
 impl From<AccessLockError> for MapError {
@@ -563,7 +592,7 @@ impl<'a, P: BindlessPlatform, T: BufferStructIdentity> MappedBuffer<'a, P, [T]> 
 	pub fn as_mut_slice(&mut self) -> &mut [T] {
 		unsafe {
 			let slab = P::mapped_buffer_to_slab(&self.slot);
-			bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())
+			&mut bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())[0..self.slot.len]
 		}
 	}
 }

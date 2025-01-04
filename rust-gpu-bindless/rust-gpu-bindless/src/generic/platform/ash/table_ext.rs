@@ -13,15 +13,8 @@ use rust_gpu_bindless_shaders::descriptor::MutBuffer;
 use std::ffi::CString;
 
 impl<'a> SamplerTableAccess<'a, Ash> {
-	pub fn alloc_ash(
-		&self,
-		device: &ash::Device,
-		sampler_create_info: &SamplerCreateInfo,
-	) -> VkResult<RCDesc<Ash, Sampler>> {
-		unsafe {
-			let sampler = device.create_sampler(&sampler_create_info, None)?;
-			Ok(self.alloc_slot(sampler))
-		}
+	pub fn alloc_ash(&self, sampler_create_info: &SamplerCreateInfo) -> VkResult<RCDesc<Ash, Sampler>> {
+		unsafe { Ok(self.alloc_slot(self.0.device.create_sampler(&sampler_create_info, None)?)) }
 	}
 }
 

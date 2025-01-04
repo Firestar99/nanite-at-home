@@ -40,6 +40,10 @@ impl<'a, T: BufferContent + ?Sized> BufferSlice<'a, T> {
 			_phantom: PhantomData {},
 		}
 	}
+
+	pub fn into_raw(self) -> &'a [u32] {
+		self.buffer.data
+	}
 }
 
 impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
@@ -60,6 +64,10 @@ impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
 			meta: self.meta,
 			_phantom: self._phantom,
 		}
+	}
+
+	pub fn into_raw_mut(self) -> &'a mut [u32] {
+		self.buffer.data
 	}
 }
 
@@ -89,6 +97,11 @@ impl<'a, T: BufferStructPlain> MutBufferSlice<'a, T> {
 }
 
 impl<'a, T: BufferStruct> BufferSlice<'a, [T]> {
+	/// The len of the buffer. The len calculation contains a potentially expensive division.
+	pub fn len(&self) -> usize {
+		self.buffer.data.len() * 4 / mem::size_of::<T::Transfer>()
+	}
+
 	/// Loads a T at an `index` offset from the buffer.
 	pub fn load(&self, index: usize) -> T {
 		let byte_offset = index * mem::size_of::<T::Transfer>();
@@ -106,6 +119,11 @@ impl<'a, T: BufferStruct> BufferSlice<'a, [T]> {
 }
 
 impl<'a, T: BufferStruct> MutBufferSlice<'a, [T]> {
+	/// The len of the buffer. The len calculation contains a potentially expensive division.
+	pub fn len(&self) -> usize {
+		self.as_ref().len()
+	}
+
 	/// Loads a T at an `index` offset from the buffer.
 	pub fn load(&self, index: usize) -> T {
 		self.as_ref().load(index)

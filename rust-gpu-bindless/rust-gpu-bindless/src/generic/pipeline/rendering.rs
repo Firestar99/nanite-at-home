@@ -15,6 +15,7 @@ use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Image2d, TransientAccess};
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use thiserror::Error;
 
 /// A RenderPass defines the formats of the color and depth attachments.
@@ -68,7 +69,7 @@ unsafe impl<'a, 'b, P: BindlessPipelinePlatform> TransientAccess<'a> for Renderi
 
 unsafe impl<'a: 'b, 'b, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Rendering<'a, 'b, P> {
 	#[inline]
-	fn bindless(&self) -> &Bindless<Ash> {
+	fn bindless(&self) -> &Arc<Bindless<Ash>> {
 		self.platform.bindless()
 	}
 
@@ -201,7 +202,7 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 	pub fn draw_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
-		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<P, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
@@ -222,7 +223,7 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 		&mut self,
 		pipeline: &BindlessGraphicsPipeline<P, T>,
 		index_buffer: impl MutOrSharedBuffer<P, [IT], AIR>,
-		indirect: impl MutOrSharedBuffer<P, [DrawIndirectCommand], AIC>,
+		indirect: impl MutOrSharedBuffer<P, DrawIndirectCommand, AIC>,
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {
@@ -252,7 +253,7 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 	pub fn draw_mesh_tasks_indirect<T: BufferStruct, AIC: IndirectCommandReadable>(
 		&mut self,
 		pipeline: &BindlessMeshGraphicsPipeline<P, T>,
-		indirect: impl MutOrSharedBuffer<P, [[u32; 3]], AIC>,
+		indirect: impl MutOrSharedBuffer<P, [u32; 3], AIC>,
 		param: T,
 	) -> Result<(), RecordingError<P>> {
 		unsafe {

@@ -14,13 +14,12 @@ space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
-rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true, features = ["ash"] }
+rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
 
-# device
+# vulkan
+ash = { workspace = true }
 winit = { workspace = true }
-
-# async
-async-std = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
@@ -28,10 +27,14 @@ num-traits = { workspace = true }
 
 # profiling
 profiling = { workspace = true }
-puffin_http = { workspace = true }
+puffin_http = { workspace = true, optional = true }
+
+# other
+anyhow = { workspace = true }
+parking_lot = { workspace = true }
 
 [features]
-profile-with-puffin = ["profiling/profile-with-puffin"]
+profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
 profile-with-optick = ["profiling/profile-with-optick"]
 profile-with-superluminal = ["profiling/profile-with-superluminal"]
 profile-with-tracing = ["profiling/profile-with-tracing"]

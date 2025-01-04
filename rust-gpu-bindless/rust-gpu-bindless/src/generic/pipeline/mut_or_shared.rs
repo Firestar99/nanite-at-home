@@ -1,8 +1,7 @@
 use crate::generic::descriptor::{BindlessBufferUsage, BindlessImageUsage, BufferSlot, ImageSlot, RCDesc, RCDescExt};
-use crate::generic::pipeline::access_buffer::MutBufferAccess;
-use crate::generic::pipeline::access_error::AccessError;
-use crate::generic::pipeline::access_image::MutImageAccess;
-use crate::generic::pipeline::access_type::{BufferAccessType, ImageAccessType};
+use crate::generic::pipeline::{
+	AccessError, BufferAccessType, GeneralRead, ImageAccessType, MutBufferAccess, MutImageAccess,
+};
 use crate::generic::platform::{BindlessPipelinePlatform, BindlessPlatform};
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Image, ImageType};
@@ -28,16 +27,16 @@ pub unsafe trait MutOrSharedBuffer<P: BindlessPlatform, T: BufferContent + ?Size
 	}
 }
 
-unsafe impl<P: BindlessPlatform, T: BufferContent + ?Sized, A: BufferAccessType> MutOrSharedBuffer<P, T, A>
-	for RCDesc<P, Buffer<T>>
+unsafe impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutOrSharedBuffer<P, T, GeneralRead>
+	for &RCDesc<P, Buffer<T>>
 {
 	unsafe fn inner_slot(&self) -> &BufferSlot<P> {
-		RCDescExt::inner_slot(self)
+		RCDescExt::inner_slot(*self)
 	}
 }
 
 unsafe impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccessType> MutOrSharedBuffer<P, T, A>
-	for MutBufferAccess<'_, P, T, A>
+	for &MutBufferAccess<'_, P, T, A>
 {
 	unsafe fn inner_slot(&self) -> &BufferSlot<P> {
 		unsafe { MutBufferAccess::inner_slot(self) }
@@ -65,14 +64,14 @@ pub unsafe trait MutOrSharedImage<P: BindlessPlatform, T: ImageType, A> {
 	}
 }
 
-unsafe impl<P: BindlessPlatform, T: ImageType, A: ImageAccessType> MutOrSharedImage<P, T, A> for RCDesc<P, Image<T>> {
+unsafe impl<P: BindlessPlatform, T: ImageType> MutOrSharedImage<P, T, GeneralRead> for &RCDesc<P, Image<T>> {
 	unsafe fn inner_slot(&self) -> &ImageSlot<P> {
-		RCDescExt::inner_slot(self)
+		RCDescExt::inner_slot(*self)
 	}
 }
 
 unsafe impl<P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutOrSharedImage<P, T, A>
-	for MutImageAccess<'_, P, T, A>
+	for &MutImageAccess<'_, P, T, A>
 {
 	unsafe fn inner_slot(&self) -> &ImageSlot<P> {
 		unsafe { MutImageAccess::inner_slot(self) }
