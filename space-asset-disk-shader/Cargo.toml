@@ -19,6 +19,7 @@ profiling = { workspace = true }
 
 # bytes and numbers
 glam = { workspace = true }
+num-traits = { workspace = true }
 bytemuck = { workspace = true }
 bytemuck_derive = { workspace = true }
 
