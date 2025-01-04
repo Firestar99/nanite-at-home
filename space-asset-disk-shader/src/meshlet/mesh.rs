@@ -1,4 +1,5 @@
 use crate::meshlet::offset::MeshletOffset;
+use crate::shape::sphere::Sphere;
 use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 
 #[repr(C)]
@@ -7,8 +8,13 @@ use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 pub struct MeshletData {
 	pub draw_vertex_offset: MeshletOffset,
 	pub triangle_offset: MeshletOffset,
+	pub bounds: Sphere,
+	pub parent_bounds: Sphere,
+	pub error: f32,
+	pub parent_error: f32,
+	pub _pad: [u32; 2],
 }
-assert_transfer_size!(MeshletData, 4 * 4);
+assert_transfer_size!(MeshletData, 16 * 4);
 
 impl AsRef<MeshletData> for MeshletData {
 	fn as_ref(&self) -> &MeshletData {

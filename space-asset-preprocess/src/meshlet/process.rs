@@ -7,7 +7,7 @@ use crate::meshlet::lod_tree_gen::border_tracker::BorderTracker;
 use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
-use meshopt::{Meshlets, VertexDataAdapter};
+use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
@@ -20,6 +20,7 @@ use space_asset_disk::meshlet::scene::MeshletSceneDisk;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::range::RangeU32;
+use space_asset_disk::shape::sphere::Sphere;
 use std::mem::{offset_of, size_of};
 
 #[profiling::function]
@@ -141,7 +142,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 		(0..draw_vertices_len as u32).collect()
 	};
 
-	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices);
+	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, Sphere::default(), f32::INFINITY);
 
 	let lod_ranges = Vec::from([0, lod_mesh.meshlets.len() as u32]);
 	Ok(MeshletMeshDisk {
@@ -153,7 +154,12 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 }
 
 #[profiling::function]
-pub fn lod_mesh_build_meshlets(mut indices: Vec<u32>, mut draw_vertices: Vec<DrawVertex>) -> LodMesh {
+pub fn lod_mesh_build_meshlets(
+	mut indices: Vec<u32>,
+	mut draw_vertices: Vec<DrawVertex>,
+	bounds: Sphere,
+	error: f32,
+) -> LodMesh {
 	{
 		profiling::scope!("meshopt::optimize_vertex_fetch_in_place");
 		let vertex_cnt = meshopt::optimize_vertex_fetch_in_place(&mut indices, &mut draw_vertices);
@@ -165,14 +171,15 @@ pub fn lod_mesh_build_meshlets(mut indices: Vec<u32>, mut draw_vertices: Vec<Dra
 		meshopt::optimize_vertex_cache_in_place(&mut indices, draw_vertices.len());
 	}
 
+	let adapter = VertexDataAdapter::new(
+		bytemuck::cast_slice::<DrawVertex, u8>(&draw_vertices),
+		size_of::<DrawVertex>(),
+		offset_of!(DrawVertex, position),
+	)
+	.unwrap();
+
 	let out = {
 		profiling::scope!("meshopt::build_meshlets");
-		let adapter = VertexDataAdapter::new(
-			bytemuck::cast_slice::<DrawVertex, u8>(&draw_vertices),
-			size_of::<DrawVertex>(),
-			offset_of!(DrawVertex, position),
-		)
-		.unwrap();
 		meshopt::build_meshlets(
 			&indices,
 			&adapter,
@@ -182,40 +189,48 @@ pub fn lod_mesh_build_meshlets(mut indices: Vec<u32>, mut draw_vertices: Vec<Dra
 		)
 	};
 
-	lod_mesh_from_meshopt(&out, |i| draw_vertices[i as usize])
-}
+	{
+		profiling::scope!("lod_mesh_from_meshopt");
+		let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
+		let triangles = triangle_indices_write_vec(indices.into_iter().map(u32::from));
 
-#[profiling::function]
-pub fn lod_mesh_from_meshopt(out: &Meshlets, f: impl Fn(u32) -> DrawVertex) -> LodMesh {
-	let indices = out.iter().flat_map(|m| m.triangles).copied().collect::<Vec<_>>();
-	let triangles = triangle_indices_write_vec(indices.into_iter().map(u32::from));
+		// resize vertex buffer appropriately
+		let last_vertex = out
+			.meshlets
+			.last()
+			.map(|m| m.vertex_offset as usize + m.vertex_count as usize)
+			.unwrap_or(0);
+		let draw_vertices = out
+			.vertices
+			.iter()
+			.take(last_vertex)
+			.map(|i| draw_vertices[*i as usize])
+			.collect();
 
-	// resize vertex buffer appropriately
-	let last_vertex = out
-		.meshlets
-		.last()
-		.map(|m| m.vertex_offset as usize + m.vertex_count as usize)
-		.unwrap_or(0);
-	let draw_vertices = out.vertices.iter().take(last_vertex).map(|i| f(*i)).collect();
+		let mut triangle_start = 0;
+		let meshlets = out
+			.meshlets
+			.iter()
+			.map(|m| {
+				let data = MeshletData {
+					draw_vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
+					triangle_offset: MeshletOffset::new(triangle_start, m.triangle_count as usize),
+					bounds,
+					parent_bounds: Sphere::default(),
+					error,
+					parent_error: 0.,
+					_pad: [0; 2],
+				};
+				triangle_start += m.triangle_count as usize;
+				data
+			})
+			.collect::<Vec<_>>();
 
-	let mut triangle_start = 0;
-	let meshlets = out
-		.meshlets
-		.iter()
-		.map(|m| {
-			let data = MeshletData {
-				draw_vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
-				triangle_offset: MeshletOffset::new(triangle_start, m.triangle_count as usize),
-			};
-			triangle_start += m.triangle_count as usize;
-			data
-		})
-		.collect::<Vec<_>>();
-
-	LodMesh {
-		draw_vertices,
-		meshlets,
-		triangles,
+		LodMesh {
+			draw_vertices,
+			meshlets,
+			triangles,
+		}
 	}
 }
 
@@ -230,7 +245,7 @@ fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk
 
 	for lod_level in 0..lod_levels {
 		let lod_faction = lod_level as f32 / (lod_levels - 1) as f32;
-		let lod = BorderTracker::from_meshlet_mesh(&prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
+		let lod = BorderTracker::from_meshlet_mesh(&mut prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
 
 		mesh.append_lod_level(&mut prev_lod);
 		prev_lod = lod;

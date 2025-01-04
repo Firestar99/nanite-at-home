@@ -14,6 +14,9 @@ disk = ["dep:rkyv", "glam/rkyv"]
 rust-gpu-bindless-macros = { workspace = true }
 rust-gpu-bindless-buffer-content = { workspace = true }
 
+# profiling
+profiling = { workspace = true }
+
 # bytes and numbers
 glam = { workspace = true }
 bytemuck = { workspace = true }

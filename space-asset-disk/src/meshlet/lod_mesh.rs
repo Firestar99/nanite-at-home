@@ -49,25 +49,42 @@ impl FromParallelIterator<LodMesh> for LodMesh {
 	where
 		I: IntoParallelIterator<Item = LodMesh>,
 	{
-		let list = par_iter.into_par_iter().collect_vec_list();
-		let mut mesh = LodMesh {
-			meshlets: Vec::with_capacity(list.iter().flatten().map(|a| a.meshlets.len()).sum()),
-			draw_vertices: Vec::with_capacity(list.iter().flatten().map(|a| a.draw_vertices.len()).sum()),
-			triangles: Vec::with_capacity(list.iter().flatten().map(|a| a.triangles.len()).sum()),
-		};
-		for mut e in list.into_iter().flatten() {
-			mesh.append(&mut e);
-		}
+		let mut mesh = Self::default();
+		mesh.par_extend(par_iter);
 		mesh
+	}
+}
+
+impl ParallelExtend<LodMesh> for LodMesh {
+	fn par_extend<I>(&mut self, par_iter: I)
+	where
+		I: IntoParallelIterator<Item = LodMesh>,
+	{
+		let list = par_iter.into_par_iter().collect_vec_list();
+		self.meshlets
+			.reserve(list.iter().flatten().map(|a| a.meshlets.len()).sum());
+		self.draw_vertices
+			.reserve(list.iter().flatten().map(|a| a.draw_vertices.len()).sum());
+		self.triangles
+			.reserve(list.iter().flatten().map(|a| a.triangles.len()).sum());
+		for mut e in list.into_iter().flatten() {
+			self.append(&mut e);
+		}
 	}
 }
 
 impl FromIterator<LodMesh> for LodMesh {
 	fn from_iter<T: IntoIterator<Item = LodMesh>>(iter: T) -> Self {
 		let mut mesh = LodMesh::default();
-		for mut e in iter.into_iter() {
-			mesh.append(&mut e);
-		}
+		mesh.extend(iter);
 		mesh
+	}
+}
+
+impl Extend<LodMesh> for LodMesh {
+	fn extend<T: IntoIterator<Item = LodMesh>>(&mut self, iter: T) {
+		for mut e in iter.into_iter() {
+			self.append(&mut e);
+		}
 	}
 }
