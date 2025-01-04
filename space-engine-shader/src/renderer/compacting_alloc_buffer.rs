@@ -1,4 +1,3 @@
-use core::mem::size_of;
 use rust_gpu_bindless_macros::BufferStruct;
 use rust_gpu_bindless_shaders::buffer_content::BufferStructPlain;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, BufferSlice, Descriptors, MutBuffer, TransientDesc};
@@ -45,14 +44,12 @@ pub struct Allocation<'a, T: BufferStructPlain> {
 
 impl<'a, T: BufferStructPlain> Allocation<'a, T> {
 	pub fn write(self, descriptors: &mut Descriptors, t: T) -> bool {
-		let sizeof = size_of::<T>();
-		let byte_index = self.index * sizeof;
 		let mut buffer = self.writer.buffer.access(descriptors);
-		if byte_index + sizeof > buffer.len() {
-			false
-		} else {
-			unsafe { buffer.store(byte_index, t) };
+		if self.index < buffer.len() {
+			unsafe { buffer.store(self.index, t) };
 			true
+		} else {
+			false
 		}
 	}
 }
