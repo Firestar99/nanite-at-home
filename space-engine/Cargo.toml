@@ -9,13 +9,11 @@ repository.workspace = true
 [dependencies]
 # members
 space-engine-shader = { workspace = true }
-vulkano-bindless = { workspace = true }
+rust-gpu-bindless = { workspace = true }
 space-asset-rt = { workspace = true }
 space-asset-shader = { workspace = true }
 
 # device
-vulkano = { workspace = true }
-vulkano-shaders = { workspace = true }
 winit = { workspace = true }
 
 # async

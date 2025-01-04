@@ -10,11 +10,15 @@ members = [
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
-	"vulkano-bindless/vulkano-bindless",
-	"vulkano-bindless/vulkano-bindless-buffer-content",
-	"vulkano-bindless/vulkano-bindless-macros",
-	"vulkano-bindless/vulkano-bindless-shaders",
-	"vulkano-bindless/vulkano-bindless-shader-builder",
+	"rust-gpu-bindless/rust-gpu-bindless",
+	"rust-gpu-bindless/rust-gpu-bindless-buffer-content",
+	"rust-gpu-bindless/rust-gpu-bindless-macro-utils",
+	"rust-gpu-bindless/rust-gpu-bindless-macros",
+	"rust-gpu-bindless/rust-gpu-bindless-shaders",
+	"rust-gpu-bindless/rust-gpu-bindless-shader-builder",
+	"rust-gpu-bindless/rust-gpu-bindless-winit",
+	"rust-gpu-bindless/tests/integration-test",
+	"rust-gpu-bindless/tests/integration-test-shader",
 ]
 resolver = "2"
 
@@ -41,27 +45,33 @@ space-asset-shader = { path = "space-asset-shader" }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
-vulkano-bindless = { path = "vulkano-bindless/vulkano-bindless" }
-vulkano-bindless-buffer-content = { path = "vulkano-bindless/vulkano-bindless-buffer-content" }
-vulkano-bindless-shaders = { path = "vulkano-bindless/vulkano-bindless-shaders" }
-vulkano-bindless-macros = { path = "vulkano-bindless/vulkano-bindless-macros" }
-vulkano-bindless-shader-builder = { path = "vulkano-bindless/vulkano-bindless-shader-builder", default-features = false, features = ["use-installed-tools", "use-pretty-print"] }
+rust-gpu-bindless = { path = "rust-gpu-bindless/rust-gpu-bindless" }
+rust-gpu-bindless-buffer-content = { path = "rust-gpu-bindless/rust-gpu-bindless-buffer-content" }
+rust-gpu-bindless-macro-utils = { path = "rust-gpu-bindless/rust-gpu-bindless-macro-utils" }
+rust-gpu-bindless-macros = { path = "rust-gpu-bindless/rust-gpu-bindless-macros" }
+rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-shaders" }
+rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools"] }
+rust-gpu-bindless-winit = { path = "rust-gpu-bindless/rust-gpu-bindless-winit" }
+integration-test = { path = "rust-gpu-bindless/tests/integration-test" }
+integration-test-shader = { path = "rust-gpu-bindless/tests/integration-test-shader" }
 
-# device
-# vulkano 0.35 development
-vulkano = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "40d6e615a3fb59e4bf3b94726eb60520b573d0ec" }
-vulkano-shaders = { git = "https://github.com/vulkano-rs/vulkano.git", rev = "40d6e615a3fb59e4bf3b94726eb60520b573d0ec" }
+# vulkan
+ash = "0.38.0"
+ash-window = "0.13.0"
+gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
+presser = "0.3.1"
 
 winit = { version = "0.29" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "8754983ea296a759e5693944d7b594c051281006", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "8754983ea296a759e5693944d7b594c051281006", features = ["bytemuck"] }
+spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", default-features = false }
+spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", features = ["bytemuck"] }
 
 # async
 async-std = "1.12.0"
 futures = "0.3"
 rayon = "1.10"
+pollster = "0.4.0"
 
 # codegen
 quote = "1.0"
@@ -105,17 +115,17 @@ once_cell = "1.18"
 smallvec = { version = "1.11", features = ["const_generics", "const_new", "union"] }
 static_assertions = "1.1.0"
 parking_lot = "0.12"
-parking_lot_core = "0.9"
 clap = { version = "4.5", features = ["derive"] }
-loom = "0.7.1"
 rand = "0.8"
-ahash = "0.8"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 rangemap = "1.5.1"
 walkdir = "2.5.0"
 anyhow = "1.0"
 num_enum = { version = "0.7.2", default-features = false }
+bitflags = "2.6.0"
+thiserror = "2.0.6"
+approx = "0.5.1"
 
 [patch.crates-io]
 glam = { git = "https://github.com/Firestar99/glam-rs.git", rev = "27649a451790a3fc8a34f021937ea3fcb45b5ff5" }

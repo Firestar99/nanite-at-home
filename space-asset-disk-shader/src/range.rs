@@ -1,8 +1,8 @@
 use core::ops::Range;
-use vulkano_bindless_macros::BufferContentPlain;
+use rust_gpu_bindless_macros::BufferStructPlain;
 
 #[repr(C)]
-#[derive(Copy, Clone, Default, Debug, BufferContentPlain)]
+#[derive(Copy, Clone, Default, Debug, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct RangeU32 {
 	pub start: u32,

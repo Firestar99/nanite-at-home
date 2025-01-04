@@ -10,12 +10,8 @@ repository.workspace = true
 # members
 space-asset-disk = { workspace = true }
 space-asset-shader = { workspace = true }
-vulkano-bindless = { workspace = true }
-vulkano-bindless-macros = { workspace = true }
-vulkano-bindless-shaders = { workspace = true }
-
-# vulkan
-vulkano = { workspace = true }
+rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless-shaders = { workspace = true }
 
 # model loader
 zune-image = { workspace = true }

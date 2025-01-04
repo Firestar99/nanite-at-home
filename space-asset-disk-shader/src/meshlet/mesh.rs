@@ -1,8 +1,8 @@
 use crate::meshlet::offset::MeshletOffset;
-use vulkano_bindless_macros::{assert_transfer_size, BufferContentPlain};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, BufferContentPlain)]
+#[derive(Copy, Clone, Debug, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MeshletData {
 	pub draw_vertex_offset: MeshletOffset,

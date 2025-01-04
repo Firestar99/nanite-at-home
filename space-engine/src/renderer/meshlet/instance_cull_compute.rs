@@ -1,18 +1,18 @@
 use crate::renderer::meshlet::meshlet_allocation_buffer::MeshletAllocationBuffer;
 use crate::renderer::render_graph::context::FrameContext;
 use crate::renderer::Init;
+use rust_gpu_bindless::descriptor::RCDescExt;
+use rust_gpu_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 use space_asset_rt::meshlet::scene::MeshletSceneCpu;
-use space_engine_shader::renderer::meshlet::instance_cull::{Params, INSTANCE_CULL_WG_SIZE};
+use space_engine_shader::renderer::meshlet::instance_cull::{Param, INSTANCE_CULL_WG_SIZE};
 use std::ops::Deref;
 use std::sync::Arc;
 use vulkano::command_buffer::RecordingCommandBuffer;
 use vulkano::pipeline::layout::PipelineLayoutCreateInfo;
 use vulkano::pipeline::{Pipeline, PipelineBindPoint, PipelineLayout};
-use vulkano_bindless::descriptor::RCDescExt;
-use vulkano_bindless::pipeline::compute_pipeline::BindlessComputePipeline;
 
 pub struct InstanceCullCompute {
-	pipeline: BindlessComputePipeline<Params<'static>>,
+	pipeline: BindlessComputePipeline<Param<'static>>,
 }
 
 impl InstanceCullCompute {
@@ -29,7 +29,7 @@ impl InstanceCullCompute {
 							init.bindless.descriptor_set_layout.clone(),
 							alloc_buffer.descriptor_set.layout().clone(),
 						]),
-						push_constant_ranges: init.bindless.get_push_constant::<Params<'static>>(),
+						push_constant_ranges: init.bindless.get_push_constant::<Param<'static>>(),
 						..PipelineLayoutCreateInfo::default()
 					},
 				)
@@ -63,7 +63,7 @@ impl InstanceCullCompute {
 							alloc_buffer.descriptor_set.clone(),
 						)
 					},
-					Params {
+					Param {
 						frame_data: frame_context.frame_data_desc,
 						scene: scene.scene.to_transient(frame_context.fif),
 						num_instances: scene.num_instances,

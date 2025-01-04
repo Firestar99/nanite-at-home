@@ -3,6 +3,8 @@ use crate::device::debug::Debug;
 use crate::device::validation_layers::ValidationLayers;
 use crate::device::ENGINE_APPLICATION_CONFIG;
 use crate::pipeline_cache::SpacePipelineCache;
+use rust_gpu_bindless::descriptor::bindless::Bindless;
+use rust_gpu_bindless::descriptor::descriptor_counts::DescriptorCounts;
 use smallvec::SmallVec;
 use std::cmp;
 use std::sync::Arc;
@@ -14,8 +16,6 @@ use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, Insta
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::shader::ShaderStages;
 use vulkano::{Version, VulkanLibrary};
-use vulkano_bindless::descriptor::bindless::Bindless;
-use vulkano_bindless::descriptor::descriptor_counts::DescriptorCounts;
 
 pub trait Plugin {
 	/// Return what InstanceExtensions or validation layer names you would like to be enabled.

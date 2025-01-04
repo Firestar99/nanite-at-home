@@ -3,16 +3,16 @@ use crate::renderer::camera::Camera;
 use crate::renderer::frame_data::FrameData;
 use core::ops::Range;
 use glam::UVec3;
+use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::meshlet::instance::{MeshInstance, MeshletInstance};
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use spirv_std::indirect_command::DrawMeshTasksIndirectCommandEXT;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 
-#[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+#[derive(Copy, Clone, BufferStruct)]
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 	pub scene: TransientDesc<'a, Buffer<MeshletScene<Strong>>>,
 	pub num_instances: u32,
@@ -23,8 +23,8 @@ pub const INSTANCE_CULL_WG_SIZE: u32 = 32;
 const_assert_eq!(INSTANCE_CULL_WG_SIZE, 32);
 #[bindless(compute(threads(32)))]
 pub fn instance_cull_compute(
-	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] params: &Params<'static>,
+	#[bindless(descriptors)] descriptors: Descriptors,
+	#[bindless(param)] params: &Param<'static>,
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 0)] out_meshlet_instances_buffer: &mut [u32],
 	#[spirv(storage_buffer, descriptor_set = 1, binding = 1)]
 	out_meshlet_indirect_draw_args: &mut DrawMeshTasksIndirectCommandEXT,
@@ -37,9 +37,9 @@ pub fn instance_cull_compute(
 		return;
 	}
 
-	let frame_data = params.frame_data.access(descriptors).load();
-	let scene = params.scene.access(descriptors).load();
-	let instance = scene.instances.access(descriptors).load(instance_id as usize);
+	let frame_data = params.frame_data.access(&descriptors).load();
+	let scene = params.scene.access(&descriptors).load();
+	let instance = scene.instances.access(&descriptors).load(instance_id as usize);
 	if !cull_instance(frame_data.camera, instance) {
 		let mut writer = unsafe {
 			AllocationBufferWriter::<MeshletInstance>::new(
@@ -48,8 +48,8 @@ pub fn instance_cull_compute(
 			)
 		};
 		for mesh_id in Range::<u32>::from(instance.mesh_ids) {
-			let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(mesh_id as usize);
-			let lod_ranges = mesh.lod_ranges.access(descriptors);
+			let mesh: MeshletMesh<Strong> = scene.meshes.access(&descriptors).load(mesh_id as usize);
+			let lod_ranges = mesh.lod_ranges.access(&descriptors);
 			let lod_level = u32::clamp(frame_data.debug_lod_level, 0, mesh.num_lod_ranges - 1) as usize;
 			let meshlet_range = lod_ranges.load(lod_level)..lod_ranges.load(lod_level + 1);
 			for meshlet_id in meshlet_range {

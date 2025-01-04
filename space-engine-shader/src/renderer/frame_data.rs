@@ -3,7 +3,7 @@ use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
 use glam::UVec2;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use vulkano_bindless_macros::BufferContent;
+use rust_gpu_bindless_macros::BufferStruct;
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -25,7 +25,7 @@ impl DebugSettings {
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 
-#[derive(Copy, Clone, BufferContent)]
+#[derive(Copy, Clone, BufferStruct)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
 pub struct FrameData {

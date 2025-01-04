@@ -4,8 +4,8 @@ use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
 use crate::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use core::ops::Deref;
 use glam::UVec3;
-use vulkano_bindless_macros::BufferContent;
-use vulkano_bindless_shaders::descriptor::{AliveDescRef, Buffer, Desc, DescRef, Descriptors};
+use rust_gpu_bindless_macros::BufferStruct;
+use rust_gpu_bindless_shaders::descriptor::{AliveDescRef, Buffer, Desc, DescRef, Descriptors};
 
 /// not DescStruct as this should never be read or written, only constructed when querying meshlets
 #[repr(C)]
@@ -34,7 +34,7 @@ where
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, BufferContent)]
+#[derive(Copy, Clone, Debug, BufferStruct)]
 pub struct MeshletMesh<R: DescRef> {
 	pub meshlets: Desc<R, Buffer<[MeshletData]>>,
 	pub draw_vertices: Desc<R, Buffer<[DrawVertex]>>,

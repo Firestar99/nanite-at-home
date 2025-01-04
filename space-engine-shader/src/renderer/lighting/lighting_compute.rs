@@ -6,13 +6,13 @@ use crate::renderer::lighting::is_skybox;
 use crate::utils::hsv::hsv2rgb_smooth;
 use crate::utils::srgb::linear_to_srgb_alpha;
 use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 use spirv_std::image::{Image2d, StorageImage2d};
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
-#[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+#[derive(Copy, Clone, BufferStruct)]
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }
 
@@ -21,8 +21,8 @@ pub const LIGHTING_WG_SIZE: u32 = 64;
 const_assert_eq!(LIGHTING_WG_SIZE, 64);
 #[bindless(compute(threads(64)))]
 pub fn lighting_cs(
-	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params<'static>,
+	#[bindless(descriptors)] descriptors: Descriptors,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 1)] g_normal: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 2)] g_roughness_metallic: &Image2d,
@@ -46,8 +46,8 @@ pub fn lighting_cs(
 
 #[allow(clippy::too_many_arguments, clippy::useless_conversion)]
 fn lighting_inner(
-	descriptors: &Descriptors,
-	param: &Params<'static>,
+	descriptors: Descriptors,
+	param: &Param<'static>,
 	g_albedo: &Image2d,
 	g_normal: &Image2d,
 	g_roughness_metallic: &Image2d,
@@ -56,7 +56,7 @@ fn lighting_inner(
 	wg_id: UVec3,
 	inv_id: UVec3,
 ) {
-	let frame_data = param.frame_data.access(descriptors).load();
+	let frame_data = param.frame_data.access(&descriptors).load();
 	let size: UVec2 = frame_data.viewport_size;
 	let pixel_wg_start = wg_id.xy() * uvec2(64, 1);
 	let pixel = pixel_wg_start + uvec2(inv_id.x, 0);

@@ -7,4 +7,4 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-vulkano-bindless-shader-builder = { workspace = true }
+rust-gpu-bindless-shader-builder = { workspace = true }

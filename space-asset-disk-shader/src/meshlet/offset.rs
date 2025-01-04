@@ -1,9 +1,9 @@
 use core::fmt::{Debug, Formatter};
-use vulkano_bindless_macros::BufferContentPlain;
+use rust_gpu_bindless_macros::BufferStructPlain;
 
 /// a "slice" into a vertex buffer, or rather the start index and len of the slice
 #[repr(C)]
-#[derive(Copy, Clone, Default, BufferContentPlain)]
+#[derive(Copy, Clone, Default, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MeshletOffset(u32, u32);
 

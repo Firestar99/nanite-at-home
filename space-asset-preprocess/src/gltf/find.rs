@@ -1,7 +1,7 @@
-use crate::modnode::{ModNode, ModNodeError};
 use proc_macro2::TokenStream;
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote, TokenStreamExt};
+use rust_gpu_bindless_macro_utils::modnode::{ModNode, ModNodeError};
 use smallvec::SmallVec;
 use std::path::{Component, Path, PathBuf};
 use std::{fs, io};

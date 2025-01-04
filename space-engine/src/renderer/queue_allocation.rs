@@ -87,8 +87,7 @@ impl QueueAllocator<Queues, SpaceQueueAllocation> for SpaceQueueAllocator {
 			.or_else(|| {
 				queue_allocator.queues().find(|q| {
 					q.queue_flags.contains(QueueFlags::TRANSFER)
-						&& *q != graphics_family
-						&& async_compute_family.as_ref().map_or(true, |f| *q != *f)
+						&& *q != graphics_family && async_compute_family.as_ref().map_or(true, |f| *q != *f)
 				})
 			})
 			// 3. inherit from async_compute_family if additional queues are available

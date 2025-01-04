@@ -1,0 +1,27 @@
+[package]
+name = "rust-gpu-bindless-winit"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+ash = ["rust-gpu-bindless/ash-platform", "dep:ash", "dep:ash-window"]
+
+[dependencies]
+# members
+rust-gpu-bindless = { workspace = true }
+winit = { workspace = true }
+ash = { workspace = true, optional = true }
+ash-window = { workspace = true, optional = true }
+
+# other
+static_assertions = { workspace = true }
+parking_lot = { workspace = true }
+num_enum = { workspace = true }
+pollster = { workspace = true }
+smallvec = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+profiling = { workspace = true }

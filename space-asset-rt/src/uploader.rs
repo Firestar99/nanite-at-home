@@ -2,6 +2,11 @@ use crate::image::upload::upload_image2d_disk;
 use async_std::task::block_on;
 use glam::Vec4;
 use rkyv::Deserialize;
+use rust_gpu_bindless::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
+use rust_gpu_bindless::descriptor::{Bindless, RCDesc, StrongBackingRefs, RC};
+use rust_gpu_bindless::spirv_std::image::Image2d;
+use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct, Metadata};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Desc};
 use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
@@ -18,11 +23,6 @@ use vulkano::image::AllocateImageError;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter};
 use vulkano::sync::GpuFuture;
 use vulkano::{Validated, ValidationError, VulkanError};
-use vulkano_bindless::descriptor::buffer_metadata_cpu::{BackingRefsError, StrongMetadataCpu};
-use vulkano_bindless::descriptor::{Bindless, RCDesc, StrongBackingRefs, RC};
-use vulkano_bindless::spirv_std::image::Image2d;
-use vulkano_bindless_shaders::buffer_content::{BufferContent, BufferStruct, Metadata};
-use vulkano_bindless_shaders::descriptor::{Buffer, Desc};
 use zune_image::errors::ImageErrors;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T

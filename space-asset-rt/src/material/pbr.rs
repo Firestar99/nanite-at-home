@@ -1,12 +1,12 @@
 use crate::image::upload::upload_image2d_archive;
 use crate::upload_traits::ToStrong;
 use crate::uploader::{UploadError, Uploader};
+use rust_gpu_bindless::descriptor::{RCDescExt, RC};
+use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::material::pbr::ArchivedPbrMaterialDisk;
 use space_asset_shader::material::pbr::PbrMaterial;
 use std::future::Future;
 use vulkano::Validated;
-use vulkano_bindless::descriptor::{RCDescExt, RC};
-use vulkano_bindless_shaders::descriptor::Strong;
 
 pub struct PbrMaterials<'a> {
 	pub pbr_materials: &'a [PbrMaterial<RC>],

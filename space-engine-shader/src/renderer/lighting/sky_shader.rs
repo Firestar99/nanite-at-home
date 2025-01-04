@@ -5,12 +5,12 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
 use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
+use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 use spirv_std::image::{Image2d, StorageImage2d};
 #[cfg(target_arch = "spirv")]
 use spirv_std::num_traits::Float;
 use static_assertions::const_assert_eq;
-use vulkano_bindless_macros::{bindless, BufferContent};
-use vulkano_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 pub fn saturate(x: f32) -> f32 {
 	x.clamp(0.0, 1.0)
@@ -132,8 +132,8 @@ pub fn preetham_sky(dir: Vec3, sun_position: Vec3) -> Vec3 {
 	lin + l0
 }
 
-#[derive(Copy, Clone, BufferContent)]
-pub struct Params<'a> {
+#[derive(Copy, Clone, BufferStruct)]
+pub struct Param<'a> {
 	pub frame_data: TransientDesc<'a, Buffer<FrameData>>,
 }
 
@@ -143,13 +143,13 @@ const_assert_eq!(SKY_SHADER_WG_SIZE.x, 8);
 const_assert_eq!(SKY_SHADER_WG_SIZE.y, 8);
 #[bindless(compute(threads(8, 8)))]
 pub fn sky_shader_cs(
-	#[bindless(descriptors)] descriptors: &Descriptors,
-	#[bindless(param_constants)] param: &Params<'static>,
+	#[bindless(descriptors)] descriptors: Descriptors,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(descriptor_set = 1, binding = 0)] g_albedo: &Image2d,
 	#[spirv(descriptor_set = 1, binding = 4)] output_image: &StorageImage2d,
 	#[spirv(global_invocation_id)] inv_id: UVec3,
 ) {
-	let frame_data = param.frame_data.access(descriptors).load();
+	let frame_data = param.frame_data.access(&descriptors).load();
 	let size: UVec2 = frame_data.viewport_size;
 	let pixel = inv_id.xy();
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;

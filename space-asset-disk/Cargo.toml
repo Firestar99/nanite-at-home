@@ -9,8 +9,8 @@ repository.workspace = true
 [dependencies]
 # members
 space-asset-disk-shader = { workspace = true, features = ["disk"] }
-vulkano-bindless-macros = { workspace = true }
-vulkano-bindless-buffer-content = { workspace = true }
+rust-gpu-bindless-macros = { workspace = true }
+rust-gpu-bindless-buffer-content = { workspace = true }
 
 # async
 rayon = { workspace = true }

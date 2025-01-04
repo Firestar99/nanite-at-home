@@ -1,0 +1,27 @@
+[package]
+name = "integration-test"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# members
+rust-gpu-bindless = { workspace = true, features = ["ash-platform"] }
+rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
+integration-test-shader = { workspace = true }
+
+# vulkan
+winit = { workspace = true }
+ash = { workspace = true }
+
+# other
+smallvec = { workspace = true }
+pollster = { workspace = true }
+anyhow = { workspace = true }
+approx = { workspace = true }
+
+[build-dependencies]
+anyhow = { workspace = true }
+rust-gpu-bindless-shader-builder = { workspace = true }
