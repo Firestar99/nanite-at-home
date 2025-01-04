@@ -250,14 +250,21 @@ impl AshSwapchain {
 		params: &AshSwapchainParams,
 		old_swapchain: ash::vk::SwapchainKHR,
 		e: &EventLoopWindowTarget<()>,
-	) -> Result<(ash::vk::SwapchainKHR, Vec<RcTableSlot>), ImageAllocationError<Ash>> {
+	) -> anyhow::Result<(ash::vk::SwapchainKHR, Vec<RcTableSlot>)> {
 		unsafe {
-			let window_size = window.get(e).inner_size();
-			let extent = Extent {
-				width: window_size.width,
-				height: window_size.height,
-				depth: 1,
+			let extent = {
+				let window_size = window.get(e).inner_size();
+				let surface_ext = bindless.extensions.surface();
+				let capabilities =
+					surface_ext.get_physical_device_surface_capabilities(bindless.physical_device, surface)?;
+				let min = capabilities.min_image_extent;
+				let max = capabilities.max_image_extent;
+				Extent::from([
+					u32::clamp(window_size.width, min.width, max.width),
+					u32::clamp(window_size.height, min.height, max.height),
+				])
 			};
+
 			let ext_swapchain = bindless.extensions.swapchain();
 			let swapchain = ext_swapchain
 				.create_swapchain(&params.create_info(surface, extent).old_swapchain(old_swapchain), None)
