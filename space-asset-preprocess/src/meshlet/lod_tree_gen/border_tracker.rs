@@ -5,13 +5,14 @@ use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use space_asset_disk::material::pbr::PbrVertex;
 use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::MESHLET_MAX_TRIANGLES;
 use static_assertions::const_assert_eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::mem::{offset_of, size_of};
+use std::mem::{offset_of, size_of, size_of_val};
 
 #[derive(Debug)]
 pub struct BorderTracker<'a> {
@@ -177,10 +178,10 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn simplify(&self, lod_faction: f32) -> LodMesh {
+	pub fn simplify(&self, lod_faction: f32, pbr_material_vertices: &[PbrVertex]) -> LodMesh {
 		self.metis_partition()
 			.par_iter()
-			.filter_map(|group| self.simplify_meshlet_group(lod_faction, &group))
+			.filter_map(|group| self.simplify_meshlet_group(lod_faction, pbr_material_vertices, &group))
 			.collect::<LodMesh>()
 	}
 
@@ -228,7 +229,12 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	fn simplify_meshlet_group(&self, lod_faction: f32, meshlet_ids: &[MeshletId]) -> Option<LodMesh> {
+	fn simplify_meshlet_group(
+		&self,
+		lod_faction: f32,
+		pbr_material_vertices: &[PbrVertex],
+		meshlet_ids: &[MeshletId],
+	) -> Option<LodMesh> {
 		let mut s_vertices;
 		let mut s_indices;
 		let mut s_remap;
@@ -273,6 +279,31 @@ impl<'a> BorderTracker<'a> {
 			}
 		}
 
+		let vertex_attrib_scale = 1.;
+		let vertex_attrib_weights = [
+			1., 1., 1., // normal
+			1., 1., // tex coord
+		]
+		.map(|a| a * vertex_attrib_scale);
+
+		let s_vertex_attrib;
+		{
+			profiling::scope!("simplify vertex_attrib");
+			s_vertex_attrib = s_vertices
+				.iter()
+				.flat_map(|d| {
+					let pbr = pbr_material_vertices[d.material_vertex_id.0 as usize];
+					[
+						pbr.normal.x,
+						pbr.normal.y,
+						pbr.normal.z,
+						pbr.tex_coord.x,
+						pbr.tex_coord.y,
+					]
+				})
+				.collect::<Vec<f32>>();
+		}
+
 		let target_count = s_indices.len() / 2;
 		let target_error = f32::lerp(0.01, 0.9, lod_faction);
 
@@ -284,9 +315,12 @@ impl<'a> BorderTracker<'a> {
 				offset_of!(DrawVertex, position),
 			)
 			.unwrap();
-			s_indices = meshopt::simplify_with_locks(
+			s_indices = meshopt::simplify_with_attributes_and_locks(
 				&s_indices,
 				&adapter,
+				&s_vertex_attrib,
+				&vertex_attrib_weights,
+				size_of_val(&vertex_attrib_weights),
 				&s_vertex_lock,
 				target_count,
 				target_error,

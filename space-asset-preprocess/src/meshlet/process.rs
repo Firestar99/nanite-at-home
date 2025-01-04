@@ -225,12 +225,12 @@ fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk
 	let mut prev_lod = mesh.lod_mesh;
 	mesh.lod_mesh = LodMesh::default();
 	mesh.lod_ranges.clear();
+	mesh.lod_ranges.reserve(lod_levels as usize + 1);
 	mesh.lod_ranges.push(0);
-	mesh.lod_ranges.reserve(lod_levels as usize);
 
 	for lod_level in 0..lod_levels {
 		let lod_faction = lod_level as f32 / (lod_levels - 1) as f32;
-		let lod = BorderTracker::from_meshlet_mesh(&prev_lod).simplify(lod_faction);
+		let lod = BorderTracker::from_meshlet_mesh(&prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
 
 		mesh.append_lod_level(&mut prev_lod);
 		prev_lod = lod;
