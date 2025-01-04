@@ -291,6 +291,7 @@ impl<'a> BorderTracker<'a> {
 				target_count,
 				target_error,
 				SimplifyOptions::empty(),
+				None,
 			);
 		}
 

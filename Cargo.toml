@@ -101,7 +101,7 @@ zune-image = { version = "0.5.0-rc0", default-features = false, features = ["png
 gltf = { version = "1.4.0", default-features = false, features = ["names", "utils", "KHR_lights_punctual", "KHR_materials_specular"] }
 base64 = "0.22"
 urlencoding = "2.1"
-meshopt = "0.3.0"
+meshopt = "0.4"
 metis = "0.2.1"
 intel_tex_2 = "0.4.0"
 
