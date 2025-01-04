@@ -62,7 +62,7 @@ fn lighting_inner(
 	let pixel = pixel_wg_start + uvec2(inv_id.x, 0);
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 
-	let (sampled, meshlet_debug_hue) = sampled_material_from_g_buffer(
+	let (sampled, debug_hue) = sampled_material_from_g_buffer(
 		frame_data.camera,
 		g_albedo,
 		g_normal,
@@ -75,12 +75,10 @@ fn lighting_inner(
 
 	let out_color = match frame_data.debug_settings() {
 		DebugSettings::None => material_eval(frame_data, sampled),
-		DebugSettings::MeshletIdOverlay => Vec3::lerp(
-			material_eval(frame_data, sampled),
-			meshlet_debug_color(meshlet_debug_hue),
-			0.1,
-		),
-		DebugSettings::MeshletId => meshlet_debug_color(meshlet_debug_hue),
+		DebugSettings::MeshletIdOverlay | DebugSettings::TriangleIdOverlay => {
+			Vec3::lerp(material_eval(frame_data, sampled), debug_color(debug_hue), 0.1)
+		}
+		DebugSettings::MeshletId | DebugSettings::TriangleId => debug_color(debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
 		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),
@@ -151,7 +149,7 @@ fn material_eval(frame_data: FrameData, sampled: SampledMaterial) -> Vec3 {
 	lo.tone_map_reinhard()
 }
 
-fn meshlet_debug_color(meshlet_debug_hue: f32) -> Vec3 {
+fn debug_color(meshlet_debug_hue: f32) -> Vec3 {
 	if meshlet_debug_hue < 0.0001 {
 		vec3(0., 0., 0.)
 	} else {

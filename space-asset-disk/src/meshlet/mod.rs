@@ -1,4 +1,5 @@
 pub mod instance;
+pub mod lod_mesh;
 pub mod mesh;
 pub mod scene;
 

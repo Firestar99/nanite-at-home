@@ -72,17 +72,25 @@ impl<'a> MeshletSceneFile<'a> {
 
 		let capacity = path.metadata()?.len() as usize + 1;
 		let mut vec = AlignedVec::with_capacity(capacity);
-		vec.resize(capacity, 0);
+		unsafe {
+			vec.set_len(capacity);
+		}
 
+		let mut bytes_read = 0;
 		loop {
-			match file.read(&mut vec) {
+			match file.read(&mut vec[bytes_read..]) {
 				Ok(e) => {
-					vec.resize(e, 0);
-					break;
+					bytes_read += e;
+					if e == 0 {
+						break;
+					}
 				}
 				Err(err) if err.kind() == io::ErrorKind::Interrupted => (),
 				Err(err) => Err(err)?,
 			}
+		}
+		unsafe {
+			vec.set_len(bytes_read);
 		}
 		Ok(LoadedMeshletScene { archive: vec })
 	}

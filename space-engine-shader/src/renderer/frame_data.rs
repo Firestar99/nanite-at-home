@@ -10,7 +10,9 @@ use vulkano_bindless_macros::BufferContent;
 pub enum DebugSettings {
 	None,
 	MeshletIdOverlay,
+	TriangleIdOverlay,
 	MeshletId,
+	TriangleId,
 	BaseColor,
 	Normals,
 	VertexNormals,
@@ -30,6 +32,7 @@ pub struct FrameData {
 	pub camera: Camera,
 	pub viewport_size: UVec2,
 	pub debug_settings: u32,
+	pub debug_lod_level: u32,
 	pub sun: DirectionalLight,
 	pub ambient_light: Radiance,
 }
