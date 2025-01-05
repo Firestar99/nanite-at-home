@@ -40,6 +40,7 @@ impl RenderPipelineMainFormat {
 pub struct RenderPipelineMain {
 	pub bindless: Arc<Bindless>,
 	pub format: RenderPipelineMainFormat,
+	pub meshlet_group_capacity: usize,
 	pub meshlet_instance_capacity: usize,
 	pub instance_cull: InstanceCullCompute,
 	pub meshlet_select: MeshletSelectCompute,
@@ -52,6 +53,7 @@ impl RenderPipelineMain {
 	pub fn new(
 		bindless: &Arc<Bindless>,
 		output_format: Format,
+		meshlet_group_capacity: usize,
 		meshlet_instance_capacity: usize,
 	) -> anyhow::Result<Arc<Self>> {
 		// all formats are always available
@@ -66,6 +68,7 @@ impl RenderPipelineMain {
 		Ok(Arc::new(Self {
 			bindless: bindless.clone(),
 			format,
+			meshlet_group_capacity,
 			meshlet_instance_capacity,
 			instance_cull: InstanceCullCompute::new(bindless)?,
 			meshlet_select: MeshletSelectCompute::new(bindless)?,
@@ -125,17 +128,17 @@ impl RendererMainResources {
 			name: "g_depth",
 			..Default::default()
 		})?;
+		let compacting_meshlet_groups = CompactingAllocBuffer::new(
+			&pipeline.bindless,
+			pipeline.meshlet_group_capacity,
+			[0, 1, 1],
+			"compacting_meshlet_groups",
+		)?;
 		let compacting_meshlet_instances = CompactingAllocBuffer::new(
 			&pipeline.bindless,
 			pipeline.meshlet_instance_capacity,
 			[0, 1, 1],
 			"compacting_meshlet_instances",
-		)?;
-		let compacting_meshlet_groups = CompactingAllocBuffer::new(
-			&pipeline.bindless,
-			pipeline.meshlet_instance_capacity / MeshletGroupInstance::MAX_MESHLET_CNT as usize,
-			[0, 1, 1],
-			"compacting_meshlet_groups",
 		)?;
 		Ok(RendererMainResources {
 			extent,

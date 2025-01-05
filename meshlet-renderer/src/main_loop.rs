@@ -31,9 +31,12 @@ use winit::window::{CursorGrabMode, WindowBuilder};
 
 const DEBUGGER: Debuggers = Debuggers::None;
 
-// how many meshlet instances can be dynamically allocated, 1 << 17 = 131072
-// about double what bistro needs if all meshlets rendered
+/// how many `MeshletInstance`s can be dynamically allocated, 1 << 17 = 131072
+/// about double what bistro needs if all meshlets rendered
 const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
+
+/// how many `MeshletGroupInstance` can be dynamically allocated
+const MESHLET_GROUP_CAPACITY: usize = MESHLET_INSTANCE_CAPACITY / 16;
 
 pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) -> anyhow::Result<()> {
 	rayon::ThreadPoolBuilder::new()
@@ -92,8 +95,12 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	.await?;
 
 	// renderer
-	let render_pipeline_main =
-		RenderPipelineMain::new(&bindless, swapchain.params().format, MESHLET_INSTANCE_CAPACITY)?;
+	let render_pipeline_main = RenderPipelineMain::new(
+		&bindless,
+		swapchain.params().format,
+		MESHLET_GROUP_CAPACITY,
+		MESHLET_INSTANCE_CAPACITY,
+	)?;
 	let mut renderer_main = render_pipeline_main.new_renderer()?;
 
 	// model loading
