@@ -21,7 +21,6 @@ use rust_gpu_bindless::generic::platform::ash::{
 use std::ffi::CStr;
 use std::fmt::Display;
 use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -153,29 +152,28 @@ impl AshSwapchainParams {
 }
 
 /// A binary semaphore for swapchain operations
-pub struct SwapchainSemaphore(Semaphore);
-
-impl Deref for SwapchainSemaphore {
-	type Target = Semaphore;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+pub struct SwapchainSemaphore {
+	acquire: Semaphore,
+	present: Semaphore,
 }
 
 impl SwapchainSemaphore {
 	pub unsafe fn new(bindless: &Arc<Bindless<Ash>>) -> anyhow::Result<Self> {
 		unsafe {
-			Ok(Self(
-				bindless
+			Ok(Self {
+				acquire: bindless
 					.device
 					.create_semaphore(&SemaphoreCreateInfo::default(), None)?,
-			))
+				present: bindless
+					.device
+					.create_semaphore(&SemaphoreCreateInfo::default(), None)?,
+			})
 		}
 	}
 
 	pub unsafe fn destroy(&mut self, bindless: &Arc<Bindless<Ash>>) {
-		bindless.device.destroy_semaphore(self.0, None);
+		bindless.device.destroy_semaphore(self.acquire, None);
+		bindless.device.destroy_semaphore(self.present, None);
 	}
 }
 
@@ -396,7 +394,7 @@ impl AshSwapchain {
 				match swapchain_ext.acquire_next_image(
 					self.swapchain,
 					timeout.map(|a| a.as_nanos() as u64).unwrap_or(!0),
-					*semaphore,
+					semaphore.acquire,
 					Fence::null(),
 				) {
 					Ok((id, suboptimal)) => {
@@ -411,7 +409,7 @@ impl AshSwapchain {
 							device.queue_submit(
 								*queue,
 								&[SubmitInfo::default()
-									.wait_semaphores(&[*semaphore])
+									.wait_semaphores(&[semaphore.acquire])
 									.wait_dst_stage_mask(&[PipelineStageFlags::ALL_COMMANDS])
 									.signal_semaphores(&[execution.resource().semaphore])
 									.push_next(
@@ -477,7 +475,7 @@ impl AshSwapchain {
 			let semaphore = self.image_semaphores[id as usize]
 				.as_ref()
 				.expect("missing image_semaphore {e:?} in slot {id}")
-				.0;
+				.present;
 
 			let dependency = last.upgrade_ash_resource();
 
