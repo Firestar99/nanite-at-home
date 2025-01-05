@@ -1,6 +1,7 @@
 use crate::renderer::camera::Camera;
 use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferWriter;
 use crate::renderer::frame_data::FrameData;
+use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::MeshletGroupInstance;
 use core::ops::Range;
 use glam::UVec3;
@@ -39,9 +40,16 @@ pub fn instance_cull_compute(
 	if !cull_instance(frame_data.camera, instance) {
 		for mesh_id in Range::<u32>::from(instance.mesh_ids) {
 			let mesh: MeshletMesh<Strong> = scene.meshes.access(&descriptors).load(mesh_id as usize);
-			let lod_ranges = mesh.lod_ranges.access(&descriptors);
-			let lod_level = u32::clamp(frame_data.debug_lod_level, 0, mesh.num_lod_ranges - 1) as usize;
-			let meshlet_range = lod_ranges.load(lod_level)..lod_ranges.load(lod_level + 1);
+
+			let meshlet_range = match frame_data.debug_lod_level.lod_type() {
+				LodType::Nanite => 0..mesh.num_meshlets,
+				LodType::Static => {
+					let lod_ranges = mesh.lod_ranges.access(&descriptors);
+					let lod_level = frame_data.debug_lod_level.lod_level_static();
+					let lod_level = u32::clamp(lod_level, 0, mesh.num_lod_ranges - 1) as usize;
+					lod_ranges.load(lod_level)..lod_ranges.load(lod_level + 1)
+				}
+			};
 
 			let mut meshlet_start = meshlet_range.start + meshlet_offset * MAX_MESHLET_CNT;
 			while meshlet_start < meshlet_range.end {
