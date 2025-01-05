@@ -633,7 +633,10 @@ unsafe impl BindlessPlatform for Ash {
 			if let Some(imageview) = image.image_view {
 				self.device.destroy_image_view(imageview, None);
 			}
-			self.device.destroy_image(image.image, None);
+			// do not destroy swapchain images
+			if !image.usage.contains(BindlessImageUsage::SWAPCHAIN) {
+				self.device.destroy_image(image.image, None);
+			}
 		}
 	}
 

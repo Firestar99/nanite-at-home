@@ -21,7 +21,6 @@ use rust_gpu_bindless::generic::platform::ash::{
 use std::ffi::CStr;
 use std::fmt::Display;
 use std::fmt::{Debug, Formatter};
-use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
@@ -382,10 +381,11 @@ impl AshSwapchain {
 							.spawn(move |e| Self::create_swapchain(&bindless, &window, surface, &params, swapchain, e))
 							.await?
 					};
+					swapchain_ext.destroy_swapchain(self.swapchain, None);
 					self.swapchain = new.0;
 					assert_eq!(self.images.len(), new.1.len());
 					for (i, image) in new.1.into_iter().enumerate() {
-						mem::forget(self.images[i].replace(image));
+						drop(self.images[i].replace(image));
 					}
 				}
 
@@ -432,9 +432,13 @@ impl AshSwapchain {
 						return Ok(desc);
 					}
 					Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+						self.semaphore_pool.push(semaphore);
 						self.should_recreate = true;
 					}
-					Err(e) => return Err(e.into()),
+					Err(e) => {
+						self.semaphore_pool.push(semaphore);
+						return Err(e.into());
+					}
 				}
 			}
 			panic!(
@@ -471,8 +475,9 @@ impl AshSwapchain {
 			let swapchain_ext = self.bindless.extensions.swapchain();
 			let (rc_slot, last) = image.into_inner();
 			let semaphore = self.image_semaphores[id as usize]
-				.take()
-				.expect("missing image_semaphore {e:?} in slot {id}");
+				.as_ref()
+				.expect("missing image_semaphore {e:?} in slot {id}")
+				.0;
 
 			let dependency = last.upgrade_ash_resource();
 
@@ -483,7 +488,7 @@ impl AshSwapchain {
 					&[SubmitInfo::default()
 						.wait_semaphores(dependency.as_ref().map(|a| a.resource().semaphore).as_slice())
 						.wait_dst_stage_mask(dependency.as_ref().map(|_| PipelineStageFlags::ALL_COMMANDS).as_slice())
-						.signal_semaphores(&[*semaphore])
+						.signal_semaphores(&[semaphore])
 						.push_next(
 							&mut TimelineSemaphoreSubmitInfo::default()
 								.wait_semaphore_values(
@@ -496,7 +501,7 @@ impl AshSwapchain {
 				match swapchain_ext.queue_present(
 					*queue,
 					&PresentInfoKHR::default()
-						.wait_semaphores(&[*semaphore])
+						.wait_semaphores(&[semaphore])
 						.swapchains(&[self.swapchain])
 						.image_indices(&[id]),
 				) {
@@ -538,16 +543,13 @@ impl Debug for PresentError {
 impl Drop for AshSwapchain {
 	fn drop(&mut self) {
 		unsafe {
-			// TODO leak: The slots swapchain images occupy are leaked, as we must not destroy swapchain images,
-			//  due to them being owned by the swapchain.
-			for image in &mut self.images {
-				mem::forget(image.take());
-			}
 			for x in self.semaphore_pool.iter_mut() {
 				x.destroy(&self.bindless);
 			}
 			let ext_swapchain = &self.bindless.extensions.swapchain();
 			ext_swapchain.destroy_swapchain(self.swapchain, None);
+			let surface_ext = self.bindless.extensions.surface();
+			surface_ext.destroy_surface(self.surface, None);
 		}
 	}
 }
