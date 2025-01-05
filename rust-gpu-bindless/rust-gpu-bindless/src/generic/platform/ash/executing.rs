@@ -252,8 +252,8 @@ impl AshExecutionManager {
 	/// # Safety
 	/// must only submit an execution acquired from [`Self::new_execution`] exactly once
 	pub unsafe fn submit_for_waiting(&self, execution: Arc<AshExecution>) -> VkResult<()> {
-		self.submit_for_waiting.push(execution);
 		self.assert_not_in_shutdown();
+		self.submit_for_waiting.push(execution);
 		self.notify_wait_semaphore_thread()?;
 		Ok(())
 	}
@@ -283,7 +283,7 @@ impl AshExecutionManager {
 			let mut semaphores = Vec::with_capacity(initial_capacity);
 			let mut values = Vec::with_capacity(initial_capacity);
 			let mut notify_timeline_value;
-			while !execution_manager.wait_thread_shutdown.load(Relaxed) {
+			loop {
 				// update our notify_timeline_value
 				notify_timeline_value = device
 					.get_semaphore_counter_value(execution_manager.wait_thread_notify_semaphore)
@@ -331,6 +331,11 @@ impl AshExecutionManager {
 						Err(e) => panic!("{:?}", e),
 					}
 				} else {
+					if execution_manager.wait_thread_shutdown.load(Relaxed) {
+						assert_eq!(pending.len(), 0);
+						assert_eq!(execution_manager.submit_for_waiting.len(), 0);
+						break;
+					}
 					// wait for notify semaphore only
 					// with timeout to back off from the bindless Arc
 					let result = device.wait_semaphores(
@@ -383,7 +388,7 @@ impl AshExecutionManager {
 		Ok(())
 	}
 
-	pub fn destroy(&mut self, device: &Device) {
+	pub unsafe fn destroy(&mut self, device: &Device) {
 		let guard = self.wait_thread.lock();
 		if let Some(join) = guard.0 {
 			if guard.1.as_ref().is_some() {
@@ -395,7 +400,7 @@ impl AshExecutionManager {
 		}
 		unsafe {
 			device.destroy_semaphore(self.wait_thread_notify_semaphore, None);
-			if let Some(resource) = self.free_pool.pop() {
+			while let Some(resource) = self.free_pool.pop() {
 				resource.destroy(device)
 			}
 		}

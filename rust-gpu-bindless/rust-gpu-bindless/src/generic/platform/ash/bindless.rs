@@ -105,7 +105,12 @@ impl Deref for Ash {
 
 impl Drop for Ash {
 	fn drop(&mut self) {
-		self.execution_manager.destroy(&self.create_info.device);
+		unsafe {
+			// This device_wait_idle is needed as some semaphores may still be in use. Likely due to being waited
+			// upon, as that does not hold a strong ref on the semaphore.
+			self.device.device_wait_idle().unwrap();
+			self.execution_manager.destroy(&self.create_info.device);
+		}
 	}
 }
 
