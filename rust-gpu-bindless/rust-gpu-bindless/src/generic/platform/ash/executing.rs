@@ -1,10 +1,11 @@
 use crate::generic::descriptor::{Bindless, BindlessFrame};
-use crate::generic::platform::ash::{Ash, AshCreateInfo};
+use crate::generic::platform::ash::{Ash, AshCreateInfo, DeviceExt};
 use crate::generic::platform::PendingExecution;
 use ash::prelude::VkResult;
 use ash::vk::{
-	CommandPoolCreateFlags, CommandPoolCreateInfo, CommandPoolResetFlags, SemaphoreCreateInfo, SemaphoreSignalInfo,
-	SemaphoreType, SemaphoreTypeCreateInfo, SemaphoreWaitFlags, SemaphoreWaitInfo,
+	CommandBufferAllocateInfo, CommandBufferLevel, CommandPoolCreateFlags, CommandPoolCreateInfo,
+	CommandPoolResetFlags, SemaphoreCreateInfo, SemaphoreSignalInfo, SemaphoreType, SemaphoreTypeCreateInfo,
+	SemaphoreWaitFlags, SemaphoreWaitInfo,
 };
 use ash::Device;
 use crossbeam_queue::SegQueue;
@@ -36,6 +37,7 @@ pub fn create_timeline_semaphore(device: &Device, timeline_value: u64) -> VkResu
 #[derive(Debug, Clone)]
 pub struct AshExecutionResource {
 	pub command_pool: ash::vk::CommandPool,
+	pub command_buffer: ash::vk::CommandBuffer,
 	pub semaphore: ash::vk::Semaphore,
 	pub timeline_value: u64,
 }
@@ -44,11 +46,19 @@ impl AshExecutionResource {
 	pub fn new(device: &Device) -> VkResult<Self> {
 		unsafe {
 			let timeline_value = 0;
+			let command_pool = device.create_command_pool(
+				&CommandPoolCreateInfo::default().flags(CommandPoolCreateFlags::TRANSIENT),
+				None,
+			)?;
+			let command_buffer = device.allocate_command_buffer(
+				&CommandBufferAllocateInfo::default()
+					.command_pool(command_pool)
+					.level(CommandBufferLevel::PRIMARY)
+					.command_buffer_count(1),
+			)?;
 			Ok(Self {
-				command_pool: device.create_command_pool(
-					&CommandPoolCreateInfo::default().flags(CommandPoolCreateFlags::TRANSIENT),
-					None,
-				)?,
+				command_pool,
+				command_buffer,
 				semaphore: create_timeline_semaphore(device, timeline_value)?,
 				timeline_value: timeline_value + 1,
 			})
@@ -58,7 +68,7 @@ impl AshExecutionResource {
 	pub fn reset(&mut self, device: &Device) {
 		unsafe {
 			device
-				.reset_command_pool(self.command_pool, CommandPoolResetFlags::RELEASE_RESOURCES)
+				.reset_command_pool(self.command_pool, CommandPoolResetFlags::empty())
 				.unwrap();
 			self.timeline_value += 1;
 		}
@@ -66,6 +76,7 @@ impl AshExecutionResource {
 
 	pub unsafe fn destroy(&self, device: &Device) {
 		unsafe {
+			device.free_command_buffers(self.command_pool, &[self.command_buffer]);
 			device.destroy_command_pool(self.command_pool, None);
 			device.destroy_semaphore(self.semaphore, None);
 		}
