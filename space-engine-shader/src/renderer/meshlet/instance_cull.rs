@@ -27,15 +27,15 @@ const_assert_eq!(INSTANCE_CULL_WG_SIZE, 32);
 #[bindless(compute(threads(32)))]
 pub fn instance_cull_compute(
 	#[bindless(descriptors)] mut descriptors: Descriptors,
-	#[bindless(param)] params: &Param<'static>,
+	#[bindless(param)] param: &Param<'static>,
 	#[spirv(workgroup_id)] wg_id: UVec3,
 	#[spirv(local_invocation_id)] inv_id: UVec3,
 ) {
 	let instance_id = wg_id.x;
 	let meshlet_offset = inv_id.x;
 
-	let frame_data = params.frame_data.access(&descriptors).load();
-	let scene = params.scene.access(&descriptors).load();
+	let frame_data = param.frame_data.access(&descriptors).load();
+	let scene = param.scene.access(&descriptors).load();
 	let instance = scene.instances.access(&descriptors).load(instance_id as usize);
 	if !cull_instance(frame_data.camera, instance) {
 		for mesh_id in Range::<u32>::from(instance.mesh_ids) {
@@ -54,7 +54,7 @@ pub fn instance_cull_compute(
 			let mut meshlet_start = meshlet_range.start + meshlet_offset * MAX_MESHLET_CNT;
 			while meshlet_start < meshlet_range.end {
 				let meshlet_cnt = u32::clamp(meshlet_start + MAX_MESHLET_CNT, 0, meshlet_range.end) - meshlet_start;
-				let _ = params.compacting_groups_out.allocate(&mut descriptors).write(
+				let _ = param.compacting_groups_out.allocate(&mut descriptors).write(
 					&mut descriptors,
 					MeshletGroupInstance {
 						instance_id,

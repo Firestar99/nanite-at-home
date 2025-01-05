@@ -2,6 +2,7 @@ use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::lod_selector::LodSelector;
+use crate::nanite_error_selector::NaniteErrorSelector;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::{eval_ambient_light, eval_sun};
@@ -20,6 +21,7 @@ use rust_gpu_bindless_winit::ash::{
 use rust_gpu_bindless_winit::event_loop::EventLoopExecutor;
 use rust_gpu_bindless_winit::window_ref::WindowRef;
 use space_asset_shader::affine_transform::AffineTransform;
+use space_asset_shader::shape::sphere::ProjectToScreen;
 use space_engine::renderer::renderers::main::RenderPipelineMain;
 use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
@@ -115,6 +117,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let mut camera_controls = FpsCameraController::new();
 	let mut debug_settings_selector = DebugSettingsSelector::new();
 	let mut lod_selector = LodSelector::new();
+	let mut nanite_error_selector = NaniteErrorSelector::new();
 	let mut last_frame = DeltaTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
@@ -127,6 +130,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			debug_settings_selector.handle_input(&event);
 			scene_selector.handle_input(&event).await?;
 			lod_selector.handle_input(&event);
+			nanite_error_selector.handle_input(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -142,8 +146,9 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		let frame_data = {
 			let delta_time = last_frame.next();
 			let out_extent = UVec3::from(output_image.extent());
+			let fov = 90.;
 			let projection = Mat4::perspective_rh(
-				90. / 360. * 2. * PI,
+				fov / 360. * 2. * PI,
 				out_extent.x as f32 / out_extent.y as f32,
 				0.1,
 				1000.,
@@ -159,9 +164,11 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 
 			FrameData {
 				camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
+				viewport_size: out_extent.xy(),
+				project_to_screen: ProjectToScreen::new(fov),
+				nanite_error_threshold: nanite_error_selector.error,
 				debug_settings: debug_settings_selector.get().into(),
 				debug_lod_level: lod_selector.lod_level,
-				viewport_size: out_extent.xy(),
 				sun,
 				ambient_light,
 			}
