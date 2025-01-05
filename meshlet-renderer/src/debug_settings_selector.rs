@@ -48,10 +48,12 @@ impl DebugSettingsSelector {
 				match code {
 					KeyQ => selected -= 1,
 					KeyE => selected += 1,
-					_ => {}
+					_ => return,
 				}
 				let selected = i32::rem_euclid(selected, DebugSettings::LEN as i32);
-				self.set(DebugSettings::try_from(selected as u32).unwrap());
+				let debug_settings = DebugSettings::try_from(selected as u32).unwrap();
+				self.set(debug_settings);
+				println!("DebugSettings: {:?}", debug_settings);
 			}
 			_ => {}
 		}
