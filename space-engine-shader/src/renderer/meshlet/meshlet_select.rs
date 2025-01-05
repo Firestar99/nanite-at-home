@@ -2,6 +2,7 @@ use crate::renderer::compacting_alloc_buffer::{CompactingAllocBufferReader, Comp
 use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
+use crate::utils::affine::AffineTranspose;
 use glam::UVec3;
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
@@ -59,14 +60,21 @@ fn cull_meshlet(
 			let scene = scene.access(descriptors).load();
 			let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(instance.mesh_id as usize);
 			let m = mesh.meshlet(descriptors, instance.meshlet_id as usize);
-			let transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
-			let transform = transform.transform.affine;
+			let instance_transform = scene
+				.instances
+				.access(descriptors)
+				.load(instance.instance_id as usize)
+				.transform
+				.affine;
+			let camera_transform = frame_data.camera.transform.affine.transpose();
 
 			let ss_error = Sphere::new(m.bounds.position(), m.error)
-				.transform(transform)
+				.transform(instance_transform)
+				.transform(camera_transform)
 				.project_to_screen_area(frame_data.project_to_screen);
 			let ss_error_parent = Sphere::new(m.parent_bounds.position(), m.parent_error)
-				.transform(transform)
+				.transform(instance_transform)
+				.transform(camera_transform)
 				.project_to_screen_area(frame_data.project_to_screen);
 
 			let error_threshold = frame_data.nanite_error_threshold;
