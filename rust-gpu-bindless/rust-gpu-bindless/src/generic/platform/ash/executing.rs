@@ -351,8 +351,13 @@ impl AshExecutionManager {
 
 	pub fn destroy(&mut self, device: &Device) {
 		unsafe {
+			// Join AshWaitSemaphoreThread to ensure the resources below aren't in use by it.
+			// But if we are AshWaitSemaphoreThread, main thread must have dropped bindless and cannot possibly access
+			// these resources anymore, so we can just free them safely.
 			if let Some(join_handle) = self.wait_thread_join_handle.take() {
-				join_handle.join().unwrap();
+				if join_handle.thread().id() != thread::current().id() {
+					join_handle.join().unwrap();
+				}
 			}
 			device.destroy_semaphore(self.wait_thread_notify_semaphore, None);
 			if let Some(resource) = self.free_pool.pop() {
