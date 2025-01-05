@@ -350,12 +350,13 @@ impl<'a> BorderTracker<'a> {
 			);
 		}
 
-		let max_parent_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
-		let mesh_space_error = {
+		let mut mesh_space_error = {
 			profiling::scope!("meshopt::simplify_scale");
 			// relative -> absolute error
 			relative_error * meshopt::simplify_scale(&adapter)
-		} + max_parent_error;
+		};
+		let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
+		mesh_space_error += max_child_error;
 
 		let group_sphere = Sphere::bounding_sphere(|| s_vertices.iter().map(|d| d.position)).unwrap();
 

@@ -142,7 +142,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 		(0..draw_vertices_len as u32).collect()
 	};
 
-	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, Sphere::default(), f32::INFINITY);
+	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, Sphere::default(), 0.);
 
 	let lod_ranges = Vec::from([0, lod_mesh.meshlets.len() as u32]);
 	Ok(MeshletMeshDisk {
@@ -218,7 +218,7 @@ pub fn lod_mesh_build_meshlets(
 					bounds,
 					parent_bounds: Sphere::default(),
 					error,
-					parent_error: 0.,
+					parent_error: f32::INFINITY,
 					_pad: [0; 2],
 				};
 				triangle_start += m.triangle_count as usize;
