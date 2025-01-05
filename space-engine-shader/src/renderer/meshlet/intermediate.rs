@@ -14,7 +14,7 @@ pub struct MeshletInstance {
 pub struct MeshletGroupInstance {
 	pub instance_id: u32,
 	pub mesh_id: u32,
-	pub meshlet_id: u32,
+	pub meshlet_start: u32,
 	pub meshlet_cnt: u32,
 }
 

@@ -35,7 +35,7 @@ pub fn meshlet_select_compute(
 		let instance = MeshletInstance {
 			instance_id: group_instance.instance_id,
 			mesh_id: group_instance.mesh_id,
-			meshlet_id: group_instance.meshlet_id + instance_id,
+			meshlet_id: group_instance.meshlet_start + instance_id,
 		};
 		if !cull_meshlet(frame_data.camera, instance) {
 			params
