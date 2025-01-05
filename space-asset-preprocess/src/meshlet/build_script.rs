@@ -19,7 +19,7 @@ pub fn out_and_export_dir() -> Option<(PathBuf, PathBuf)> {
 pub fn build_script(
 	models_dir: &Path,
 	out_dir: &Path,
-	models_rs: &Path,
+	models_rs: Option<&Path>,
 	rerun_if_changed: bool,
 ) -> anyhow::Result<Vec<GltfFile>> {
 	let model_paths = find_gltf_files(models_dir, out_dir, rerun_if_changed)?;
@@ -45,7 +45,7 @@ pub fn build_script(
 			.collect::<Result<_, _>>()?;
 	}
 
-	{
+	if let Some(models_rs) = models_rs {
 		profiling::scope!("writing models mod hierarchy");
 		fs::write(models_rs, to_mod_hierarchy(model_paths.iter())?.to_string())?;
 	}
