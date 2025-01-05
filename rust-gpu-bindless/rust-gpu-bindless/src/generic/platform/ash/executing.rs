@@ -16,7 +16,7 @@ use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicU64};
-use std::sync::{Arc, OnceLock, Weak};
+use std::sync::{Arc, Weak};
 use std::task::{Context, Poll, Waker};
 use std::thread;
 
@@ -182,7 +182,8 @@ pub struct AshExecutionManager {
 	bindless: Weak<Bindless<Ash>>,
 	free_pool: SegQueue<AshExecutionResource>,
 	submit_for_waiting: SegQueue<Arc<AshExecution>>,
-	wait_thread_join_handle: OnceLock<thread::JoinHandle<()>>,
+	wait_thread: Mutex<(Option<thread::ThreadId>, Option<thread::JoinHandle<()>>)>,
+	wait_thread_shutdown: AtomicBool,
 	wait_thread_notify_semaphore: ash::vk::Semaphore,
 	wait_thread_notify_timeline_value_send: Mutex<u64>,
 	wait_thread_notify_timeline_value_receive: AtomicU64,
@@ -197,7 +198,8 @@ impl AshExecutionManager {
 			bindless: bindless.clone(),
 			free_pool: SegQueue::new(),
 			submit_for_waiting: SegQueue::new(),
-			wait_thread_join_handle: OnceLock::new(),
+			wait_thread: Mutex::new((None, None)),
+			wait_thread_shutdown: AtomicBool::new(false),
 			wait_thread_notify_semaphore: create_timeline_semaphore(&create_info.device, initial_value)?,
 			wait_thread_notify_timeline_value_send: Mutex::new(initial_value),
 			wait_thread_notify_timeline_value_receive: AtomicU64::new(initial_value),
@@ -240,6 +242,7 @@ impl AshExecutionManager {
 	/// must only submit an execution acquired from [`Self::new_execution`] exactly once
 	pub unsafe fn submit_for_waiting(&self, execution: Arc<AshExecution>) -> VkResult<()> {
 		self.submit_for_waiting.push(execution);
+		self.assert_not_in_shutdown();
 		self.notify_wait_semaphore_thread()?;
 		Ok(())
 	}
@@ -260,105 +263,126 @@ impl AshExecutionManager {
 		Ok(())
 	}
 
-	unsafe fn wait_semaphore_thread_main(bindless: Weak<Bindless<Ash>>) {
+	unsafe fn wait_semaphore_thread_main(bindless: Arc<Bindless<Ash>>) {
 		unsafe {
+			let execution_manager = &bindless.execution_manager;
+			let device = &bindless.device;
 			let initial_capacity = 64;
 			let mut pending = Vec::with_capacity(initial_capacity);
 			let mut semaphores = Vec::with_capacity(initial_capacity);
 			let mut values = Vec::with_capacity(initial_capacity);
 			let mut notify_timeline_value;
-			while let Some(bindless) = bindless.upgrade() {
-				let execution_manager = &bindless.execution_manager;
-				let device = &bindless.device;
+			while !execution_manager.wait_thread_shutdown.load(Relaxed) {
+				// update our notify_timeline_value
+				notify_timeline_value = device
+					.get_semaphore_counter_value(execution_manager.wait_thread_notify_semaphore)
+					.unwrap();
+				execution_manager
+					.wait_thread_notify_timeline_value_receive
+					.store(notify_timeline_value, Relaxed);
 
-				loop {
-					// update our notify_timeline_value
-					notify_timeline_value = device
-						.get_semaphore_counter_value(execution_manager.wait_thread_notify_semaphore)
-						.unwrap();
-					execution_manager
-						.wait_thread_notify_timeline_value_receive
-						.store(notify_timeline_value, Relaxed);
-
-					// add new semaphores
-					// MUST happen after timeline_value_receive was set
-					while let Some(e) = execution_manager.submit_for_waiting.pop() {
-						if !e.check_completion(&device) {
-							pending.push(e);
-						}
+				// add new semaphores
+				// MUST happen after timeline_value_receive was set
+				while let Some(e) = execution_manager.submit_for_waiting.pop() {
+					if !e.check_completion(&device) {
+						pending.push(e);
 					}
+				}
 
-					// check each semaphore for completion
-					pending.retain(|e| !e.check_completion(&device));
-					if !pending.is_empty() {
-						// wait for any semaphore to complete
-						assert!(semaphores.is_empty() && values.is_empty());
-						semaphores.extend(
-							pending
-								.iter()
-								.map(|e| e.resource.semaphore)
-								.chain([execution_manager.wait_thread_notify_semaphore]),
-						);
-						values.extend(
-							pending
-								.iter()
-								.map(|e| e.resource.timeline_value)
-								.chain([notify_timeline_value + 1]),
-						);
-						let result = device.wait_semaphores(
-							&SemaphoreWaitInfo::default()
-								.flags(SemaphoreWaitFlags::ANY)
-								.semaphores(&semaphores)
-								.values(&values),
-							!0,
-						);
-						semaphores.clear();
-						values.clear();
-						match result {
-							Ok(_) | Err(ash::vk::Result::TIMEOUT) => (),
-							Err(e) => panic!("{:?}", e),
-						}
-					} else {
-						// wait for notify semaphore only
-						// with timeout to back off from the bindless Arc
-						let result = device.wait_semaphores(
-							&SemaphoreWaitInfo::default()
-								.semaphores(&[execution_manager.wait_thread_notify_semaphore])
-								.values(&[notify_timeline_value + 1]),
-							10_000_000, // nanoseconds = 10ms
-						);
-						match result {
-							Ok(_) => (),
-							// back off: release strong reference to Bindless, allowing it to potentially free
-							Err(ash::vk::Result::TIMEOUT) => break,
-							Err(e) => panic!("{:?}", e),
-						}
+				// check each semaphore for completion
+				pending.retain(|e| !e.check_completion(&device));
+				if !pending.is_empty() {
+					// wait for any semaphore to complete
+					assert!(semaphores.is_empty() && values.is_empty());
+					semaphores.extend(
+						pending
+							.iter()
+							.map(|e| e.resource.semaphore)
+							.chain([execution_manager.wait_thread_notify_semaphore]),
+					);
+					values.extend(
+						pending
+							.iter()
+							.map(|e| e.resource.timeline_value)
+							.chain([notify_timeline_value + 1]),
+					);
+					let result = device.wait_semaphores(
+						&SemaphoreWaitInfo::default()
+							.flags(SemaphoreWaitFlags::ANY)
+							.semaphores(&semaphores)
+							.values(&values),
+						!0,
+					);
+					semaphores.clear();
+					values.clear();
+					match result {
+						Ok(_) | Err(ash::vk::Result::TIMEOUT) => (),
+						Err(e) => panic!("{:?}", e),
+					}
+				} else {
+					// wait for notify semaphore only
+					// with timeout to back off from the bindless Arc
+					let result = device.wait_semaphores(
+						&SemaphoreWaitInfo::default()
+							.semaphores(&[execution_manager.wait_thread_notify_semaphore])
+							.values(&[notify_timeline_value + 1]),
+						!0,
+					);
+					match result {
+						Ok(_) | Err(ash::vk::Result::TIMEOUT) => (),
+						Err(e) => panic!("{:?}", e),
 					}
 				}
 			}
 		}
 	}
 
-	pub fn start_wait_semaphore_thread(&self) {
-		self.wait_thread_join_handle.get_or_init(|| {
-			let bindless = self.bindless.clone();
-			thread::Builder::new()
+	pub fn assert_not_in_shutdown(&self) {
+		if self.wait_thread_shutdown.load(Relaxed) {
+			panic!("in shutdown")
+		}
+	}
+
+	pub fn start_wait_semaphore_thread(&self, bindless: &Arc<Bindless<Ash>>) {
+		let mut guard = self.wait_thread.lock();
+		if guard.0.is_none() {
+			self.assert_not_in_shutdown();
+			let bindless = bindless.clone();
+			let join_handle = thread::Builder::new()
 				.name(ASH_WAIT_SEMAPHORE_THREAD_NAME.to_string())
 				.spawn(|| unsafe { Self::wait_semaphore_thread_main(bindless) })
-				.unwrap()
-		});
+				.unwrap();
+			*guard = (Some(join_handle.thread().id()), Some(join_handle));
+		}
+	}
+
+	pub fn graceful_shutdown(&self) -> VkResult<()> {
+		let mut guard = self.wait_thread.lock();
+		if let Some(join_handle) = guard.1.take() {
+			if join_handle.thread().id() == thread::current().id() {
+				panic!(
+					"graceful_shutdown() must not be called in {}",
+					ASH_WAIT_SEMAPHORE_THREAD_NAME
+				);
+			}
+			self.wait_thread_shutdown.store(true, Relaxed);
+			self.notify_wait_semaphore_thread()?;
+			join_handle.join().unwrap();
+		}
+		Ok(())
 	}
 
 	pub fn destroy(&mut self, device: &Device) {
-		unsafe {
-			// Join AshWaitSemaphoreThread to ensure the resources below aren't in use by it.
-			// But if we are AshWaitSemaphoreThread, main thread must have dropped bindless and cannot possibly access
-			// these resources anymore, so we can just free them safely.
-			if let Some(join_handle) = self.wait_thread_join_handle.take() {
-				if join_handle.thread().id() != thread::current().id() {
-					join_handle.join().unwrap();
-				}
+		let guard = self.wait_thread.lock();
+		if let Some(join) = guard.0 {
+			if guard.1.as_ref().is_some() {
+				panic!("Bindless dropped without graceful shutdown");
 			}
+			if join == thread::current().id() {
+				panic!("destroy() must not be called in {}", ASH_WAIT_SEMAPHORE_THREAD_NAME);
+			}
+		}
+		unsafe {
 			device.destroy_semaphore(self.wait_thread_notify_semaphore, None);
 			if let Some(resource) = self.free_pool.pop() {
 				resource.destroy(device)

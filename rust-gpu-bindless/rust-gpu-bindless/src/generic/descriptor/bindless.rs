@@ -27,13 +27,31 @@ impl<P: BindlessPlatform> Deref for Bindless<P> {
 	}
 }
 
+pub struct BindlessInstance<P: BindlessPlatform>(Arc<Bindless<P>>);
+
+impl<P: BindlessPlatform> Deref for BindlessInstance<P> {
+	type Target = Arc<Bindless<P>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<P: BindlessPlatform> Drop for BindlessInstance<P> {
+	fn drop(&mut self) {
+		unsafe {
+			self.0.bindless_shutdown(&self.0);
+		}
+	}
+}
+
 impl<P: BindlessPlatform> Bindless<P> {
 	/// Creates a new Descriptors instance with which to allocate descriptors.
 	///
 	/// # Safety
 	/// * There must only be one global Bindless instance for each [`Device`].
 	/// * The [general bindless safety requirements](crate#safety) apply
-	pub unsafe fn new(ci: P::PlatformCreateInfo, counts: DescriptorCounts) -> Arc<Self> {
+	pub unsafe fn new(ci: P::PlatformCreateInfo, counts: DescriptorCounts) -> BindlessInstance<P> {
 		let bindless = Arc::new_cyclic(|weak| {
 			// TODO propagate error
 			let platform = P::create_platform(ci, weak).unwrap();
@@ -50,7 +68,7 @@ impl<P: BindlessPlatform> Bindless<P> {
 			}
 		});
 		bindless.platform.bindless_initialized(&bindless);
-		bindless
+		BindlessInstance(bindless)
 	}
 
 	#[inline(never)]

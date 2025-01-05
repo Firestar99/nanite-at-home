@@ -377,8 +377,12 @@ unsafe impl BindlessPlatform for Ash {
 		}
 	}
 
-	unsafe fn bindless_initialized(&self, _bindless: &Arc<Bindless<Self>>) {
-		self.execution_manager.start_wait_semaphore_thread();
+	unsafe fn bindless_initialized(&self, bindless: &Arc<Bindless<Self>>) {
+		self.execution_manager.start_wait_semaphore_thread(bindless);
+	}
+
+	unsafe fn bindless_shutdown(&self, _bindless: &Arc<Bindless<Self>>) {
+		self.execution_manager.graceful_shutdown().unwrap();
 	}
 
 	unsafe fn update_descriptor_set(
