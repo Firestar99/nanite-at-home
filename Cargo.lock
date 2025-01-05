@@ -1228,6 +1228,7 @@ dependencies = [
  "parking_lot",
  "profiling",
  "puffin_http",
+ "rayon",
  "rust-gpu-bindless",
  "rust-gpu-bindless-winit",
  "space-asset-disk",

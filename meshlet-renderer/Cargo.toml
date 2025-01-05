@@ -25,6 +25,9 @@ winit = { workspace = true }
 glam = { workspace = true }
 num-traits = { workspace = true }
 
+# async
+rayon = "1.10"
+
 # profiling
 profiling = { workspace = true }
 puffin_http = { workspace = true, optional = true }

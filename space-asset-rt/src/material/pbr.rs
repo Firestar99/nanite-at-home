@@ -33,6 +33,7 @@ pub fn upload_pbr_material<'a>(
 	this: &'a ArchivedPbrMaterialDisk,
 	uploader: &'a Uploader,
 ) -> impl Future<Output = anyhow::Result<PbrMaterial<RC>>> + 'a {
+	profiling::scope!("upload_pbr_material");
 	let base_color = this
 		.base_color
 		.as_ref()

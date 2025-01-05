@@ -36,6 +36,9 @@ const DEBUGGER: Debuggers = Debuggers::None;
 const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
 
 pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) -> anyhow::Result<()> {
+	rayon::ThreadPoolBuilder::new()
+		.thread_name(|i| format!("rayon worker {i}"))
+		.build_global()?;
 	if matches!(DEBUGGER, Debuggers::RenderDoc) {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
