@@ -94,8 +94,9 @@ pub fn project_to_screen_area(camera: Camera, instance: AffineTransform, sphere:
 	if !error.is_finite() {
 		return error;
 	}
-	let position_view = camera.transform_vertex(instance, sphere.center()).camera_space;
-	let d = position_view.length() - sphere.radius();
+	let center_world = instance.affine.transform_point3(sphere.center());
+	let d = center_world.distance(camera.transform.translation()) - sphere.radius();
+	// let d = f32::max(d, camera.z_near);
 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
-	error / f32::max(d, camera.z_near) * (camera_proj * 0.5)
+	error / d * (camera_proj * 0.5)
 }
