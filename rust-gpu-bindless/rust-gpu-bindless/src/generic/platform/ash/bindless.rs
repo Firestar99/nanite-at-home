@@ -105,7 +105,12 @@ impl Deref for Ash {
 
 impl Drop for Ash {
 	fn drop(&mut self) {
-		self.execution_manager.destroy(&self.create_info.device);
+		unsafe {
+			// This device_wait_idle is needed as some semaphores may still be in use. Likely due to being waited
+			// upon, as that does not hold a strong ref on the semaphore.
+			self.device.device_wait_idle().unwrap();
+			self.execution_manager.destroy(&self.create_info.device);
+		}
 	}
 }
 
@@ -377,8 +382,12 @@ unsafe impl BindlessPlatform for Ash {
 		}
 	}
 
-	unsafe fn bindless_initialized(&self, _bindless: &Arc<Bindless<Self>>) {
-		self.execution_manager.start_wait_semaphore_thread();
+	unsafe fn bindless_initialized(&self, bindless: &Arc<Bindless<Self>>) {
+		self.execution_manager.start_wait_semaphore_thread(bindless);
+	}
+
+	unsafe fn bindless_shutdown(&self, _bindless: &Arc<Bindless<Self>>) {
+		self.execution_manager.graceful_shutdown().unwrap();
 	}
 
 	unsafe fn update_descriptor_set(
@@ -624,7 +633,10 @@ unsafe impl BindlessPlatform for Ash {
 			if let Some(imageview) = image.image_view {
 				self.device.destroy_image_view(imageview, None);
 			}
-			self.device.destroy_image(image.image, None);
+			// do not destroy swapchain images
+			if !image.usage.contains(BindlessImageUsage::SWAPCHAIN) {
+				self.device.destroy_image(image.image, None);
+			}
 		}
 	}
 

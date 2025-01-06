@@ -7,16 +7,14 @@ use crate::generic::pipeline::{
 	IndirectCommandReadable, MutBufferAccess, MutImageAccess, MutOrSharedBuffer, Recording, RecordingError,
 	TransferReadable, TransferWriteable,
 };
-use crate::generic::platform::ash::ash_ext::DeviceExt;
 use crate::generic::platform::ash::image_format::FormatExt;
 use crate::generic::platform::ash::{Ash, AshExecution, AshPendingExecution};
 use crate::generic::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResourceContext};
 use ash::vk::{
-	BufferCopy, BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferAllocateInfo,
-	CommandBufferBeginInfo, CommandBufferLevel, CommandBufferUsageFlags, CopyBufferToImageInfo2,
-	CopyImageToBufferInfo2, DependencyInfo, Fence, ImageMemoryBarrier2, ImageSubresourceLayers, ImageSubresourceRange,
-	MemoryBarrier2, Offset3D, PipelineBindPoint, PipelineStageFlags, SubmitInfo, TimelineSemaphoreSubmitInfo,
-	QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, WHOLE_SIZE,
+	BufferCopy, BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferBeginInfo, CommandBufferUsageFlags,
+	CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo, Fence, ImageMemoryBarrier2, ImageSubresourceLayers,
+	ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint, PipelineStageFlags, SubmitInfo,
+	TimelineSemaphoreSubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, WHOLE_SIZE,
 };
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, TransientAccess};
@@ -220,12 +218,7 @@ impl<'a> AshRecordingContext<'a> {
 		unsafe {
 			let bindless = resource_context.execution.bindless().clone();
 			let device = &bindless.device;
-			let cmd = device.allocate_command_buffer(
-				&CommandBufferAllocateInfo::default()
-					.command_pool(resource_context.execution.resource().command_pool)
-					.level(CommandBufferLevel::PRIMARY)
-					.command_buffer_count(1),
-			)?;
+			let cmd = resource_context.execution.resource().command_buffer;
 			device.begin_command_buffer(
 				cmd,
 				&CommandBufferBeginInfo::default().flags(CommandBufferUsageFlags::ONE_TIME_SUBMIT),

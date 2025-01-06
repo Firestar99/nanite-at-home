@@ -21,6 +21,11 @@ fn main() -> anyhow::Result<()> {
 
 fn inner_main() -> anyhow::Result<()> {
 	let (out_dir, export_dir) = out_and_export_dir().context("Failed to find export path")?;
-	build_script(Path::new(MODELS_DIR), &export_dir, &out_dir.join("models.rs"), true)?;
+	build_script(
+		Path::new(MODELS_DIR),
+		&export_dir,
+		Some(&out_dir.join("models.rs")),
+		true,
+	)?;
 	Ok(())
 }

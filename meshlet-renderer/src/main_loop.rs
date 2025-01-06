@@ -31,11 +31,17 @@ use winit::window::{CursorGrabMode, WindowBuilder};
 
 const DEBUGGER: Debuggers = Debuggers::None;
 
-// how many meshlet instances can be dynamically allocated, 1 << 17 = 131072
-// about double what bistro needs if all meshlets rendered
+/// how many `MeshletInstance`s can be dynamically allocated, 1 << 17 = 131072
+/// about double what bistro needs if all meshlets rendered
 const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
 
+/// how many `MeshletGroupInstance` can be dynamically allocated
+const MESHLET_GROUP_CAPACITY: usize = MESHLET_INSTANCE_CAPACITY / 16;
+
 pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) -> anyhow::Result<()> {
+	rayon::ThreadPoolBuilder::new()
+		.thread_name(|i| format!("rayon worker {i}"))
+		.build_global()?;
 	if matches!(DEBUGGER, Debuggers::RenderDoc) {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
@@ -45,7 +51,9 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
 			let window = WindowBuilder::new().with_title("Nanite at home").build(e)?;
-			window.set_cursor_grab(CursorGrabMode::Locked).ok();
+			if let Err(_) = window.set_cursor_grab(CursorGrabMode::Confined) {
+				window.set_cursor_grab(CursorGrabMode::Locked).ok();
+			}
 			window.set_cursor_visible(false);
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
 			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
@@ -87,8 +95,12 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	.await?;
 
 	// renderer
-	let render_pipeline_main =
-		RenderPipelineMain::new(&bindless, swapchain.params().format, MESHLET_INSTANCE_CAPACITY)?;
+	let render_pipeline_main = RenderPipelineMain::new(
+		&bindless,
+		swapchain.params().format,
+		MESHLET_GROUP_CAPACITY,
+		MESHLET_INSTANCE_CAPACITY,
+	)?;
 	let mut renderer_main = render_pipeline_main.new_renderer()?;
 
 	// model loading

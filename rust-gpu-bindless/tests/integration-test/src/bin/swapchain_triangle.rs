@@ -7,12 +7,12 @@ use integration_test_shader::color::ColorEnum;
 use integration_test_shader::triangle::{Param, Vertex};
 use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageUsage,
-	DescriptorCounts, Format, Image2d, MutBuffer, MutDesc, MutDescBufferExt, MutImage,
+	DescriptorCounts, Format, Image2d, MutDesc, MutImage, RCDescExt,
 };
 use rust_gpu_bindless::generic::pipeline::{
-	BindlessGraphicsPipeline, ClearValue, ColorAttachment, GraphicsPipelineCreateInfo, HostAccess, LoadOp,
-	MutBufferAccessExt, MutImageAccessExt, PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo,
-	PipelineRasterizationStateCreateInfo, Present, RenderPassFormat, RenderingAttachment, ShaderRead, StoreOp,
+	BindlessGraphicsPipeline, ClearValue, ColorAttachment, GraphicsPipelineCreateInfo, LoadOp, MutImageAccessExt,
+	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
+	Present, RenderPassFormat, RenderingAttachment, StoreOp,
 };
 use rust_gpu_bindless::generic::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
@@ -114,7 +114,6 @@ pub struct TriangleRenderer<P: BindlessPipelinePlatform> {
 	bindless: Arc<Bindless<P>>,
 	rt_format: TriangleRendererRTFormat,
 	pipeline: BindlessGraphicsPipeline<P, Param<'static>>,
-	vertices: Option<MutDesc<P, MutBuffer<[Vertex]>>>,
 	timer: Instant,
 }
 
@@ -142,20 +141,10 @@ impl<P: BindlessPipelinePlatform> TriangleRenderer<P> {
 			integration_test::shader::triangle::triangle_fragment::new(),
 		)?;
 
-		let vertices = bindless.buffer().alloc_slice(
-			&BindlessBufferCreateInfo {
-				name: "vertices",
-				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
-				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
-			},
-			VERTEX_CNT,
-		)?;
-
 		Ok(Self {
 			bindless: bindless.clone(),
 			rt_format,
 			pipeline,
-			vertices: Some(vertices),
 			timer: Instant::now(),
 		})
 	}
@@ -174,14 +163,16 @@ impl<P: BindlessPipelinePlatform> TriangleRenderer<P> {
 	}
 
 	pub async fn draw(&mut self, rt: MutDesc<P, MutImage<Image2d>>) -> anyhow::Result<MutDesc<P, MutImage<Image2d>>> {
-		let vertices = self.vertices.take().unwrap();
-		vertices
-			.mapped()
-			.await?
-			.overwrite_from_iter_exact(self.generate_vertices().iter().copied());
-		let (vertices, rt) = self.bindless.execute(|cmd| {
+		let vertices = self.bindless.buffer().alloc_shared_from_iter(
+			&BindlessBufferCreateInfo {
+				name: "vertices",
+				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
+				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
+			},
+			self.generate_vertices().into_iter(),
+		)?;
+		let rt = self.bindless.execute(|cmd| {
 			let mut rt = rt.access_dont_care::<ColorAttachment>(&cmd)?;
-			let vertices = vertices.access::<ShaderRead>(&cmd)?;
 			cmd.begin_rendering(
 				self.rt_format.to_render_pass_format(),
 				&[RenderingAttachment {
@@ -199,19 +190,15 @@ impl<P: BindlessPipelinePlatform> TriangleRenderer<P> {
 							..DrawIndirectCommand::default()
 						},
 						Param {
-							vertices: vertices.to_transient()?,
+							vertices: vertices.to_transient(rp),
 						},
 					)?;
 					Ok(())
 				},
 			)?;
 
-			Ok((
-				vertices.transition::<HostAccess>()?.into_desc(),
-				rt.transition::<Present>()?.into_desc(),
-			))
+			Ok(rt.transition::<Present>()?.into_desc())
 		})?;
-		self.vertices.replace(vertices);
 		Ok(rt)
 	}
 }

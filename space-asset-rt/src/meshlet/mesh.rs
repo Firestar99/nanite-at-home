@@ -29,6 +29,7 @@ pub fn upload_mesh<'a>(
 	uploader: &'a Uploader,
 	pbr_materials: &'a PbrMaterials<'a>,
 ) -> impl Future<Output = anyhow::Result<MeshletMesh<RC>>> + 'a {
+	profiling::scope!("upload_mesh");
 	let meshlets = uploader.upload_buffer_iter("meshlets", this.lod_mesh.meshlets.iter().map(deserialize_infallible));
 	let draw_vertices = uploader.upload_buffer_iter(
 		"draw_vertices",

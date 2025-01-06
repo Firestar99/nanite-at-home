@@ -42,6 +42,9 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 	/// modifications or buffer allocations here.
 	unsafe fn bindless_initialized(&self, bindless: &Arc<Bindless<Self>>);
 
+	/// Bindless should start to shut down. No further executions may happen after.
+	unsafe fn bindless_shutdown(&self, bindless: &Arc<Bindless<Self>>);
+
 	/// Update the [`BindlessDescriptorSet`] with these changed buffers, images and samplers.
 	///
 	/// # Safety

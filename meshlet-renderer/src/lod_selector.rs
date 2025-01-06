@@ -30,9 +30,10 @@ impl LodSelector {
 			match code {
 				KeyR => lod_level -= 1,
 				KeyF => lod_level += 1,
-				_ => {}
+				_ => return,
 			}
 			self.lod_level = lod_level.max(0) as u32;
+			println!("Lod level: {} (or minimum available)", self.lod_level);
 		}
 	}
 }

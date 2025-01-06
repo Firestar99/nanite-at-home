@@ -4,6 +4,7 @@ use crate::renderer::lighting::lighting_compute::LightingCompute;
 use crate::renderer::lighting::sky_shader_compute::SkyShaderCompute;
 use crate::renderer::meshlet::instance_cull_compute::InstanceCullCompute;
 use crate::renderer::meshlet::meshlet_draw::MeshletDraw;
+use crate::renderer::meshlet::meshlet_select_compute::MeshletSelectCompute;
 use anyhow::anyhow;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageDescExt, MutDesc, MutImage,
@@ -13,9 +14,9 @@ use rust_gpu_bindless::pipeline::{
 	Recording, RenderPassFormat, RenderingAttachment, SampledRead, StorageReadWrite, StoreOp,
 };
 use space_asset_rt::meshlet::scene::MeshletSceneCpu;
-use space_asset_shader::meshlet::instance::MeshletInstance;
 use space_engine_shader::renderer::frame_data::FrameData;
 use space_engine_shader::renderer::g_buffer::GBuffer;
+use space_engine_shader::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
 use std::sync::Arc;
 
 #[derive(Copy, Clone, Debug)]
@@ -39,8 +40,10 @@ impl RenderPipelineMainFormat {
 pub struct RenderPipelineMain {
 	pub bindless: Arc<Bindless>,
 	pub format: RenderPipelineMainFormat,
+	pub meshlet_group_capacity: usize,
 	pub meshlet_instance_capacity: usize,
 	pub instance_cull: InstanceCullCompute,
+	pub meshlet_select: MeshletSelectCompute,
 	pub meshlet_draw: MeshletDraw,
 	pub lighting: LightingCompute,
 	pub sky_shader: SkyShaderCompute,
@@ -50,6 +53,7 @@ impl RenderPipelineMain {
 	pub fn new(
 		bindless: &Arc<Bindless>,
 		output_format: Format,
+		meshlet_group_capacity: usize,
 		meshlet_instance_capacity: usize,
 	) -> anyhow::Result<Arc<Self>> {
 		// all formats are always available
@@ -64,8 +68,10 @@ impl RenderPipelineMain {
 		Ok(Arc::new(Self {
 			bindless: bindless.clone(),
 			format,
+			meshlet_group_capacity,
 			meshlet_instance_capacity,
 			instance_cull: InstanceCullCompute::new(bindless)?,
+			meshlet_select: MeshletSelectCompute::new(bindless)?,
 			meshlet_draw: MeshletDraw::new(bindless, format.to_g_buffer_rp())?,
 			lighting: LightingCompute::new(bindless)?,
 			sky_shader: SkyShaderCompute::new(bindless)?,
@@ -88,6 +94,7 @@ struct RendererMainResources {
 	g_normal: MutDesc<MutImage<Image2d>>,
 	g_roughness_metallic: MutDesc<MutImage<Image2d>>,
 	depth_image: MutDesc<MutImage<Image2d>>,
+	compacting_meshlet_groups: CompactingAllocBuffer<MeshletGroupInstance>,
 	compacting_meshlet_instances: CompactingAllocBuffer<MeshletInstance>,
 }
 
@@ -121,6 +128,12 @@ impl RendererMainResources {
 			name: "g_depth",
 			..Default::default()
 		})?;
+		let compacting_meshlet_groups = CompactingAllocBuffer::new(
+			&pipeline.bindless,
+			pipeline.meshlet_group_capacity,
+			[0, 1, 1],
+			"compacting_meshlet_groups",
+		)?;
 		let compacting_meshlet_instances = CompactingAllocBuffer::new(
 			&pipeline.bindless,
 			pipeline.meshlet_instance_capacity,
@@ -133,6 +146,7 @@ impl RendererMainResources {
 			g_albedo,
 			g_normal,
 			g_roughness_metallic,
+			compacting_meshlet_groups,
 			compacting_meshlet_instances,
 		})
 	}
@@ -175,9 +189,14 @@ impl RendererMain {
 		let frame_context = FrameContext::new(cmd, frame_data)?;
 
 		let meshlet_instances = resources.compacting_meshlet_instances.transition_writing(cmd)?;
+		let meshlet_groups = resources.compacting_meshlet_groups.transition_writing(cmd)?;
 		self.pipeline
 			.instance_cull
-			.dispatch(cmd, &frame_context, scene, &meshlet_instances)?;
+			.dispatch(cmd, &frame_context, scene, &meshlet_groups)?;
+		let meshlet_groups = meshlet_groups.transition_reading()?;
+		self.pipeline
+			.meshlet_select
+			.dispatch(cmd, &frame_context, scene, &meshlet_groups, &meshlet_instances)?;
 
 		let meshlet_instances = meshlet_instances.transition_reading()?;
 		let mut g_albedo = resources.g_albedo.access_dont_care::<ColorAttachment>(&cmd)?;
@@ -241,6 +260,7 @@ impl RendererMain {
 			g_normal: g_normal.into_desc(),
 			g_roughness_metallic: g_roughness_metallic.into_desc(),
 			depth_image: depth_image.into_desc(),
+			compacting_meshlet_groups: meshlet_groups.transition_reset(),
 			compacting_meshlet_instances: meshlet_instances.transition_reset(),
 		});
 		Ok(())
