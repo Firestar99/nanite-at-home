@@ -45,7 +45,7 @@ pub fn lighting_cs(
 		DebugSettings::MeshletIdOverlay | DebugSettings::TriangleIdOverlay => {
 			Vec3::lerp(material_eval(frame_data, sampled), debug_color(debug_hue), 0.1)
 		}
-		DebugSettings::MeshletId | DebugSettings::TriangleId => debug_color(debug_hue),
+		DebugSettings::MeshletId | DebugSettings::TriangleId | DebugSettings::LodLevel => debug_color(debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
 		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),

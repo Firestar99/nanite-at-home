@@ -12,7 +12,8 @@ pub struct MeshletData {
 	pub parent_bounds: Sphere,
 	pub error: f32,
 	pub parent_error: f32,
-	pub _pad: [u32; 2],
+	pub lod_level: u32,
+	pub _pad: [u32; 1],
 }
 assert_transfer_size!(MeshletData, 16 * 4);
 

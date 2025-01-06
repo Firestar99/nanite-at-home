@@ -219,7 +219,8 @@ pub fn lod_mesh_build_meshlets(
 					parent_bounds: Sphere::default(),
 					error,
 					parent_error: f32::INFINITY,
-					_pad: [0; 2],
+					lod_level: 0,
+					_pad: [0; 1],
 				};
 				triangle_start += m.triangle_count as usize;
 				data
@@ -243,9 +244,13 @@ fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk
 	mesh.lod_ranges.reserve(lod_levels as usize + 1);
 	mesh.lod_ranges.push(0);
 
-	for lod_level in 0..lod_levels {
-		let lod_faction = lod_level as f32 / (lod_levels - 1) as f32;
-		let lod = BorderTracker::from_meshlet_mesh(&mut prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
+	for lod_level in 1..=lod_levels {
+		let lod_faction = lod_level as f32 / lod_levels as f32;
+		let mut lod =
+			BorderTracker::from_meshlet_mesh(&mut prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
+		for m in &mut lod.meshlets {
+			m.lod_level = lod_level;
+		}
 
 		mesh.append_lod_level(&mut prev_lod);
 		prev_lod = lod;

@@ -15,6 +15,7 @@ pub enum DebugSettings {
 	TriangleIdOverlay,
 	MeshletId,
 	TriangleId,
+	LodLevel,
 	BaseColor,
 	Normals,
 	VertexNormals,
