@@ -281,22 +281,7 @@ impl<'a> BorderTracker<'a> {
 			}
 		}
 
-		let mut s_vertex_lock;
-		{
-			profiling::scope!("simplify vertex_lock");
-			s_vertex_lock = vec![false; s_vertices.len()];
-			for id in meshlet_ids.iter().copied() {
-				for oid in self.get_connected_meshlets(id) {
-					if !meshlet_ids.contains(&oid) {
-						for edge in &self.get_border(IndexPair::new(id, oid)).unwrap().edges {
-							for vtx_id in edge.iter() {
-								s_vertex_lock[s_remap[&vtx_id] as usize] = true;
-							}
-						}
-					}
-				}
-			}
-		}
+		let s_vertex_lock = vec![false; s_vertices.len()];
 
 		let vertex_attrib_scale = 1.;
 		let vertex_attrib_weights = [
@@ -345,7 +330,7 @@ impl<'a> BorderTracker<'a> {
 				&s_vertex_lock,
 				target_count,
 				target_error,
-				SimplifyOptions::empty(),
+				SimplifyOptions::LockBorder,
 				Some(&mut relative_error),
 			);
 		}
