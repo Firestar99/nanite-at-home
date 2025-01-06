@@ -60,25 +60,17 @@ fn cull_meshlet(
 			let scene = scene.access(descriptors).load();
 			let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(instance.mesh_id as usize);
 			let m = mesh.meshlet(descriptors, instance.meshlet_id as usize);
-			let instance_transform = scene
-				.instances
-				.access(descriptors)
-				.load(instance.instance_id as usize)
-				.transform
-				.affine;
-			let camera_transform = frame_data.camera.transform.affine.transpose();
-
-			let ss_error = Sphere::new(m.bounds.position(), m.error)
-				.transform(instance_transform)
-				.transform(camera_transform)
-				.project_to_screen_area(frame_data.project_to_screen);
-			let ss_error_parent = Sphere::new(m.parent_bounds.position(), m.parent_error)
-				.transform(instance_transform)
-				.transform(camera_transform)
-				.project_to_screen_area(frame_data.project_to_screen);
-
+			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
+			let transform = |sphere: Sphere| {
+				sphere
+					.transform(instance_transform.transform.affine)
+					.transform(frame_data.camera.transform.affine.transpose())
+					.project_to_screen_area(frame_data.project_to_screen, frame_data.viewport_size)
+			};
+			let ss_error = transform(Sphere::new(m.bounds.position(), m.error));
+			let ss_error_parent = transform(Sphere::new(m.parent_bounds.position(), m.parent_error));
 			let error_threshold = frame_data.nanite_error_threshold;
-			let draw = ss_error <= error_threshold && ss_error_parent > error_threshold;
+			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			!draw
 		}
 		LodType::Static => false,
