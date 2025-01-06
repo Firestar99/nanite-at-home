@@ -45,8 +45,8 @@ Once started, you may use the windows key to undock your mouse and maximize the 
 * Scrollwheel - adjust Speed
 * Home - reset camera
 * T/G - cycle through all the available scenes
-* R/F - adjust the LOD level down or up (`lod_tree_gen` branch only)
-* Q/E - cycle through rendering modes: PBR, PBR mixed with meshlet coloring, just meshlet coloring, baseColor, normals with normal maps, vertex normals, texture coordinates and position reconstruction from depth
+* R/F - adjust the static LOD level
+* Q/E - cycle through rendering modes, see console output for what they are
 
 ## Scenes
 
