@@ -67,8 +67,8 @@ fn cull_meshlet(
 					.transform(frame_data.camera.transform.affine.transpose())
 					.project_to_screen_area(frame_data.project_to_screen, frame_data.viewport_size)
 			};
-			let ss_error = transform(Sphere::new(m.bounds.position(), m.error));
-			let ss_error_parent = transform(Sphere::new(m.parent_bounds.position(), m.parent_error));
+			let ss_error = transform(Sphere::new(m.bounds.center(), m.error));
+			let ss_error_parent = transform(Sphere::new(m.parent_bounds.center(), m.parent_error));
 			let error_threshold = frame_data.nanite_error_threshold;
 			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			!draw

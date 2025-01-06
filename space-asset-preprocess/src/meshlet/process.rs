@@ -142,7 +142,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 		(0..draw_vertices_len as u32).collect()
 	};
 
-	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, Sphere::default(), 0.);
+	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, None, 0.);
 
 	let lod_ranges = Vec::from([0, lod_mesh.meshlets.len() as u32]);
 	Ok(MeshletMeshDisk {
@@ -157,7 +157,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 pub fn lod_mesh_build_meshlets(
 	mut indices: Vec<u32>,
 	mut draw_vertices: Vec<DrawVertex>,
-	bounds: Sphere,
+	bounds: Option<Sphere>,
 	error: f32,
 ) -> LodMesh {
 	{
@@ -211,11 +211,15 @@ pub fn lod_mesh_build_meshlets(
 		let meshlets = out
 			.meshlets
 			.iter()
-			.map(|m| {
+			.zip(out.iter())
+			.map(|(m, meshlet)| {
 				let data = MeshletData {
 					draw_vertex_offset: MeshletOffset::new(m.vertex_offset as usize, m.vertex_count as usize),
 					triangle_offset: MeshletOffset::new(triangle_start, m.triangle_count as usize),
-					bounds,
+					bounds: bounds.unwrap_or_else(|| {
+						let bounds = meshopt::compute_meshlet_bounds(meshlet, &adapter);
+						Sphere::new(Vec3::from_array(bounds.center), bounds.radius)
+					}),
 					parent_bounds: Sphere::default(),
 					error,
 					parent_error: f32::INFINITY,

@@ -8,8 +8,8 @@ use rust_gpu_bindless_macros::BufferStructPlain;
 pub struct Sphere(Vec4);
 
 impl Sphere {
-	pub fn new(position: Vec3, radius: f32) -> Sphere {
-		Self(Vec4::from((position, radius)))
+	pub fn new(center: Vec3, radius: f32) -> Sphere {
+		Self(Vec4::from((center, radius)))
 	}
 
 	#[profiling::function]
@@ -45,7 +45,29 @@ impl Sphere {
 		}
 	}
 
-	pub fn position(&self) -> Vec3 {
+	pub fn merge_spheres_approx(spheres: &[Sphere]) -> Option<Sphere> {
+		if spheres.len() == 0 {
+			return None;
+		}
+
+		let mut center = Vec3::ZERO;
+		let mut weight_accum = 0.;
+		for sphere in spheres {
+			let weight = sphere.radius();
+			center += sphere.center() * weight;
+			weight_accum += weight;
+		}
+		center /= weight_accum;
+
+		let radius = spheres
+			.iter()
+			.map(|s| s.center().distance(center) + s.radius())
+			.max_by(|a, b| a.total_cmp(b))
+			.unwrap();
+		Some(Self::new(center, radius))
+	}
+
+	pub fn center(&self) -> Vec3 {
 		self.0.xyz()
 	}
 
@@ -54,7 +76,7 @@ impl Sphere {
 	}
 
 	pub fn transform(&self, affine: Affine3A) -> Self {
-		Self::new(affine.transform_point3(self.position()), self.radius())
+		Self::new(affine.transform_point3(self.center()), self.radius())
 	}
 
 	pub fn project_to_screen_area(&self, project: ProjectToScreen, viewport: UVec2) -> f32 {
@@ -62,7 +84,7 @@ impl Sphere {
 		if !r.is_finite() {
 			return r;
 		}
-		let d2 = self.position().length_squared();
+		let d2 = self.center().length_squared();
 		viewport.y as f32 / 2. * project.cot_half_fov * r / f32::sqrt(d2 - r * r)
 	}
 }

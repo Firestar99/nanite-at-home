@@ -358,11 +358,12 @@ impl<'a> BorderTracker<'a> {
 		let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
 		mesh_space_error += max_child_error;
 
-		let group_sphere = Sphere::bounding_sphere(|| s_vertices.iter().map(|d| d.position)).unwrap();
+		let group_sphere =
+			Sphere::merge_spheres_approx(&meshlets.iter().map(|m| m.bounds).collect::<SmallVec<[_; 6]>>()).unwrap();
 
 		if s_indices.len() > 0 {
 			Some((
-				lod_mesh_build_meshlets(s_indices, s_vertices, group_sphere, mesh_space_error),
+				lod_mesh_build_meshlets(s_indices, s_vertices, Some(group_sphere), mesh_space_error),
 				group_sphere,
 				mesh_space_error,
 			))
