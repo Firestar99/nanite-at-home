@@ -4,8 +4,6 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
 use glam::UVec3;
-#[cfg(target_arch = "spirv")]
-use num_traits::float::Float;
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::affine_transform::AffineTransform;
@@ -78,13 +76,26 @@ fn cull_meshlet(
 	}
 }
 
-/// https://jglrxavpok.github.io/2024/04/02/recreating-nanite-runtime-lod-selection.html
+// /// https://jglrxavpok.github.io/2024/04/02/recreating-nanite-runtime-lod-selection.html
+// pub fn project_to_screen_area(camera: Camera, instance: AffineTransform, sphere: Sphere, error: f32) -> f32 {
+// 	#[cfg(target_arch = "spirv")]
+// 	use num_traits::float::Float;
+// 	if !error.is_finite() {
+// 		return error;
+// 	}
+// 	let position = camera.transform_vertex(instance, sphere.center()).camera_space;
+// 	let d2 = position.length_squared();
+// 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
+// 	camera_proj * error / f32::sqrt(d2 - error * error)
+// }
+
+/// https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
 pub fn project_to_screen_area(camera: Camera, instance: AffineTransform, sphere: Sphere, error: f32) -> f32 {
 	if !error.is_finite() {
 		return error;
 	}
-	let position = camera.transform_vertex(instance, sphere.center()).camera_space;
-	let d2 = position.length_squared();
+	let position_view = camera.transform_vertex(instance, sphere.center()).camera_space;
+	let d = position_view.length() - sphere.radius();
 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
-	camera_proj * error / f32::sqrt(d2 - error * error)
+	error / f32::max(d, camera.z_near) * (camera_proj * 0.5)
 }
