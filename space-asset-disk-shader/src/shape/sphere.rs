@@ -1,6 +1,4 @@
-use glam::{Affine3A, UVec2, Vec3, Vec4, Vec4Swizzles};
-#[cfg(target_arch = "spirv")]
-use num_traits::float::Float;
+use glam::{Affine3A, Vec3, Vec4, Vec4Swizzles};
 use rust_gpu_bindless_macros::BufferStructPlain;
 
 #[derive(Copy, Clone, Debug, Default, BufferStructPlain)]
@@ -77,27 +75,5 @@ impl Sphere {
 
 	pub fn transform(&self, affine: Affine3A) -> Self {
 		Self::new(affine.transform_point3(self.center()), self.radius())
-	}
-
-	pub fn project_to_screen_area(&self, project: ProjectToScreen, viewport: UVec2) -> f32 {
-		let r = self.radius();
-		if !r.is_finite() {
-			return r;
-		}
-		let d2 = self.center().length_squared();
-		viewport.y as f32 / 2. * project.cot_half_fov * r / f32::sqrt(d2 - r * r)
-	}
-}
-
-#[derive(Clone, Copy, Debug, BufferStructPlain)]
-pub struct ProjectToScreen {
-	pub cot_half_fov: f32,
-}
-
-impl ProjectToScreen {
-	pub fn new(fov: f32) -> Self {
-		Self {
-			cot_half_fov: 1. / f32::tan(fov / 2.),
-		}
 	}
 }

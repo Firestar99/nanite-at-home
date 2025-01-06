@@ -22,7 +22,7 @@ impl SkyShaderCompute {
 		g_buffer: GBuffer<Transient>,
 		output_image: TransientDesc<MutImage<Image2d>>,
 	) -> Result<(), RecordingError> {
-		let image_size = frame_context.frame_data.viewport_size;
+		let image_size = frame_context.frame_data.camera.viewport_size;
 		let groups = [
 			(image_size.x + SKY_SHADER_WG_SIZE.x - 1) / SKY_SHADER_WG_SIZE.x,
 			(image_size.y + SKY_SHADER_WG_SIZE.y - 1) / SKY_SHADER_WG_SIZE.y,

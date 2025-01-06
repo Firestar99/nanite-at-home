@@ -2,10 +2,8 @@ use crate::material::light::DirectionalLight;
 use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
 use crate::renderer::lod_selection::LodSelection;
-use glam::UVec2;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_gpu_bindless_macros::BufferStruct;
-use space_asset_shader::shape::sphere::ProjectToScreen;
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -33,8 +31,6 @@ impl DebugSettings {
 #[repr(C)]
 pub struct FrameData {
 	pub camera: Camera,
-	pub viewport_size: UVec2,
-	pub project_to_screen: ProjectToScreen,
 	pub nanite_error_threshold: f32,
 	pub debug_settings: u32,
 	pub debug_lod_level: LodSelection,

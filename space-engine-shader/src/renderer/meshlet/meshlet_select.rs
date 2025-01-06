@@ -1,11 +1,14 @@
+use crate::renderer::camera::Camera;
 use crate::renderer::compacting_alloc_buffer::{CompactingAllocBufferReader, CompactingAllocBufferWriter};
 use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
-use crate::utils::affine::AffineTranspose;
 use glam::UVec3;
+#[cfg(target_arch = "spirv")]
+use num_traits::float::Float;
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
+use space_asset_shader::affine_transform::AffineTransform;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use space_asset_shader::shape::sphere::Sphere;
@@ -61,18 +64,27 @@ fn cull_meshlet(
 			let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(instance.mesh_id as usize);
 			let m = mesh.meshlet(descriptors, instance.meshlet_id as usize);
 			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
-			let transform = |sphere: Sphere| {
-				sphere
-					.transform(instance_transform.transform.affine)
-					.transform(frame_data.camera.transform.affine.transpose())
-					.project_to_screen_area(frame_data.project_to_screen, frame_data.viewport_size)
+			let transform = |sphere: Sphere, radius: f32| {
+				project_to_screen_area(frame_data.camera, instance_transform.transform, sphere, radius)
+					* (frame_data.camera.viewport_size.y as f32 * 0.5)
 			};
-			let ss_error = transform(Sphere::new(m.bounds.center(), m.error));
-			let ss_error_parent = transform(Sphere::new(m.parent_bounds.center(), m.parent_error));
+			let ss_error = transform(m.bounds, m.error);
+			let ss_error_parent = transform(m.parent_bounds, m.parent_error);
 			let error_threshold = frame_data.nanite_error_threshold;
 			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			!draw
 		}
 		LodType::Static => false,
 	}
+}
+
+/// https://jglrxavpok.github.io/2024/04/02/recreating-nanite-runtime-lod-selection.html
+pub fn project_to_screen_area(camera: Camera, instance: AffineTransform, sphere: Sphere, error: f32) -> f32 {
+	if !error.is_finite() {
+		return error;
+	}
+	let position = camera.transform_vertex(instance, sphere.center()).camera_space;
+	let d2 = position.length_squared();
+	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
+	camera_proj * error / f32::sqrt(d2 - error * error)
 }

@@ -23,7 +23,7 @@ impl LightingCompute {
 		g_buffer: GBuffer<Transient>,
 		output_image: TransientDesc<MutImage<Image2d>>,
 	) -> Result<(), RecordingError> {
-		let image_size = frame_context.frame_data.viewport_size;
+		let image_size = frame_context.frame_data.camera.viewport_size;
 		let groups = [
 			(image_size.x + LIGHTING_WG_SIZE - 1) / LIGHTING_WG_SIZE,
 			image_size.y,
