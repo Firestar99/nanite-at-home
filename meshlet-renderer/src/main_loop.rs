@@ -34,10 +34,10 @@ const DEBUGGER: Debuggers = Debuggers::None;
 
 /// how many `MeshletInstance`s can be dynamically allocated, 1 << 17 = 131072
 /// about double what bistro needs if all meshlets rendered
-const MESHLET_INSTANCE_CAPACITY: usize = 1 << 17;
+const MESHLET_INSTANCE_CAPACITY: usize = 1 << 19;
 
 /// how many `MeshletGroupInstance` can be dynamically allocated
-const MESHLET_GROUP_CAPACITY: usize = MESHLET_INSTANCE_CAPACITY / 16;
+const MESHLET_GROUP_CAPACITY: usize = 1 << 19;
 
 pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>>) -> anyhow::Result<()> {
 	rayon::ThreadPoolBuilder::new()
