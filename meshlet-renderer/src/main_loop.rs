@@ -1,3 +1,4 @@
+use crate::curser_lock::CursorLock;
 use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
@@ -28,7 +29,7 @@ use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
-use winit::window::{CursorGrabMode, WindowBuilder};
+use winit::window::WindowBuilder;
 
 const DEBUGGER: Debuggers = Debuggers::None;
 
@@ -52,10 +53,6 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
 			let window = WindowBuilder::new().with_title("Nanite at home").build(e)?;
-			if let Err(_) = window.set_cursor_grab(CursorGrabMode::Confined) {
-				window.set_cursor_grab(CursorGrabMode::Locked).ok();
-			}
-			window.set_cursor_visible(false);
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
 			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
 		})
@@ -109,14 +106,14 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let mut scene_selector = SceneSelector::new(bindless.clone(), sample_scenes(), |s| {
 		*scene.lock() = Some(s);
 	})
-	.await
-	.unwrap();
+	.await?;
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
 	let mut debug_settings_selector = DebugSettingsSelector::new();
 	let mut lod_selector = LodSelector::new();
 	let mut nanite_error_selector = NaniteErrorSelector::new();
+	let mut cursor_lock = CursorLock::new(event_loop.clone(), window.clone());
 	let mut last_frame = DeltaTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
@@ -130,6 +127,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			scene_selector.handle_input(&event).await?;
 			lod_selector.handle_input(&event);
 			nanite_error_selector.handle_input(&event);
+			cursor_lock.handle_input(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
