@@ -2,11 +2,12 @@ use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::lod_selector::LodSelector;
+use crate::nanite_error_selector::NaniteErrorSelector;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::{eval_ambient_light, eval_sun};
 use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
-use glam::{vec4, Mat4, UVec3, Vec3Swizzles};
+use glam::{UVec3, Vec3Swizzles};
 use parking_lot::Mutex;
 use rust_gpu_bindless::descriptor::{BindlessImageUsage, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::generic::descriptor::Bindless;
@@ -29,7 +30,7 @@ use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::{CursorGrabMode, WindowBuilder};
 
-const DEBUGGER: Debuggers = Debuggers::None;
+const DEBUGGER: Debuggers = Debuggers::RenderDoc;
 
 /// how many `MeshletInstance`s can be dynamically allocated, 1 << 17 = 131072
 /// about double what bistro needs if all meshlets rendered
@@ -115,6 +116,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let mut camera_controls = FpsCameraController::new();
 	let mut debug_settings_selector = DebugSettingsSelector::new();
 	let mut lod_selector = LodSelector::new();
+	let mut nanite_error_selector = NaniteErrorSelector::new();
 	let mut last_frame = DeltaTimer::default();
 	'outer: loop {
 		profiling::finish_frame!();
@@ -127,6 +129,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			debug_settings_selector.handle_input(&event);
 			scene_selector.handle_input(&event).await?;
 			lod_selector.handle_input(&event);
+			nanite_error_selector.handle_input(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -141,27 +144,25 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		let output_image = swapchain.acquire_image(None).await?;
 		let frame_data = {
 			let delta_time = last_frame.next();
-			let out_extent = UVec3::from(output_image.extent());
-			let projection = Mat4::perspective_rh(
-				90. / 360. * 2. * PI,
-				out_extent.x as f32 / out_extent.y as f32,
-				0.1,
+
+			let out_extent = UVec3::from(output_image.extent()).xy();
+			let fov_y = 90.;
+			let camera = Camera::new_perspective_rh_y_flip(
+				out_extent,
+				fov_y / 360. * 2. * PI,
+				0.01,
 				1000.,
-			) * Mat4::from_cols(
-				vec4(1., 0., 0., 0.),
-				vec4(0., -1., 0., 0.),
-				vec4(0., 0., 1., 0.),
-				vec4(0., 0., 0., 1.),
+				AffineTransform::new(camera_controls.update(delta_time)),
 			);
 
 			let sun = eval_sun(delta_time);
 			let ambient_light = eval_ambient_light(sun);
 
 			FrameData {
-				camera: Camera::new(projection, AffineTransform::new(camera_controls.update(delta_time))),
+				camera,
+				nanite_error_threshold: nanite_error_selector.error,
 				debug_settings: debug_settings_selector.get().into(),
 				debug_lod_level: lod_selector.lod_level,
-				viewport_size: out_extent.xy(),
 				sun,
 				ambient_light,
 			}

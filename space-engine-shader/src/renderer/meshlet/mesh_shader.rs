@@ -101,6 +101,18 @@ pub fn meshlet_mesh(
 		}
 	}
 
+	let debug_hue = |primitive_id: u32| {
+		let seed = match frame_data.debug_settings() {
+			DebugSettings::MeshletIdOverlay | DebugSettings::MeshletId => meshlet_instance.meshlet_id,
+			DebugSettings::TriangleIdOverlay | DebugSettings::TriangleId => {
+				meshlet_instance.meshlet_id.wrapping_add(primitive_id)
+			}
+			DebugSettings::LodLevel => meshlet.lod_level,
+			_ => return 0.,
+		};
+		GpuRng(seed.wrapping_add(1)).next_f32()
+	};
+
 	// process primitives
 	// Safety: panics within pools mispile
 	unsafe {
@@ -110,7 +122,7 @@ pub fn meshlet_mesh(
 			let i = if inbounds { i } else { triangle_count - 1 };
 
 			let indices = meshlet.load_triangle(&descriptors, i);
-			let debug_hue = debug_hue(frame_data, meshlet_instance.meshlet_id, i as u32);
+			let debug_hue = debug_hue(i as u32);
 
 			if i < triangle_count {
 				*prim_indices.index_unchecked_mut(i) = indices;
@@ -118,17 +130,6 @@ pub fn meshlet_mesh(
 			}
 		}
 	}
-}
-
-fn debug_hue(frame_data: FrameData, meshlet_id: u32, primitive_id: u32) -> f32 {
-	let offset = match frame_data.debug_settings() {
-		DebugSettings::MeshletIdOverlay | DebugSettings::MeshletId => 0,
-		DebugSettings::TriangleIdOverlay | DebugSettings::TriangleId => primitive_id,
-		_ => {
-			return 0.;
-		}
-	};
-	GpuRng(meshlet_id.wrapping_add(offset).wrapping_add(1)).next_f32()
 }
 
 #[bindless(fragment())]

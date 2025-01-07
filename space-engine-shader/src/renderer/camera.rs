@@ -1,6 +1,6 @@
 use crate::utils::affine::AffineTranspose;
 use bytemuck_derive::AnyBitPattern;
-use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{vec4, Mat4, UVec2, Vec2, Vec3, Vec4, Vec4Swizzles};
 use rust_gpu_bindless_macros::BufferStruct;
 use space_asset_shader::affine_transform::AffineTransform;
 
@@ -11,6 +11,9 @@ pub struct Camera {
 	pub perspective: Mat4,
 	pub perspective_inverse: Mat4,
 	pub transform: AffineTransform,
+	pub viewport_size: UVec2,
+	pub fov_y: f32,
+	pub z_near: f32,
 }
 
 #[derive(Copy, Clone, AnyBitPattern)]
@@ -31,12 +34,32 @@ pub struct TransformedNormal {
 }
 
 impl Camera {
-	pub fn new(perspective: Mat4, transform: AffineTransform) -> Self {
+	pub fn new(perspective: Mat4, viewport_size: UVec2, fov_y: f32, z_near: f32, transform: AffineTransform) -> Self {
 		Self {
 			perspective,
 			perspective_inverse: perspective.inverse(),
 			transform,
+			viewport_size,
+			fov_y,
+			z_near,
 		}
+	}
+
+	pub fn new_perspective_rh_y_flip(
+		viewport_size: UVec2,
+		fov_y: f32,
+		z_near: f32,
+		z_far: f32,
+		transform: AffineTransform,
+	) -> Self {
+		let projection = Mat4::perspective_rh(fov_y, viewport_size.x as f32 / viewport_size.y as f32, z_near, z_far)
+			* Mat4::from_cols(
+				vec4(1., 0., 0., 0.),
+				vec4(0., -1., 0., 0.),
+				vec4(0., 0., 1., 0.),
+				vec4(0., 0., 0., 1.),
+			);
+		Self::new(projection, viewport_size, fov_y, z_near, transform)
 	}
 
 	pub fn transform_vertex(&self, instance: AffineTransform, vertex_pos: Vec3) -> TransformedPosition {

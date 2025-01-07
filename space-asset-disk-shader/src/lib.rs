@@ -5,3 +5,4 @@
 pub mod material;
 pub mod meshlet;
 pub mod range;
+pub mod shape;

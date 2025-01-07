@@ -150,7 +150,7 @@ pub fn sky_shader_cs(
 	#[spirv(global_invocation_id)] inv_id: UVec3,
 ) {
 	let frame_data = param.frame_data.access(&descriptors).load();
-	let size: UVec2 = frame_data.viewport_size;
+	let size: UVec2 = frame_data.camera.viewport_size;
 	let pixel = inv_id.xy();
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
 

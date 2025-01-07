@@ -1,13 +1,16 @@
+use space_engine_shader::renderer::lod_selection::{LodSelection, LodType};
 use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
 use winit::keyboard::PhysicalKey::Code;
 
 pub struct LodSelector {
-	pub lod_level: u32,
+	pub lod_level: LodSelection,
 }
 
 impl LodSelector {
 	pub fn new() -> Self {
-		Self { lod_level: 0 }
+		Self {
+			lod_level: LodSelection::new_nanite(),
+		}
 	}
 
 	pub fn handle_input(&mut self, event: &Event<()>) {
@@ -26,14 +29,21 @@ impl LodSelector {
 		} = event
 		{
 			use winit::keyboard::KeyCode::*;
-			let mut lod_level = self.lod_level as i32;
+			let mut lod_level = self.lod_level.to_i32();
 			match code {
 				KeyR => lod_level -= 1,
 				KeyF => lod_level += 1,
 				_ => return,
 			}
-			self.lod_level = lod_level.max(0) as u32;
-			println!("Lod level: {} (or minimum available)", self.lod_level);
+			self.lod_level = LodSelection::from(lod_level);
+			println!(
+				"Lod level: {:?}{}",
+				self.lod_level,
+				match self.lod_level.lod_type() {
+					LodType::Nanite => "",
+					LodType::Static => " (or minimum available)",
+				}
+			);
 		}
 	}
 }

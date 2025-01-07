@@ -31,7 +31,7 @@ pub fn lighting_cs(
 	#[spirv(local_invocation_id)] inv_id: UVec3,
 ) {
 	let frame_data = param.frame_data.access(&descriptors).load();
-	let size: UVec2 = frame_data.viewport_size;
+	let size: UVec2 = frame_data.camera.viewport_size;
 	let pixel_wg_start = wg_id.xy() * uvec2(64, 1);
 	let pixel = pixel_wg_start + uvec2(inv_id.x, 0);
 	let pixel_inbounds = pixel.x < size.x && pixel.y < size.y;
@@ -45,7 +45,7 @@ pub fn lighting_cs(
 		DebugSettings::MeshletIdOverlay | DebugSettings::TriangleIdOverlay => {
 			Vec3::lerp(material_eval(frame_data, sampled), debug_color(debug_hue), 0.1)
 		}
-		DebugSettings::MeshletId | DebugSettings::TriangleId => debug_color(debug_hue),
+		DebugSettings::MeshletId | DebugSettings::TriangleId | DebugSettings::LodLevel => debug_color(debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
 		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),

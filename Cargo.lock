@@ -2185,6 +2185,8 @@ dependencies = [
  "bytemuck",
  "bytemuck_derive",
  "glam",
+ "num-traits",
+ "profiling",
  "rkyv",
  "rust-gpu-bindless-buffer-content",
  "rust-gpu-bindless-macros",

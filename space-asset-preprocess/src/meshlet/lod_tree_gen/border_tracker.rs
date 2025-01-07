@@ -9,6 +9,7 @@ use space_asset_disk::material::pbr::PbrVertex;
 use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::MESHLET_MAX_TRIANGLES;
+use space_asset_disk::shape::sphere::Sphere;
 use static_assertions::const_assert_eq;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -17,7 +18,7 @@ use std::mem::{offset_of, size_of, size_of_val};
 #[derive(Debug)]
 pub struct BorderTracker<'a> {
 	/// mesh
-	mesh: &'a LodMesh,
+	mesh: &'a mut LodMesh,
 	/// Compressed Sparse Row `xadj` like METIS
 	xadj: Vec<i32>,
 	/// Compressed Sparse Row `adjncy` like METIS, adjacency indices are sorted
@@ -64,7 +65,7 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn from_meshlet_mesh(mesh: &'a LodMesh) -> Self {
+	pub fn from_meshlet_mesh(mesh: &'a mut LodMesh) -> Self {
 		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
@@ -178,11 +179,25 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn simplify(&self, lod_faction: f32, pbr_material_vertices: &[PbrVertex]) -> LodMesh {
-		self.metis_partition()
+	pub fn simplify(&mut self, lod_faction: f32, pbr_material_vertices: &[PbrVertex]) -> LodMesh {
+		let groups = self.metis_partition();
+		let (mesh, parent_data) = groups
 			.par_iter()
-			.filter_map(|group| self.simplify_meshlet_group(lod_faction, pbr_material_vertices, &group))
-			.collect::<LodMesh>()
+			.filter_map(|group| {
+				let (mesh, sphere, error) = self.simplify_meshlet_group(lod_faction, pbr_material_vertices, &group)?;
+				Some((mesh, (sphere, error)))
+			})
+			.unzip::<_, _, LodMesh, Vec<_>>();
+
+		for (meshlet_ids, (sphere, error)) in groups.iter().zip(parent_data.iter().copied()) {
+			for meshlet_id in meshlet_ids {
+				let data = &mut self.mesh.meshlets[meshlet_id.0 as usize];
+				data.parent_bounds = sphere;
+				data.parent_error = error;
+			}
+		}
+
+		mesh
 	}
 
 	#[profiling::function]
@@ -234,18 +249,22 @@ impl<'a> BorderTracker<'a> {
 		lod_faction: f32,
 		pbr_material_vertices: &[PbrVertex],
 		meshlet_ids: &[MeshletId],
-	) -> Option<LodMesh> {
+	) -> Option<(LodMesh, Sphere, f32)> {
+		let meshlets = meshlet_ids
+			.iter()
+			.map(|i| self.mesh.meshlet(i.0 as usize))
+			.collect::<SmallVec<[_; 6]>>();
+
 		let mut s_vertices;
 		let mut s_indices;
 		let mut s_remap;
 		{
 			profiling::scope!("simplify make mesh");
-			let meshlets = meshlet_ids
-				.iter()
-				.map(|i| self.mesh.meshlet(i.0 as usize))
-				.collect::<SmallVec<[_; 6]>>();
 			let draw_vertex_cnt = meshlets.iter().map(|m| m.draw_vertex_offset.len()).sum();
 			let triangle_cnt: usize = meshlets.iter().map(|m| m.triangle_offset.len()).sum();
+			if draw_vertex_cnt == 0 || triangle_cnt == 0 {
+				return None;
+			}
 			s_remap = HashMap::with_capacity(draw_vertex_cnt);
 			s_vertices = Vec::with_capacity(draw_vertex_cnt);
 			s_indices = Vec::with_capacity(triangle_cnt * 3);
@@ -262,22 +281,7 @@ impl<'a> BorderTracker<'a> {
 			}
 		}
 
-		let mut s_vertex_lock;
-		{
-			profiling::scope!("simplify vertex_lock");
-			s_vertex_lock = vec![false; s_vertices.len()];
-			for id in meshlet_ids.iter().copied() {
-				for oid in self.get_connected_meshlets(id) {
-					if !meshlet_ids.contains(&oid) {
-						for edge in &self.get_border(IndexPair::new(id, oid)).unwrap().edges {
-							for vtx_id in edge.iter() {
-								s_vertex_lock[s_remap[&vtx_id] as usize] = true;
-							}
-						}
-					}
-				}
-			}
-		}
+		let s_vertex_lock = vec![false; s_vertices.len()];
 
 		let vertex_attrib_scale = 1.;
 		let vertex_attrib_weights = [
@@ -307,14 +311,16 @@ impl<'a> BorderTracker<'a> {
 		let target_count = s_indices.len() / 2;
 		let target_error = f32::lerp(0.01, 0.9, lod_faction);
 
+		let adapter = VertexDataAdapter::new(
+			bytemuck::cast_slice::<DrawVertex, u8>(&s_vertices),
+			size_of::<DrawVertex>(),
+			offset_of!(DrawVertex, position),
+		)
+		.unwrap();
+
+		let mut relative_error = 0.;
 		{
-			profiling::scope!("meshopt::simplify_with_locks");
-			let adapter = VertexDataAdapter::new(
-				bytemuck::cast_slice::<DrawVertex, u8>(&s_vertices),
-				size_of::<DrawVertex>(),
-				offset_of!(DrawVertex, position),
-			)
-			.unwrap();
+			profiling::scope!("meshopt::simplify_with_attributes_and_locks");
 			s_indices = meshopt::simplify_with_attributes_and_locks(
 				&s_indices,
 				&adapter,
@@ -324,13 +330,28 @@ impl<'a> BorderTracker<'a> {
 				&s_vertex_lock,
 				target_count,
 				target_error,
-				SimplifyOptions::empty(),
-				None,
+				SimplifyOptions::LockBorder,
+				Some(&mut relative_error),
 			);
 		}
 
+		let mut mesh_space_error = {
+			profiling::scope!("meshopt::simplify_scale");
+			// relative -> absolute error
+			relative_error * meshopt::simplify_scale(&adapter)
+		};
+		let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
+		mesh_space_error += max_child_error;
+
+		let group_sphere =
+			Sphere::merge_spheres_approx(&meshlets.iter().map(|m| m.bounds).collect::<SmallVec<[_; 6]>>()).unwrap();
+
 		if s_indices.len() > 0 {
-			Some(lod_mesh_build_meshlets(s_indices, s_vertices))
+			Some((
+				lod_mesh_build_meshlets(s_indices, s_vertices, Some(group_sphere), mesh_space_error),
+				group_sphere,
+				mesh_space_error,
+			))
 		} else {
 			None
 		}

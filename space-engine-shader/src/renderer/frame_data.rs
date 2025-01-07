@@ -1,7 +1,7 @@
 use crate::material::light::DirectionalLight;
 use crate::material::radiance::Radiance;
 use crate::renderer::camera::Camera;
-use glam::UVec2;
+use crate::renderer::lod_selection::LodSelection;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_gpu_bindless_macros::BufferStruct;
 
@@ -13,6 +13,7 @@ pub enum DebugSettings {
 	TriangleIdOverlay,
 	MeshletId,
 	TriangleId,
+	LodLevel,
 	BaseColor,
 	Normals,
 	VertexNormals,
@@ -30,9 +31,9 @@ impl DebugSettings {
 #[repr(C)]
 pub struct FrameData {
 	pub camera: Camera,
-	pub viewport_size: UVec2,
+	pub nanite_error_threshold: f32,
 	pub debug_settings: u32,
-	pub debug_lod_level: u32,
+	pub debug_lod_level: LodSelection,
 	pub sun: DirectionalLight,
 	pub ambient_light: Radiance,
 }
