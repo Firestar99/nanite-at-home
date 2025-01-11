@@ -144,12 +144,10 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 
 	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, None, 0.);
 
-	let lod_ranges = Vec::from([0, lod_mesh.meshlets.len() as u32]);
 	Ok(MeshletMeshDisk {
 		lod_mesh,
 		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone(), draw_vertices_len)?,
 		pbr_material_id: primitive.material().index().map(|i| i as u32),
-		lod_ranges,
 	})
 }
 
@@ -244,9 +242,6 @@ fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk
 
 	let mut prev_lod = mesh.lod_mesh;
 	mesh.lod_mesh = LodMesh::default();
-	mesh.lod_ranges.clear();
-	mesh.lod_ranges.reserve(lod_levels as usize + 1);
-	mesh.lod_ranges.push(0);
 
 	for lod_level in 1..=lod_levels {
 		let lod_faction = lod_level as f32 / lod_levels as f32;
@@ -256,13 +251,13 @@ fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk
 			m.lod_level = lod_level;
 		}
 
-		mesh.append_lod_level(&mut prev_lod);
+		mesh.lod_mesh.append(&mut prev_lod);
 		prev_lod = lod;
 
 		if prev_lod.meshlets.len() <= 1 {
 			break;
 		}
 	}
-	mesh.append_lod_level(&mut prev_lod);
+	mesh.lod_mesh.append(&mut prev_lod);
 	Ok(mesh)
 }

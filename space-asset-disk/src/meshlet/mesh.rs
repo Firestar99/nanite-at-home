@@ -10,10 +10,6 @@ pub struct MeshletMeshDisk {
 	pub lod_mesh: LodMesh,
 	pub pbr_material_vertices: Vec<PbrVertex>,
 	pub pbr_material_id: Option<u32>,
-	/// Indices to `meshlets` to only access the meshlets corresponding to a certain LOD level. Lod level N meshlets are
-	/// in the slice of `meshlets[lod_ranges[N]..lod_ranges[N+1]]`, meaning that lod_ranges is always one longer than
-	/// the lowest Lod level of the model.
-	pub lod_ranges: Vec<u32>,
 }
 
 impl Deref for MeshletMeshDisk {
@@ -37,20 +33,11 @@ impl AsRef<LodMesh> for MeshletMeshDisk {
 }
 
 impl MeshletMeshDisk {
-	pub fn lod_levels(&self) -> u32 {
-		self.lod_ranges.len() as u32 - 1
-	}
-
 	pub fn meshlet(&self, index: usize) -> MeshletReader<Self> {
 		MeshletReader {
 			data: self.meshlets[index],
 			mesh: self,
 		}
-	}
-
-	pub fn append_lod_level(&mut self, mesh: &mut LodMesh) {
-		self.lod_mesh.append(mesh);
-		self.lod_ranges.push(self.lod_mesh.meshlets.len() as u32);
 	}
 }
 

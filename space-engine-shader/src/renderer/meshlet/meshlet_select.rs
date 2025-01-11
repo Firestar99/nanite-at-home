@@ -56,11 +56,11 @@ fn cull_meshlet(
 	scene: TransientDesc<Buffer<MeshletScene<Strong>>>,
 	instance: MeshletInstance,
 ) -> bool {
+	let scene = scene.access(descriptors).load();
+	let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(instance.mesh_id as usize);
+	let m = mesh.meshlet(descriptors, instance.meshlet_id as usize);
 	match frame_data.debug_lod_level.lod_type() {
 		LodType::Nanite => {
-			let scene = scene.access(descriptors).load();
-			let mesh: MeshletMesh<Strong> = scene.meshes.access(descriptors).load(instance.mesh_id as usize);
-			let m = mesh.meshlet(descriptors, instance.meshlet_id as usize);
 			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
 			let transform = |sphere: Sphere, radius: f32| {
 				project_to_screen_area(frame_data.camera, instance_transform.transform, sphere, radius)
@@ -72,7 +72,7 @@ fn cull_meshlet(
 			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			!draw
 		}
-		LodType::Static => false,
+		LodType::Static => frame_data.debug_lod_level.lod_level_static() != m.lod_level,
 	}
 }
 
