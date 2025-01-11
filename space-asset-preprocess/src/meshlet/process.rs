@@ -4,7 +4,7 @@ use crate::image::image_processor::ImageProcessor;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
 use crate::meshlet::lod_mesh::LodMesh;
-use crate::meshlet::lod_tree_gen::border_tracker::BorderTracker;
+use crate::meshlet::lod_tree_gen::border_tracker::process_lod_tree;
 use crate::meshlet::mesh::MeshletMesh;
 use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
@@ -237,37 +237,4 @@ pub fn lod_mesh_build_meshlets(
 			triangles,
 		}
 	}
-}
-
-fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
-	let max_lod_level = 15;
-
-	let mut prev_lod = mesh.lod_mesh;
-	mesh.lod_mesh = LodMesh::default();
-	for m in &mut prev_lod.meshlets {
-		m.lod_level_bitmask = LodLevelBitmask(1);
-	}
-
-	let mut lod_levels = 1..max_lod_level;
-	for lod_level in &mut lod_levels {
-		let lod_faction = lod_level as f32 / max_lod_level as f32;
-		let mut lod =
-			BorderTracker::from_meshlet_mesh(&mut prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
-		for m in &mut lod.meshlets {
-			m.lod_level_bitmask = LodLevelBitmask(1 << lod_level);
-		}
-
-		mesh.lod_mesh.append(&mut prev_lod);
-		prev_lod = lod;
-
-		if prev_lod.meshlets.len() <= 1 {
-			break;
-		}
-	}
-
-	for m in &mut prev_lod.meshlets {
-		m.lod_level_bitmask |= LodLevelBitmask(!0 << lod_levels.start);
-	}
-	mesh.lod_mesh.append(&mut prev_lod);
-	Ok(mesh)
 }

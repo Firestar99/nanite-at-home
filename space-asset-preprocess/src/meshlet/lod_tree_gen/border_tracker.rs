@@ -1,12 +1,14 @@
 use crate::meshlet::lod_mesh::LodMesh;
 use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
+use crate::meshlet::mesh::MeshletMesh;
 use crate::meshlet::process::lod_mesh_build_meshlets;
 use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrVertex;
+use space_asset_disk::meshlet::lod_level_bitmask::LodLevelBitmask;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::shape::sphere::Sphere;
@@ -14,11 +16,76 @@ use static_assertions::const_assert_eq;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem::{offset_of, size_of, size_of_val};
+use MeshletGroupSimplifyResult::*;
+
+const MAX_LOD_LEVEL: u32 = 15;
+
+pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
+	let max_lod_level = MAX_LOD_LEVEL;
+
+	let mut prev_lod = mesh.lod_mesh;
+	mesh.lod_mesh = LodMesh::default();
+	for m in &mut prev_lod.meshlets {
+		m.lod_level_bitmask = LodLevelBitmask(1);
+	}
+
+	let mut lod_levels = 1..max_lod_level;
+	for lod_level in &mut lod_levels {
+		let lod_faction = lod_level as f32 / max_lod_level as f32;
+
+		let tracker = BorderTracker::from_meshlet_mesh(&prev_lod);
+		let groups = tracker.metis_partition();
+		assert!(!groups.is_empty());
+
+		let (mut lod, parent_data) = groups
+			.par_iter()
+			.map(
+				|group| match tracker.simplify_meshlet_group(lod_faction, &mesh.pbr_material_vertices, &group) {
+					SimplifiedMeshlets(mesh, sphere, error) => {
+						(mesh, SimplifiedMeshlets(LodMesh::default(), sphere, error))
+					}
+					SimplifiedToNothing => (LodMesh::default(), SimplifiedToNothing),
+				},
+			)
+			.unzip::<_, _, LodMesh, Vec<_>>();
+		drop(tracker);
+
+		for (meshlet_ids, result) in groups.iter().zip(parent_data.iter()) {
+			match result {
+				SimplifiedMeshlets(_, sphere, error) => {
+					for meshlet_id in meshlet_ids {
+						let data = &mut prev_lod.meshlets[meshlet_id.0 as usize];
+						data.parent_bounds = *sphere;
+						data.parent_error = *error;
+					}
+				}
+				SimplifiedToNothing => {}
+			}
+		}
+
+		for m in &mut lod.meshlets {
+			m.lod_level_bitmask = LodLevelBitmask(1 << lod_level);
+		}
+
+		mesh.lod_mesh.append(&mut prev_lod);
+		prev_lod = lod;
+
+		if prev_lod.meshlets.len() <= 1 {
+			break;
+		}
+	}
+
+	for m in &mut prev_lod.meshlets {
+		m.lod_level_bitmask |= LodLevelBitmask(!0 << lod_levels.start);
+	}
+	mesh.lod_mesh.append(&mut prev_lod);
+	Ok(mesh)
+}
 
 #[derive(Debug)]
 pub struct BorderTracker<'a> {
 	/// mesh
-	mesh: &'a mut LodMesh,
+	mesh: &'a LodMesh,
 	/// Compressed Sparse Row `xadj` like METIS
 	xadj: Vec<i32>,
 	/// Compressed Sparse Row `adjncy` like METIS, adjacency indices are sorted
@@ -73,7 +140,7 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn from_meshlet_mesh(mesh: &'a mut LodMesh) -> Self {
+	pub fn from_meshlet_mesh(mesh: &'a LodMesh) -> Self {
 		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
@@ -193,29 +260,7 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn simplify(&mut self, lod_faction: f32, pbr_material_vertices: &[PbrVertex]) -> LodMesh {
-		let groups = self.metis_partition();
-		let (mesh, parent_data) = groups
-			.par_iter()
-			.filter_map(|group| {
-				let (mesh, sphere, error) = self.simplify_meshlet_group(lod_faction, pbr_material_vertices, &group)?;
-				Some((mesh, (sphere, error)))
-			})
-			.unzip::<_, _, LodMesh, Vec<_>>();
-
-		for (meshlet_ids, (sphere, error)) in groups.iter().zip(parent_data.iter().copied()) {
-			for meshlet_id in meshlet_ids {
-				let data = &mut self.mesh.meshlets[meshlet_id.0 as usize];
-				data.parent_bounds = sphere;
-				data.parent_error = error;
-			}
-		}
-
-		mesh
-	}
-
-	#[profiling::function]
-	fn metis_partition(&self) -> Vec<SmallVec<[MeshletId; 6]>> {
+	pub fn metis_partition(&self) -> Vec<SmallVec<[MeshletId; 6]>> {
 		let meshlet_merge_cnt = 4;
 		let n_partitions = (self.meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
 		if n_partitions <= 1 {
@@ -258,12 +303,12 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	fn simplify_meshlet_group(
+	pub fn simplify_meshlet_group(
 		&self,
 		lod_faction: f32,
 		pbr_material_vertices: &[PbrVertex],
 		meshlet_ids: &[MeshletId],
-	) -> Option<(LodMesh, Sphere, f32)> {
+	) -> MeshletGroupSimplifyResult {
 		let meshlets = meshlet_ids
 			.iter()
 			.map(|i| self.mesh.meshlet(i.0 as usize))
@@ -272,7 +317,7 @@ impl<'a> BorderTracker<'a> {
 		let draw_vertex_cnt = meshlets.iter().map(|m| m.draw_vertex_offset.len()).sum();
 		let triangle_cnt: usize = meshlets.iter().map(|m| m.triangle_offset.len()).sum();
 		if draw_vertex_cnt == 0 || triangle_cnt == 0 {
-			return None;
+			return SimplifiedToNothing;
 		}
 
 		let mut s_vertices;
@@ -387,13 +432,18 @@ impl<'a> BorderTracker<'a> {
 			Sphere::merge_spheres_approx(&meshlets.iter().map(|m| m.bounds).collect::<SmallVec<[_; 6]>>()).unwrap();
 
 		if s_indices.len() > 0 {
-			Some((
+			SimplifiedMeshlets(
 				lod_mesh_build_meshlets(s_indices, s_vertices, Some(group_sphere), mesh_space_error),
 				group_sphere,
 				mesh_space_error,
-			))
+			)
 		} else {
-			None
+			SimplifiedToNothing
 		}
 	}
+}
+
+pub enum MeshletGroupSimplifyResult {
+	SimplifiedMeshlets(LodMesh, Sphere, f32),
+	SimplifiedToNothing,
 }
