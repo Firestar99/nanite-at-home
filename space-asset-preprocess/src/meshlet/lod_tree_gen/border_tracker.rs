@@ -1,3 +1,4 @@
+use crate::meshlet::lod_mesh::LodMesh;
 use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
 use crate::meshlet::process::lod_mesh_build_meshlets;
@@ -6,7 +7,6 @@ use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
 use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrVertex;
-use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::shape::sphere::Sphere;

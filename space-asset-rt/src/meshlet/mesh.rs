@@ -28,13 +28,10 @@ pub fn upload_mesh<'a>(
 	pbr_materials: &'a PbrMaterials<'a>,
 ) -> impl Future<Output = anyhow::Result<MeshletMesh<RC>>> + 'a {
 	profiling::scope!("upload_mesh");
-	let meshlets = uploader.upload_buffer_iter("meshlets", this.lod_mesh.meshlets.iter().map(deserialize_infallible));
-	let draw_vertices = uploader.upload_buffer_iter(
-		"draw_vertices",
-		this.lod_mesh.draw_vertices.iter().map(deserialize_infallible),
-	);
-	let triangles =
-		uploader.upload_buffer_iter("triangles", this.lod_mesh.triangles.iter().map(deserialize_infallible));
+	let meshlets = uploader.upload_buffer_iter("meshlets", this.meshlets.iter().map(deserialize_infallible));
+	let draw_vertices =
+		uploader.upload_buffer_iter("draw_vertices", this.draw_vertices.iter().map(deserialize_infallible));
+	let triangles = uploader.upload_buffer_iter("triangles", this.triangles.iter().map(deserialize_infallible));
 	let pbr_material_vertices = uploader.upload_buffer_iter(
 		"pbr_material_vertices",
 		this.pbr_material_vertices.iter().map(deserialize_infallible),
@@ -45,7 +42,7 @@ pub fn upload_mesh<'a>(
 			meshlets: meshlets.await?,
 			draw_vertices: draw_vertices.await?,
 			triangles: triangles.await?,
-			num_meshlets: this.lod_mesh.meshlets.len() as u32,
+			num_meshlets: this.meshlets.len() as u32,
 			pbr_material: pbr_material_id
 				.map_or(pbr_materials.default_pbr_material, |i| {
 					pbr_materials.pbr_materials.get(i as usize).unwrap()

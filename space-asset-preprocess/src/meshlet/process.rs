@@ -3,7 +3,9 @@ use crate::image::encode::EncodeSettings;
 use crate::image::image_processor::ImageProcessor;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
+use crate::meshlet::lod_mesh::LodMesh;
 use crate::meshlet::lod_tree_gen::border_tracker::BorderTracker;
+use crate::meshlet::mesh::MeshletMesh;
 use glam::{Affine3A, Vec3};
 use gltf::mesh::Mode;
 use gltf::Primitive;
@@ -14,7 +16,6 @@ use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
 use space_asset_disk::meshlet::lod_level_bitmask::LodLevelBitmask;
-use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset_disk::meshlet::offset::MeshletOffset;
 use space_asset_disk::meshlet::scene::MeshletSceneDisk;
@@ -80,7 +81,7 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 				vec.into_par_iter()
 					.map(|primitive| {
 						let mesh = process_mesh_primitive(gltf, primitive.clone())?;
-						let mesh = process_lod_tree(mesh)?;
+						let mesh = process_lod_tree(mesh)?.to_meshlet_mesh_disk()?;
 						Ok::<_, anyhow::Error>(mesh)
 					})
 					.collect::<Result<Vec<_>, _>>()
@@ -120,7 +121,7 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 }
 
 #[profiling::function]
-fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMeshDisk> {
+fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMesh> {
 	if primitive.mode() != Mode::Triangles {
 		Err(MeshletError::PrimitiveMustBeTriangleList)?;
 	}
@@ -145,7 +146,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 
 	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, None, 0.);
 
-	Ok(MeshletMeshDisk {
+	Ok(MeshletMesh {
 		lod_mesh,
 		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone(), draw_vertices_len)?,
 		pbr_material_id: primitive.material().index().map(|i| i as u32),
@@ -238,7 +239,7 @@ pub fn lod_mesh_build_meshlets(
 	}
 }
 
-fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk> {
+fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 	let max_lod_level = 15;
 
 	let mut prev_lod = mesh.lod_mesh;
