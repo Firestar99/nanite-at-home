@@ -98,7 +98,7 @@ pub fn project_to_screen_area(camera: Camera, instance: AffineTransform, sphere:
 	}
 	let center_world = instance.affine.transform_point3(sphere.center());
 	let d = center_world.distance(camera.transform.translation()) - sphere.radius();
-	// let d = f32::max(d, camera.z_near);
+	let d = f32::max(d, camera.perspective.to_cols_array_2d()[3][2]);
 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
 	error / d * (camera_proj * 0.5)
 }
