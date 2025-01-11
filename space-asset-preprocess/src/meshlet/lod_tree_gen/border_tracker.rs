@@ -16,31 +16,32 @@ use static_assertions::const_assert_eq;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem::{offset_of, size_of, size_of_val};
+use std::ops::Deref;
 use MeshletGroupSimplifyResult::*;
 
 const MAX_LOD_LEVEL: u32 = 15;
+const TARGET_SIMPLIFICATION_FACTOR: f32 = 0.5;
 
 pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
-	let max_lod_level = MAX_LOD_LEVEL;
-
-	let mut prev_lod = mesh.lod_mesh;
-	mesh.lod_mesh = LodMesh::default();
-	for m in &mut prev_lod.meshlets {
+	for m in &mut mesh.lod_mesh.meshlets {
 		m.lod_level_bitmask = LodLevelBitmask(1);
 	}
+	let mut queue = (0..mesh.lod_mesh.meshlets.len() as u32)
+		.map(|i| MeshletId(i))
+		.collect::<Vec<_>>();
 
-	let mut lod_levels = 1..max_lod_level;
+	let mut lod_levels = 1..MAX_LOD_LEVEL;
 	for lod_level in &mut lod_levels {
-		let lod_faction = lod_level as f32 / max_lod_level as f32;
+		let lod_faction = lod_level as f32 / MAX_LOD_LEVEL as f32;
 
-		let tracker = BorderTracker::from_meshlet_mesh(&prev_lod);
+		let tracker = BorderTracker::from_meshlet_mesh(&mesh.lod_mesh, &queue);
 		let groups = tracker.metis_partition();
 		assert!(!groups.is_empty());
 
 		let (mut lod, parent_data) = groups
 			.par_iter()
 			.map(
-				|group| match tracker.simplify_meshlet_group(lod_faction, &mesh.pbr_material_vertices, &group) {
+				|group| match tracker.simplify_meshlet_group(&group, &mesh.pbr_material_vertices, lod_faction) {
 					SimplifiedMeshlets(mesh, sphere, error) => {
 						(mesh, SimplifiedMeshlets(LodMesh::default(), sphere, error))
 					}
@@ -48,37 +49,39 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 				},
 			)
 			.unzip::<_, _, LodMesh, Vec<_>>();
+
+		if parent_data.iter().all(|a| matches!(a, SimplifiedToNothing)) {
+			// must break before clearing queue
+			break;
+		}
+		let groups = tracker.groups_to_meshlet_ids(&groups);
 		drop(tracker);
+		queue.clear();
 
 		for (meshlet_ids, result) in groups.iter().zip(parent_data.iter()) {
 			match result {
 				SimplifiedMeshlets(_, sphere, error) => {
 					for meshlet_id in meshlet_ids {
-						let data = &mut prev_lod.meshlets[meshlet_id.0 as usize];
+						let data = &mut mesh.meshlets[meshlet_id.0 as usize];
 						data.parent_bounds = *sphere;
 						data.parent_error = *error;
 					}
 				}
-				SimplifiedToNothing => {}
+				SimplifiedToNothing => (),
 			}
 		}
 
 		for m in &mut lod.meshlets {
-			m.lod_level_bitmask = LodLevelBitmask(1 << lod_level);
+			m.lod_level_bitmask |= LodLevelBitmask(1 << lod_level);
 		}
 
-		mesh.lod_mesh.append(&mut prev_lod);
-		prev_lod = lod;
-
-		if prev_lod.meshlets.len() <= 1 {
-			break;
-		}
+		queue.extend((0..lod.meshlets.len()).map(|a| MeshletId((a + mesh.lod_mesh.meshlets.len()) as u32)));
+		mesh.lod_mesh.append(&mut lod);
 	}
 
-	for m in &mut prev_lod.meshlets {
-		m.lod_level_bitmask |= LodLevelBitmask(!0 << lod_levels.start);
+	for meshlet_id in queue {
+		mesh.meshlets[meshlet_id.0 as usize].lod_level_bitmask |= LodLevelBitmask(!0 << lod_levels.start);
 	}
-	mesh.lod_mesh.append(&mut prev_lod);
 	Ok(mesh)
 }
 
@@ -86,6 +89,8 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 pub struct BorderTracker<'a> {
 	/// mesh
 	mesh: &'a LodMesh,
+	/// meshlet ids to be simplified
+	queued_meshlets: &'a [MeshletId],
 	/// Compressed Sparse Row `xadj` like METIS
 	xadj: Vec<i32>,
 	/// Compressed Sparse Row `adjncy` like METIS, adjacency indices are sorted
@@ -109,13 +114,24 @@ pub struct Border {
 }
 const_assert_eq!(size_of::<Border>(), 8 * 12);
 
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct QueueId(pub u32);
+
+impl Deref for QueueId {
+	type Target = u32;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
 impl<'a> BorderTracker<'a> {
-	pub fn get_connected_meshlets(&self, meshlet: MeshletId) -> impl Iterator<Item = MeshletId> + '_ {
+	pub fn get_connected_meshlets(&self, meshlet: QueueId) -> impl Iterator<Item = QueueId> + '_ {
 		let adjncy_range = self.xadj[*meshlet as usize] as usize..self.xadj[*meshlet as usize + 1] as usize;
-		self.adjncy[adjncy_range].iter().map(|i| MeshletId(*i as u32))
+		self.adjncy[adjncy_range].iter().map(|i| QueueId(*i as u32))
 	}
 
-	pub fn get_border(&self, meshlets: IndexPair<MeshletId>) -> Option<&Border> {
+	pub fn get_border(&self, meshlets: IndexPair<QueueId>) -> Option<&Border> {
 		let adjncy_range = self.xadj[*meshlets.0 as usize] as usize..self.xadj[*meshlets.0 as usize + 1] as usize;
 		let adjncy_index = adjncy_range.start + self.adjncy[adjncy_range].binary_search(&(*meshlets.1 as i32)).ok()?;
 		Some(&self.borders[self.adjncy_border_index[adjncy_index] as usize])
@@ -135,34 +151,36 @@ impl<'a> BorderTracker<'a> {
 		&self.adjncy
 	}
 
-	pub fn meshlets(&self) -> usize {
+	pub fn queued_meshlets(&self) -> usize {
 		self.xadj.len() - 1
 	}
 
 	#[profiling::function]
-	pub fn from_meshlet_mesh(mesh: &'a LodMesh) -> Self {
+	pub fn from_meshlet_mesh(mesh: &'a LodMesh, queued_meshlets: &'a [MeshletId]) -> Self {
 		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
 			size_of::<SmallVec<[MeshletId; 1]>>(),
 			size_of::<SmallVec<[MeshletId; 4]>>()
 		);
-		let mut edge_to_meshlets: HashMap<IndexPair<MaterialVertexId>, SmallVec<[MeshletId; 4]>>;
+		let mut edge_to_meshlets: HashMap<IndexPair<MaterialVertexId>, SmallVec<[QueueId; 4]>>;
 		let mut position_dedup_material_remap: HashMap<[u32; 3], MaterialVertexId>;
 		// Use a SmallVec of cap 6 for adjacency:
 		// small models: 0..2
 		// large models: usually 0..6, sometimes a few meshlets have significantly more
-		let mut meshlet_adj: Vec<SortedSmallVec<[MeshletId; 6]>>;
+		let mut meshlet_adj: Vec<SortedSmallVec<[QueueId; 6]>>;
 		{
 			profiling::scope!("edge_to_meshlets meshlet_adj");
 			// HashMap capacity: worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical
 			// and HashMap over allocates a bit anyway
-			edge_to_meshlets = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
-			position_dedup_material_remap = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_VERTICES as usize);
-			meshlet_adj = vec![SortedSmallVec::new(); mesh.meshlets.len()];
-			for meshlet_id in 0..mesh.meshlets.len() {
+			edge_to_meshlets = HashMap::with_capacity(queued_meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
+			position_dedup_material_remap =
+				HashMap::with_capacity(queued_meshlets.len() * MESHLET_MAX_VERTICES as usize);
+			meshlet_adj = vec![SortedSmallVec::new(); queued_meshlets.len()];
+			for queue_id in 0..queued_meshlets.len() {
+				let queue_id = QueueId(queue_id as u32);
+				let meshlet_id = queued_meshlets[queue_id.0 as usize];
 				let meshlet = mesh.meshlet(meshlet_id);
-				let meshlet_id = MeshletId(meshlet_id as u32);
 				for triangle in 0..meshlet.triangle_offset.len() {
 					let draw_indices = meshlet.load_triangle(triangle);
 					let indices = draw_indices.to_array().map(|i| {
@@ -176,18 +194,18 @@ impl<'a> BorderTracker<'a> {
 						// it's not worth optimizing this search for (typically) at most 2 entries, just do a linear scan
 						let vec = edge_to_meshlets.entry(edge).or_insert_with(SmallVec::new);
 						if !vec.is_empty() {
-							if vec.contains(&meshlet_id) {
+							if vec.contains(&queue_id) {
 								continue;
 							}
-							let x = &mut meshlet_adj[*meshlet_id as usize];
+							let x = &mut meshlet_adj[queue_id.0 as usize];
 							for other_meshlet_id in vec.iter().copied() {
 								x.insert(other_meshlet_id);
 							}
 							for other_meshlet_id in vec.iter().copied() {
-								meshlet_adj[*other_meshlet_id as usize].insert(meshlet_id);
+								meshlet_adj[*other_meshlet_id as usize].insert(queue_id);
 							}
 						}
-						vec.push(meshlet_id);
+						vec.push(queue_id);
 					}
 				}
 			}
@@ -197,14 +215,14 @@ impl<'a> BorderTracker<'a> {
 		let mut adjncy;
 		{
 			profiling::scope!("xadj adjncy");
-			xadj = vec![0; mesh.meshlets.len() + 1];
+			xadj = vec![0; queued_meshlets.len() + 1];
 			adjncy = Vec::with_capacity(meshlet_adj.iter().map(|s| s.len()).sum());
-			for i in 0..mesh.meshlets.len() {
+			for i in 0..queued_meshlets.len() {
 				xadj[i] = adjncy.len() as i32;
 				adjncy.extend(meshlet_adj[i].iter().map(|id| id.0 as i32))
 			}
-			xadj[mesh.meshlets.len()] = adjncy.len() as i32;
-			assert_eq!(xadj.len(), mesh.meshlets.len() + 1);
+			xadj[queued_meshlets.len()] = adjncy.len() as i32;
+			assert_eq!(xadj.len(), queued_meshlets.len() + 1);
 			drop(meshlet_adj);
 		}
 
@@ -251,6 +269,7 @@ impl<'a> BorderTracker<'a> {
 
 		BorderTracker {
 			mesh,
+			queued_meshlets,
 			xadj,
 			adjncy,
 			adjncy_border_index,
@@ -260,11 +279,11 @@ impl<'a> BorderTracker<'a> {
 	}
 
 	#[profiling::function]
-	pub fn metis_partition(&self) -> Vec<SmallVec<[MeshletId; 6]>> {
+	pub fn metis_partition(&self) -> Vec<SmallVec<[QueueId; 6]>> {
 		let meshlet_merge_cnt = 4;
-		let n_partitions = (self.meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
+		let n_partitions = (self.queued_meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
 		if n_partitions <= 1 {
-			return Vec::from([(0..self.meshlets()).map(|id| MeshletId(id as u32)).collect()]);
+			return Vec::from([(0..self.queued_meshlets.len()).map(|i| QueueId(i as u32)).collect()]);
 		}
 
 		let mut weights;
@@ -282,7 +301,7 @@ impl<'a> BorderTracker<'a> {
 		let mut partitions;
 		{
 			profiling::scope!("metis partitioning");
-			partitions = vec![0; self.meshlets()];
+			partitions = vec![0; self.queued_meshlets()];
 			metis::Graph::new(1, n_partitions as i32, self.xadj(), self.adjncy())
 				.unwrap()
 				.set_adjwgt(&weights)
@@ -294,24 +313,31 @@ impl<'a> BorderTracker<'a> {
 		{
 			profiling::scope!("meshlet groups");
 			groups = vec![SmallVec::new(); n_partitions];
-			for meshlet_id in 0..self.meshlets() {
-				groups[partitions[meshlet_id] as usize].push(MeshletId(meshlet_id as u32));
+			for queue_id in 0..self.queued_meshlets() {
+				groups[partitions[queue_id] as usize].push(QueueId(queue_id as u32));
 			}
 		}
 
 		groups
 	}
 
+	pub fn groups_to_meshlet_ids(&self, groups: &[SmallVec<[QueueId; 6]>]) -> Vec<SmallVec<[MeshletId; 6]>> {
+		groups
+			.iter()
+			.map(|group| group.iter().map(|i| self.queued_meshlets[i.0 as usize]).collect())
+			.collect()
+	}
+
 	#[profiling::function]
 	pub fn simplify_meshlet_group(
 		&self,
-		lod_faction: f32,
+		queue_ids: &[QueueId],
 		pbr_material_vertices: &[PbrVertex],
-		meshlet_ids: &[MeshletId],
+		lod_faction: f32,
 	) -> MeshletGroupSimplifyResult {
-		let meshlets = meshlet_ids
+		let meshlets = queue_ids
 			.iter()
-			.map(|i| self.mesh.meshlet(i.0 as usize))
+			.map(|i| self.mesh.meshlet(self.queued_meshlets[i.0 as usize]))
 			.collect::<SmallVec<[_; 6]>>();
 
 		let draw_vertex_cnt = meshlets.iter().map(|m| m.draw_vertex_offset.len()).sum();
@@ -344,9 +370,9 @@ impl<'a> BorderTracker<'a> {
 		{
 			profiling::scope!("simplify vertex_lock");
 			let mut locked_dedup_material_ids = HashSet::with_capacity(draw_vertex_cnt);
-			for id in meshlet_ids.iter().copied() {
+			for id in queue_ids.iter().copied() {
 				for oid in self.get_connected_meshlets(id) {
-					if !meshlet_ids.contains(&oid) {
+					if !queue_ids.contains(&oid) {
 						for edge in &self.get_border(IndexPair::new(id, oid)).unwrap().edges {
 							for vtx_id in edge.iter() {
 								locked_dedup_material_ids.insert(vtx_id);
@@ -393,7 +419,8 @@ impl<'a> BorderTracker<'a> {
 				.collect::<Vec<f32>>();
 		}
 
-		let target_count = s_indices.len() / 2;
+		let original_indices_cnt = s_indices.len();
+		let target_count = (original_indices_cnt as f32 * TARGET_SIMPLIFICATION_FACTOR) as usize;
 		let target_error = f32::lerp(0.01, 0.9, lod_faction);
 
 		let adapter = VertexDataAdapter::new(

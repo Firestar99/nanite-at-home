@@ -1,3 +1,4 @@
+use crate::meshlet::lod_tree_gen::indices::MeshletId;
 use crate::meshlet::mesh::MeshletReader;
 use rayon::prelude::*;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -14,9 +15,9 @@ pub struct LodMesh {
 }
 
 impl LodMesh {
-	pub fn meshlet(&self, index: usize) -> MeshletReader<Self> {
+	pub fn meshlet(&self, index: MeshletId) -> MeshletReader<Self> {
 		MeshletReader {
-			data: self.meshlets[index],
+			data: self.meshlets[index.0 as usize],
 			mesh: self,
 		}
 	}
