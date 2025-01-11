@@ -21,6 +21,7 @@ use MeshletGroupSimplifyResult::*;
 
 const MAX_LOD_LEVEL: u32 = 15;
 const TARGET_SIMPLIFICATION_FACTOR: f32 = 0.5;
+const MINIMUM_REQUIRED_SIMPLIFICATION_FACTOR: f32 = 0.65;
 
 pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 	for m in &mut mesh.lod_mesh.meshlets {
@@ -45,6 +46,7 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 					SimplifiedMeshlets(mesh, sphere, error) => {
 						(mesh, SimplifiedMeshlets(LodMesh::default(), sphere, error))
 					}
+					TooLittleSimplification => (LodMesh::default(), TooLittleSimplification),
 					SimplifiedToNothing => (LodMesh::default(), SimplifiedToNothing),
 				},
 			)
@@ -67,6 +69,7 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 						data.parent_error = *error;
 					}
 				}
+				TooLittleSimplification => queue.extend_from_slice(&meshlet_ids),
 				SimplifiedToNothing => (),
 			}
 		}
@@ -447,6 +450,11 @@ impl<'a> BorderTracker<'a> {
 			);
 		}
 
+		let simplification_factor = original_indices_cnt as f32 / s_indices.len() as f32;
+		if simplification_factor < MINIMUM_REQUIRED_SIMPLIFICATION_FACTOR {
+			return TooLittleSimplification;
+		}
+
 		let mut mesh_space_error = {
 			profiling::scope!("meshopt::simplify_scale");
 			// relative -> absolute error
@@ -471,6 +479,7 @@ impl<'a> BorderTracker<'a> {
 }
 
 pub enum MeshletGroupSimplifyResult {
+	TooLittleSimplification,
 	SimplifiedMeshlets(LodMesh, Sphere, f32),
 	SimplifiedToNothing,
 }
