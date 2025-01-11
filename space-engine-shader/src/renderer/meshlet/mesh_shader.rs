@@ -107,7 +107,7 @@ pub fn meshlet_mesh(
 			DebugSettings::TriangleIdOverlay | DebugSettings::TriangleId => {
 				meshlet_instance.meshlet_id.wrapping_add(primitive_id)
 			}
-			DebugSettings::LodLevel => meshlet.lod_level,
+			DebugSettings::LodLevel => meshlet.lod_level_bitmask.0,
 			_ => return 0.,
 		};
 		GpuRng(seed.wrapping_add(1)).next_f32()

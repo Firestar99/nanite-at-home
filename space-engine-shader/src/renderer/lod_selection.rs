@@ -1,3 +1,4 @@
+use crate::renderer::meshlet::lod_level_bitmask::LodLevelBitmask;
 use core::fmt::{Debug, Formatter};
 use rust_gpu_bindless_macros::BufferStructPlain;
 
@@ -20,11 +21,13 @@ impl LodSelection {
 	}
 
 	#[inline]
-	pub fn from(value: i32) -> LodSelection {
+	pub fn from(value: i32) -> Option<LodSelection> {
 		if value < 0 {
-			Self(LOD_SELECTION_NANITE)
+			Some(Self(LOD_SELECTION_NANITE))
+		} else if value < 32 {
+			Some(Self(value))
 		} else {
-			Self(value)
+			None
 		}
 	}
 
@@ -44,6 +47,11 @@ impl LodSelection {
 	#[inline]
 	pub fn lod_level_static(&self) -> u32 {
 		self.0 as u32
+	}
+
+	#[inline]
+	pub fn lod_level_bitmask(&self) -> LodLevelBitmask {
+		LodLevelBitmask(1 << (self.0 as u32))
 	}
 }
 

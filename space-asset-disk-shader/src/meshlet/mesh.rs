@@ -1,3 +1,4 @@
+use crate::meshlet::lod_level_bitmask::LodLevelBitmask;
 use crate::meshlet::offset::MeshletOffset;
 use crate::shape::sphere::Sphere;
 use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
@@ -12,7 +13,7 @@ pub struct MeshletData {
 	pub parent_bounds: Sphere,
 	pub error: f32,
 	pub parent_error: f32,
-	pub lod_level: u32,
+	pub lod_level_bitmask: LodLevelBitmask,
 	pub _pad: [u32; 1],
 }
 assert_transfer_size!(MeshletData, 16 * 4);

@@ -13,6 +13,7 @@ use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
+use space_asset_disk::meshlet::lod_level_bitmask::LodLevelBitmask;
 use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset_disk::meshlet::offset::MeshletOffset;
@@ -221,7 +222,7 @@ pub fn lod_mesh_build_meshlets(
 					parent_bounds: Sphere::default(),
 					error,
 					parent_error: f32::INFINITY,
-					lod_level: 0,
+					lod_level_bitmask: LodLevelBitmask::default(),
 					_pad: [0; 1],
 				};
 				triangle_start += m.triangle_count as usize;
@@ -238,17 +239,21 @@ pub fn lod_mesh_build_meshlets(
 }
 
 fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk> {
-	let lod_levels = 15;
+	let max_lod_level = 15;
 
 	let mut prev_lod = mesh.lod_mesh;
 	mesh.lod_mesh = LodMesh::default();
+	for m in &mut prev_lod.meshlets {
+		m.lod_level_bitmask = LodLevelBitmask(1);
+	}
 
-	for lod_level in 1..=lod_levels {
-		let lod_faction = lod_level as f32 / lod_levels as f32;
+	let mut lod_levels = 1..max_lod_level;
+	for lod_level in &mut lod_levels {
+		let lod_faction = lod_level as f32 / max_lod_level as f32;
 		let mut lod =
 			BorderTracker::from_meshlet_mesh(&mut prev_lod).simplify(lod_faction, &mesh.pbr_material_vertices);
 		for m in &mut lod.meshlets {
-			m.lod_level = lod_level;
+			m.lod_level_bitmask = LodLevelBitmask(1 << lod_level);
 		}
 
 		mesh.lod_mesh.append(&mut prev_lod);
@@ -257,6 +262,10 @@ fn process_lod_tree(mut mesh: MeshletMeshDisk) -> anyhow::Result<MeshletMeshDisk
 		if prev_lod.meshlets.len() <= 1 {
 			break;
 		}
+	}
+
+	for m in &mut prev_lod.meshlets {
+		m.lod_level_bitmask |= LodLevelBitmask(!0 << lod_levels.start);
 	}
 	mesh.lod_mesh.append(&mut prev_lod);
 	Ok(mesh)

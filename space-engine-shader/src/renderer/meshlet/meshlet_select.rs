@@ -72,7 +72,9 @@ fn cull_meshlet(
 			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			!draw
 		}
-		LodType::Static => frame_data.debug_lod_level.lod_level_static() != m.lod_level,
+		LodType::Static => m
+			.lod_level_bitmask
+			.contains(frame_data.debug_lod_level.lod_level_bitmask()),
 	}
 }
 
