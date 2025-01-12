@@ -63,13 +63,18 @@ fn cull_meshlet(
 		LodType::Nanite => {
 			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
 			let transform = |sphere: Sphere, radius: f32| {
-				project_to_screen_area(frame_data.camera, instance_transform.transform, sphere, radius)
-					* (frame_data.camera.viewport_size.y as f32 * 0.5)
+				project_to_screen_area(
+					frame_data.camera,
+					instance_transform.transform,
+					sphere,
+					radius,
+					frame_data.nanite_error_threshold,
+				) * (frame_data.camera.viewport_size.y as f32 * 0.5)
 			};
 			let ss_error = transform(m.bounds, m.error);
 			let ss_error_parent = transform(m.parent_bounds, m.parent_error);
-			let error_threshold = frame_data.nanite_error_threshold;
-			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
+			// let error_threshold = frame_data.nanite_error_threshold;
+			let draw = ss_error <= 1. && 1. < ss_error_parent;
 			!draw
 		}
 		LodType::Static => m
@@ -92,12 +97,18 @@ fn cull_meshlet(
 // }
 
 /// https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
-pub fn project_to_screen_area(camera: Camera, instance: AffineTransform, sphere: Sphere, error: f32) -> f32 {
+pub fn project_to_screen_area(
+	camera: Camera,
+	instance: AffineTransform,
+	sphere: Sphere,
+	error: f32,
+	scale_sphere_radius: f32,
+) -> f32 {
 	if !error.is_finite() {
 		return error;
 	}
 	let center_world = instance.affine.transform_point3(sphere.center());
-	let d = center_world.distance(camera.transform.translation()) - sphere.radius();
+	let d = center_world.distance(camera.transform.translation()) - sphere.radius() * scale_sphere_radius;
 	let d = f32::max(d, camera.perspective.to_cols_array_2d()[3][2]);
 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
 	error / d * (camera_proj * 0.5)
