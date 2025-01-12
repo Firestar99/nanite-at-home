@@ -5,6 +5,8 @@ use space_engine_shader::material::radiance::Radiance;
 use space_engine_shader::renderer::lighting::sky_shader::preetham_sky;
 use space_engine_shader::utils::animated_segments::{AnimatedSegment, Segment};
 use std::f32::consts::PI;
+use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
+use winit::keyboard::PhysicalKey::Code;
 
 const SUN_MAX_ALTITUDE_DEGREE: f32 = 25.;
 const SUN_INCLINATION_SPEED: f32 = 0.5;
@@ -24,25 +26,64 @@ const SUN_INCLINATION_CURVE: AnimatedSegment<f32> = AnimatedSegment::new(&[
 	Segment::new(7., 1.),
 ]);
 
-pub fn eval_sun(delta_time: DeltaTime) -> DirectionalLight {
-	let sun_dir = vec3(0., 1., 0.);
-	let inclination = SUN_INCLINATION_CURVE.lerp(delta_time.since_start * SUN_INCLINATION_SPEED);
-	let sun_dir = Mat3::from_axis_angle(vec3(1., 0., 0.), inclination * 2. * PI) * sun_dir;
-	let sun_dir = Mat3::from_axis_angle(vec3(0., 0., 1.), f32::to_radians(SUN_MAX_ALTITUDE_DEGREE)) * sun_dir;
-	// not strictly necessary, but why not correct some inaccuracy?
-	let sun_dir = sun_dir.normalize();
-	// there's no science in this, just looks good
-	let color = preetham_sky(sun_dir, sun_dir) / 1_000_000.;
-	let color = color.clamp(Vec3::splat(0.), Vec3::splat(1.));
-	DirectionalLight {
-		direction: sun_dir,
-		color: Radiance(color),
-	}
+pub struct SunController {
+	pub is_paused: bool,
+	pub last_delta_time: DeltaTime,
 }
 
-pub fn eval_ambient_light(sun: DirectionalLight) -> Radiance {
-	{
+impl SunController {
+	pub fn new() -> Self {
+		Self {
+			is_paused: false,
+			last_delta_time: DeltaTime::default(),
+		}
+	}
+
+	pub fn handle_input(&mut self, event: &Event<()>) {
+		if let Event::WindowEvent {
+			event:
+				WindowEvent::KeyboardInput {
+					event:
+						KeyEvent {
+							state: ElementState::Pressed,
+							physical_key: Code {
+								0: winit::keyboard::KeyCode::KeyN,
+							},
+							repeat: false,
+							..
+						},
+					..
+				},
+			..
+		} = event
+		{
+			self.is_paused = !self.is_paused;
+		}
+	}
+
+	pub fn eval_sun(&mut self, delta_time: DeltaTime) -> (DirectionalLight, Radiance) {
+		let since_start = if self.is_paused {
+			self.last_delta_time.since_start
+		} else {
+			self.last_delta_time = delta_time;
+			delta_time.since_start
+		};
+
+		let sun_dir = vec3(0., 1., 0.);
+		let inclination = SUN_INCLINATION_CURVE.lerp(since_start * SUN_INCLINATION_SPEED);
+		let sun_dir = Mat3::from_axis_angle(vec3(1., 0., 0.), inclination * 2. * PI) * sun_dir;
+		let sun_dir = Mat3::from_axis_angle(vec3(0., 0., 1.), f32::to_radians(SUN_MAX_ALTITUDE_DEGREE)) * sun_dir;
+		// not strictly necessary, but why not correct some inaccuracy?
+		let sun_dir = sun_dir.normalize();
+		// there's no science in this, just looks good
+		let color = preetham_sky(sun_dir, sun_dir) / 1_000_000.;
+		let color = color.clamp(Vec3::splat(0.), Vec3::splat(1.));
+		let sun = DirectionalLight {
+			direction: sun_dir,
+			color: Radiance(color),
+		};
 		const AMBIENT_STARLIGHT: Vec3 = vec3(105. / 255., 129. / 255., 142. / 255.);
-		Radiance(sun.color.0 * 0.1 + AMBIENT_STARLIGHT * 0.1)
+		let ambient = Radiance(sun.color.0 * 0.1 + AMBIENT_STARLIGHT * 0.1);
+		(sun, ambient)
 	}
 }

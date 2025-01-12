@@ -43,7 +43,8 @@ For the complex configurations, see the console output for what has been selecte
 * T/G - cycle through all the available scenes
 * R/F - adjust the LOD selection, default is dynamic "Nanite" selection, increasing it with F selects LOD 0, 1, 2, etc. or the lowest available
 * Q/E - cycle through different rendering modes, see console output on what they are
-* X/C - adjust the target triangle density for Nanite selection, can yield some broken results in extreme settings
+* X/C - adjust the target triangle density for Nanite selection
+* N - pause sun rotation for non-changing lights
 * M - disable mouse rotating the camera
 
 ## Scenes
