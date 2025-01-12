@@ -9,20 +9,20 @@ use rust_gpu_bindless_macros::BufferStruct;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum DebugSettings {
 	None,
-	MeshletIdOverlay,
+	LodLevelOverlay,
 	TriangleIdOverlay,
-	MeshletId,
-	TriangleId,
+	MeshletIdOverlay,
 	LodLevel,
+	TriangleId,
+	MeshletId,
 	BaseColor,
 	Normals,
 	VertexNormals,
 	RoughnessMetallic,
-	ReconstructedPosition,
 }
 
 impl DebugSettings {
-	pub const MAX_VALUE: DebugSettings = DebugSettings::ReconstructedPosition;
+	pub const MAX_VALUE: DebugSettings = DebugSettings::RoughnessMetallic;
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 
