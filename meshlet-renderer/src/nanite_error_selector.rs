@@ -32,7 +32,8 @@ impl NaniteErrorSelector {
 				KeyC => error *= 2.,
 				_ => return,
 			}
-			self.error = f32::clamp(error, 1., 4096.);
+			self.error = error;
+			// self.error = f32::clamp(error, 1., 4096.);
 			println!("nanite error: {}", self.error);
 		}
 	}
