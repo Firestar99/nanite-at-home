@@ -107,7 +107,7 @@ pub fn meshlet_mesh(
 			DebugSettings::TriangleIdOverlay | DebugSettings::TriangleId => {
 				meshlet_instance.meshlet_id.wrapping_add(primitive_id)
 			}
-			DebugSettings::LodLevel => meshlet.lod_level,
+			DebugSettings::LodLevel => 32 - leading_zeros(meshlet.lod_level_bitmask.0),
 			_ => return 0.,
 		};
 		GpuRng(seed.wrapping_add(1)).next_f32()
@@ -130,6 +130,19 @@ pub fn meshlet_mesh(
 			}
 		}
 	}
+}
+
+pub fn leading_zeros(mut x: u32) -> u32 {
+	// Keep shifting x by one until leftmost bit
+	// does not become 1.
+	let total_bits = core::mem::size_of_val(&x) * 8;
+
+	let mut res = 0;
+	while (x & (1 << (total_bits - 1))) == 0 {
+		x = x << 1;
+		res += 1;
+	}
+	res
 }
 
 #[bindless(fragment())]

@@ -27,6 +27,7 @@ use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
+use winit::dpi::PhysicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::WindowBuilder;
@@ -52,7 +53,10 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
-			let window = WindowBuilder::new().with_title("Nanite at home").build(e)?;
+			let window = WindowBuilder::new()
+				.with_inner_size(PhysicalSize::new(1920, 1080))
+				.with_title("Nanite at home")
+				.build(e)?;
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
 			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
 		})

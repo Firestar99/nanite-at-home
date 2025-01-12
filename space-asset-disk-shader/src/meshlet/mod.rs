@@ -1,6 +1,7 @@
 use static_assertions::const_assert;
 
 pub mod indices;
+pub mod lod_level_bitmask;
 pub mod mesh;
 pub mod offset;
 pub mod vertex;

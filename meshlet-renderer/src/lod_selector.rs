@@ -35,7 +35,7 @@ impl LodSelector {
 				KeyF => lod_level += 1,
 				_ => return,
 			}
-			self.lod_level = LodSelection::from(lod_level);
+			self.lod_level = LodSelection::from(i32::clamp(lod_level, -1, 31)).unwrap();
 			println!(
 				"Lod level: {:?}{}",
 				self.lod_level,

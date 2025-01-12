@@ -1,10 +1,11 @@
+use crate::meshlet::lod_tree_gen::indices::MeshletId;
 use crate::meshlet::mesh::MeshletReader;
 use rayon::prelude::*;
 use rkyv::{Archive, Deserialize, Serialize};
-use space_asset_disk_shader::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
-use space_asset_disk_shader::meshlet::mesh::MeshletData;
-use space_asset_disk_shader::meshlet::offset::MeshletOffset;
-use space_asset_disk_shader::meshlet::vertex::DrawVertex;
+use space_asset_disk::meshlet::indices::{CompressedIndices, INDICES_PER_WORD};
+use space_asset_disk::meshlet::mesh::MeshletData;
+use space_asset_disk::meshlet::offset::MeshletOffset;
+use space_asset_disk::meshlet::vertex::DrawVertex;
 
 #[derive(Clone, Debug, Default, Archive, Serialize, Deserialize)]
 pub struct LodMesh {
@@ -14,9 +15,9 @@ pub struct LodMesh {
 }
 
 impl LodMesh {
-	pub fn meshlet(&self, index: usize) -> MeshletReader<Self> {
+	pub fn meshlet(&self, index: MeshletId) -> MeshletReader<Self> {
 		MeshletReader {
-			data: self.meshlets[index],
+			data: self.meshlets[index.0 as usize],
 			mesh: self,
 		}
 	}
