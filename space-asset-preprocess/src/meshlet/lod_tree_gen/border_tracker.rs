@@ -8,10 +8,10 @@ use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrVertex;
 use space_asset_disk::meshlet::lod_mesh::LodMesh;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
-use space_asset_disk::meshlet::MESHLET_MAX_TRIANGLES;
+use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::shape::sphere::Sphere;
 use static_assertions::const_assert_eq;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem::{offset_of, size_of, size_of_val};
 
@@ -28,6 +28,8 @@ pub struct BorderTracker<'a> {
 	adjncy_border_index: Vec<u32>,
 	/// contains all borders
 	borders: Vec<Border>,
+	/// remap table to deduplicate material vertices based on their position
+	position_dedup_material_remap: HashMap<[u32; 3], MaterialVertexId>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -52,6 +54,12 @@ impl<'a> BorderTracker<'a> {
 		Some(&self.borders[self.adjncy_border_index[adjncy_index] as usize])
 	}
 
+	pub fn get_position_dedup_material_vertex_id(&self, vertex: DrawVertex) -> Option<MaterialVertexId> {
+		self.position_dedup_material_remap
+			.get(&vertex.position.to_array().map(|f| f.to_bits()))
+			.copied()
+	}
+
 	pub fn xadj(&self) -> &[i32] {
 		&self.xadj
 	}
@@ -73,6 +81,7 @@ impl<'a> BorderTracker<'a> {
 			size_of::<SmallVec<[MeshletId; 4]>>()
 		);
 		let mut edge_to_meshlets: HashMap<IndexPair<MaterialVertexId>, SmallVec<[MeshletId; 4]>>;
+		let mut position_dedup_material_remap: HashMap<[u32; 3], MaterialVertexId>;
 		// Use a SmallVec of cap 6 for adjacency:
 		// small models: 0..2
 		// large models: usually 0..6, sometimes a few meshlets have significantly more
@@ -82,15 +91,19 @@ impl<'a> BorderTracker<'a> {
 			// HashMap capacity: worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical
 			// and HashMap over allocates a bit anyway
 			edge_to_meshlets = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
+			position_dedup_material_remap = HashMap::with_capacity(mesh.meshlets.len() * MESHLET_MAX_VERTICES as usize);
 			meshlet_adj = vec![SortedSmallVec::new(); mesh.meshlets.len()];
 			for meshlet_id in 0..mesh.meshlets.len() {
 				let meshlet = mesh.meshlet(meshlet_id);
 				let meshlet_id = MeshletId(meshlet_id as u32);
 				for triangle in 0..meshlet.triangle_offset.len() {
 					let draw_indices = meshlet.load_triangle(triangle);
-					let indices = draw_indices
-						.to_array()
-						.map(|i| meshlet.load_draw_vertex(i as usize).material_vertex_id);
+					let indices = draw_indices.to_array().map(|i| {
+						let vertex = meshlet.load_draw_vertex(i as usize);
+						*position_dedup_material_remap
+							.entry(vertex.position.to_array().map(|f| f.to_bits()))
+							.or_insert(vertex.material_vertex_id)
+					});
 					let edges = (0..3).map(|i| IndexPair::new(indices[i], indices[(i + 1) % 3]));
 					for edge in edges {
 						// it's not worth optimizing this search for (typically) at most 2 entries, just do a linear scan
@@ -175,6 +188,7 @@ impl<'a> BorderTracker<'a> {
 			adjncy,
 			adjncy_border_index,
 			borders,
+			position_dedup_material_remap,
 		}
 	}
 
@@ -255,17 +269,17 @@ impl<'a> BorderTracker<'a> {
 			.map(|i| self.mesh.meshlet(i.0 as usize))
 			.collect::<SmallVec<[_; 6]>>();
 
+		let draw_vertex_cnt = meshlets.iter().map(|m| m.draw_vertex_offset.len()).sum();
+		let triangle_cnt: usize = meshlets.iter().map(|m| m.triangle_offset.len()).sum();
+		if draw_vertex_cnt == 0 || triangle_cnt == 0 {
+			return None;
+		}
+
 		let mut s_vertices;
 		let mut s_indices;
-		let mut s_remap;
 		{
 			profiling::scope!("simplify make mesh");
-			let draw_vertex_cnt = meshlets.iter().map(|m| m.draw_vertex_offset.len()).sum();
-			let triangle_cnt: usize = meshlets.iter().map(|m| m.triangle_offset.len()).sum();
-			if draw_vertex_cnt == 0 || triangle_cnt == 0 {
-				return None;
-			}
-			s_remap = HashMap::with_capacity(draw_vertex_cnt);
+			let mut s_remap = HashMap::with_capacity(draw_vertex_cnt);
 			s_vertices = Vec::with_capacity(draw_vertex_cnt);
 			s_indices = Vec::with_capacity(triangle_cnt * 3);
 			for m in &meshlets {
@@ -281,7 +295,33 @@ impl<'a> BorderTracker<'a> {
 			}
 		}
 
-		let s_vertex_lock = vec![false; s_vertices.len()];
+		let s_vertex_lock;
+		{
+			profiling::scope!("simplify vertex_lock");
+			let mut locked_dedup_material_ids = HashSet::with_capacity(draw_vertex_cnt);
+			for id in meshlet_ids.iter().copied() {
+				for oid in self.get_connected_meshlets(id) {
+					if !meshlet_ids.contains(&oid) {
+						for edge in &self.get_border(IndexPair::new(id, oid)).unwrap().edges {
+							for vtx_id in edge.iter() {
+								locked_dedup_material_ids.insert(vtx_id);
+							}
+						}
+					}
+				}
+			}
+
+			s_vertex_lock = s_vertices
+				.iter()
+				.map(|v| {
+					locked_dedup_material_ids.contains(
+						&self
+							.get_position_dedup_material_vertex_id(*v)
+							.expect("DrawVertex without position deduplicated material vertex id"),
+					)
+				})
+				.collect::<Vec<_>>();
+		}
 
 		let vertex_attrib_scale = 1.;
 		let vertex_attrib_weights = [
@@ -330,7 +370,7 @@ impl<'a> BorderTracker<'a> {
 				&s_vertex_lock,
 				target_count,
 				target_error,
-				SimplifyOptions::LockBorder,
+				SimplifyOptions::empty(),
 				Some(&mut relative_error),
 			);
 		}
