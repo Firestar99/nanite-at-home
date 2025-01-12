@@ -450,8 +450,8 @@ impl<'a> BorderTracker<'a> {
 			);
 		}
 
-		let simplification_factor = original_indices_cnt as f32 / s_indices.len() as f32;
-		if simplification_factor < MINIMUM_REQUIRED_SIMPLIFICATION_FACTOR {
+		let simplification_factor = s_indices.len() as f32 / original_indices_cnt as f32;
+		if simplification_factor > MINIMUM_REQUIRED_SIMPLIFICATION_FACTOR {
 			return TooLittleSimplification;
 		}
 
