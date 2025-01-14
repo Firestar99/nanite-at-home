@@ -1,9 +1,9 @@
 use glam::{Affine3A, Mat3A, Vec3};
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferStruct};
+use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 
 /// Affine transformation like [`Affine3A`] but also stores a matrix to transform normals.
 #[repr(C)]
-#[derive(Copy, Clone, Default, Debug, BufferStruct)]
+#[derive(Copy, Clone, Default, Debug, BufferStructPlain)]
 pub struct AffineTransform {
 	pub affine: Affine3A,
 	pub normals: Mat3A,

@@ -1,6 +1,7 @@
 use glam::{Affine3A, Vec3, Vec4, Vec4Swizzles};
 use rust_gpu_bindless_macros::BufferStructPlain;
 
+#[repr(transparent)]
 #[derive(Copy, Clone, Debug, Default, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct Sphere(Vec4);
