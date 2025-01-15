@@ -6,7 +6,7 @@ use crate::lod_selector::LodSelector;
 use crate::nanite_error_selector::NaniteErrorSelector;
 use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
-use crate::sun_controller::{eval_ambient_light, eval_sun};
+use crate::sun_controller::SunController;
 use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
 use glam::{UVec3, Vec3Swizzles};
 use parking_lot::Mutex;
@@ -119,6 +119,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let mut nanite_error_selector = NaniteErrorSelector::new();
 	let mut cursor_lock = CursorLock::new(event_loop.clone(), window.clone());
 	let mut last_frame = DeltaTimer::default();
+	let mut sun_controller = SunController::new();
 	'outer: loop {
 		profiling::finish_frame!();
 		profiling::scope!("frame");
@@ -132,6 +133,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			lod_selector.handle_input(&event);
 			nanite_error_selector.handle_input(&event);
 			cursor_lock.handle_input(&event);
+			sun_controller.handle_input(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -157,9 +159,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 				AffineTransform::new(camera_controls.update(delta_time)),
 			);
 
-			let sun = eval_sun(delta_time);
-			let ambient_light = eval_ambient_light(sun);
-
+			let (sun, ambient_light) = sun_controller.eval_sun(delta_time);
 			FrameData {
 				camera,
 				nanite_error_threshold: nanite_error_selector.error,

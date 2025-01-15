@@ -2,7 +2,7 @@ use std::mem::replace;
 use std::ops::Deref;
 use std::time::Instant;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DeltaTime {
 	pub delta_time: f32,
 	pub since_start: f32,

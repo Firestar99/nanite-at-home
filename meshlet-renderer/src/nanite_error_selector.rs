@@ -34,7 +34,12 @@ impl NaniteErrorSelector {
 			}
 			self.error = error;
 			// self.error = f32::clamp(error, 1., 4096.);
-			println!("nanite error: {}", self.error);
+			if self.error < 1. {
+				let recip_rounded = self.error.recip().round();
+				println!("nanite error: 1/{} = {}", recip_rounded, self.error);
+			} else {
+				println!("nanite error: {}", self.error);
+			}
 		}
 	}
 }

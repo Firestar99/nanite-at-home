@@ -51,7 +51,7 @@ pub fn instance_cull_compute(
 						meshlet_cnt,
 					},
 				);
-				meshlet_start += MAX_MESHLET_CNT * INSTANCE_CULL_WG_SIZE;
+				meshlet_start += MAX_MESHLET_CNT * MAX_MESHLET_CNT;
 			}
 		}
 	}
