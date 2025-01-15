@@ -47,6 +47,8 @@ For the complex configurations, see the console output for what has been selecte
 * N - pause sun rotation for non-changing lights
 * M - disable mouse rotating the camera
 
+For many scenes with usual poly counts, like Bistro or Sponza, you have to reduce the target triangle density down to about 1/8 or 1/16 by pressing X 3-4 times, for the scene to actually get simplified to a reasonable degree.
+
 ## Scenes
 
 The Lantern scene is always available, for additional scenes checkout the `scenes` branch with ~1GiB of additional scenes available. You may also add scenes in the `gltf` or `glb` format yourself by putting them in `/models/models/local/`, restarting and cycling to them using the T/G keys.
