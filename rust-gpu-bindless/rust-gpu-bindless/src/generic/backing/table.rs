@@ -567,10 +567,10 @@ mod tests {
 	impl TableInterface for DummyInterface {
 		type Slot = Arc<u32>;
 
-		fn drop_slots(&self, indices: impl DescriptorIndexIterator<'_, Self>) {}
+		fn drop_slots<'a>(&self, _indices: impl DescriptorIndexIterator<'a, Self>) {}
 
-		fn flush(&self, flush_queue: impl DescriptorIndexIterator<'_, Self>) {
-			for _ in flush_queue {}
+		fn flush<'a>(&self, flush_queue: impl DescriptorIndexIterator<'a, Self>) {
+			for _ in flush_queue.into_iter() {}
 		}
 	}
 
@@ -588,7 +588,7 @@ mod tests {
 		pub fn take(&self) -> Vec<Vec<u32>> {
 			take(&mut *self.drops.lock())
 				.into_iter()
-				.map(|set| set.iter().map(|i| i.to_u32()).collect())
+				.map(|set| set.iter().flat_map(|i| i.start.to_u32()..i.end.to_u32()).collect())
 				.collect()
 		}
 	}
@@ -596,13 +596,17 @@ mod tests {
 	impl TableInterface for SimpleInterface {
 		type Slot = Arc<u32>;
 
-		fn drop_slots(&self, indices: impl DescriptorIndexIterator<'_, Self>) {
+		fn drop_slots<'a>(&self, indices: impl DescriptorIndexIterator<'a, Self>) {
 			self.drops.lock().push(indices.into_range_set().into_range_set());
 		}
 
-		fn flush(&self, flush_queue: impl DescriptorIndexIterator<'_, Self>) {
-			for _ in flush_queue {}
+		fn flush<'a>(&self, flush_queue: impl DescriptorIndexIterator<'a, Self>) {
+			for _ in flush_queue.into_iter() {}
 		}
+	}
+
+	pub fn simple_empty() -> Vec<Vec<u32>> {
+		Vec::<Vec<u32>>::new()
 	}
 
 	#[test]
@@ -806,10 +810,10 @@ mod tests {
 		tm.flush();
 
 		drop(slot1);
-		assert_eq!(ti.take(), Vec::<Vec<u32>>::new());
+		assert_eq!(ti.take(), simple_empty());
 
 		switch.switch();
-		assert_eq!(ti.take(), &[&[]]);
+		assert_eq!(ti.take(), simple_empty());
 
 		drop(slot2);
 		switch.switch();
@@ -819,9 +823,9 @@ mod tests {
 		assert_eq!(ti.take(), &[&[1]]);
 
 		switch.switch();
-		assert_eq!(ti.take(), &[&[]]);
+		assert_eq!(ti.take(), simple_empty());
 		switch.switch();
-		assert_eq!(ti.take(), &[&[]]);
+		assert_eq!(ti.take(), simple_empty());
 
 		Ok(())
 	}
@@ -840,7 +844,7 @@ mod tests {
 
 		drop(table.alloc_slot(Arc::new(42))?);
 		tm.flush();
-		assert_eq!(ti.take(), &[&[], &[]]);
+		assert_eq!(ti.take(), simple_empty());
 
 		// doesn't matter how many frames, it never gets dropped until long_frame_b is done
 		for _ in 0..5 {
@@ -853,11 +857,11 @@ mod tests {
 
 		// gc of nothing
 		drop(long_frame_b);
-		assert_eq!(ti.take(), &[&[]]);
+		assert_eq!(ti.take(), simple_empty());
 
 		// 2nd gc should drop 0
 		drop(tm.frame());
-		assert_eq!(ti.take(), &[&[0][..], &[]]);
+		assert_eq!(ti.take(), &[&[0][..]]);
 
 		Ok(())
 	}
@@ -872,10 +876,10 @@ mod tests {
 		drop(table.alloc_slot(Arc::new(42))?);
 		tm.flush();
 		drop(a1);
-		assert_eq!(ti.take(), &[&[], &[]]);
+		assert_eq!(ti.take(), simple_empty());
 
 		drop(tm.frame());
-		assert_eq!(ti.take(), &[&[0][..], &[]]);
+		assert_eq!(ti.take(), &[&[0][..]]);
 
 		Ok(())
 	}
