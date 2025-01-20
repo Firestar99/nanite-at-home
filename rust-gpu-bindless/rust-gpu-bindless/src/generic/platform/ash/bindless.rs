@@ -318,8 +318,9 @@ unsafe impl BindlessPlatform for Ash {
 				.descriptor_count(counts.samplers)
 				.stage_flags(self.shader_stages),
 		];
-		let binding_flags =
-			[DescriptorBindingFlags::UPDATE_AFTER_BIND | DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING; 4];
+		let binding_flags = [DescriptorBindingFlags::UPDATE_AFTER_BIND
+			| DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING
+			| DescriptorBindingFlags::PARTIALLY_BOUND; 4];
 		assert_eq!(bindings.len(), binding_flags.len());
 
 		let set_layout = self
