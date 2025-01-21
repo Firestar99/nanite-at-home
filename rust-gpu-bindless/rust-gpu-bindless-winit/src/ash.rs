@@ -5,8 +5,8 @@ use ash::ext::metal_surface;
 use ash::khr::{android_surface, surface, wayland_surface, win32_surface, xcb_surface, xlib_surface};
 use ash::prelude::VkResult;
 use ash::vk::{
-	ColorSpaceKHR, CompositeAlphaFlagsKHR, Fence, PipelineStageFlags, PresentInfoKHR, PresentModeKHR, Semaphore,
-	SemaphoreCreateInfo, SharingMode, SubmitInfo, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR,
+	ColorSpaceKHR, CompositeAlphaFlagsKHR, Fence, FenceCreateInfo, PipelineStageFlags, PresentInfoKHR, PresentModeKHR,
+	Semaphore, SemaphoreCreateInfo, SharingMode, SubmitInfo, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR,
 	TimelineSemaphoreSubmitInfo,
 };
 use rust_gpu_bindless::generic::backing::table::RcTableSlot;
@@ -152,12 +152,13 @@ impl AshSwapchainParams {
 }
 
 /// A binary semaphore for swapchain operations
-pub struct SwapchainSemaphore {
+pub struct SwapchainSync {
 	acquire: Semaphore,
 	present: Semaphore,
+	acquire_fence: Fence,
 }
 
-impl SwapchainSemaphore {
+impl SwapchainSync {
 	pub unsafe fn new(bindless: &Arc<Bindless<Ash>>) -> anyhow::Result<Self> {
 		unsafe {
 			Ok(Self {
@@ -167,6 +168,7 @@ impl SwapchainSemaphore {
 				present: bindless
 					.device
 					.create_semaphore(&SemaphoreCreateInfo::default(), None)?,
+				acquire_fence: bindless.device.create_fence(&FenceCreateInfo::default(), None)?,
 			})
 		}
 	}
@@ -174,6 +176,7 @@ impl SwapchainSemaphore {
 	pub unsafe fn destroy(&mut self, bindless: &Arc<Bindless<Ash>>) {
 		bindless.device.destroy_semaphore(self.acquire, None);
 		bindless.device.destroy_semaphore(self.present, None);
+		bindless.device.destroy_fence(self.acquire_fence, None);
 	}
 }
 
@@ -185,8 +188,8 @@ pub struct AshSwapchain {
 	params: AshSwapchainParams,
 	swapchain: ash::vk::SwapchainKHR,
 	images: Vec<Option<RcTableSlot>>,
-	image_semaphores: Vec<Option<SwapchainSemaphore>>,
-	semaphore_pool: Vec<SwapchainSemaphore>,
+	image_semaphores: Vec<Option<SwapchainSync>>,
+	sync_pool: Vec<SwapchainSync>,
 	should_recreate: bool,
 }
 
@@ -232,7 +235,7 @@ impl AshSwapchain {
 					swapchain,
 					images,
 					image_semaphores,
-					semaphore_pool: Vec::new(),
+					sync_pool: Vec::new(),
 					should_recreate: false,
 				})
 			})
@@ -387,14 +390,14 @@ impl AshSwapchain {
 					}
 				}
 
-				let semaphore = self
-					.semaphore_pool
+				let sync = self
+					.sync_pool
 					.pop()
-					.map_or_else(|| SwapchainSemaphore::new(&self.bindless), Ok)?;
+					.map_or_else(|| SwapchainSync::new(&self.bindless), Ok)?;
 				match swapchain_ext.acquire_next_image(
 					self.swapchain,
 					timeout.map(|a| a.as_nanos() as u64).unwrap_or(!0),
-					semaphore.acquire,
+					sync.acquire,
 					Fence::null(),
 				) {
 					Ok((id, suboptimal)) => {
@@ -409,7 +412,7 @@ impl AshSwapchain {
 							device.queue_submit(
 								*queue,
 								&[SubmitInfo::default()
-									.wait_semaphores(&[semaphore.acquire])
+									.wait_semaphores(&[sync.acquire])
 									.wait_dst_stage_mask(&[PipelineStageFlags::ALL_COMMANDS])
 									.signal_semaphores(&[execution.resource().semaphore])
 									.push_next(
@@ -417,24 +420,26 @@ impl AshSwapchain {
 											.wait_semaphore_values(&[0])
 											.signal_semaphore_values(&[execution.resource().timeline_value]),
 									)],
-								Fence::null(),
+								sync.acquire_fence,
 							)?;
 						}
 						let pending = AshPendingExecution::new(&execution);
 						self.bindless.execution_manager.submit_for_waiting(execution)?;
-						if let Some(e) = self.image_semaphores[id as usize].replace(semaphore) {
-							self.semaphore_pool.push(e);
+						if let Some(e) = self.image_semaphores[id as usize].replace(sync) {
+							device.wait_for_fences(&[e.acquire_fence], true, !0)?;
+							device.reset_fences(&[e.acquire_fence])?;
+							self.sync_pool.push(e);
 						}
 						let desc = MutDesc::<Ash, MutImage<Image2d>>::new(image, pending);
 						desc.inner_slot().access_lock.unlock(ImageAccess::Present);
 						return Ok(desc);
 					}
 					Err(ash::vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-						self.semaphore_pool.push(semaphore);
+						self.sync_pool.push(sync);
 						self.should_recreate = true;
 					}
 					Err(e) => {
-						self.semaphore_pool.push(semaphore);
+						self.sync_pool.push(sync);
 						return Err(e.into());
 					}
 				}
@@ -541,7 +546,8 @@ impl Debug for PresentError {
 impl Drop for AshSwapchain {
 	fn drop(&mut self) {
 		unsafe {
-			for x in self.semaphore_pool.iter_mut() {
+			self.bindless.device.device_wait_idle().unwrap();
+			for x in self.sync_pool.iter_mut() {
 				x.destroy(&self.bindless);
 			}
 			let ext_swapchain = &self.bindless.extensions.swapchain();
