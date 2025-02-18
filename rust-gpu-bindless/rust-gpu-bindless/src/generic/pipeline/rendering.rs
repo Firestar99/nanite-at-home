@@ -11,8 +11,11 @@ use crate::generic::pipeline::rendering::RenderingError::MismatchedColorAttachme
 use crate::generic::platform::ash::Ash;
 use crate::generic::platform::{BindlessPipelinePlatform, RenderingContext};
 use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
+use glam::{IVec2, UVec2};
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Image2d, TransientAccess};
+use rust_gpu_bindless_shaders::utils::rect::IRect2;
+use rust_gpu_bindless_shaders::utils::viewport::Viewport;
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -64,6 +67,7 @@ pub struct RenderingAttachment<'a, 'b, P: BindlessPipelinePlatform, A: ImageAcce
 
 pub struct Rendering<'a: 'b, 'b, P: BindlessPipelinePlatform> {
 	platform: P::RenderingContext<'a, 'b>,
+	extent: UVec2,
 }
 
 unsafe impl<'a, 'b, P: BindlessPipelinePlatform> TransientAccess<'a> for Rendering<'a, 'b, P> {}
@@ -71,12 +75,14 @@ unsafe impl<'a, 'b, P: BindlessPipelinePlatform> TransientAccess<'a> for Renderi
 impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Deref for Rendering<'a, 'b, P> {
 	type Target = P::RenderingContext<'a, 'b>;
 
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.platform
 	}
 }
 
 impl<'a: 'b, 'b, P: BindlessPipelinePlatform> DerefMut for Rendering<'a, 'b, P> {
+	#[inline]
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.platform
 	}
@@ -164,16 +170,21 @@ impl<'a, P: BindlessPipelinePlatform> Recording<'a, P> {
 				}
 			}
 
-			let mut rendering = Rendering {
+			let extent = UVec2::from(extent);
+			let mut rendering: Rendering<'a, '_, P> = Rendering {
 				platform: <P::RenderingContext<'a, '_> as RenderingContext<P>>::begin_rendering(
 					self.inner_mut(),
 					format,
-					[extent.width, extent.height],
+					extent,
 					color_attachments,
 					depth_attachment,
 				)
 				.map_err(Into::<RecordingError<P>>::into)?,
+				extent,
 			};
+			rendering.set_viewport_to_extent();
+			rendering.set_scissor_to_extent();
+
 			f(&mut rendering)?;
 			Ok(rendering
 				.platform
@@ -278,6 +289,36 @@ impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Rendering<'a, 'b, P> {
 				.draw_mesh_tasks_indirect(pipeline, indirect, param)
 				.map_err(Into::<RecordingError<P>>::into)?)
 		}
+	}
+
+	#[inline]
+	pub fn extent(&self) -> UVec2 {
+		self.extent
+	}
+
+	pub fn set_viewport(&mut self, viewport: Viewport) {
+		unsafe {
+			self.platform.set_viewport(viewport);
+		}
+	}
+
+	#[inline]
+	pub fn set_viewport_to_extent(&mut self) {
+		self.set_viewport(Viewport::from_extent(self.extent))
+	}
+
+	pub fn set_scissor(&mut self, scissor: IRect2) {
+		unsafe {
+			self.platform.set_scissor(scissor);
+		}
+	}
+
+	#[inline]
+	pub fn set_scissor_to_extent(&mut self) {
+		self.set_scissor(IRect2 {
+			origin: IVec2::ZERO,
+			extent: self.extent,
+		})
 	}
 }
 

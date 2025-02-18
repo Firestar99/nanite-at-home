@@ -245,15 +245,22 @@ impl<'a> AshRecordingContext<'a> {
 		&self.resource_context.execution
 	}
 
+	/// Flushes the following state changes to the command buffer:
+	/// * accumulated barriers
+	pub fn ash_flush(&mut self) {
+		self.ash_flush_barriers();
+	}
+
 	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any action
 	/// command is recorded.
-	pub fn ash_flush(&mut self) {
+	pub fn ash_flush_barriers(&mut self) {
 		unsafe {
-			let device = &self.bindless.device;
 			let mut collector = self.resource_context.inner.borrow_mut();
 			if collector.is_empty() {
 				return;
 			}
+
+			let device = &self.bindless.device;
 			device.cmd_pipeline_barrier2(
 				self.cmd,
 				&DependencyInfo::default()
@@ -267,10 +274,9 @@ impl<'a> AshRecordingContext<'a> {
 		}
 	}
 
-	/// Flushes the accumulated barriers as one [`Device::cmd_pipeline_barrier2`], must be called before any action
-	/// command is recorded.
-	pub fn ash_must_not_flush(&mut self) -> Result<(), AshRecordingError> {
-		let collector = self.resource_context.inner.borrow_mut();
+	/// Return an Error if any barrier flushes are queued. Useful for verifying no flushes happen within a render pass.
+	pub fn ash_must_not_flush_barriers(&self) -> Result<(), AshRecordingError> {
+		let collector = self.resource_context.inner.borrow();
 		if collector.is_empty() {
 			Ok(())
 		} else {
