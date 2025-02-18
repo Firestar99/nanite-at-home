@@ -15,6 +15,7 @@ use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Image2d, TransientAccess};
 use smallvec::SmallVec;
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -66,6 +67,20 @@ pub struct Rendering<'a: 'b, 'b, P: BindlessPipelinePlatform> {
 }
 
 unsafe impl<'a, 'b, P: BindlessPipelinePlatform> TransientAccess<'a> for Rendering<'a, 'b, P> {}
+
+impl<'a: 'b, 'b, P: BindlessPipelinePlatform> Deref for Rendering<'a, 'b, P> {
+	type Target = P::RenderingContext<'a, 'b>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.platform
+	}
+}
+
+impl<'a: 'b, 'b, P: BindlessPipelinePlatform> DerefMut for Rendering<'a, 'b, P> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.platform
+	}
+}
 
 unsafe impl<'a: 'b, 'b, P: BindlessPipelinePlatform> HasResourceContext<'a, P> for Rendering<'a, 'b, P> {
 	#[inline]
