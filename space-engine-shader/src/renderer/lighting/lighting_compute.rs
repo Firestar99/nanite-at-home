@@ -5,12 +5,12 @@ use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::renderer::g_buffer::GBuffer;
 use crate::renderer::lighting::is_skybox;
 use crate::utils::hsv::hsv2rgb_smooth;
-use crate::utils::srgb::linear_to_srgb_alpha;
 use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{
 	AliveDescRef, Buffer, Descriptors, Image2d, MutImage, Transient, TransientDesc,
 };
+use rust_gpu_bindless_shaders::utils::srgb::linear_to_srgb_alpha;
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone, BufferStruct)]
