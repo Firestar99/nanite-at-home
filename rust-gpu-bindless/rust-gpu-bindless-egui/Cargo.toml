@@ -1,0 +1,39 @@
+[package]
+name = "rust-gpu-bindless-egui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+winit = []
+
+[dependencies]
+# members
+rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless-egui-shaders = { workspace = true, features = ["epaint"] }
+
+# vulkan
+ash = { workspace = true }
+winit = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+num-traits = { workspace = true }
+num-derive = { workspace = true }
+
+# profiling
+profiling = { workspace = true }
+
+# egui
+egui = { workspace = true }
+egui-winit = { workspace = true }
+
+# other
+thiserror = { workspace = true }
+
+[build-dependencies]
+space-engine-shader-builder = { workspace = true }
