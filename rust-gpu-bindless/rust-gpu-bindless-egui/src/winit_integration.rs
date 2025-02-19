@@ -1,9 +1,9 @@
-use crate::EguiBindlessPlatform;
+use crate::platform::EguiBindlessPlatform;
 use egui::{Context, RawInput, ViewportId};
 use egui_winit::State;
 use rust_gpu_bindless::generic::descriptor::Bindless;
 use std::sync::Arc;
-use winit::event_loop::EventLoopWindowTarget;
+use winit::event_loop::ActiveEventLoop;
 
 pub struct EguiBindless<P: EguiBindlessPlatform> {
 	bindless: Arc<Bindless<P>>,
@@ -12,7 +12,7 @@ pub struct EguiBindless<P: EguiBindlessPlatform> {
 }
 
 impl<P: EguiBindlessPlatform> EguiBindless<P> {
-	pub fn new<T: 'static>(bindless: Arc<Bindless<P>>, event_loop: &EventLoopWindowTarget<T>) -> Self {
+	pub fn new<T: 'static>(bindless: Arc<Bindless<P>>, event_loop: &ActiveEventLoop) -> Self {
 		let ctx = Context::default();
 		let max_texture_side = unsafe { bindless.platform.max_image_dimensions_2d() };
 		let egui_winit = State::new(

@@ -1,42 +1,35 @@
-use crate::EguiBindlessPlatform;
+use crate::platform::EguiBindlessPlatform;
 use ash::vk::{
 	BlendFactor, BlendOp, ColorComponentFlags, PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
 	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
 	PrimitiveTopology,
 };
+use egui::epaint::Primitive;
 use egui::{ClippedPrimitive, Context, TexturesDelta};
+use glam::{IVec2, UVec2};
 use rust_gpu_bindless::generic::descriptor::{Bindless, Format, Image2d};
 use rust_gpu_bindless::generic::pipeline::{
 	BindlessGraphicsPipeline, GraphicsPipelineCreateInfo, Recording, RecordingError, RenderPassFormat,
 	RenderingAttachment,
 };
 use rust_gpu_bindless::generic::pipeline::{ColorAttachment, DepthStencilAttachment, LoadOp, MutImageAccess, StoreOp};
-use rust_gpu_bindless::generic::platform::ash::Ash;
 use rust_gpu_bindless_egui_shaders::Param;
+use rust_gpu_bindless_shaders::utils::rect::IRect2;
+use rust_gpu_bindless_shaders::utils::viewport::Viewport;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
 
-unsafe impl EguiBindlessPlatform for Ash {
-	unsafe fn max_image_dimensions_2d(&self) -> u32 {
-		unsafe {
-			self.instance
-				.get_physical_device_properties(self.physical_device)
-				.limits
-				.max_image_dimension2_d
-		}
-	}
-}
-
-pub struct EguiAshRenderer {
-	bindless: Arc<Bindless<Ash>>,
+pub struct EguiRenderer<P: EguiBindlessPlatform> {
+	bindless: Arc<Bindless<P>>,
 	output_format: Format,
 	depth_format: Option<Format>,
-	graphics_pipeline: BindlessGraphicsPipeline<Ash, Param<'static>>,
+	graphics_pipeline: BindlessGraphicsPipeline<P, Param<'static>>,
+	// white_texture: RCDesc<P, Image<Image2d>>,
 }
 
-impl EguiAshRenderer {
-	pub fn new(bindless: Arc<Bindless<Ash>>, output_format: Format, depth_format: Option<Format>) -> Arc<Self> {
+impl<P: EguiBindlessPlatform> EguiRenderer<P> {
+	pub fn new(bindless: Arc<Bindless<P>>, output_format: Format, depth_format: Option<Format>) -> Arc<Self> {
 		let format = RenderPassFormat::new(&[output_format], depth_format);
 		let graphics_pipeline = bindless
 			.create_graphics_pipeline(
@@ -77,8 +70,8 @@ impl EguiAshRenderer {
 	}
 }
 
-pub struct EguiAshRenderContext {
-	renderer: Arc<EguiAshRenderer>,
+pub struct EguiRenderContext<P: EguiBindlessPlatform> {
+	renderer: Arc<EguiRenderer<P>>,
 	ctx: Context,
 }
 
@@ -96,20 +89,21 @@ impl Default for RenderingOptions {
 	}
 }
 
-impl EguiAshRenderContext {
-	pub fn new(renderer: Arc<EguiAshRenderer>, ctx: Context) -> Self {
+impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
+	pub fn new(renderer: Arc<EguiRenderer<P>>, ctx: Context) -> Self {
 		Self { renderer, ctx }
 	}
 
-	pub fn update_texture(&self, texture_delta: TexturesDelta) {}
+	pub fn update_texture(&mut self, texture_delta: TexturesDelta) {}
 
 	pub fn draw<'a>(
-		&self,
-		cmd: &mut Recording<'a, Ash>,
-		image: &mut MutImageAccess<'a, Ash, Image2d, ColorAttachment>,
-		depth: Option<&mut MutImageAccess<'a, Ash, Image2d, DepthStencilAttachment>>,
+		&mut self,
+		cmd: &mut Recording<'a, P>,
+		image: &mut MutImageAccess<'a, P, Image2d, ColorAttachment>,
+		depth: Option<&mut MutImageAccess<'a, P, Image2d, DepthStencilAttachment>>,
 		options: RenderingOptions,
-	) -> Result<(), EguiRenderingError<Ash>> {
+		geometry: Vec<ClippedPrimitive>,
+	) -> Result<(), EguiRenderingError<P>> {
 		let depth = match (self.renderer.depth_format, depth) {
 			(Some(format), Some(depth)) => Some((format, depth)),
 			(None, None) => None,
@@ -129,7 +123,39 @@ impl EguiAshRenderContext {
 				load_op: options.depth_rt_load_op,
 				store_op: StoreOp::Store,
 			}),
-			|rp| Ok(()),
+			|rp| {
+				let mut prev_clip_rect = None;
+				for primitive in geometry {
+					{
+						let rect = primitive.clip_rect;
+						let rect = IRect2 {
+							origin: IVec2::new(rect.min.x.floor() as i32, rect.min.y.floor() as i32),
+							extent: UVec2::new(rect.width().ceil() as u32, rect.height().ceil() as u32),
+						};
+						if prev_clip_rect.map_or(true, |prev| prev != rect) {
+							prev_clip_rect = Some(rect);
+							rp.set_viewport(Viewport {
+								x: rect.origin.x as f32,
+								y: rect.origin.y as f32,
+								width: rect.extent.x as f32,
+								height: rect.extent.y as f32,
+								min_depth: 0.0,
+								max_depth: 1.0,
+							});
+							rp.set_scissor(rect);
+						}
+					}
+
+					match primitive.primitive {
+						Primitive::Mesh(mesh) => {}
+						Primitive::Callback(_) => {
+							panic!("callback unsupported")
+						}
+					}
+				}
+
+				Ok(())
+			},
 		)?;
 
 		Ok(())
@@ -152,7 +178,7 @@ impl<P: EguiBindlessPlatform> core::fmt::Debug for EguiRenderingError<P> {
 	}
 }
 
-impl Deref for EguiAshRenderContext {
+impl<P: EguiBindlessPlatform> Deref for EguiRenderContext<P> {
 	type Target = Context;
 
 	fn deref(&self) -> &Self::Target {
@@ -160,17 +186,17 @@ impl Deref for EguiAshRenderContext {
 	}
 }
 
-impl DerefMut for EguiAshRenderContext {
+impl<P: EguiBindlessPlatform> DerefMut for EguiRenderContext<P> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.ctx
 	}
 }
 
-pub struct RenderOutput<'a> {
-	render_ctx: &'a mut EguiAshRenderContext,
+pub struct RenderOutput<'a, P: EguiBindlessPlatform> {
+	render_ctx: &'a mut EguiRenderContext<P>,
 	primitives: Vec<ClippedPrimitive>,
 }
 
-impl<'a> RenderOutput<'a> {
+impl<'a, P: EguiBindlessPlatform> RenderOutput<'a, P> {
 	pub fn draw(&self) {}
 }

@@ -2350,6 +2350,7 @@ dependencies = [
  "profiling",
  "rust-gpu-bindless",
  "rust-gpu-bindless-egui-shaders",
+ "rust-gpu-bindless-shaders",
  "space-engine-shader-builder",
  "thiserror 2.0.11",
  "winit",
