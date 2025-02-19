@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoopWindowTarget;
+use winit::event_loop::ActiveEventLoop;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle};
 
 pub fn ash_enumerate_required_extensions(display_handle: RawDisplayHandle) -> VkResult<&'static [&'static CStr]> {
@@ -198,9 +198,7 @@ impl AshSwapchain {
 		bindless: &Arc<Bindless<Ash>>,
 		event_loop: &EventLoopExecutor,
 		window_ref: &WindowRef,
-		params: impl FnOnce(&ash::vk::SurfaceKHR, &EventLoopWindowTarget<()>) -> anyhow::Result<AshSwapchainParams>
-			+ Send
-			+ 'static,
+		params: impl FnOnce(&ash::vk::SurfaceKHR, &ActiveEventLoop) -> anyhow::Result<AshSwapchainParams> + Send + 'static,
 	) -> anyhow::Result<Self> {
 		let bindless = bindless.clone();
 		let event_loop_clone = event_loop.clone();
@@ -249,7 +247,7 @@ impl AshSwapchain {
 		surface: ash::vk::SurfaceKHR,
 		params: &AshSwapchainParams,
 		old_swapchain: ash::vk::SwapchainKHR,
-		e: &EventLoopWindowTarget<()>,
+		e: &ActiveEventLoop,
 	) -> anyhow::Result<(ash::vk::SwapchainKHR, Vec<RcTableSlot>)> {
 		unsafe {
 			let extent = {

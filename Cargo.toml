@@ -61,7 +61,7 @@ ash-window = "0.13.0"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
 presser = "0.3.1"
 
-winit = { version = "0.29" }
+winit = { version = "0.30" }
 
 # rust-gpu
 spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", default-features = false }
@@ -115,7 +115,6 @@ smallvec = { version = "1.11", features = ["const_generics", "const_new", "union
 static_assertions = "1.1.0"
 parking_lot = "0.12"
 clap = { version = "4.5", features = ["derive"] }
-rand = "0.8"
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 rangemap = "1.5.1"

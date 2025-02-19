@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use winit::event_loop::EventLoopWindowTarget;
+use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 /// `winit`'s [`Window`] is technically Send + Sync, but I'm not trusting that. `WindowRef` wraps a [`Window`] and will
-/// only give you access if you have the [`EventLoopWindowTarget`], which is only available on the main thread
+/// only give you access if you have the [`ActiveEventLoop`], which is only available on the main thread
 /// within the closure of [`EventLoopExecutor::spawn()`].
 ///
 /// [`EventLoopExecutor::spawn()`]: rust_gpu_bindless_winit::event_loop::EventLoopExecutor::spawn
@@ -19,7 +19,7 @@ impl WindowRef {
 		}
 	}
 
-	pub fn get<'a>(&'a self, _event_loop: &'a EventLoopWindowTarget<()>) -> &'a Arc<Window> {
+	pub fn get<'a>(&'a self, _event_loop: &'a ActiveEventLoop) -> &'a Arc<Window> {
 		&self.window
 	}
 
