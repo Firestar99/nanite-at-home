@@ -35,6 +35,7 @@ egui-winit = { workspace = true }
 
 # other
 thiserror = { workspace = true }
+rustc-hash = { workspace = true }
 
 [build-dependencies]
 space-engine-shader-builder = { workspace = true }
