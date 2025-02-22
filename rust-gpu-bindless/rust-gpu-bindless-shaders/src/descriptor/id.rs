@@ -1,5 +1,6 @@
+use crate::buffer_content::{BufferStruct, Metadata, MetadataCpuInterface};
 use crate::descriptor::transient::TransientDesc;
-use crate::descriptor::{Desc, DescContent, DescRef, TransientAccess};
+use crate::descriptor::{Desc, DescContent, DescRef, DescStructRef, TransientAccess};
 use bytemuck_derive::{Pod, Zeroable};
 use core::fmt::{Debug, Formatter};
 use core::mem;
@@ -210,5 +211,17 @@ impl<C: DescContent> UnsafeDesc<C> {
 	#[inline]
 	pub unsafe fn to_transient_unchecked<'a>(&self, access: &impl TransientAccess<'a>) -> TransientDesc<'a, C> {
 		unsafe { TransientDesc::new(self.r, access) }
+	}
+}
+
+unsafe impl<C: DescContent> DescStructRef<UnsafeDesc<C>> for DescriptorId {
+	type TransferDescStruct = DescriptorIdTransfer;
+
+	unsafe fn desc_write_cpu(desc: UnsafeDesc<C>, meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
+		unsafe { desc.r.write_cpu(meta) }
+	}
+
+	unsafe fn desc_read(from: Self::TransferDescStruct, meta: Metadata) -> UnsafeDesc<C> {
+		unsafe { UnsafeDesc::new(DescriptorId::read(from, meta)) }
 	}
 }
