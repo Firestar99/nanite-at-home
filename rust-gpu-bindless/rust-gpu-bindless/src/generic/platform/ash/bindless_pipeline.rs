@@ -163,7 +163,10 @@ impl Ash {
 					)
 					.depth_stencil_state(&depth_stencil_state)
 					.color_blend_state(&color_blend_state)
-					.dynamic_state(&PipelineDynamicStateCreateInfo::default().dynamic_states(&[DynamicState::VIEWPORT]))
+					.dynamic_state(
+						&PipelineDynamicStateCreateInfo::default()
+							.dynamic_states(&[DynamicState::VIEWPORT, DynamicState::SCISSOR]),
+					)
 					.layout(bindless.global_descriptor_set().pipeline_layout)
 					.push_next(
 						&mut PipelineRenderingCreateInfo::default()
