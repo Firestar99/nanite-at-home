@@ -1,3 +1,4 @@
+use crate::convert::Egui2Bindless;
 use crate::platform::EguiBindlessPlatform;
 use ash::vk::{
 	BlendFactor, BlendOp, ColorComponentFlags, PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
@@ -9,8 +10,8 @@ use egui::{Context, FullOutput, ImageData, TextureId, TextureOptions, TexturesDe
 use glam::{IVec2, UVec2};
 use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
-	BindlessImageUsage, BufferAllocationError, Extent, Format, Image2d, ImageAllocationError, MutBoxDescExt, MutDesc,
-	MutDescBufferExt, MutDescExt, MutImage, RCDesc, RCDescExt, Sampler,
+	BindlessImageUsage, BindlessSamplerCreateInfo, BufferAllocationError, Extent, Filter, Format, Image2d,
+	MutBoxDescExt, MutDesc, MutDescBufferExt, MutDescExt, MutImage, RCDesc, RCDescExt, Sampler, SamplerAllocationError,
 };
 use rust_gpu_bindless::generic::pipeline::{
 	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, LoadOp,
@@ -176,7 +177,24 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 						let sampler = self
 							.samplers
 							.entry(delta.options)
-							.or_insert_with(|| self.renderer.bindless.sampler().alloc())
+							.or_insert_with(|| {
+								self.renderer
+									.bindless
+									.sampler()
+									.alloc(&BindlessSamplerCreateInfo {
+										min_filter: delta.options.minification.to_bindless(),
+										mag_filter: delta.options.magnification.to_bindless(),
+										mipmap_mode: delta
+											.options
+											.mipmap_mode
+											.map_or(Filter::Nearest, |f| f.to_bindless()),
+										address_mode_v: delta.options.wrap_mode.to_bindless(),
+										address_mode_u: delta.options.wrap_mode.to_bindless(),
+										address_mode_w: delta.options.wrap_mode.to_bindless(),
+										..BindlessSamplerCreateInfo::default()
+									})
+									.unwrap()
+							})
 							.clone();
 
 						self.textures.insert(id, (image, sampler));
@@ -383,7 +401,7 @@ pub enum EguiRenderingError<P: EguiBindlessPlatform> {
 	#[error("BufferAllocationError: {0}")]
 	BufferAllocationError(#[from] BufferAllocationError<P>),
 	#[error("ImageAllocationError: {0}")]
-	ImageAllocationError(#[from] ImageAllocationError<P>),
+	ImageAllocationError(#[from] SamplerAllocationError<P>),
 }
 
 impl<P: EguiBindlessPlatform> core::fmt::Debug for EguiRenderingError<P> {
