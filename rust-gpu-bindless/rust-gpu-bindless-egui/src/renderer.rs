@@ -16,7 +16,7 @@ use rust_gpu_bindless::generic::descriptor::{
 use rust_gpu_bindless::generic::pipeline::{
 	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, LoadOp,
 	MutBufferAccessExt, MutImageAccess, MutImageAccessExt, Recording, RecordingError, RenderPassFormat,
-	RenderingAttachment, StoreOp,
+	RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
 use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, UnsafeDesc};
@@ -148,29 +148,39 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							ImageData::Font(font) => (Format::R32_SFLOAT, bytemuck::cast_slice(&font.pixels)),
 						};
 
-						let staging = self.renderer.bindless.buffer().alloc_from_iter(
-							&BindlessBufferCreateInfo {
-								usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::TRANSFER_SRC,
+						let staging = self
+							.renderer
+							.bindless
+							.buffer()
+							.alloc_from_iter(
+								&BindlessBufferCreateInfo {
+									usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::TRANSFER_SRC,
+									allocation_scheme: Default::default(),
+									name: &format!("egui texture {:?} staging buffer", id),
+								},
+								bytes.iter().copied(),
+							)
+							.unwrap();
+
+						let image = self
+							.renderer
+							.bindless
+							.image()
+							.alloc(&BindlessImageCreateInfo {
+								format,
+								extent,
+								mip_levels: 0,
+								array_layers: 0,
+								samples: Default::default(),
+								usage: BindlessImageUsage::TRANSFER_DST | BindlessImageUsage::SAMPLED,
 								allocation_scheme: Default::default(),
-								name: &format!("egui texture {:?} staging buffer", id),
-							},
-							bytes.iter().copied(),
-						)?;
+								name: &format!("egui texture {:?}", id),
+								_phantom: Default::default(),
+							})
+							.unwrap();
 
-						let image = self.renderer.bindless.image().alloc(&BindlessImageCreateInfo {
-							format,
-							extent,
-							mip_levels: 0,
-							array_layers: 0,
-							samples: Default::default(),
-							usage: BindlessImageUsage::TRANSFER_DST | BindlessImageUsage::SAMPLED,
-							allocation_scheme: Default::default(),
-							name: &format!("egui texture {:?}", id),
-							_phantom: Default::default(),
-						})?;
-
-						let image = image.access_dont_care(cmd)?;
-						let staging = staging.access(cmd)?;
+						let image = image.access_dont_care::<TransferWrite>(cmd)?;
+						let staging = staging.access::<TransferRead>(cmd)?;
 						cmd.copy_buffer_to_image(&staging, &image)?;
 						let image = image.into_desc();
 
@@ -324,7 +334,7 @@ struct DrawCmd {
 }
 
 impl<'b, P: EguiBindlessPlatform> RenderOutput<'b, P> {
-	fn draw<'a>(
+	pub fn draw<'a>(
 		&mut self,
 		cmd: &mut Recording<'a, P>,
 		image: &mut MutImageAccess<'a, P, Image2d, ColorAttachment>,
