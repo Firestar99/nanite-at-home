@@ -1,8 +1,9 @@
 use crate::generic::backing::range_set::DescriptorIndexIterator;
 use crate::generic::backing::table::DrainFlushQueue;
 use crate::generic::descriptor::{
-	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BufferAllocationError, BufferInterface, BufferSlot,
-	DescriptorCounts, ImageAllocationError, ImageInterface, SamplerInterface,
+	Bindless, BindlessBufferCreateInfo, BindlessImageCreateInfo, BindlessSamplerCreateInfo, BufferAllocationError,
+	BufferInterface, BufferSlot, DescriptorCounts, ImageAllocationError, ImageInterface, SamplerAllocationError,
+	SamplerInterface,
 };
 use rust_gpu_bindless_shaders::descriptor::ImageType;
 use std::error::Error;
@@ -21,7 +22,8 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 		+ Send
 		+ Sync
 		+ Into<BufferAllocationError<Self>>
-		+ Into<ImageAllocationError<Self>>;
+		+ Into<ImageAllocationError<Self>>
+		+ Into<SamplerAllocationError<Self>>;
 	type BindlessDescriptorSet: 'static + Send + Sync;
 	type PendingExecution: PendingExecution<Self>;
 
@@ -72,6 +74,11 @@ pub unsafe trait BindlessPlatform: Sized + Send + Sync + 'static {
 		&self,
 		create_info: &BindlessImageCreateInfo<T>,
 	) -> Result<Self::Image, Self::AllocationError>;
+
+	unsafe fn alloc_sampler(
+		&self,
+		create_info: &BindlessSamplerCreateInfo,
+	) -> Result<Self::Sampler, Self::AllocationError>;
 
 	/// Turn a mapped Buffer into a Slab. You may assume that the buffer is mappable, aka. has either
 	/// [`BindlessBufferUsage::MAP_WRITE`] or [`BindlessBufferUsage::MAP_READ`]. You also have exclusive access

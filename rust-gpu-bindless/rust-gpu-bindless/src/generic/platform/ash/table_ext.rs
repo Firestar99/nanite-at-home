@@ -1,10 +1,9 @@
 use crate::generic::descriptor::{
 	BindlessAllocationScheme, BindlessBufferUsage, BufferAllocationError, BufferSlot, BufferTableAccess, MutDesc,
-	RCDesc, Sampler, SamplerTableAccess,
+	RCDesc, Sampler, SamplerAllocationError, SamplerTableAccess,
 };
 use crate::generic::pipeline::{AccessLock, BufferAccess};
 use crate::generic::platform::ash::{Ash, AshAllocationError, AshBuffer, AshMemoryAllocation};
-use ash::prelude::VkResult;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, SamplerCreateInfo};
 use gpu_allocator::vulkan::AllocationCreateDesc;
 use gpu_allocator::MemoryLocation;
@@ -13,8 +12,18 @@ use rust_gpu_bindless_shaders::descriptor::MutBuffer;
 use std::ffi::CString;
 
 impl<'a> SamplerTableAccess<'a, Ash> {
-	pub fn alloc_ash(&self, sampler_create_info: &SamplerCreateInfo) -> VkResult<RCDesc<Ash, Sampler>> {
-		unsafe { Ok(self.alloc_slot(self.0.device.create_sampler(&sampler_create_info, None)?)) }
+	pub fn alloc_ash(
+		&self,
+		sampler_create_info: &SamplerCreateInfo,
+	) -> Result<RCDesc<Ash, Sampler>, SamplerAllocationError<Ash>> {
+		unsafe {
+			Ok(self.alloc_slot(
+				self.0
+					.device
+					.create_sampler(&sampler_create_info, None)
+					.map_err(AshAllocationError::from)?,
+			)?)
+		}
 	}
 }
 

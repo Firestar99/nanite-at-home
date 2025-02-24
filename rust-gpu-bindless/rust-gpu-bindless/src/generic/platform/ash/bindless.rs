@@ -2,8 +2,8 @@ use crate::generic::backing::range_set::{DescriptorIndexIterator, DescriptorInde
 use crate::generic::backing::table::DrainFlushQueue;
 use crate::generic::descriptor::{
 	Bindless, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo, BindlessImageUsage,
-	BufferAllocationError, BufferInterface, BufferSlot, DescriptorCounts, ImageAllocationError, ImageInterface,
-	SamplerInterface,
+	BindlessSamplerCreateInfo, BufferAllocationError, BufferInterface, BufferSlot, DescriptorCounts,
+	ImageAllocationError, ImageInterface, SamplerAllocationError, SamplerInterface,
 };
 use crate::generic::platform::ash::image_format::FormatExt;
 use crate::generic::platform::ash::{
@@ -21,7 +21,7 @@ use ash::vk::{
 	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, Handle, ImageLayout,
 	ImageSubresourceRange, ImageTiling, ImageViewCreateInfo, PhysicalDeviceProperties2,
 	PhysicalDeviceVulkan12Properties, PipelineCache, PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange,
-	ShaderStageFlags, SharingMode, WriteDescriptorSet,
+	SamplerCreateInfo, ShaderStageFlags, SharingMode, WriteDescriptorSet, LOD_CLAMP_NONE,
 };
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::AllocationError;
@@ -260,6 +260,12 @@ impl From<AshAllocationError> for BufferAllocationError<Ash> {
 impl From<AshAllocationError> for ImageAllocationError<Ash> {
 	fn from(value: AshAllocationError) -> Self {
 		ImageAllocationError::Platform(value)
+	}
+}
+
+impl From<AshAllocationError> for SamplerAllocationError<Ash> {
+	fn from(value: AshAllocationError) -> Self {
+		SamplerAllocationError::Platform(value)
 	}
 }
 
@@ -595,6 +601,29 @@ unsafe impl BindlessPlatform for Ash {
 			image_view,
 			allocation: AshMemoryAllocation::new(memory_allocation),
 		})
+	}
+
+	unsafe fn alloc_sampler(
+		&self,
+		create_info: &BindlessSamplerCreateInfo,
+	) -> Result<Self::Sampler, Self::AllocationError> {
+		unsafe {
+			Ok(self.device.create_sampler(
+				&SamplerCreateInfo::default()
+					.mag_filter(create_info.mag_filter.to_ash_filter())
+					.min_filter(create_info.min_filter.to_ash_filter())
+					.mipmap_mode(create_info.mipmap_mode.to_ash_mipmap_mode())
+					.address_mode_u(create_info.address_mode_u.to_ash_address_mode())
+					.address_mode_v(create_info.address_mode_v.to_ash_address_mode())
+					.address_mode_w(create_info.address_mode_w.to_ash_address_mode())
+					.anisotropy_enable(create_info.max_anisotropy.is_some())
+					.max_anisotropy(create_info.max_anisotropy.unwrap_or(1.0))
+					.min_lod(create_info.min_lod)
+					.max_lod(create_info.max_lod.unwrap_or(LOD_CLAMP_NONE))
+					.border_color(create_info.border_color.to_ash_border_color(false)),
+				None,
+			)?)
+		}
 	}
 
 	unsafe fn mapped_buffer_to_slab<'a>(buffer: &'a BufferSlot<Self>) -> &'a mut (impl Slab + 'a) {
