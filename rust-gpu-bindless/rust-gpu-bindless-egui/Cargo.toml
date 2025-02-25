@@ -34,8 +34,10 @@ egui = { workspace = true }
 egui-winit = { workspace = true }
 
 # other
+smallvec = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
+parking_lot = { workspace = true }
 
 [build-dependencies]
 space-engine-shader-builder = { workspace = true }

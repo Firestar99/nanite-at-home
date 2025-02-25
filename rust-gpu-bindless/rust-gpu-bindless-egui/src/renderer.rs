@@ -6,40 +6,105 @@ use ash::vk::{
 	PrimitiveTopology,
 };
 use egui::epaint::Primitive;
-use egui::{Context, FullOutput, ImageData, TextureId, TextureOptions, TexturesDelta};
+use egui::{Context, FullOutput, ImageData, RawInput, TextureId, TextureOptions, TexturesDelta};
 use glam::{IVec2, UVec2};
+use parking_lot::Mutex;
 use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, BindlessSamplerCreateInfo, BufferAllocationError, Extent, Filter, Format, Image2d,
 	MutBoxDescExt, MutDesc, MutDescBufferExt, MutDescExt, MutImage, RCDesc, RCDescExt, Sampler, SamplerAllocationError,
 };
 use rust_gpu_bindless::generic::pipeline::{
-	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, LoadOp,
-	MutBufferAccessExt, MutImageAccess, MutImageAccessExt, Recording, RecordingError, RenderPassFormat,
+	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, HasResourceContext,
+	LoadOp, MutBufferAccessExt, MutImageAccess, MutImageAccessExt, Recording, RecordingError, RenderPassFormat,
 	RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
+use rust_gpu_bindless::generic::platform::RecordingResourceContext;
 use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, UnsafeDesc};
 use rust_gpu_bindless_shaders::spirv_std::indirect_command::DrawIndexedIndirectCommand;
 use rust_gpu_bindless_shaders::utils::rect::IRect2;
 use rust_gpu_bindless_shaders::utils::viewport::Viewport;
 use rustc_hash::FxHashMap;
-use std::ops::{Deref, DerefMut};
+use smallvec::SmallVec;
+use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
-/// The global egui renderer, contains the graphics pipelines required for rendering. Create it once per required
-/// render target format.
-pub struct EguiRenderer<P: EguiBindlessPlatform> {
+/// The global `EguiRenderer` should be created exactly once and can create new [`EguiRenderPipeline`] and [`EguiRenderContext`].
+pub struct EguiRenderer<P: EguiBindlessPlatform>(Arc<EguiRendererInner<P>>);
+
+impl<P: EguiBindlessPlatform> Clone for EguiRenderer<P> {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+
+impl<P: EguiBindlessPlatform> Deref for EguiRenderer<P> {
+	type Target = EguiRendererInner<P>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+pub struct EguiRendererInner<P: EguiBindlessPlatform> {
 	bindless: Arc<Bindless<P>>,
-	output_format: Format,
+	/// deduplicate samplers, they will never be freed if unused
+	samplers: Mutex<FxHashMap<TextureOptions, RCDesc<P, Sampler>>>,
+}
+
+impl<P: EguiBindlessPlatform> EguiRenderer<P> {
+	pub fn new(bindless: Arc<Bindless<P>>) -> Self {
+		EguiRenderer(Arc::new(EguiRendererInner {
+			bindless,
+			samplers: Mutex::new(FxHashMap::default()),
+		}))
+	}
+
+	pub fn bindless(&self) -> &Bindless<P> {
+		&self.bindless
+	}
+
+	pub fn new_pipeline(&self, output_format: Option<Format>, depth_format: Option<Format>) -> EguiRenderPipeline<P> {
+		EguiRenderPipeline::new(self.clone(), output_format, depth_format)
+	}
+
+	pub fn new_context(self: &Arc<Self>, ctx: Context) -> EguiRenderContext<P> {
+		EguiRenderContext::new(self.clone(), ctx)
+	}
+}
+
+/// `EguiRenderPipeline` represents the graphics pipelines used to draw the ui onto some image. Create a new
+/// `EguiRenderPipeline` for each combination of color and depth rendertarget that should be rendered onto. May be
+/// used by multiple [`EguiRenderContext`], even simultaneously.
+pub struct EguiRenderPipeline<P: EguiBindlessPlatform>(Arc<EguiRenderPipelineInner<P>>);
+
+impl<P: EguiBindlessPlatform> Clone for EguiRenderPipeline<P> {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+
+impl<P: EguiBindlessPlatform> Deref for EguiRenderPipeline<P> {
+	type Target = EguiRenderPipelineInner<P>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+pub struct EguiRenderPipelineInner<P: EguiBindlessPlatform> {
+	renderer: EguiRenderer<P>,
+	output_format: Option<Format>,
 	depth_format: Option<Format>,
 	graphics_pipeline: BindlessGraphicsPipeline<P, Param<'static>>,
 }
 
-impl<P: EguiBindlessPlatform> EguiRenderer<P> {
-	pub fn new(bindless: Arc<Bindless<P>>, output_format: Format, depth_format: Option<Format>) -> Arc<Self> {
-		let format = RenderPassFormat::new(&[output_format], depth_format);
+impl<P: EguiBindlessPlatform> EguiRenderPipeline<P> {
+	pub fn new(renderer: EguiRenderer<P>, output_format: Option<Format>, depth_format: Option<Format>) -> Self {
+		let bindless = &renderer.bindless;
+		let format = RenderPassFormat::new(output_format.as_slice(), depth_format);
 		let graphics_pipeline = bindless
 			.create_graphics_pipeline(
 				&format,
@@ -66,28 +131,36 @@ impl<P: EguiBindlessPlatform> EguiRenderer<P> {
 				crate::shaders::egui_fragment::new(),
 			)
 			.unwrap();
-		Arc::new(Self {
-			bindless,
+		EguiRenderPipeline(Arc::new(EguiRenderPipelineInner {
+			renderer,
 			output_format,
 			depth_format,
 			graphics_pipeline,
-		})
+		}))
 	}
 
 	pub fn render_pass_format(&self) -> RenderPassFormat {
-		RenderPassFormat::new(&[self.output_format], self.depth_format)
+		RenderPassFormat::new(self.output_format.as_slice(), self.depth_format)
 	}
 }
 
-/// The RenderContext is the renderer for a particular egui [`Context`], create once per egui [`Context`]. Mixing
-/// different contexts or their [`FullOutput`]s may lead to panics and state / image corruption.
+/// The `EguiRenderContext` is the renderer for one particular egui [`Context`]. Use [`Self::run`] to run the
+/// [`Context`] or manually [`Self::update`] it using the [`FullOutput`] returned by egui. You must not mix the
+/// [`FullOutput`] of different contexts, as that may lead to panics and state / image corruption.
 pub struct EguiRenderContext<P: EguiBindlessPlatform> {
 	renderer: Arc<EguiRenderer<P>>,
 	ctx: Context,
 	textures: FxHashMap<TextureId, (MutDesc<P, MutImage<Image2d>>, RCDesc<P, Sampler>)>,
 	textures_free_queued: Vec<TextureId>,
-	/// deduplicate samplers, they will never be freed if unused
-	samplers: FxHashMap<TextureOptions, RCDesc<P, Sampler>>,
+	upload_wait: Mutex<SmallVec<[P::PendingExecution; 2]>>,
+}
+
+impl<P: EguiBindlessPlatform> Deref for EguiRenderContext<P> {
+	type Target = Context;
+
+	fn deref(&self) -> &Self::Target {
+		&self.ctx
+	}
 }
 
 pub struct RenderingOptions {
@@ -111,14 +184,24 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			ctx,
 			textures: FxHashMap::default(),
 			textures_free_queued: Vec::new(),
-			samplers: FxHashMap::default(),
+			upload_wait: Mutex::new(SmallVec::new()),
 		}
 	}
 
-	pub fn update(&mut self, output: FullOutput) -> Result<RenderOutput<P>, EguiRenderingError<P>> {
+	pub fn run(
+		&mut self,
+		new_input: RawInput,
+		run_ui: impl FnMut(&Context),
+	) -> Result<(RenderOutput<P>, FullOutput), EguiRenderingError<P>> {
+		let full_output = self.ctx.run(new_input, run_ui);
+		let render_output = self.update(&full_output)?;
+		Ok((render_output, full_output))
+	}
+
+	pub fn update(&mut self, output: &FullOutput) -> Result<RenderOutput<P>, EguiRenderingError<P>> {
 		self.free_textures(&output.textures_delta)?;
 		self.update_textures(&output.textures_delta)?;
-		Ok(self.tessellate_upload(output)?)
+		Ok(self.tessellate_upload(&output)?)
 	}
 
 	fn free_textures(&mut self, texture_delta: &TexturesDelta) -> Result<(), EguiRenderingError<P>> {
@@ -135,8 +218,13 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			return Ok(());
 		}
 
-		// FIXME copy MUST wait for last draw to finish executing
-		self.renderer.bindless.execute(|cmd| {
+		let bindless = &self.renderer.bindless;
+		bindless.execute(|cmd| {
+			// lock must always immediately succeed, as &mut prevents rendering() from accessing it
+			for exec in self.upload_wait.try_lock().unwrap().drain(..) {
+				cmd.resource_context().add_dependency(exec);
+			}
+
 			for (id, delta) in &texture_delta.set {
 				let id = *id;
 				match &delta.pos {
@@ -148,9 +236,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							ImageData::Font(font) => (Format::R32_SFLOAT, bytemuck::cast_slice(&font.pixels)),
 						};
 
-						let staging = self
-							.renderer
-							.bindless
+						let staging = bindless
 							.buffer()
 							.alloc_from_iter(
 								&BindlessBufferCreateInfo {
@@ -162,9 +248,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							)
 							.unwrap();
 
-						let image = self
-							.renderer
-							.bindless
+						let image = bindless
 							.image()
 							.alloc(&BindlessImageCreateInfo {
 								format,
@@ -184,12 +268,11 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 						cmd.copy_buffer_to_image(&staging, &image)?;
 						let image = image.into_desc();
 
-						let sampler = self
-							.samplers
-							.entry(delta.options)
-							.or_insert_with(|| {
-								self.renderer
-									.bindless
+						let sampler = {
+							// I would not hold a lock across the loop, we will rarely allocate a new texture
+							let mut samplers = self.renderer.samplers.lock();
+							let sampler = samplers.entry(delta.options).or_insert_with(|| {
+								bindless
 									.sampler()
 									.alloc(&BindlessSamplerCreateInfo {
 										min_filter: delta.options.minification.to_bindless(),
@@ -204,8 +287,9 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 										..BindlessSamplerCreateInfo::default()
 									})
 									.unwrap()
-							})
-							.clone();
+							});
+							sampler.clone()
+						};
 
 						self.textures.insert(id, (image, sampler));
 					}
@@ -219,8 +303,12 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		Ok(())
 	}
 
-	fn tessellate_upload(&mut self, output: FullOutput) -> Result<RenderOutput<P>, EguiRenderingError<P>> {
-		let primitives = self.ctx.tessellate(output.shapes, output.pixels_per_point);
+	fn tessellate_upload(&mut self, output: &FullOutput) -> Result<RenderOutput<P>, EguiRenderingError<P>> {
+		let bindless = &self.renderer.bindless;
+
+		// silly clone, but egui's API needs a Vec
+		let shapes = output.shapes.clone();
+		let primitives = self.ctx.tessellate(shapes, output.pixels_per_point);
 		let (vertex_cnt, index_cnt) = primitives
 			.iter()
 			.map(|p| match &p.primitive {
@@ -229,7 +317,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			})
 			.fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
 
-		let vertices = self.renderer.bindless.buffer().alloc_slice(
+		let vertices = bindless.buffer().alloc_slice(
 			&BindlessBufferCreateInfo {
 				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
 				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
@@ -237,8 +325,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			},
 			vertex_cnt,
 		)?;
-
-		let indices = self.renderer.bindless.buffer().alloc_slice(
+		let indices = bindless.buffer().alloc_slice(
 			&BindlessBufferCreateInfo {
 				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::INDEX_BUFFER,
 				allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
@@ -321,7 +408,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 }
 
 pub struct RenderOutput<'a, P: EguiBindlessPlatform> {
-	render_ctx: &'a mut EguiRenderContext<P>,
+	render_ctx: &'a EguiRenderContext<P>,
 	vertices: RCDesc<P, Buffer<[ImageVertex]>>,
 	indices: RCDesc<P, Buffer<[u32]>>,
 	draw_cmds: Vec<DrawCmd>,
@@ -335,18 +422,28 @@ struct DrawCmd {
 
 impl<'b, P: EguiBindlessPlatform> RenderOutput<'b, P> {
 	pub fn draw<'a>(
-		&mut self,
+		&self,
+		pipeline: &EguiRenderPipeline<P>,
 		cmd: &mut Recording<'a, P>,
 		image: &mut MutImageAccess<'a, P, Image2d, ColorAttachment>,
 		depth: Option<&mut MutImageAccess<'a, P, Image2d, DepthStencilAttachment>>,
 		options: RenderingOptions,
 	) -> Result<(), EguiRenderingError<P>> {
-		let depth = match (self.render_ctx.renderer.depth_format, depth) {
+		if !Arc::ptr_eq(&self.render_ctx.renderer.0, &pipeline.renderer.0) {
+			return Err(EguiRenderingError::DifferentEguiRenderer);
+		}
+
+		let depth = match (pipeline.depth_format, depth) {
 			(Some(format), Some(depth)) => Some((format, depth)),
 			(None, None) => None,
 			(None, Some(_)) => return Err(EguiRenderingError::UnexpectedDepthRT),
 			(Some(format), None) => return Err(EguiRenderingError::ExpectedDepthRT(format)),
 		};
+
+		{
+			let mut upload_wait = self.render_ctx.upload_wait.lock();
+			upload_wait.push(cmd.resource_context().to_pending_execution());
+		}
 
 		let param = Param {
 			vertices: self.vertices.to_transient(cmd),
@@ -354,7 +451,7 @@ impl<'b, P: EguiBindlessPlatform> RenderOutput<'b, P> {
 		};
 
 		cmd.begin_rendering(
-			self.render_ctx.renderer.render_pass_format(),
+			pipeline.render_pass_format(),
 			&[RenderingAttachment {
 				image,
 				load_op: options.image_rt_load_op,
@@ -378,7 +475,7 @@ impl<'b, P: EguiBindlessPlatform> RenderOutput<'b, P> {
 					});
 					rp.set_scissor(rect);
 					rp.draw_indexed(
-						&self.render_ctx.renderer.graphics_pipeline,
+						&pipeline.graphics_pipeline,
 						&self.indices,
 						DrawIndexedIndirectCommand {
 							index_count: draw.indices_count,
@@ -406,8 +503,11 @@ pub enum EguiRenderingError<P: EguiBindlessPlatform> {
 	ExpectedDepthRT(Format),
 	#[error("Expected no render target, but got a image")]
 	UnexpectedDepthRT,
-	#[error("TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?")]
+	#[error("TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?"
+	)]
 	MissingTexture(TextureId),
+	#[error("Trying to render with a Pipeline and Context of differing `EguiRenderer`")]
+	DifferentEguiRenderer,
 	#[error("BufferAllocationError: {0}")]
 	BufferAllocationError(#[from] BufferAllocationError<P>),
 	#[error("ImageAllocationError: {0}")]
@@ -417,19 +517,5 @@ pub enum EguiRenderingError<P: EguiBindlessPlatform> {
 impl<P: EguiBindlessPlatform> core::fmt::Debug for EguiRenderingError<P> {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		core::fmt::Display::fmt(self, f)
-	}
-}
-
-impl<P: EguiBindlessPlatform> Deref for EguiRenderContext<P> {
-	type Target = Context;
-
-	fn deref(&self) -> &Self::Target {
-		&self.ctx
-	}
-}
-
-impl<P: EguiBindlessPlatform> DerefMut for EguiRenderContext<P> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.ctx
 	}
 }
