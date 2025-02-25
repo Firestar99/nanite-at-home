@@ -338,26 +338,27 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 
 	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool {
 		let counters = &self.slot_counters[id.index()];
-		let ref_old = counters.ref_count.load(Acquire);
-		if ref_old != 0 {
-			match counters
-				.ref_count
-				.compare_exchange(ref_old, ref_old + 1, Acquire, Relaxed)
-			{
+		let mut old = counters.ref_count.load(Acquire);
+		loop {
+			if old == 0 {
+				// slot has been deallocated
+				break false;
+			}
+
+			match counters.ref_count.compare_exchange_weak(old, old + 1, Acquire, Relaxed) {
 				Ok(_) => {
 					// Safety: we inc ref count so this slot must be alive and we can read this
 					let version = unsafe { *counters.version.get() };
 					if id.version().to_u32() == version {
-						true
+						break true;
 					} else {
+						// slot has been reused
 						self.ref_dec(id, write_queue_ab);
-						false
+						break false;
 					}
 				}
-				Err(_) => false,
+				Err(o) => old = o,
 			}
-		} else {
-			false
 		}
 	}
 }
