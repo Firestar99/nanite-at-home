@@ -21,7 +21,7 @@ use rust_gpu_bindless::generic::pipeline::{
 	RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
 use rust_gpu_bindless::generic::platform::RecordingResourceContext;
-use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex};
+use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex, VertexFlags};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, UnsafeDesc};
 use rust_gpu_bindless_shaders::spirv_std::indirect_command::DrawIndexedIndirectCommand;
 use rust_gpu_bindless_shaders::utils::rect::IRect2;
@@ -155,7 +155,7 @@ impl<P: EguiBindlessPlatform> EguiRenderPipeline<P> {
 pub struct EguiRenderContext<P: EguiBindlessPlatform> {
 	renderer: EguiRenderer<P>,
 	ctx: Context,
-	textures: FxHashMap<TextureId, (MutDesc<P, MutImage<Image2d>>, RCDesc<P, Sampler>)>,
+	textures: FxHashMap<TextureId, EguiTexture<P>>,
 	textures_free_queued: Vec<TextureId>,
 	upload_wait: Mutex<SmallVec<[P::PendingExecution; 2]>>,
 }
@@ -168,18 +168,31 @@ impl<P: EguiBindlessPlatform> Deref for EguiRenderContext<P> {
 	}
 }
 
-pub struct EguiRenderingOptions {
-	pub image_rt_load_op: LoadOp,
-	pub depth_rt_load_op: LoadOp,
+pub enum EguiTextureType {
+	Color,
+	Font,
 }
 
-impl Default for EguiRenderingOptions {
-	fn default() -> Self {
-		Self {
-			image_rt_load_op: LoadOp::Load,
-			depth_rt_load_op: LoadOp::Load,
+impl EguiTextureType {
+	pub fn to_ash_format(&self) -> Format {
+		match self {
+			EguiTextureType::Color => Format::R8G8B8A8_UNORM,
+			EguiTextureType::Font => Format::R32_SFLOAT,
 		}
 	}
+
+	pub fn to_vertex_flags(&self) -> VertexFlags {
+		match self {
+			EguiTextureType::Color => VertexFlags::empty(),
+			EguiTextureType::Font => VertexFlags::FONT_TEXTURE,
+		}
+	}
+}
+
+pub struct EguiTexture<P: EguiBindlessPlatform> {
+	image: MutDesc<P, MutImage<Image2d>>,
+	sampler: RCDesc<P, Sampler>,
+	texture_type: EguiTextureType,
 }
 
 impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
@@ -235,10 +248,10 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 				match &delta.pos {
 					None => {
 						let extent = Extent::from([delta.image.width() as u32, delta.image.height() as u32]);
-						let (format, bytes): (Format, &[u8]) = match &delta.image {
+						let (texture_type, bytes): (EguiTextureType, &[u8]) = match &delta.image {
 							// format must be UNORM even though color data is SRGB, so that sample ops return colors in srgb colorspace
-							ImageData::Color(color) => (Format::R8G8B8A8_UNORM, bytemuck::cast_slice(&color.pixels)),
-							ImageData::Font(font) => (Format::R32_SFLOAT, bytemuck::cast_slice(&font.pixels)),
+							ImageData::Color(color) => (EguiTextureType::Color, bytemuck::cast_slice(&color.pixels)),
+							ImageData::Font(font) => (EguiTextureType::Font, bytemuck::cast_slice(&font.pixels)),
 						};
 
 						let staging = bindless
@@ -256,7 +269,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 						let image = bindless
 							.image()
 							.alloc(&BindlessImageCreateInfo {
-								format,
+								format: texture_type.to_ash_format(),
 								extent,
 								mip_levels: 1,
 								array_layers: 1,
@@ -296,7 +309,14 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							sampler.clone()
 						};
 
-						self.textures.insert(id, (image, sampler));
+						self.textures.insert(
+							id,
+							EguiTexture {
+								image,
+								sampler,
+								texture_type,
+							},
+						);
 					}
 					Some(_pos) => {
 						unimplemented!()
@@ -348,12 +368,13 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			for p in primitives {
 				match p.primitive {
 					Primitive::Mesh(mesh) => {
-						let (image, sampler) = self
+						let texture = self
 							.textures
 							.get(&mesh.texture_id)
 							.ok_or(EguiRenderingError::MissingTexture(mesh.texture_id))?;
-						let image = unsafe { UnsafeDesc::new(image.id()) };
-						let sampler = sampler.to_strong();
+						let image = unsafe { UnsafeDesc::new(texture.image.id()) };
+						let sampler = texture.sampler.to_strong();
+						let flags = texture.texture_type.to_vertex_flags();
 
 						let vertices_start = vertices_idx;
 						let indices_start = indices_idx;
@@ -364,6 +385,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 									vertex: Vertex::from(vertex),
 									image,
 									sampler,
+									flags,
 								},
 							);
 							vertices_idx += 1;
@@ -423,6 +445,20 @@ struct DrawCmd {
 	clip_rect: IRect2,
 	indices_offset: u32,
 	indices_count: u32,
+}
+
+pub struct EguiRenderingOptions {
+	pub image_rt_load_op: LoadOp,
+	pub depth_rt_load_op: LoadOp,
+}
+
+impl Default for EguiRenderingOptions {
+	fn default() -> Self {
+		Self {
+			image_rt_load_op: LoadOp::Load,
+			depth_rt_load_op: LoadOp::Load,
+		}
+	}
 }
 
 impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {

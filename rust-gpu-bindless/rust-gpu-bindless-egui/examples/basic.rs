@@ -60,7 +60,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 				&bindless2,
 				surface,
 				BindlessImageUsage::COLOR_ATTACHMENT,
-				SwapchainImageFormatPreference::SRGB,
+				SwapchainImageFormatPreference::UNORM,
 			)
 		})
 	}

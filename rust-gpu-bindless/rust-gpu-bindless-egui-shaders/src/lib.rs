@@ -3,7 +3,7 @@
 pub use crate::vertex::*;
 use bitflags::bitflags;
 use core::fmt;
-use glam::{Vec2, Vec4};
+use glam::{Vec2, Vec4, Vec4Swizzles};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{
 	Buffer, Descriptors, Image, Image2d, Sampler, StrongDesc, TransientDesc, UnsafeDesc,
@@ -20,6 +20,22 @@ pub struct ImageVertex {
 	pub vertex: Vertex,
 	pub image: UnsafeDesc<Image<Image2d>>,
 	pub sampler: StrongDesc<Sampler>,
+	pub flags: VertexFlags,
+}
+
+#[derive(Clone, Copy, BufferStruct)]
+pub struct VertexFlags(u32);
+
+bitflags! {
+	impl VertexFlags: u32 {
+		const FONT_TEXTURE = 1;
+	}
+}
+
+impl fmt::Debug for VertexFlags {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		bitflags::parser::to_writer(self, f)
+	}
 }
 
 #[derive(Copy, Clone, Debug, BufferStruct)]
@@ -54,6 +70,7 @@ pub fn egui_vertex(
 	vtx_uv: &mut Vec2,
 	image: &mut UnsafeDesc<Image<Image2d>>,
 	sampler: &mut StrongDesc<Sampler>,
+	flags: &mut VertexFlags,
 ) {
 	let vertex = param.vertices.access(&descriptors).load(vertex_id as usize);
 	let screen_pos = vertex.vertex.pos;
@@ -67,6 +84,7 @@ pub fn egui_vertex(
 	*vtx_uv = vertex.vertex.uv;
 	*image = vertex.image;
 	*sampler = vertex.sampler;
+	*flags = vertex.flags;
 }
 
 #[bindless(fragment())]
@@ -77,15 +95,19 @@ pub fn egui_fragment(
 	vtx_uv: Vec2,
 	#[spirv(flat)] image: UnsafeDesc<Image<Image2d>>,
 	#[spirv(flat)] sampler: StrongDesc<Sampler>,
+	#[spirv(flat)] flags: VertexFlags,
 	frag_color: &mut Vec4,
 ) {
 	let image = unsafe { image.to_transient_unchecked(&descriptors) };
 
 	// our image is unorm, but the values stored inside are in srgb colorspace
 	// this sample op should not do any srgb conversions
-	let image_srgb: Vec4 = image.access(&descriptors).sample(sampler.access(&descriptors), vtx_uv);
-	let out_color_srgb = vtx_color_srgb * image_srgb;
+	let mut image_srgb: Vec4 = image.access(&descriptors).sample(sampler.access(&descriptors), vtx_uv);
+	if flags.contains(VertexFlags::FONT_TEXTURE) {
+		image_srgb = image_srgb.xxxx();
+	}
 
+	let out_color_srgb = vtx_color_srgb * image_srgb;
 	*frag_color = if param.flags.contains(ParamFlags::SRGB_FRAMEBUFFER) {
 		out_color_srgb
 	} else {
