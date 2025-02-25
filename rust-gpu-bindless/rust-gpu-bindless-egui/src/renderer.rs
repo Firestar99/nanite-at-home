@@ -66,11 +66,15 @@ impl<P: EguiBindlessPlatform> EguiRenderer<P> {
 		&self.bindless
 	}
 
-	pub fn new_pipeline(&self, output_format: Option<Format>, depth_format: Option<Format>) -> EguiRenderPipeline<P> {
+	pub fn create_pipeline(
+		&self,
+		output_format: Option<Format>,
+		depth_format: Option<Format>,
+	) -> EguiRenderPipeline<P> {
 		EguiRenderPipeline::new(self.clone(), output_format, depth_format)
 	}
 
-	pub fn new_context(self: &Arc<Self>, ctx: Context) -> EguiRenderContext<P> {
+	pub fn create_context(&self, ctx: Context) -> EguiRenderContext<P> {
 		EguiRenderContext::new(self.clone(), ctx)
 	}
 }
@@ -148,7 +152,7 @@ impl<P: EguiBindlessPlatform> EguiRenderPipeline<P> {
 /// [`Context`] or manually [`Self::update`] it using the [`FullOutput`] returned by egui. You must not mix the
 /// [`FullOutput`] of different contexts, as that may lead to panics and state / image corruption.
 pub struct EguiRenderContext<P: EguiBindlessPlatform> {
-	renderer: Arc<EguiRenderer<P>>,
+	renderer: EguiRenderer<P>,
 	ctx: Context,
 	textures: FxHashMap<TextureId, (MutDesc<P, MutImage<Image2d>>, RCDesc<P, Sampler>)>,
 	textures_free_queued: Vec<TextureId>,
@@ -163,12 +167,12 @@ impl<P: EguiBindlessPlatform> Deref for EguiRenderContext<P> {
 	}
 }
 
-pub struct RenderingOptions {
-	image_rt_load_op: LoadOp,
-	depth_rt_load_op: LoadOp,
+pub struct EguiRenderingOptions {
+	pub image_rt_load_op: LoadOp,
+	pub depth_rt_load_op: LoadOp,
 }
 
-impl Default for RenderingOptions {
+impl Default for EguiRenderingOptions {
 	fn default() -> Self {
 		Self {
 			image_rt_load_op: LoadOp::Load,
@@ -178,7 +182,7 @@ impl Default for RenderingOptions {
 }
 
 impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
-	pub fn new(renderer: Arc<EguiRenderer<P>>, ctx: Context) -> Self {
+	pub fn new(renderer: EguiRenderer<P>, ctx: Context) -> Self {
 		Self {
 			renderer,
 			ctx,
@@ -192,13 +196,13 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		&mut self,
 		new_input: RawInput,
 		run_ui: impl FnMut(&Context),
-	) -> Result<(RenderOutput<P>, FullOutput), EguiRenderingError<P>> {
+	) -> Result<(EguiRenderOutput<P>, FullOutput), EguiRenderingError<P>> {
 		let full_output = self.ctx.run(new_input, run_ui);
 		let render_output = self.update(&full_output)?;
 		Ok((render_output, full_output))
 	}
 
-	pub fn update(&mut self, output: &FullOutput) -> Result<RenderOutput<P>, EguiRenderingError<P>> {
+	pub fn update(&mut self, output: &FullOutput) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
 		self.free_textures(&output.textures_delta)?;
 		self.update_textures(&output.textures_delta)?;
 		Ok(self.tessellate_upload(&output)?)
@@ -253,8 +257,8 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							.alloc(&BindlessImageCreateInfo {
 								format,
 								extent,
-								mip_levels: 0,
-								array_layers: 0,
+								mip_levels: 1,
+								array_layers: 1,
 								samples: Default::default(),
 								usage: BindlessImageUsage::TRANSFER_DST | BindlessImageUsage::SAMPLED,
 								allocation_scheme: Default::default(),
@@ -303,7 +307,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		Ok(())
 	}
 
-	fn tessellate_upload(&mut self, output: &FullOutput) -> Result<RenderOutput<P>, EguiRenderingError<P>> {
+	fn tessellate_upload(&mut self, output: &FullOutput) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
 		let bindless = &self.renderer.bindless;
 
 		// silly clone, but egui's API needs a Vec
@@ -398,7 +402,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		let vertices = unsafe { vertices.into_shared_unchecked() };
 		let indices = unsafe { indices.into_shared_unchecked() };
 
-		Ok(RenderOutput {
+		Ok(EguiRenderOutput {
 			render_ctx: self,
 			vertices,
 			indices,
@@ -407,7 +411,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 	}
 }
 
-pub struct RenderOutput<'a, P: EguiBindlessPlatform> {
+pub struct EguiRenderOutput<'a, P: EguiBindlessPlatform> {
 	render_ctx: &'a EguiRenderContext<P>,
 	vertices: RCDesc<P, Buffer<[ImageVertex]>>,
 	indices: RCDesc<P, Buffer<[u32]>>,
@@ -420,14 +424,14 @@ struct DrawCmd {
 	indices_count: u32,
 }
 
-impl<'b, P: EguiBindlessPlatform> RenderOutput<'b, P> {
+impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 	pub fn draw<'a>(
 		&self,
 		pipeline: &EguiRenderPipeline<P>,
 		cmd: &mut Recording<'a, P>,
 		image: &mut MutImageAccess<'a, P, Image2d, ColorAttachment>,
 		depth: Option<&mut MutImageAccess<'a, P, Image2d, DepthStencilAttachment>>,
-		options: RenderingOptions,
+		options: EguiRenderingOptions,
 	) -> Result<(), EguiRenderingError<P>> {
 		if !Arc::ptr_eq(&self.render_ctx.renderer.0, &pipeline.renderer.0) {
 			return Err(EguiRenderingError::DifferentEguiRenderer);

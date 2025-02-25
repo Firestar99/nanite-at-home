@@ -19,8 +19,9 @@ impl<P: EguiBindlessPlatform> EguiBindless<P> {
 			ctx.clone(),
 			ViewportId::ROOT,
 			event_loop,
+			// Some(window.scale_factor() as f32),
 			None,
-			None,
+			event_loop.system_theme(),
 			Some(max_texture_side as usize),
 		);
 		Self {

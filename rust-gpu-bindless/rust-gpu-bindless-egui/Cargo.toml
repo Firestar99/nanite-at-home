@@ -41,3 +41,7 @@ parking_lot = { workspace = true }
 
 [build-dependencies]
 space-engine-shader-builder = { workspace = true }
+
+[dev-dependencies]
+rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
+anyhow = { workspace = true }

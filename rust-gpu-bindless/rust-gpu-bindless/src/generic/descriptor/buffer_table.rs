@@ -526,13 +526,9 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 		unsafe {
 			let mut meta = StrongMetadataCpu::new(&self.table_sync, Metadata {});
 			let slab = P::mapped_buffer_to_slab(&self.slot);
-			let record = presser::copy_from_slice_to_offset(
-				&[T::write_cpu(t, &mut meta)],
-				slab,
-				index * size_of::<T::Transfer>(),
-			)
-			.unwrap();
-			assert_eq!(record.copy_start_offset, 0, "presser must not add padding");
+			let start_offset = index * size_of::<T::Transfer>();
+			let record = presser::copy_from_slice_to_offset(&[T::write_cpu(t, &mut meta)], slab, start_offset).unwrap();
+			assert_eq!(record.copy_start_offset, start_offset, "presser must not add padding");
 			self.slot.strong_refs.lock().merge(meta.into_backing_refs());
 		}
 	}

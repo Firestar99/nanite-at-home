@@ -2339,6 +2339,7 @@ dependencies = [
 name = "rust-gpu-bindless-egui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ash",
  "bytemuck",
  "bytemuck_derive",
@@ -2352,6 +2353,7 @@ dependencies = [
  "rust-gpu-bindless",
  "rust-gpu-bindless-egui-shaders",
  "rust-gpu-bindless-shaders",
+ "rust-gpu-bindless-winit",
  "rustc-hash 2.1.1",
  "smallvec",
  "space-engine-shader-builder",
