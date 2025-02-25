@@ -17,8 +17,8 @@ use rust_gpu_bindless::generic::descriptor::{
 };
 use rust_gpu_bindless::generic::pipeline::{
 	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, HasResourceContext,
-	LoadOp, MutBufferAccessExt, MutImageAccess, MutImageAccessExt, Recording, RecordingError, RenderPassFormat,
-	RenderingAttachment, StoreOp, TransferRead, TransferWrite,
+	ImageAccessType, LoadOp, MutBufferAccessExt, MutImageAccess, MutImageAccessExt, Recording, RecordingError,
+	RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
 use rust_gpu_bindless::generic::platform::RecordingResourceContext;
 use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex};
@@ -100,15 +100,16 @@ impl<P: EguiBindlessPlatform> Deref for EguiRenderPipeline<P> {
 
 pub struct EguiRenderPipelineInner<P: EguiBindlessPlatform> {
 	renderer: EguiRenderer<P>,
-	output_format: Option<Format>,
+	color_format: Option<Format>,
 	depth_format: Option<Format>,
 	graphics_pipeline: BindlessGraphicsPipeline<P, Param<'static>>,
 }
 
 impl<P: EguiBindlessPlatform> EguiRenderPipeline<P> {
-	pub fn new(renderer: EguiRenderer<P>, output_format: Option<Format>, depth_format: Option<Format>) -> Self {
+	pub fn new(renderer: EguiRenderer<P>, color_format: Option<Format>, depth_format: Option<Format>) -> Self {
+		assert!(color_format.is_some() || depth_format.is_some());
 		let bindless = &renderer.bindless;
-		let format = RenderPassFormat::new(output_format.as_slice(), depth_format);
+		let format = RenderPassFormat::new(color_format.as_slice(), depth_format);
 		let graphics_pipeline = bindless
 			.create_graphics_pipeline(
 				&format,
@@ -137,14 +138,14 @@ impl<P: EguiBindlessPlatform> EguiRenderPipeline<P> {
 			.unwrap();
 		EguiRenderPipeline(Arc::new(EguiRenderPipelineInner {
 			renderer,
-			output_format,
+			color_format,
 			depth_format,
 			graphics_pipeline,
 		}))
 	}
 
 	pub fn render_pass_format(&self) -> RenderPassFormat {
-		RenderPassFormat::new(self.output_format.as_slice(), self.depth_format)
+		RenderPassFormat::new(self.color_format.as_slice(), self.depth_format)
 	}
 }
 
@@ -429,7 +430,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 		&self,
 		pipeline: &EguiRenderPipeline<P>,
 		cmd: &mut Recording<'a, P>,
-		image: &mut MutImageAccess<'a, P, Image2d, ColorAttachment>,
+		color: Option<&mut MutImageAccess<'a, P, Image2d, ColorAttachment>>,
 		depth: Option<&mut MutImageAccess<'a, P, Image2d, DepthStencilAttachment>>,
 		options: EguiRenderingOptions,
 	) -> Result<(), EguiRenderingError<P>> {
@@ -437,13 +438,23 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			return Err(EguiRenderingError::DifferentEguiRenderer);
 		}
 
-		let depth = match (pipeline.depth_format, depth) {
-			(Some(format), Some(depth)) => Some((format, depth)),
-			(None, None) => None,
-			(None, Some(_)) => return Err(EguiRenderingError::UnexpectedDepthRT),
-			(Some(format), None) => return Err(EguiRenderingError::ExpectedDepthRT(format)),
-		};
-		let extent = image.extent();
+		let color = check_format_mismatch(pipeline.color_format, color, RenderTarget::Color)?;
+		let depth = check_format_mismatch(pipeline.depth_format, depth, RenderTarget::Depth)?;
+		let extent = match (color.as_ref().map(|c| &c.1), depth.as_ref().map(|c| &c.1)) {
+			(Some(c), Some(d)) => {
+				if c.extent() == d.extent() {
+					Ok(c.extent())
+				} else {
+					Err(EguiRenderingError::MismatchExtent {
+						color: c.extent(),
+						depth: d.extent(),
+					})
+				}
+			}
+			(None, Some(d)) => Ok(d.extent()),
+			(Some(c), None) => Ok(c.extent()),
+			(None, None) => unreachable!(),
+		}?;
 
 		{
 			let mut upload_wait = self.render_ctx.upload_wait.lock();
@@ -458,11 +469,13 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 
 		cmd.begin_rendering(
 			pipeline.render_pass_format(),
-			&[RenderingAttachment {
-				image,
-				load_op: options.image_rt_load_op,
-				store_op: StoreOp::Store,
-			}],
+			color
+				.map(|(_, color)| RenderingAttachment {
+					image: color,
+					load_op: options.image_rt_load_op,
+					store_op: StoreOp::Store,
+				})
+				.as_slice(),
 			depth.map(|(_, depth)| RenderingAttachment {
 				image: depth,
 				load_op: options.depth_rt_load_op,
@@ -492,19 +505,56 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 	}
 }
 
+fn check_format_mismatch<'a, 'b, P: EguiBindlessPlatform, A: ImageAccessType>(
+	format: Option<Format>,
+	image: Option<&'a mut MutImageAccess<'b, P, Image2d, A>>,
+	rt: RenderTarget,
+) -> Result<Option<(Format, &'a mut MutImageAccess<'b, P, Image2d, A>)>, EguiRenderingError<P>> {
+	match (format, image) {
+		(Some(format), Some(image)) => {
+			if format == image.format() {
+				Ok(Some((format, image)))
+			} else {
+				Err(EguiRenderingError::MismatchRTFormat {
+					rt,
+					expected: format,
+					actual: image.format(),
+				})
+			}
+		}
+		(None, None) => Ok(None),
+		(None, Some(_)) => Err(EguiRenderingError::UnexpectedRT(rt)),
+		(Some(format), None) => Err(EguiRenderingError::ExpectedRT(rt, format)),
+	}
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum RenderTarget {
+	Color,
+	Depth,
+}
+
 #[derive(Error)]
 pub enum EguiRenderingError<P: EguiBindlessPlatform> {
-	#[error("Recording Error: {0}")]
-	RecordingError(#[from] RecordingError<P>),
-	#[error("Expected depth render target in format {0:?}, but got None")]
-	ExpectedDepthRT(Format),
-	#[error("Expected no render target, but got a image")]
-	UnexpectedDepthRT,
+	#[error("Trying to render with a Pipeline and Context of differing `EguiRenderer`")]
+	DifferentEguiRenderer,
+	#[error("Expected {0:?} RT in format {1:?}, but got None")]
+	ExpectedRT(RenderTarget, Format),
+	#[error("Expected no {0:?} RT, but got some image")]
+	UnexpectedRT(RenderTarget),
+	#[error("Expected {rt:?} RT of format {expected:?}, but got an image of format {actual:?}")]
+	MismatchRTFormat {
+		rt: RenderTarget,
+		expected: Format,
+		actual: Format,
+	},
+	#[error("Color RT with extent {color:?} must match depth RT with extent {depth:?}")]
+	MismatchExtent { color: Extent, depth: Extent },
 	#[error("TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?"
 	)]
 	MissingTexture(TextureId),
-	#[error("Trying to render with a Pipeline and Context of differing `EguiRenderer`")]
-	DifferentEguiRenderer,
+	#[error("Recording Error: {0}")]
+	RecordingError(#[from] RecordingError<P>),
 	#[error("BufferAllocationError: {0}")]
 	BufferAllocationError(#[from] BufferAllocationError<P>),
 	#[error("ImageAllocationError: {0}")]

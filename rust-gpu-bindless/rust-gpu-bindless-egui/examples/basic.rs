@@ -106,7 +106,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 				.draw(
 					&egui_pipeline,
 					cmd,
-					&mut rt,
+					Some(&mut rt),
 					None,
 					EguiRenderingOptions {
 						image_rt_load_op: LoadOp::Clear(ClearValue::ColorF([0.; 4])),
