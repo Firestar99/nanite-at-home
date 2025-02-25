@@ -69,6 +69,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 	let egui_renderer = EguiRenderer::new(bindless.clone());
 	let egui_pipeline = egui_renderer.create_pipeline(Some(swapchain.params().format), None);
 	let mut egui_ctx = egui_renderer.create_context(egui::Context::default());
+	let mut basic_ui = BasicUi::default();
 
 	'outer: loop {
 		for event in events.try_iter() {
@@ -96,7 +97,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 				}),
 				..RawInput::default()
 			},
-			ui,
+			|ctx| basic_ui.ui(ctx),
 		)?;
 
 		let rt = bindless.execute(|cmd| {
@@ -121,11 +122,34 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 	Ok(())
 }
 
-fn ui(ctx: &egui::Context) {
-	egui::SidePanel::left("left panel").show(ctx, |ui| {
-		ui.label("Hello world!");
-		if ui.button("Button").clicked() {
-			println!("Button clicked!");
+pub struct BasicUi {
+	pub name: String,
+	pub age: u32,
+}
+
+impl Default for BasicUi {
+	fn default() -> Self {
+		Self {
+			name: "Authur".to_string(),
+			age: 42,
 		}
-	});
+	}
+}
+
+impl BasicUi {
+	pub fn ui(&mut self, ctx: &egui::Context) {
+		egui::CentralPanel::default().show(ctx, |ui| {
+			ui.add_space(100.0);
+			ui.heading("My egui Application");
+			ui.horizontal(|ui| {
+				let name_label = ui.label("Your name: ");
+				ui.text_edit_singleline(&mut self.name).labelled_by(name_label.id);
+			});
+			ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
+			if ui.button("Increment").clicked() {
+				self.age += 1;
+			}
+			ui.label(format!("Hello '{}', age {}", self.name, self.age));
+		});
+	}
 }
