@@ -211,18 +211,24 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		new_input: RawInput,
 		run_ui: impl FnMut(&Context),
 	) -> Result<(EguiRenderOutput<P>, FullOutput), EguiRenderingError<P>> {
-		let full_output = self.ctx.run(new_input, run_ui);
+		profiling::function_scope!();
+		let full_output = {
+			profiling::scope!("egui::Context::run");
+			self.ctx.run(new_input, run_ui)
+		};
 		let render_output = self.update(&full_output)?;
 		Ok((render_output, full_output))
 	}
 
 	pub fn update(&mut self, output: &FullOutput) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
+		profiling::function_scope!();
 		self.free_textures(&output.textures_delta)?;
 		self.update_textures(&output.textures_delta)?;
 		Ok(self.tessellate_upload(&output)?)
 	}
 
 	fn free_textures(&mut self, texture_delta: &TexturesDelta) -> Result<(), EguiRenderingError<P>> {
+		profiling::function_scope!();
 		for texture_id in &self.textures_free_queued {
 			self.textures.remove(&texture_id);
 		}
@@ -232,6 +238,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 	}
 
 	fn update_textures(&mut self, texture_delta: &TexturesDelta) -> Result<(), EguiRenderingError<P>> {
+		profiling::function_scope!();
 		if texture_delta.set.is_empty() {
 			return Ok(());
 		}
@@ -247,6 +254,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 				let id = *id;
 				match &delta.pos {
 					None => {
+						profiling::scope!("alloc Texture", &format!("{:?}", id));
 						let extent = Extent::from([delta.image.width() as u32, delta.image.height() as u32]);
 						let (texture_type, bytes): (EguiTextureType, &[u8]) = match &delta.image {
 							// format must be UNORM even though color data is SRGB, so that sample ops return colors in srgb colorspace
@@ -319,7 +327,8 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 						);
 					}
 					Some(_pos) => {
-						unimplemented!()
+						profiling::scope!("update Texture", &format!("{:?}", id));
+						// unimplemented!()
 					}
 				}
 			}
@@ -329,11 +338,16 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 	}
 
 	fn tessellate_upload(&mut self, output: &FullOutput) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
+		profiling::function_scope!();
 		let bindless = &self.renderer.bindless;
 
 		// silly clone, but egui's API needs a Vec
 		let shapes = output.shapes.clone();
-		let primitives = self.ctx.tessellate(shapes, output.pixels_per_point);
+		let primitives = {
+			profiling::scope!("egui::Context::tessellate");
+			self.ctx.tessellate(shapes, output.pixels_per_point)
+		};
+
 		let (vertex_cnt, index_cnt) = primitives
 			.iter()
 			.map(|p| match &p.primitive {
@@ -341,7 +355,6 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 				Primitive::Callback(_) => (0, 0),
 			})
 			.fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
-
 		let vertices = bindless.buffer().alloc_slice(
 			&BindlessBufferCreateInfo {
 				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
@@ -361,6 +374,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 
 		let mut draw_cmds: Vec<DrawCmd> = Vec::new();
 		{
+			profiling::scope!("write DrawCmd and primitives");
 			let mut vertices = vertices.mapped_immediate().unwrap();
 			let mut indices = indices.mapped_immediate().unwrap();
 			let mut vertices_idx = 0;
@@ -470,6 +484,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 		depth: Option<&mut MutImageAccess<'a, P, Image2d, DepthStencilAttachment>>,
 		options: EguiRenderingOptions,
 	) -> Result<(), EguiRenderingError<P>> {
+		profiling::function_scope!();
 		if !Arc::ptr_eq(&self.render_ctx.renderer.0, &pipeline.renderer.0) {
 			return Err(EguiRenderingError::DifferentEguiRenderer);
 		}

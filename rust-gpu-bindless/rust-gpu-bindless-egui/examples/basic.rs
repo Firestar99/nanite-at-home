@@ -72,6 +72,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 	let mut basic_ui = BasicUi::default();
 
 	'outer: loop {
+		profiling::scope!("frame");
 		for event in events.try_iter() {
 			swapchain.handle_input(&event);
 			if let Event::WindowEvent {
@@ -117,6 +118,8 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 			Ok(rt.transition::<Present>()?.into_desc())
 		})?;
 		swapchain.present_image(rt)?;
+
+		profiling::finish_frame!();
 	}
 
 	Ok(())
