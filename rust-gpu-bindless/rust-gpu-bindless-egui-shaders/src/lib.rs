@@ -24,6 +24,7 @@ pub struct ImageVertex {
 
 #[derive(Copy, Clone, Debug, BufferStruct)]
 pub struct Param<'a> {
+	pub screen_size_recip: Vec2,
 	pub vertices: TransientDesc<'a, Buffer<[ImageVertex]>>,
 	pub flags: ParamFlags,
 }
@@ -55,7 +56,13 @@ pub fn egui_vertex(
 	sampler: &mut StrongDesc<Sampler>,
 ) {
 	let vertex = param.vertices.access(&descriptors).load(vertex_id as usize);
-	*position = Vec4::from((vertex.vertex.pos, 1., 1.));
+	let screen_pos = vertex.vertex.pos;
+	*position = Vec4::new(
+		2.0 * screen_pos.x * param.screen_size_recip.x - 1.0,
+		2.0 * screen_pos.y * param.screen_size_recip.y - 1.0,
+		1.,
+		1.,
+	);
 	*vtx_color_srgb = vertex.vertex.color();
 	*vtx_uv = vertex.vertex.uv;
 	*image = vertex.image;

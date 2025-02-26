@@ -1,5 +1,5 @@
-use egui::RawInput;
-use rust_gpu_bindless::generic::descriptor::{Bindless, BindlessImageUsage, DescriptorCounts};
+use egui::{Pos2, RawInput};
+use rust_gpu_bindless::generic::descriptor::{Bindless, BindlessImageUsage, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::generic::pipeline::{ClearValue, ColorAttachment, LoadOp, MutImageAccessExt, Present};
 use rust_gpu_bindless::generic::platform::ash::Debuggers;
 use rust_gpu_bindless::generic::platform::ash::{
@@ -82,9 +82,23 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 			}
 		}
 
-		let (egui_render, _full_output) = egui_ctx.run(RawInput::default(), ui)?;
-
 		let rt = swapchain.acquire_image(None).await?;
+
+		let extent = rt.extent();
+		let (egui_render, _full_output) = egui_ctx.run(
+			RawInput {
+				screen_rect: Some(egui::emath::Rect {
+					min: Pos2::ZERO,
+					max: Pos2 {
+						x: extent.width as f32,
+						y: extent.height as f32,
+					},
+				}),
+				..RawInput::default()
+			},
+			ui,
+		)?;
+
 		let rt = bindless.execute(|cmd| {
 			let mut rt = rt.access_dont_care::<ColorAttachment>(cmd)?;
 			egui_render

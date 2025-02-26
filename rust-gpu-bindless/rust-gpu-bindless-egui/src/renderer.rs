@@ -12,7 +12,8 @@ use parking_lot::Mutex;
 use rust_gpu_bindless::generic::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, BindlessSamplerCreateInfo, BufferAllocationError, Extent, Filter, Format, Image2d,
-	MutBoxDescExt, MutDesc, MutDescBufferExt, MutDescExt, MutImage, RCDesc, RCDescExt, Sampler, SamplerAllocationError,
+	ImageDescExt, MutBoxDescExt, MutDesc, MutDescBufferExt, MutDescExt, MutImage, RCDesc, RCDescExt, Sampler,
+	SamplerAllocationError,
 };
 use rust_gpu_bindless::generic::pipeline::{
 	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, HasResourceContext,
@@ -24,7 +25,6 @@ use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, UnsafeDesc};
 use rust_gpu_bindless_shaders::spirv_std::indirect_command::DrawIndexedIndirectCommand;
 use rust_gpu_bindless_shaders::utils::rect::IRect2;
-use rust_gpu_bindless_shaders::utils::viewport::Viewport;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use std::ops::Deref;
@@ -443,6 +443,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			(None, Some(_)) => return Err(EguiRenderingError::UnexpectedDepthRT),
 			(Some(format), None) => return Err(EguiRenderingError::ExpectedDepthRT(format)),
 		};
+		let extent = image.extent();
 
 		{
 			let mut upload_wait = self.render_ctx.upload_wait.lock();
@@ -450,6 +451,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 		}
 
 		let param = Param {
+			screen_size_recip: UVec2::from(extent).as_vec2().recip(),
 			vertices: self.vertices.to_transient(cmd),
 			flags: ParamFlags::SRGB_FRAMEBUFFER,
 		};
@@ -468,16 +470,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			}),
 			|rp| {
 				for draw in &self.draw_cmds {
-					let rect = draw.clip_rect;
-					rp.set_viewport(Viewport {
-						x: rect.origin.x as f32,
-						y: rect.origin.y as f32,
-						width: rect.extent.x as f32,
-						height: rect.extent.y as f32,
-						min_depth: 0.0,
-						max_depth: 1.0,
-					});
-					rp.set_scissor(rect);
+					rp.set_scissor(draw.clip_rect);
 					rp.draw_indexed(
 						&pipeline.graphics_pipeline,
 						&self.indices,
