@@ -21,8 +21,8 @@ use rust_gpu_bindless::generic::pipeline::{
 	RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
 use rust_gpu_bindless::generic::platform::RecordingResourceContext;
-use rust_gpu_bindless_egui_shaders::{ImageVertex, Param, ParamFlags, Vertex, VertexFlags};
-use rust_gpu_bindless_shaders::descriptor::{Buffer, UnsafeDesc};
+use rust_gpu_bindless_egui_shaders::{Param, ParamFlags, Vertex};
+use rust_gpu_bindless_shaders::descriptor::{Buffer, Image, UnsafeDesc};
 use rust_gpu_bindless_shaders::spirv_std::indirect_command::DrawIndexedIndirectCommand;
 use rust_gpu_bindless_shaders::utils::rect::IRect2;
 use rustc_hash::FxHashMap;
@@ -181,10 +181,10 @@ impl EguiTextureType {
 		}
 	}
 
-	pub fn to_vertex_flags(&self) -> VertexFlags {
+	pub fn to_vertex_flags(&self) -> ParamFlags {
 		match self {
-			EguiTextureType::Color => VertexFlags::empty(),
-			EguiTextureType::Font => VertexFlags::FONT_TEXTURE,
+			EguiTextureType::Color => ParamFlags::empty(),
+			EguiTextureType::Font => ParamFlags::FONT_TEXTURE,
 		}
 	}
 }
@@ -372,7 +372,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			index_cnt,
 		)?;
 
-		let mut draw_cmds: Vec<DrawCmd> = Vec::new();
+		let mut draw_cmds: Vec<DrawCmd> = Vec::with_capacity(primitives.len());
 		{
 			profiling::scope!("write DrawCmd and primitives");
 			let mut vertices = vertices.mapped_immediate().unwrap();
@@ -382,26 +382,10 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			for p in primitives {
 				match p.primitive {
 					Primitive::Mesh(mesh) => {
-						let texture = self
-							.textures
-							.get(&mesh.texture_id)
-							.ok_or(EguiRenderingError::MissingTexture(mesh.texture_id))?;
-						let image = unsafe { UnsafeDesc::new(texture.image.id()) };
-						let sampler = texture.sampler.to_strong();
-						let flags = texture.texture_type.to_vertex_flags();
-
 						let vertices_start = vertices_idx;
 						let indices_start = indices_idx;
 						for vertex in mesh.vertices {
-							vertices.write_offset(
-								vertices_idx,
-								ImageVertex {
-									vertex: Vertex::from(vertex),
-									image,
-									sampler,
-									flags,
-								},
-							);
+							vertices.write_offset(vertices_idx, Vertex::from(vertex));
 							vertices_idx += 1;
 						}
 						for index in mesh.indices {
@@ -415,17 +399,12 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							extent: UVec2::new(rect.width().ceil() as u32, rect.height().ceil() as u32),
 						};
 
-						if let Some(last) = draw_cmds.last_mut().filter(|last| last.clip_rect == rect) {
-							// reuse last draw call
-							last.indices_count += (indices_idx - indices_start) as u32;
-						} else {
-							// new draw call
-							draw_cmds.push(DrawCmd {
-								clip_rect: rect,
-								indices_offset: indices_start as u32,
-								indices_count: (indices_idx - indices_start) as u32,
-							})
-						}
+						draw_cmds.push(DrawCmd {
+							clip_rect: rect,
+							texture_id: mesh.texture_id,
+							indices_offset: indices_start as u32,
+							indices_count: (indices_idx - indices_start) as u32,
+						})
 					}
 					Primitive::Callback(_) => (),
 				}
@@ -450,13 +429,14 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 
 pub struct EguiRenderOutput<'a, P: EguiBindlessPlatform> {
 	render_ctx: &'a EguiRenderContext<P>,
-	vertices: RCDesc<P, Buffer<[ImageVertex]>>,
+	vertices: RCDesc<P, Buffer<[Vertex]>>,
 	indices: RCDesc<P, Buffer<[u32]>>,
 	draw_cmds: Vec<DrawCmd>,
 }
 
 struct DrawCmd {
 	clip_rect: IRect2,
+	texture_id: TextureId,
 	indices_offset: u32,
 	indices_count: u32,
 }
@@ -512,12 +492,6 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			upload_wait.push(cmd.resource_context().to_pending_execution());
 		}
 
-		let param = Param {
-			screen_size_recip: UVec2::from(extent).as_vec2().recip(),
-			vertices: self.vertices.to_transient(cmd),
-			flags: ParamFlags::SRGB_FRAMEBUFFER,
-		};
-
 		cmd.begin_rendering(
 			pipeline.render_pass_format(),
 			color
@@ -534,6 +508,13 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			}),
 			|rp| {
 				for draw in &self.draw_cmds {
+					let texture = self
+						.render_ctx
+						.textures
+						.get(&draw.texture_id)
+						.ok_or(EguiRenderingError::<P>::MissingTexture(draw.texture_id))
+						.unwrap();
+
 					rp.set_scissor(draw.clip_rect);
 					rp.draw_indexed(
 						&pipeline.graphics_pipeline,
@@ -545,7 +526,13 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 							vertex_offset: 0,
 							first_instance: 0,
 						},
-						param,
+						Param {
+							screen_size_recip: UVec2::from(extent).as_vec2().recip(),
+							vertices: self.vertices.to_transient(rp),
+							flags: ParamFlags::SRGB_FRAMEBUFFER | texture.texture_type.to_vertex_flags(),
+							image: unsafe { UnsafeDesc::<Image<Image2d>>::new(texture.image.id()) },
+							sampler: texture.sampler.to_strong(),
+						},
 					)?;
 				}
 				Ok(())

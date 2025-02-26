@@ -14,34 +14,12 @@ mod vertex;
 
 /// Usually, we would use StrongDesc to reference the image and sampler, but they need to be mutable and we cannot turn
 /// mutable images
-#[repr(C)]
-#[derive(Copy, Clone, Debug, BufferStruct)]
-pub struct ImageVertex {
-	pub vertex: Vertex,
-	pub image: UnsafeDesc<Image<Image2d>>,
-	pub sampler: StrongDesc<Sampler>,
-	pub flags: VertexFlags,
-}
-
-#[derive(Clone, Copy, BufferStruct)]
-pub struct VertexFlags(u32);
-
-bitflags! {
-	impl VertexFlags: u32 {
-		const FONT_TEXTURE = 1;
-	}
-}
-
-impl fmt::Debug for VertexFlags {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		bitflags::parser::to_writer(self, f)
-	}
-}
-
 #[derive(Copy, Clone, Debug, BufferStruct)]
 pub struct Param<'a> {
+	pub vertices: TransientDesc<'a, Buffer<[Vertex]>>,
+	pub image: UnsafeDesc<Image<Image2d>>,
+	pub sampler: StrongDesc<Sampler>,
 	pub screen_size_recip: Vec2,
-	pub vertices: TransientDesc<'a, Buffer<[ImageVertex]>>,
 	pub flags: ParamFlags,
 }
 
@@ -51,6 +29,7 @@ pub struct ParamFlags(u32);
 bitflags! {
 	impl ParamFlags: u32 {
 		const SRGB_FRAMEBUFFER = 1;
+		const FONT_TEXTURE = 2;
 	}
 }
 
@@ -68,23 +47,17 @@ pub fn egui_vertex(
 	#[spirv(position)] position: &mut Vec4,
 	vtx_color_srgb: &mut Vec4,
 	vtx_uv: &mut Vec2,
-	image: &mut UnsafeDesc<Image<Image2d>>,
-	sampler: &mut StrongDesc<Sampler>,
-	flags: &mut VertexFlags,
 ) {
 	let vertex = param.vertices.access(&descriptors).load(vertex_id as usize);
-	let screen_pos = vertex.vertex.pos;
+	let screen_pos = vertex.pos;
 	*position = Vec4::new(
 		2.0 * screen_pos.x * param.screen_size_recip.x - 1.0,
 		2.0 * screen_pos.y * param.screen_size_recip.y - 1.0,
 		1.,
 		1.,
 	);
-	*vtx_color_srgb = vertex.vertex.color();
-	*vtx_uv = vertex.vertex.uv;
-	*image = vertex.image;
-	*sampler = vertex.sampler;
-	*flags = vertex.flags;
+	*vtx_color_srgb = vertex.color();
+	*vtx_uv = vertex.uv;
 }
 
 #[bindless(fragment())]
@@ -93,17 +66,16 @@ pub fn egui_fragment(
 	#[bindless(param)] param: &Param<'static>,
 	vtx_color_srgb: Vec4,
 	vtx_uv: Vec2,
-	#[spirv(flat)] image: UnsafeDesc<Image<Image2d>>,
-	#[spirv(flat)] sampler: StrongDesc<Sampler>,
-	#[spirv(flat)] flags: VertexFlags,
 	frag_color: &mut Vec4,
 ) {
-	let image = unsafe { image.to_transient_unchecked(&descriptors) };
+	let image = unsafe { param.image.to_transient_unchecked(&descriptors) };
 
 	// our image is unorm, but the values stored inside are in srgb colorspace
 	// this sample op should not do any srgb conversions
-	let mut image_srgb: Vec4 = image.access(&descriptors).sample(sampler.access(&descriptors), vtx_uv);
-	if flags.contains(VertexFlags::FONT_TEXTURE) {
+	let mut image_srgb: Vec4 = image
+		.access(&descriptors)
+		.sample(param.sampler.access(&descriptors), vtx_uv);
+	if param.flags.contains(ParamFlags::FONT_TEXTURE) {
 		image_srgb = image_srgb.xxxx();
 	}
 
