@@ -26,6 +26,7 @@
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui-shaders/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui-examples/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

@@ -1,0 +1,31 @@
+[package]
+name = "rust-gpu-bindless-egui-examples"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+winit = []
+
+[dependencies]
+# members
+rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless-egui = { workspace = true }
+rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
+
+# vulkan
+ash = { workspace = true }
+winit = { workspace = true }
+
+# profiling
+profiling = { workspace = true }
+
+# egui
+egui = { workspace = true }
+egui_demo_lib = { workspace = true }
+
+# other
+anyhow = { workspace = true }

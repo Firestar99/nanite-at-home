@@ -16,9 +16,9 @@ use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::WindowAttributes;
 
-pub fn main() {
-	event_loop_init(|event_loop, events| async {
-		main_loop(event_loop, events).await.unwrap();
+pub fn run(run_ui: impl FnMut(&egui::Context) + Send + 'static) {
+	event_loop_init(|event_loop, events| async move {
+		main_loop(event_loop, events, run_ui).await.unwrap();
 	});
 }
 
@@ -26,7 +26,11 @@ pub fn debugger() -> Debuggers {
 	Debuggers::Validation
 }
 
-pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>>) -> anyhow::Result<()> {
+pub async fn main_loop(
+	event_loop: EventLoopExecutor,
+	events: Receiver<Event<()>>,
+	mut run_ui: impl FnMut(&egui::Context),
+) -> anyhow::Result<()> {
 	if matches!(debugger(), Debuggers::RenderDoc) {
 		// renderdoc does not yet support wayland
 		std::env::remove_var("WAYLAND_DISPLAY");
@@ -69,7 +73,6 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 	let egui_renderer = EguiRenderer::new(bindless.clone());
 	let egui_pipeline = egui_renderer.create_pipeline(Some(swapchain.params().format), None);
 	let mut egui_ctx = egui_renderer.create_context(egui::Context::default());
-	let mut basic_ui = BasicUi::default();
 
 	'outer: loop {
 		profiling::scope!("frame");
@@ -98,7 +101,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 				}),
 				..RawInput::default()
 			},
-			|ctx| basic_ui.ui(ctx),
+			|ctx| run_ui(ctx),
 		)?;
 
 		let rt = bindless.execute(|cmd| {
@@ -123,36 +126,4 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 	}
 
 	Ok(())
-}
-
-pub struct BasicUi {
-	pub name: String,
-	pub age: u32,
-}
-
-impl Default for BasicUi {
-	fn default() -> Self {
-		Self {
-			name: "Authur".to_string(),
-			age: 42,
-		}
-	}
-}
-
-impl BasicUi {
-	pub fn ui(&mut self, ctx: &egui::Context) {
-		egui::CentralPanel::default().show(ctx, |ui| {
-			ui.add_space(100.0);
-			ui.heading("My egui Application");
-			ui.horizontal(|ui| {
-				let name_label = ui.label("Your name: ");
-				ui.text_edit_singleline(&mut self.name).labelled_by(name_label.id);
-			});
-			ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-			if ui.button("Increment").clicked() {
-				self.age += 1;
-			}
-			ui.label(format!("Hello '{}', age {}", self.name, self.age));
-		});
-	}
 }
