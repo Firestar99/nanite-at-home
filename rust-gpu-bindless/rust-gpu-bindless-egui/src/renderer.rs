@@ -7,7 +7,7 @@ use ash::vk::{
 };
 use egui::epaint::Primitive;
 use egui::{
-	epaint, Context, FullOutput, ImageData, PlatformOutput, RawInput, TextureId, TextureOptions, TexturesDelta,
+	epaint, Context, FullOutput, ImageData, PlatformOutput, RawInput, Rect, TextureId, TextureOptions, TexturesDelta,
 };
 use glam::{IVec2, UVec2};
 use parking_lot::Mutex;
@@ -394,14 +394,8 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 							indices_idx += 1;
 						}
 
-						let rect = p.clip_rect;
-						let rect = IRect2 {
-							origin: IVec2::new(rect.min.x.floor() as i32, rect.min.y.floor() as i32),
-							extent: UVec2::new(rect.width().ceil() as u32, rect.height().ceil() as u32),
-						};
-
 						draw_cmds.push(DrawCmd {
-							clip_rect: rect,
+							clip_rect: p.clip_rect,
 							texture_id: mesh.texture_id,
 							indices_offset: indices_start as u32,
 							indices_count: (indices_idx - indices_start) as u32,
@@ -424,6 +418,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			vertices,
 			indices,
 			draw_cmds,
+			render_scale: 1.,
 		})
 	}
 }
@@ -434,18 +429,21 @@ pub struct EguiRenderOutput<'a, P: EguiBindlessPlatform> {
 	vertices: RCDesc<P, Buffer<[Vertex]>>,
 	indices: RCDesc<P, Buffer<[u32]>>,
 	draw_cmds: Vec<DrawCmd>,
+	render_scale: f32,
 }
 
 struct DrawCmd {
-	clip_rect: IRect2,
+	clip_rect: Rect,
 	texture_id: TextureId,
 	indices_offset: u32,
 	indices_count: u32,
 }
 
+#[derive(Debug, Clone)]
 pub struct EguiRenderingOptions {
 	pub image_rt_load_op: LoadOp,
 	pub depth_rt_load_op: LoadOp,
+	pub render_scale: f32,
 }
 
 impl Default for EguiRenderingOptions {
@@ -453,11 +451,17 @@ impl Default for EguiRenderingOptions {
 		Self {
 			image_rt_load_op: LoadOp::Load,
 			depth_rt_load_op: LoadOp::Load,
+			render_scale: 1.0,
 		}
 	}
 }
 
 impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
+	/// render scale for window platforms
+	pub(crate) fn render_scale(&mut self, scale: f32) {
+		self.render_scale *= scale;
+	}
+
 	/// Draw the geometry of the ui onto some `color` and `depth` images. You may call this method multiple times with
 	/// potentially a different [`EguiRenderPipeline`] to draw the ui multiple times, or don't call it at all. You must
 	/// drop this struct to regain access to [`EguiRenderContext`] and further update the ui.
@@ -501,6 +505,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			upload_wait.push(cmd.resource_context().to_pending_execution());
 		}
 
+		let render_scale = options.render_scale * self.render_scale;
 		cmd.begin_rendering(
 			pipeline.render_pass_format(),
 			color
@@ -524,7 +529,13 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 						.ok_or(EguiRenderingError::<P>::MissingTexture(draw.texture_id))
 						.unwrap();
 
-					rp.set_scissor(draw.clip_rect);
+					let rect = draw.clip_rect / render_scale;
+					let rect = IRect2 {
+						origin: IVec2::new(rect.min.x.floor() as i32, rect.min.y.floor() as i32),
+						extent: UVec2::new(rect.width().ceil() as u32, rect.height().ceil() as u32),
+					};
+
+					rp.set_scissor(rect);
 					rp.draw_indexed(
 						&pipeline.graphics_pipeline,
 						&self.indices,
@@ -536,7 +547,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 							first_instance: 0,
 						},
 						Param {
-							screen_size_recip: UVec2::from(extent).as_vec2().recip(),
+							screen_size_recip: (UVec2::from(extent).as_vec2() * render_scale).recip(),
 							vertices: self.vertices.to_transient(rp),
 							flags: ParamFlags::SRGB_FRAMEBUFFER | texture.texture_type.to_vertex_flags(),
 							image: unsafe { UnsafeDesc::<Image<Image2d>>::new(texture.image.id()) },

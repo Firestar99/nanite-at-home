@@ -111,7 +111,7 @@ pub async fn main_loop(
 					None,
 					EguiRenderingOptions {
 						image_rt_load_op: LoadOp::Clear(ClearValue::ColorF([0.; 4])),
-						depth_rt_load_op: LoadOp::Load,
+						..EguiRenderingOptions::default()
 					},
 				)
 				.unwrap();

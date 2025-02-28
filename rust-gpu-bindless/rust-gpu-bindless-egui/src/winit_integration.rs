@@ -61,21 +61,19 @@ impl<P: EguiBindlessPlatform> EguiWinitContext<P> {
 	/// the geometry, uploads it to the GPU and handles any outputs from the ui. Use the returned [`EguiRenderOutput`]
 	/// to [`EguiRenderOutput::draw`] the geometry on an image.
 	pub fn run(&mut self, run_ui: impl FnMut(&Context)) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
-		self.update_viewport_info(false);
+		let scale = self.update_viewport_info(false).recip();
 		let raw_input = self.winit_state.take_egui_input(&self.window);
-		let (render, platform_output) = self.render_ctx.run(raw_input, run_ui)?;
+		let (mut render, platform_output) = self.render_ctx.run(raw_input, run_ui)?;
 		self.winit_state.handle_platform_output(&self.window, platform_output);
+		render.render_scale(scale);
 		Ok(render)
 	}
 
-	fn update_viewport_info(&mut self, is_init: bool) {
+	fn update_viewport_info(&mut self, is_init: bool) -> f32 {
 		let raw_input = self.winit_state.egui_input_mut();
-		egui_winit::update_viewport_info(
-			raw_input.viewports.entry(raw_input.viewport_id).or_default(),
-			&*self.render_ctx,
-			&self.window,
-			is_init,
-		);
+		let viewport_info = raw_input.viewports.entry(raw_input.viewport_id).or_default();
+		egui_winit::update_viewport_info(viewport_info, &*self.render_ctx, &self.window, is_init);
+		viewport_info.native_pixels_per_point.unwrap()
 	}
 }
 
