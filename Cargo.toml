@@ -188,3 +188,9 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.zune-png]
 opt-level = 3
+[profile.dev.package.epaint]
+opt-level = 3
+[profile.dev.package.emath]
+opt-level = 3
+[profile.dev.package.ecolor]
+opt-level = 3
