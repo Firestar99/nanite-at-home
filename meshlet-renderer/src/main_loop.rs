@@ -27,6 +27,7 @@ use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
@@ -59,7 +60,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 					.with_title("Nanite at home"),
 			)?;
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
-			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
+			Ok::<_, anyhow::Error>((WindowRef::new(Arc::new(window)), extensions))
 		})
 		.await?;
 
@@ -86,7 +87,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 
 	let mut swapchain = unsafe {
 		let bindless2 = bindless.clone();
-		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
+		AshSwapchain::new(&bindless, &event_loop, window.clone(), move |surface, _| {
 			AshSwapchainParams::automatic_best(
 				&bindless2,
 				surface,

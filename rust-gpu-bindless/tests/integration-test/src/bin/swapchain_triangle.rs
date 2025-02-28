@@ -52,7 +52,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 		.spawn(|e| {
 			let window = e.create_window(WindowAttributes::default().with_title("swapchain triangle"))?;
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
-			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
+			Ok::<_, anyhow::Error>((WindowRef::new(Arc::new(window)), extensions))
 		})
 		.await?;
 
@@ -70,7 +70,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 
 	let mut swapchain = unsafe {
 		let bindless2 = bindless.clone();
-		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
+		AshSwapchain::new(&bindless, &event_loop, window.clone(), move |surface, _| {
 			AshSwapchainParams::automatic_best(
 				&bindless2,
 				surface,

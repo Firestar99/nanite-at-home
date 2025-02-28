@@ -197,12 +197,11 @@ impl AshSwapchain {
 	pub async unsafe fn new(
 		bindless: &Arc<Bindless<Ash>>,
 		event_loop: &EventLoopExecutor,
-		window_ref: &WindowRef,
+		window_ref: WindowRef,
 		params: impl FnOnce(&ash::vk::SurfaceKHR, &ActiveEventLoop) -> anyhow::Result<AshSwapchainParams> + Send + 'static,
 	) -> anyhow::Result<Self> {
 		let bindless = bindless.clone();
 		let event_loop_clone = event_loop.clone();
-		let window_ref = window_ref.clone();
 		event_loop
 			.spawn(move |e| {
 				let window = window_ref.get(e);

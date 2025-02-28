@@ -13,10 +13,8 @@ pub struct WindowRef {
 }
 
 impl WindowRef {
-	pub fn new(window: Window) -> Self {
-		Self {
-			window: Arc::new(window),
-		}
+	pub fn new(window: Arc<Window>) -> Self {
+		Self { window }
 	}
 
 	pub fn get<'a>(&'a self, _event_loop: &'a ActiveEventLoop) -> &'a Arc<Window> {
