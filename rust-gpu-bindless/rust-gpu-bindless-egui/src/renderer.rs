@@ -6,7 +6,9 @@ use ash::vk::{
 	PrimitiveTopology,
 };
 use egui::epaint::Primitive;
-use egui::{Context, FullOutput, ImageData, RawInput, TextureId, TextureOptions, TexturesDelta};
+use egui::{
+	epaint, Context, FullOutput, ImageData, PlatformOutput, RawInput, TextureId, TextureOptions, TexturesDelta,
+};
 use glam::{IVec2, UVec2};
 use parking_lot::Mutex;
 use rust_gpu_bindless::generic::descriptor::{
@@ -64,18 +66,6 @@ impl<P: EguiBindlessPlatform> EguiRenderer<P> {
 
 	pub fn bindless(&self) -> &Bindless<P> {
 		&self.bindless
-	}
-
-	pub fn create_pipeline(
-		&self,
-		output_format: Option<Format>,
-		depth_format: Option<Format>,
-	) -> EguiRenderPipeline<P> {
-		EguiRenderPipeline::new(self.clone(), output_format, depth_format)
-	}
-
-	pub fn create_context(&self, ctx: Context) -> EguiRenderContext<P> {
-		EguiRenderContext::new(self.clone(), ctx)
 	}
 }
 
@@ -206,25 +196,34 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		}
 	}
 
+	/// Runs the ui using the supplied `run_ui` function and calls [`Self::update`] using the returned [`FullOutput`].
+	/// Returns an [`EguiRenderOutput`] that may be used to draw the ui geometry and the [`PlatformOutput`] of the
+	/// [`FullOutput`].
 	pub fn run(
 		&mut self,
 		new_input: RawInput,
 		run_ui: impl FnMut(&Context),
-	) -> Result<(EguiRenderOutput<P>, FullOutput), EguiRenderingError<P>> {
+	) -> Result<(EguiRenderOutput<P>, PlatformOutput), EguiRenderingError<P>> {
 		profiling::function_scope!();
 		let full_output = {
 			profiling::scope!("egui::Context::run");
 			self.ctx.run(new_input, run_ui)
 		};
-		let render_output = self.update(&full_output)?;
-		Ok((render_output, full_output))
+		self.update(full_output)
 	}
 
-	pub fn update(&mut self, output: &FullOutput) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
+	/// Updates the textures and geometry of the renderer according to the [`FullOutput`].
+	/// Returns an [`EguiRenderOutput`] that may be used to draw the ui geometry and the [`PlatformOutput`] of the
+	/// [`FullOutput`].
+	pub fn update(
+		&mut self,
+		output: FullOutput,
+	) -> Result<(EguiRenderOutput<P>, PlatformOutput), EguiRenderingError<P>> {
 		profiling::function_scope!();
 		self.free_textures(&output.textures_delta)?;
 		self.update_textures(&output.textures_delta)?;
-		Ok(self.tessellate_upload(&output)?)
+		let render_output = self.tessellate_upload(output.shapes, output.pixels_per_point)?;
+		Ok((render_output, output.platform_output))
 	}
 
 	fn free_textures(&mut self, texture_delta: &TexturesDelta) -> Result<(), EguiRenderingError<P>> {
@@ -337,15 +336,17 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		Ok(())
 	}
 
-	fn tessellate_upload(&mut self, output: &FullOutput) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
+	fn tessellate_upload(
+		&mut self,
+		shapes: Vec<epaint::ClippedShape>,
+		pixels_per_point: f32,
+	) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
 		profiling::function_scope!();
 		let bindless = &self.renderer.bindless;
 
-		// silly clone, but egui's API needs a Vec
-		let shapes = output.shapes.clone();
 		let primitives = {
 			profiling::scope!("egui::Context::tessellate");
-			self.ctx.tessellate(shapes, output.pixels_per_point)
+			self.ctx.tessellate(shapes, pixels_per_point)
 		};
 
 		let (vertex_cnt, index_cnt) = primitives
@@ -427,6 +428,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 	}
 }
 
+/// See [`EguiRenderOutput::draw`]
 pub struct EguiRenderOutput<'a, P: EguiBindlessPlatform> {
 	render_ctx: &'a EguiRenderContext<P>,
 	vertices: RCDesc<P, Buffer<[Vertex]>>,
@@ -456,6 +458,13 @@ impl Default for EguiRenderingOptions {
 }
 
 impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
+	/// Draw the geometry of the ui onto some `color` and `depth` images. You may call this method multiple times with
+	/// potentially a different [`EguiRenderPipeline`] to draw the ui multiple times, or don't call it at all. You must
+	/// drop this struct to regain access to [`EguiRenderContext`] and further update the ui.
+	///
+	/// The `color` and `depth` images must match what was declared when creating the [`EguiRenderPipeline`], e.g. be
+	/// either `Some` and be of the declared format or `None` if no image is expected, or an error may be returned. The
+	/// images must be in [`ColorAttachment`] / [`DepthStencilAttachment`] layout respectively.
 	pub fn draw<'a>(
 		&self,
 		pipeline: &EguiRenderPipeline<P>,

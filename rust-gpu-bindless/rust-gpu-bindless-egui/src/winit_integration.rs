@@ -1,40 +1,88 @@
 use crate::platform::EguiBindlessPlatform;
-use egui::{Context, RawInput, ViewportId};
-use egui_winit::State;
-use rust_gpu_bindless::generic::descriptor::Bindless;
+use crate::renderer::{EguiRenderContext, EguiRenderOutput, EguiRenderer, EguiRenderingError};
+use egui::{Context, ViewportId};
+use egui_winit::EventResponse;
+use std::ops::Deref;
 use std::sync::Arc;
+use winit::event::{Event, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
+use winit::window::Window;
 
-pub struct EguiBindless<P: EguiBindlessPlatform> {
-	bindless: Arc<Bindless<P>>,
-	ctx: Context,
-	egui_winit: State,
+/// The `EguiWinitContext` represents an egui [`Context`] that is bound to a specific winit [`Window`]. Use
+/// [`EguiWinitContext::new`] to create a new `EguiWinitContext` for some [`Context`] and [`Window`] and
+/// [`EguiWinitContext::on_window_event`] to accumulate any winit [`WindowEvent`] for this window. Call
+/// [`EguiWinitContext::run`] to update the ui, returning a [`EguiRenderOutput`] that may [`EguiRenderOutput::draw`]
+/// the ui's geometry onto some image.
+pub struct EguiWinitContext<P: EguiBindlessPlatform> {
+	window: Arc<Window>,
+	render_ctx: EguiRenderContext<P>,
+	winit_state: egui_winit::State,
 }
 
-impl<P: EguiBindlessPlatform> EguiBindless<P> {
-	pub fn new<T: 'static>(bindless: Arc<Bindless<P>>, event_loop: &ActiveEventLoop) -> Self {
-		let ctx = Context::default();
-		let max_texture_side = unsafe { bindless.platform.max_image_dimensions_2d() };
-		let egui_winit = State::new(
-			ctx.clone(),
-			ViewportId::ROOT,
-			event_loop,
-			// Some(window.scale_factor() as f32),
-			None,
-			event_loop.system_theme(),
-			Some(max_texture_side as usize),
-		);
-		Self {
-			bindless,
-			ctx,
-			egui_winit,
+impl<P: EguiBindlessPlatform> EguiWinitContext<P> {
+	pub fn new(renderer: EguiRenderer<P>, ctx: Context, e: &ActiveEventLoop, window: Arc<Window>) -> Self {
+		let max_texture_side = unsafe { renderer.bindless().platform.max_image_dimensions_2d() };
+		let mut slf = Self {
+			winit_state: egui_winit::State::new(
+				ctx.clone(),
+				ViewportId::ROOT,
+				&e,
+				Some(window.scale_factor() as f32),
+				e.system_theme(),
+				Some(max_texture_side as usize),
+			),
+			render_ctx: EguiRenderContext::new(renderer, ctx),
+			window,
+		};
+		slf.update_viewport_info(true);
+		slf
+	}
+
+	pub fn render(&self) -> &EguiRenderContext<P> {
+		&self.render_ctx
+	}
+
+	/// If this event is a [`WindowEvent`], it will be forwarded to [`Self::on_window_event`].
+	#[inline]
+	pub fn on_event<T>(&mut self, event: &Event<T>) -> Option<EventResponse> {
+		if let Event::WindowEvent { event, .. } = &event {
+			Some(self.on_window_event(event))
+		} else {
+			None
 		}
 	}
 
-	pub fn run(&mut self, run_ui: impl FnMut(&Context)) {
-		let output = self.ctx.run(RawInput::default(), run_ui);
+	/// Submit a winit [`WindowEvent`] to be accumulated as input for a later egui [`Self::run`].
+	pub fn on_window_event(&mut self, event: &WindowEvent) -> EventResponse {
+		self.winit_state.on_window_event(&self.window, event)
+	}
 
-		// output.
-		let vec = self.ctx.tessellate(output.shapes, output.pixels_per_point);
+	/// Runs the ui using the supplied `run_ui` function: Extracts accumulated input, updates the ui, tessellates
+	/// the geometry, uploads it to the GPU and handles any outputs from the ui. Use the returned [`EguiRenderOutput`]
+	/// to [`EguiRenderOutput::draw`] the geometry on an image.
+	pub fn run(&mut self, run_ui: impl FnMut(&Context)) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
+		self.update_viewport_info(false);
+		let raw_input = self.winit_state.take_egui_input(&self.window);
+		let (render, platform_output) = self.render_ctx.run(raw_input, run_ui)?;
+		self.winit_state.handle_platform_output(&self.window, platform_output);
+		Ok(render)
+	}
+
+	fn update_viewport_info(&mut self, is_init: bool) {
+		let raw_input = self.winit_state.egui_input_mut();
+		egui_winit::update_viewport_info(
+			raw_input.viewports.entry(raw_input.viewport_id).or_default(),
+			&*self.render_ctx,
+			&self.window,
+			is_init,
+		);
+	}
+}
+
+impl<P: EguiBindlessPlatform> Deref for EguiWinitContext<P> {
+	type Target = Context;
+
+	fn deref(&self) -> &Self::Target {
+		&*self.render_ctx
 	}
 }

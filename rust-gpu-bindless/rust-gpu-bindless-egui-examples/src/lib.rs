@@ -1,17 +1,18 @@
-use egui::{Pos2, RawInput};
-use rust_gpu_bindless::generic::descriptor::{Bindless, BindlessImageUsage, DescriptorCounts, ImageDescExt};
+use rust_gpu_bindless::generic::descriptor::{Bindless, BindlessImageUsage, DescriptorCounts};
 use rust_gpu_bindless::generic::pipeline::{ClearValue, ColorAttachment, LoadOp, MutImageAccessExt, Present};
 use rust_gpu_bindless::generic::platform::ash::Debuggers;
 use rust_gpu_bindless::generic::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
 };
-use rust_gpu_bindless_egui::renderer::{EguiRenderer, EguiRenderingOptions};
+use rust_gpu_bindless_egui::renderer::{EguiRenderPipeline, EguiRenderer, EguiRenderingOptions};
+use rust_gpu_bindless_egui::winit_integration::EguiWinitContext;
 use rust_gpu_bindless_winit::ash::{
 	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
 };
 use rust_gpu_bindless_winit::event_loop::{event_loop_init, EventLoopExecutor};
 use rust_gpu_bindless_winit::window_ref::WindowRef;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::WindowAttributes;
@@ -41,7 +42,7 @@ pub async fn main_loop(
 		.spawn(|e| {
 			let window = e.create_window(WindowAttributes::default().with_title("swapchain triangle"))?;
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
-			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
+			Ok::<_, anyhow::Error>((WindowRef::new(Arc::new(window)), extensions))
 		})
 		.await?;
 
@@ -59,7 +60,7 @@ pub async fn main_loop(
 
 	let mut swapchain = unsafe {
 		let bindless2 = bindless.clone();
-		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
+		AshSwapchain::new(&bindless, &event_loop, window.clone(), move |surface, _| {
 			AshSwapchainParams::automatic_best(
 				&bindless2,
 				surface,
@@ -71,13 +72,23 @@ pub async fn main_loop(
 	.await?;
 
 	let egui_renderer = EguiRenderer::new(bindless.clone());
-	let egui_pipeline = egui_renderer.create_pipeline(Some(swapchain.params().format), None);
-	let mut egui_ctx = egui_renderer.create_context(egui::Context::default());
+	let egui_pipeline = EguiRenderPipeline::new(egui_renderer.clone(), Some(swapchain.params().format), None);
+	let mut egui_ctx = event_loop
+		.spawn(move |e| {
+			EguiWinitContext::new(
+				egui_renderer.clone(),
+				egui::Context::default(),
+				e,
+				window.get(e).clone(),
+			)
+		})
+		.await;
 
 	'outer: loop {
 		profiling::scope!("frame");
 		for event in events.try_iter() {
 			swapchain.handle_input(&event);
+			egui_ctx.on_event(&event);
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -87,23 +98,9 @@ pub async fn main_loop(
 			}
 		}
 
+		let egui_render = egui_ctx.run(|ctx| run_ui(ctx))?;
+
 		let rt = swapchain.acquire_image(None).await?;
-
-		let extent = rt.extent();
-		let (egui_render, _full_output) = egui_ctx.run(
-			RawInput {
-				screen_rect: Some(egui::emath::Rect {
-					min: Pos2::ZERO,
-					max: Pos2 {
-						x: extent.width as f32,
-						y: extent.height as f32,
-					},
-				}),
-				..RawInput::default()
-			},
-			|ctx| run_ui(ctx),
-		)?;
-
 		let rt = bindless.execute(|cmd| {
 			let mut rt = rt.access_dont_care::<ColorAttachment>(cmd)?;
 			egui_render

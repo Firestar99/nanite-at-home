@@ -17,7 +17,7 @@ profile-with-tracy = ["profiling/profile-with-tracy"]
 [dependencies]
 # members
 rust-gpu-bindless = { workspace = true }
-rust-gpu-bindless-egui = { workspace = true }
+rust-gpu-bindless-egui = { workspace = true, features = ["winit"] }
 rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
 
 # vulkan
