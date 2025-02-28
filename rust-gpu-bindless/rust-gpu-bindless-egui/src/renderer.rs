@@ -134,6 +134,10 @@ impl<P: EguiBindlessPlatform> EguiRenderPipeline<P> {
 		}))
 	}
 
+	pub fn renderer(&self) -> &EguiRenderer<P> {
+		&self.renderer
+	}
+
 	pub fn render_pass_format(&self) -> RenderPassFormat {
 		RenderPassFormat::new(self.color_format.as_slice(), self.depth_format)
 	}
@@ -194,6 +198,10 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 			textures_free_queued: Vec::new(),
 			upload_wait: Mutex::new(SmallVec::new()),
 		}
+	}
+
+	pub fn renderer(&self) -> &EguiRenderer<P> {
+		&self.renderer
 	}
 
 	/// Runs the ui using the supplied `run_ui` function and calls [`Self::update`] using the returned [`FullOutput`].

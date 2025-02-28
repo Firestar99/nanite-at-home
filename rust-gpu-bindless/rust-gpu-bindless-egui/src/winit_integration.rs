@@ -38,7 +38,11 @@ impl<P: EguiBindlessPlatform> EguiWinitContext<P> {
 		slf
 	}
 
-	pub fn render(&self) -> &EguiRenderContext<P> {
+	pub fn renderer(&self) -> &EguiRenderer<P> {
+		&self.render_ctx.renderer()
+	}
+
+	pub fn render_ctx(&self) -> &EguiRenderContext<P> {
 		&self.render_ctx
 	}
 
