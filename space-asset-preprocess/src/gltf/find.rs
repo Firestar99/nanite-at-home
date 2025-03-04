@@ -93,8 +93,9 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 	};
 	let mod_hierarchy = root.to_tokens(|name, model| {
 		let out_relative = &model.out_relative;
+		let in_relative = &model.relative.join("/");
 		quote! {
-			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#out_relative) };
+			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#in_relative, #out_relative) };
 		}
 	});
 	Ok(quote! {

@@ -37,6 +37,7 @@ impl MeshletSceneDisk {
 
 #[derive(Copy, Clone, Debug)]
 pub struct MeshletSceneFile<'a> {
+	name: &'a str,
 	path: &'a str,
 }
 
@@ -51,8 +52,16 @@ impl<'a> MeshletSceneFile<'a> {
 	///
 	/// # Safety
 	/// File must contain a valid datastream retrieved from [`MeshletSceneDisk::serialize_to`]
-	pub const unsafe fn new(path: &'a str) -> Self {
-		Self { path }
+	pub const unsafe fn new(name: &'a str, path: &'a str) -> Self {
+		Self { name, path }
+	}
+
+	pub fn name(&self) -> &'a str {
+		self.name
+	}
+
+	pub fn path(&self) -> &'a str {
+		self.path
 	}
 
 	pub fn absolute_path(&self) -> io::Result<PathBuf> {
