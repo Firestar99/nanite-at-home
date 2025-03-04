@@ -350,7 +350,9 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		pixels_per_point: f32,
 	) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
 		profiling::function_scope!();
-		let bindless = &self.renderer.bindless;
+		if shapes.is_empty() {
+			return Ok(EguiRenderOutput::empty(self));
+		}
 
 		let primitives = {
 			profiling::scope!("egui::Context::tessellate");
@@ -364,6 +366,11 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 				Primitive::Callback(_) => (0, 0),
 			})
 			.fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+		if vertex_cnt == 0 || index_cnt == 0 {
+			return Ok(EguiRenderOutput::empty(self));
+		}
+
+		let bindless = &self.renderer.bindless;
 		let vertices = bindless.buffer().alloc_slice(
 			&BindlessBufferCreateInfo {
 				usage: BindlessBufferUsage::MAP_WRITE | BindlessBufferUsage::STORAGE_BUFFER,
@@ -418,8 +425,8 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 		}
 
 		// Safety: these buffers have never been used in any cmd
-		let vertices = unsafe { vertices.into_shared_unchecked() };
-		let indices = unsafe { indices.into_shared_unchecked() };
+		let vertices = unsafe { Some(vertices.into_shared_unchecked()) };
+		let indices = unsafe { Some(indices.into_shared_unchecked()) };
 
 		Ok(EguiRenderOutput {
 			render_ctx: self,
@@ -434,10 +441,24 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 /// See [`EguiRenderOutput::draw`]
 pub struct EguiRenderOutput<'a, P: EguiBindlessPlatform> {
 	render_ctx: &'a EguiRenderContext<P>,
-	vertices: RCDesc<P, Buffer<[Vertex]>>,
-	indices: RCDesc<P, Buffer<[u32]>>,
+	/// must be Some if `!draw_cmds.is_empty()`
+	vertices: Option<RCDesc<P, Buffer<[Vertex]>>>,
+	/// must be Some if `!draw_cmds.is_empty()`
+	indices: Option<RCDesc<P, Buffer<[u32]>>>,
 	draw_cmds: Vec<DrawCmd>,
 	render_scale: f32,
+}
+
+impl<'a, P: EguiBindlessPlatform> EguiRenderOutput<'a, P> {
+	fn empty(render_ctx: &'a EguiRenderContext<P>) -> Self {
+		EguiRenderOutput {
+			render_ctx,
+			vertices: None,
+			indices: None,
+			draw_cmds: Vec::new(),
+			render_scale: 1.,
+		}
+	}
 }
 
 struct DrawCmd {
@@ -513,6 +534,13 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 			upload_wait.push(cmd.resource_context().to_pending_execution());
 		}
 
+		if self.draw_cmds.is_empty() {
+			return Ok(());
+		}
+		// must be present if draw_cmds are
+		let indices = self.indices.as_ref().unwrap();
+		let vertices = self.vertices.as_ref().unwrap().to_transient(cmd);
+
 		let render_scale = options.render_scale * self.render_scale;
 		cmd.begin_rendering(
 			pipeline.render_pass_format(),
@@ -546,7 +574,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 					rp.set_scissor(rect);
 					rp.draw_indexed(
 						&pipeline.graphics_pipeline,
-						&self.indices,
+						indices,
 						DrawIndexedIndirectCommand {
 							index_count: draw.indices_count,
 							instance_count: 1,
@@ -556,7 +584,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 						},
 						Param {
 							screen_size_recip: (UVec2::from(extent).as_vec2() * render_scale).recip(),
-							vertices: self.vertices.to_transient(rp),
+							vertices,
 							flags: ParamFlags::SRGB_FRAMEBUFFER | texture.texture_type.to_vertex_flags(),
 							image: unsafe { UnsafeDesc::<Image<Image2d>>::new(texture.image.id()) },
 							sampler: texture.sampler.to_strong(),
