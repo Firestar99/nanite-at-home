@@ -17,6 +17,7 @@ space-engine = { workspace = true }
 space-engine-shader = { workspace = true }
 rust-gpu-bindless = { workspace = true, features = ["ash"] }
 rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
+rust-gpu-bindless-egui = { workspace = true, features = ["winit"] }
 
 # vulkan
 ash = { workspace = true }
@@ -32,6 +33,9 @@ rayon = "1.10"
 # profiling
 profiling = { workspace = true }
 puffin_http = { workspace = true, optional = true }
+
+# egui
+egui = { workspace = true }
 
 # other
 anyhow = { workspace = true }

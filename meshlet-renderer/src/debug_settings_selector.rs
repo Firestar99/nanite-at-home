@@ -1,3 +1,4 @@
+use egui::Ui;
 use space_engine_shader::renderer::frame_data::DebugSettings;
 use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
 use winit::keyboard::PhysicalKey::Code;
@@ -57,5 +58,16 @@ impl DebugSettingsSelector {
 			}
 			_ => {}
 		}
+	}
+
+	pub fn ui(&mut self, ui: &mut Ui) {
+		ui.strong("Debug View:");
+		egui::ComboBox::from_id_salt(concat!(file!(), line!()))
+			.selected_text(format!("{:?}", self.selected))
+			.show_ui(ui, |ui| {
+				for x in (0..DebugSettings::MAX_VALUE as u32).map(|i| DebugSettings::try_from(i).unwrap()) {
+					ui.selectable_value(&mut self.selected, x, format!("{:?}", x));
+				}
+			});
 	}
 }

@@ -1558,6 +1558,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ash",
+ "egui",
  "glam",
  "models",
  "num-traits",
@@ -1566,6 +1567,7 @@ dependencies = [
  "puffin_http",
  "rayon",
  "rust-gpu-bindless",
+ "rust-gpu-bindless-egui",
  "rust-gpu-bindless-winit",
  "space-asset-disk",
  "space-asset-rt",

@@ -64,6 +64,7 @@ impl Debug for LodSelection {
 	}
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LodType {
 	Nanite,
 	Static,

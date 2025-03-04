@@ -1,12 +1,11 @@
 use crate::delta_time::DeltaTime;
+use egui::Ui;
 use glam::{vec3, Mat3, Vec3};
 use space_engine_shader::material::light::DirectionalLight;
 use space_engine_shader::material::radiance::Radiance;
 use space_engine_shader::renderer::lighting::sky_shader::preetham_sky;
 use space_engine_shader::utils::animated_segments::{AnimatedSegment, Segment};
 use std::f32::consts::PI;
-use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
-use winit::keyboard::PhysicalKey::Code;
 
 const SUN_MAX_ALTITUDE_DEGREE: f32 = 25.;
 const SUN_INCLINATION_SPEED: f32 = 0.5;
@@ -39,28 +38,6 @@ impl SunController {
 		}
 	}
 
-	pub fn handle_input(&mut self, event: &Event<()>) {
-		if let Event::WindowEvent {
-			event:
-				WindowEvent::KeyboardInput {
-					event:
-						KeyEvent {
-							state: ElementState::Pressed,
-							physical_key: Code {
-								0: winit::keyboard::KeyCode::KeyN,
-							},
-							repeat: false,
-							..
-						},
-					..
-				},
-			..
-		} = event
-		{
-			self.is_paused = !self.is_paused;
-		}
-	}
-
 	pub fn eval_sun(&mut self, delta_time: DeltaTime) -> (DirectionalLight, Radiance) {
 		let since_start = if self.is_paused {
 			self.last_delta_time.since_start
@@ -85,5 +62,10 @@ impl SunController {
 		const AMBIENT_STARLIGHT: Vec3 = vec3(105. / 255., 129. / 255., 142. / 255.);
 		let ambient = Radiance(sun.color.0 * 0.1 + AMBIENT_STARLIGHT * 0.1);
 		(sun, ambient)
+	}
+
+	pub fn ui(&mut self, ui: &mut Ui) {
+		ui.strong("Sun");
+		ui.checkbox(&mut self.is_paused, "Paused");
 	}
 }

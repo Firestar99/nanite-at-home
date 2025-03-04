@@ -4,18 +4,19 @@ use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
 use crate::lod_selector::LodSelector;
 use crate::nanite_error_selector::NaniteErrorSelector;
-use crate::sample_scenes::sample_scenes;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::SunController;
 use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
+use egui::{Context, Pos2};
 use glam::{UVec3, Vec3Swizzles};
-use parking_lot::Mutex;
 use rust_gpu_bindless::descriptor::{BindlessImageUsage, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::generic::descriptor::Bindless;
-use rust_gpu_bindless::pipeline::{MutImageAccessExt, Present};
+use rust_gpu_bindless::pipeline::{ColorAttachment, LoadOp, MutImageAccessExt, Present};
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue_with_push_next, Ash, AshSingleGraphicsQueueCreateInfo, Debuggers,
 };
+use rust_gpu_bindless_egui::renderer::{EguiRenderPipeline, EguiRenderer, EguiRenderingOptions};
+use rust_gpu_bindless_egui::winit_integration::EguiWinitContext;
 use rust_gpu_bindless_winit::ash::{
 	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
 };
@@ -91,7 +92,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			AshSwapchainParams::automatic_best(
 				&bindless2,
 				surface,
-				BindlessImageUsage::STORAGE,
+				BindlessImageUsage::STORAGE | BindlessImageUsage::COLOR_ATTACHMENT,
 				SwapchainImageFormatPreference::UNORM,
 			)
 		})
@@ -99,20 +100,27 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	.await?;
 
 	// renderer
+	let output_format = swapchain.params().format;
 	let render_pipeline_main = RenderPipelineMain::new(
 		&bindless,
-		swapchain.params().format,
+		output_format,
 		MESHLET_GROUP_CAPACITY,
 		MESHLET_INSTANCE_CAPACITY,
 	)?;
 	let mut renderer_main = render_pipeline_main.new_renderer()?;
 
+	let egui_renderer = EguiRenderer::new(bindless.clone());
+	let egui_render_pipeline = EguiRenderPipeline::new(egui_renderer.clone(), Some(output_format), None);
+	let mut egui_ctx = {
+		let renderer = egui_renderer.clone();
+		let window = window.clone();
+		event_loop
+			.spawn(move |e| EguiWinitContext::new(renderer, Context::default(), e, window.get(e).clone()))
+			.await
+	};
+
 	// model loading
-	let scene = Mutex::new(None);
-	let mut scene_selector = SceneSelector::new(bindless.clone(), sample_scenes(), |s| {
-		*scene.lock() = Some(s);
-	})
-	.await?;
+	let mut scene_selector = SceneSelector::new(bindless.clone(), crate::sample_scenes::sample_scenes());
 
 	// main loop
 	let mut camera_controls = FpsCameraController::new();
@@ -129,13 +137,12 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		// event handling
 		for event in inputs.try_iter() {
 			swapchain.handle_input(&event);
-			camera_controls.handle_input(&event);
-			debug_settings_selector.handle_input(&event);
-			scene_selector.handle_input(&event).await?;
-			lod_selector.handle_input(&event);
-			nanite_error_selector.handle_input(&event);
-			cursor_lock.handle_input(&event);
-			sun_controller.handle_input(&event);
+
+			if egui_ctx.on_event(&event).map_or(true, |e| !e.consumed) {
+				camera_controls.handle_input(&event);
+				debug_settings_selector.handle_input(&event);
+				cursor_lock.handle_input(&event);
+			}
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -144,6 +151,8 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 				break 'outer;
 			}
 		}
+
+		let scene = scene_selector.get_or_load_scene().await?.clone();
 
 		// renderer
 		profiling::scope!("render");
@@ -166,18 +175,49 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 				camera,
 				nanite_error_threshold: nanite_error_selector.error,
 				debug_settings: debug_settings_selector.get().into(),
-				debug_lod_level: lod_selector.lod_level,
+				debug_lod_level: lod_selector.lod_selection(),
 				sun,
 				ambient_light,
 			}
 		};
 
+		let egui_output = egui_ctx.run(|ctx| {
+			egui::Window::new("Nanite at home")
+				.fixed_pos(Pos2::new(0., 0.))
+				.hscroll(true)
+				.show(&ctx, |ui| {
+					let space = 6.;
+					scene_selector.ui(ui);
+					ui.add_space(space);
+					debug_settings_selector.ui(ui);
+					ui.add_space(space);
+					lod_selector.ui(ui);
+					ui.add_space(space);
+					nanite_error_selector.ui(ui);
+					ui.add_space(space);
+					sun_controller.ui(ui);
+					ui.add_space(space);
+				});
+		})?;
+
 		let output_image = bindless.execute(|cmd| {
 			let mut output_image = output_image.access_dont_care(&cmd)?;
-			if let Err(e) = renderer_main.new_frame(cmd, frame_data, &scene.lock().as_ref().unwrap(), &mut output_image)
-			{
+			if let Err(e) = renderer_main.new_frame(cmd, frame_data, &scene, &mut output_image) {
 				return Ok(Err(e));
 			}
+			let mut output_image = output_image.transition::<ColorAttachment>()?;
+			egui_output
+				.draw(
+					&egui_render_pipeline,
+					cmd,
+					Some(&mut output_image),
+					None,
+					EguiRenderingOptions {
+						image_rt_load_op: LoadOp::Load,
+						..Default::default()
+					},
+				)
+				.unwrap();
 			Ok(Ok(output_image.transition::<Present>()?.into_desc()))
 		})??;
 
