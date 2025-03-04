@@ -1,32 +1,22 @@
-use core::ops::{Add, Mul};
+use crate::utils::lerp::Lerp;
 
-pub trait Lerp: Copy {
-	fn lerp(a: Self, b: Self, f: f32) -> Self;
-}
-
-impl<T: Copy + Mul<f32, Output = T> + Add<T, Output = T>> Lerp for T {
-	fn lerp(a: Self, b: Self, f: f32) -> Self {
-		a * f + b * (1. - f)
-	}
-}
-
-pub struct Segment<T: Lerp> {
+pub struct Segment<T: Copy + Lerp<S = f32>> {
 	pub time: f32,
 	pub t: T,
 }
 
-impl<T: Lerp> Segment<T> {
+impl<T: Copy + Lerp<S = f32>> Segment<T> {
 	pub const fn new(time: f32, t: T) -> Self {
 		Self { time, t }
 	}
 }
 
-pub struct AnimatedSegment<'a, T: Lerp> {
+pub struct AnimatedSegment<'a, T: Copy + Lerp<S = f32>> {
 	segments: &'a [Segment<T>],
 	max_time: f32,
 }
 
-impl<'a, T: Lerp> AnimatedSegment<'a, T> {
+impl<'a, T: Copy + Lerp<S = f32>> AnimatedSegment<'a, T> {
 	pub const fn new(segments: &'a [Segment<T>]) -> Self {
 		assert!(!segments.is_empty());
 		Self {
@@ -38,13 +28,17 @@ impl<'a, T: Lerp> AnimatedSegment<'a, T> {
 		}
 	}
 
+	pub const fn max_time(&self) -> f32 {
+		self.max_time
+	}
+
 	pub fn lerp(&self, time: f32) -> T {
 		let time = time % self.max_time;
 		let mut prev: Option<&Segment<T>> = None;
 		for curr in self.segments {
 			if time < curr.time {
 				return if let Some(prev) = prev {
-					T::lerp(curr.t, prev.t, (time - prev.time) / (curr.time - prev.time))
+					T::lerp(prev.t, curr.t, (time - prev.time) / (curr.time - prev.time))
 				} else {
 					curr.t
 				};
