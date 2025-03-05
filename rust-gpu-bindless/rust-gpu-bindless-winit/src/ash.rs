@@ -239,7 +239,6 @@ impl AshSwapchain {
 			.await
 	}
 
-	#[profiling::function]
 	unsafe fn create_swapchain(
 		bindless: &Arc<Bindless<Ash>>,
 		window: &WindowRef,
@@ -248,6 +247,7 @@ impl AshSwapchain {
 		old_swapchain: ash::vk::SwapchainKHR,
 		e: &ActiveEventLoop,
 	) -> anyhow::Result<(ash::vk::SwapchainKHR, Vec<RcTableSlot>)> {
+		profiling::function_scope!();
 		unsafe {
 			let extent = {
 				let window_size = window.get(e).inner_size();

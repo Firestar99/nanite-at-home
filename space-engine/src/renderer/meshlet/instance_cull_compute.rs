@@ -16,7 +16,6 @@ impl InstanceCullCompute {
 		)?))
 	}
 
-	#[profiling::function]
 	pub fn dispatch(
 		&self,
 		cmd: &mut Recording<'_>,
@@ -24,6 +23,7 @@ impl InstanceCullCompute {
 		scene: &MeshletSceneCpu,
 		alloc_buffer: &CompactingAllocBufferWriting<MeshletGroupInstance>,
 	) -> Result<(), RecordingError> {
+		profiling::function_scope!();
 		let groups_x = scene.num_instances;
 		cmd.dispatch(
 			&self.0,

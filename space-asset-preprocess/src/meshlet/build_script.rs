@@ -15,13 +15,13 @@ pub fn out_and_export_dir() -> Option<(PathBuf, PathBuf)> {
 	Some((out_dir, export_dir))
 }
 
-#[profiling::function]
 pub fn build_script(
 	models_dir: &Path,
 	out_dir: &Path,
 	models_rs: Option<&Path>,
 	rerun_if_changed: bool,
 ) -> anyhow::Result<Vec<GltfFile>> {
+	profiling::function_scope!();
 	let model_paths = find_gltf_files(models_dir, out_dir, rerun_if_changed)?;
 
 	{

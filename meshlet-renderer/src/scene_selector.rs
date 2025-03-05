@@ -58,8 +58,8 @@ impl<'a> SceneSelector<'a> {
 	}
 }
 
-#[profiling::function]
 async fn load_scene(bindless: &Arc<Bindless>, scene_file: MeshletSceneFile<'_>) -> io::Result<Arc<MeshletSceneCpu>> {
+	profiling::function_scope!();
 	let scene = scene_file.load()?;
 	let uploader = Uploader::new(bindless.clone());
 	let cpu = upload_scene(scene.root(), &uploader).await.unwrap();

@@ -16,7 +16,6 @@ impl MeshletSelectCompute {
 		)?))
 	}
 
-	#[profiling::function]
 	pub fn dispatch(
 		&self,
 		cmd: &mut Recording<'_>,
@@ -25,6 +24,7 @@ impl MeshletSelectCompute {
 		compacting_groups_in: &CompactingAllocBufferReading<MeshletGroupInstance>,
 		compacting_instances_out: &CompactingAllocBufferWriting<MeshletInstance>,
 	) -> Result<(), RecordingError> {
+		profiling::function_scope!();
 		cmd.dispatch_indirect(
 			&self.0,
 			compacting_groups_in.indirect_args(),

@@ -162,8 +162,8 @@ impl<'a> BorderTracker<'a> {
 		self.xadj.len() - 1
 	}
 
-	#[profiling::function]
 	pub fn from_meshlet_mesh(mesh: &'a LodMesh, queued_meshlets: &'a [MeshletId]) -> Self {
+		profiling::function_scope!();
 		// SmallVec: most Edges have only 1 meshlet, some 2, and in extremely rare cases >2
 		// But we get a capacity of 4 for free, as SmallVec's heap alloc needs 16 bytes anyway
 		const_assert_eq!(
@@ -285,8 +285,8 @@ impl<'a> BorderTracker<'a> {
 		}
 	}
 
-	#[profiling::function]
 	pub fn metis_partition(&self) -> Vec<SmallVec<[QueueId; 6]>> {
+		profiling::function_scope!();
 		let meshlet_merge_cnt = 4;
 		let n_partitions = (self.queued_meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
 		if n_partitions <= 1 {
@@ -335,13 +335,13 @@ impl<'a> BorderTracker<'a> {
 			.collect()
 	}
 
-	#[profiling::function]
 	pub fn simplify_meshlet_group(
 		&self,
 		queue_ids: &[QueueId],
 		pbr_material_vertices: &[PbrVertex],
 		lod_faction: f32,
 	) -> MeshletGroupSimplifyResult {
+		profiling::function_scope!();
 		let meshlets = queue_ids
 			.iter()
 			.map(|i| self.mesh.meshlet(self.queued_meshlets[i.0 as usize]))

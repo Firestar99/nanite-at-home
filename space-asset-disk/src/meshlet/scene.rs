@@ -19,8 +19,8 @@ pub struct MeshletSceneDisk {
 }
 
 impl MeshletSceneDisk {
-	#[profiling::function]
 	pub fn serialize_to(&self, write: impl Write) -> io::Result<()> {
+		profiling::function_scope!();
 		let mut serializer = CompositeSerializer::new(
 			WriteSerializer::new(BufWriter::with_capacity(128 * 1024, write)),
 			FallbackScratch::<HeapScratch<1024>, AllocScratch>::default(),
@@ -75,8 +75,8 @@ impl<'a> MeshletSceneFile<'a> {
 		Ok(file)
 	}
 
-	#[profiling::function]
 	pub fn load(&self) -> io::Result<LoadedMeshletScene> {
+		profiling::function_scope!();
 		let path = self.absolute_path()?;
 		let mut file = fs::File::open(&path)?;
 

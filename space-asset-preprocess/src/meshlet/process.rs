@@ -25,8 +25,8 @@ use space_asset_disk::range::RangeU32;
 use space_asset_disk::shape::sphere::Sphere;
 use std::mem::{offset_of, size_of};
 
-#[profiling::function]
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
+	profiling::function_scope!();
 	let mut pbr_materials = None;
 	let mut meshes_instances = None;
 	rayon::in_place_scope(|scope| {
@@ -43,8 +43,8 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	})
 }
 
-#[profiling::function]
 fn process_materials(gltf: &Gltf) -> anyhow::Result<Vec<PbrMaterialDisk>> {
+	profiling::function_scope!();
 	let image_processor = ImageProcessor::new(gltf);
 	let pbr_materials = {
 		profiling::scope!("materials 1");
@@ -70,8 +70,8 @@ fn process_materials(gltf: &Gltf) -> anyhow::Result<Vec<PbrMaterialDisk>> {
 	Ok(pbr_materials)
 }
 
-#[profiling::function]
 fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<MeshletInstanceDisk>)> {
+	profiling::function_scope!();
 	let mesh_primitives = {
 		gltf.meshes()
 			.collect::<Vec<_>>()
@@ -120,8 +120,8 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 	Ok((meshes, instances))
 }
 
-#[profiling::function]
 fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMesh> {
+	profiling::function_scope!();
 	if primitive.mode() != Mode::Triangles {
 		Err(MeshletError::PrimitiveMustBeTriangleList)?;
 	}
@@ -153,13 +153,13 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 	})
 }
 
-#[profiling::function]
 pub fn lod_mesh_build_meshlets(
 	mut indices: Vec<u32>,
 	mut draw_vertices: Vec<DrawVertex>,
 	bounds: Option<Sphere>,
 	error: f32,
 ) -> LodMesh {
+	profiling::function_scope!();
 	{
 		profiling::scope!("meshopt::optimize_vertex_fetch_in_place");
 		let vertex_cnt = meshopt::optimize_vertex_fetch_in_place(&mut indices, &mut draw_vertices);

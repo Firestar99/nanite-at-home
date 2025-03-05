@@ -6,8 +6,8 @@ use space_asset_disk::image::ImageType;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::material::pbr::PbrVertex;
 
-#[profiling::function]
 pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive, vertex_cnt: usize) -> anyhow::Result<Vec<PbrVertex>> {
+	profiling::function_scope!();
 	let reader = primitive.reader(|b| gltf.buffer(b));
 	let mut tex_coords = reader.read_tex_coords(0).map(|tex| tex.into_f32());
 	let mut normals = reader.read_normals();
@@ -32,12 +32,12 @@ pub struct ProcessedPbrMaterial<'a> {
 	occlusion_roughness_metallic: Option<RequestedImage<{ ImageType::RGBA_LINEAR as u32 }>>,
 }
 
-#[profiling::function]
 pub fn process_pbr_material<'a>(
 	_gltf: &Gltf,
 	image_processor: &ImageProcessor<'_>,
 	material: Material<'a>,
 ) -> anyhow::Result<ProcessedPbrMaterial<'a>> {
+	profiling::function_scope!();
 	Ok(ProcessedPbrMaterial {
 		base_color: material
 			.pbr_metallic_roughness()

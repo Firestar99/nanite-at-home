@@ -49,7 +49,6 @@ impl MeshletDraw {
 		Ok(Self { pipeline, sampler })
 	}
 
-	#[profiling::function]
 	pub fn draw(
 		&self,
 		cmd: &mut Rendering,
@@ -57,6 +56,7 @@ impl MeshletDraw {
 		scene: &MeshletSceneCpu,
 		alloc_buffer: &CompactingAllocBufferReading<MeshletInstance>,
 	) -> Result<(), RecordingError> {
+		profiling::function_scope!();
 		let param = Param {
 			frame_data: frame_context.frame_data_desc,
 			scene: scene.scene.to_transient(cmd),
