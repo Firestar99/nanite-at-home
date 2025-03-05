@@ -27,7 +27,7 @@ impl LodSelector {
 		ui.checkbox(&mut self.static_enabled, "Enable static LOD");
 		ui.add_enabled(
 			self.static_enabled,
-			egui::Slider::new(&mut self.lod_level, 0..=15).text("static LOD"),
+			egui::Slider::new(&mut self.lod_level, 0..=31).text("static LOD"),
 		);
 	}
 }

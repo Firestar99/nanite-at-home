@@ -60,6 +60,7 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 		drop(tracker);
 		queue.clear();
 
+		let lod_mask = 1u32.checked_shl(lod_level).map(LodLevelBitmask);
 		for (meshlet_ids, result) in groups.iter().zip(parent_data.iter()) {
 			match result {
 				SimplifiedMeshlets(_, sphere, error) => {
@@ -69,14 +70,21 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 						data.parent_error = *error;
 					}
 				}
-				TooLittleSimplification => queue.extend_from_slice(&meshlet_ids),
+				TooLittleSimplification => {
+					if let Some(lod_mask) = lod_mask {
+						for id in meshlet_ids {
+							mesh.lod_mesh.meshlet_mut(*id).lod_level_bitmask |= lod_mask;
+						}
+					}
+					queue.extend_from_slice(&meshlet_ids);
+				}
 				SimplifiedToNothing => (),
 			}
 		}
 
-		if let Some(lod_mask) = 1u32.checked_shl(lod_level) {
+		if let Some(lod_mask) = lod_mask {
 			for m in &mut lod.meshlets {
-				m.lod_level_bitmask |= LodLevelBitmask(lod_mask);
+				m.lod_level_bitmask |= lod_mask;
 			}
 		}
 

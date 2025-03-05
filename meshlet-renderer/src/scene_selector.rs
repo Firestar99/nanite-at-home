@@ -36,9 +36,6 @@ impl<'a> SceneSelector<'a> {
 			let new_scene = self.scenes[self.selected as usize];
 			println!("loading scene {:?}", new_scene);
 			let scene = load_scene(&self.bindless, new_scene).await?;
-			{
-				println!("{} instances", scene.num_instances);
-			}
 			self.loaded_scene = Some(scene);
 		}
 		Ok(self.loaded_scene.as_ref().unwrap())
