@@ -1,4 +1,4 @@
-use crate::curser_lock::CursorLock;
+use crate::app_focus::AppFocus;
 use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
@@ -127,7 +127,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let mut debug_settings_selector = DebugSettingsSelector::new();
 	let mut lod_selector = LodSelector::new();
 	let mut nanite_error_selector = NaniteErrorSelector::new();
-	let mut cursor_lock = CursorLock::new(event_loop.clone(), window.clone());
+	let mut app_focus = AppFocus::new(event_loop.clone(), window.clone());
 	let mut last_frame = DeltaTimer::default();
 	let mut sun_controller = SunController::new();
 	'outer: loop {
@@ -138,10 +138,11 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		for event in inputs.try_iter() {
 			swapchain.handle_input(&event);
 
-			if egui_ctx.on_event(&event).map_or(true, |e| !e.consumed) {
-				camera_controls.handle_input(&event);
-				debug_settings_selector.handle_input(&event);
-				cursor_lock.handle_input(&event);
+			if !app_focus.handle_input(&event) {
+				if !egui_ctx.on_event(&event).map_or(false, |e| e.consumed) {
+					camera_controls.handle_input(&event, app_focus.game_focused);
+					debug_settings_selector.handle_input(&event);
+				}
 			}
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,

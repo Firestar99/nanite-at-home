@@ -1,4 +1,4 @@
-pub mod curser_lock;
+pub mod app_focus;
 pub mod debug_settings_selector;
 pub mod delta_time;
 pub mod fps_camera_controller;
