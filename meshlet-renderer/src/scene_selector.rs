@@ -55,6 +55,38 @@ impl<'a> SceneSelector<'a> {
 				}
 			});
 		self.set_scene(newsel);
+
+		ui.collapsing("Scene stats", |ui| {
+			if let Some(scene) = self.loaded_scene.as_ref() {
+				egui::Grid::new("Scene stats grid").show(ui, |ui| {
+					ui.label("vertices source");
+					ui.label(format!("{}", scene.stats.source.unique_vertices));
+					ui.end_row();
+
+					ui.label("triangles");
+					ui.label(format!("{}", scene.stats.source.triangles));
+					ui.end_row();
+
+					ui.label("meshlets");
+					ui.label(format!("{}", scene.stats.source.meshlets));
+					ui.end_row();
+
+					ui.label("meshlet vertices");
+					ui.label(format!("{}", scene.stats.source.meshlet_vertices));
+					ui.end_row();
+
+					ui.label("bounds min");
+					ui.label(format!("{:?}", scene.stats.source.bounds_min));
+					ui.end_row();
+
+					ui.label("bounds max");
+					ui.label(format!("{:?}", scene.stats.source.bounds_max));
+					ui.end_row();
+				});
+			} else {
+				ui.label("No scene loaded");
+			}
+		});
 	}
 }
 

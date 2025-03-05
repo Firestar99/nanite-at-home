@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use rust_gpu_bindless::descriptor::{DescBufferLenExt, RCDesc, RCDescExt, RC};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Strong};
 use space_asset_disk::meshlet::scene::ArchivedMeshletSceneDisk;
+use space_asset_disk::meshlet::stats::MeshletSceneStats;
 use space_asset_disk::range::{ArchivedRangeU32, RangeU32};
 use space_asset_shader::affine_transform::AffineTransform;
 use space_asset_shader::material::pbr::PbrMaterial;
@@ -18,6 +19,7 @@ use space_asset_shader::meshlet::scene::MeshletScene;
 pub struct MeshletSceneCpu {
 	pub scene: RCDesc<Buffer<MeshletScene<Strong>>>,
 	pub num_instances: u32,
+	pub stats: MeshletSceneStats,
 }
 
 pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) -> anyhow::Result<MeshletSceneCpu> {
@@ -81,8 +83,12 @@ pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) 
 			)
 			.await?
 	};
+
+	let stats = deserialize_infallible(&this.stats);
+
 	Ok(MeshletSceneCpu {
 		scene,
 		num_instances: instances.len() as u32,
+		stats,
 	})
 }

@@ -478,7 +478,7 @@ impl<'a> BorderTracker<'a> {
 
 		if s_indices.len() > 0 {
 			SimplifiedMeshlets(
-				lod_mesh_build_meshlets(s_indices, s_vertices, Some(group_sphere), mesh_space_error),
+				lod_mesh_build_meshlets(&mut s_indices, &mut s_vertices, Some(group_sphere), mesh_space_error),
 				group_sphere,
 				mesh_space_error,
 			)

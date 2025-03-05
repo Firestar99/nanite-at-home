@@ -6,9 +6,10 @@ use space_asset_disk::image::ImageType;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::material::pbr::PbrVertex;
 
-pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive, vertex_cnt: usize) -> anyhow::Result<Vec<PbrVertex>> {
+pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<Vec<PbrVertex>> {
 	profiling::function_scope!();
 	let reader = primitive.reader(|b| gltf.buffer(b));
+	let vertex_cnt = reader.read_positions().unwrap().len();
 	let mut tex_coords = reader.read_tex_coords(0).map(|tex| tex.into_f32());
 	let mut normals = reader.read_normals();
 	let mut tangents = reader.read_tangents();
