@@ -2,7 +2,7 @@ use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferWriting;
 use crate::renderer::frame_context::FrameContext;
 use rust_gpu_bindless::descriptor::{Bindless, RCDescExt};
 use rust_gpu_bindless::pipeline::{BindlessComputePipeline, Recording, RecordingError};
-use space_asset_rt::meshlet::scene::MeshletSceneCpu;
+use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::instance_cull::Param;
 use space_engine_shader::renderer::meshlet::intermediate::MeshletGroupInstance;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl InstanceCullCompute {
 		&self,
 		cmd: &mut Recording<'_>,
 		frame_context: &FrameContext,
-		scene: &MeshletSceneCpu,
+		scene: &InstancedMeshletSceneCpu,
 		alloc_buffer: &CompactingAllocBufferWriting<MeshletGroupInstance>,
 	) -> Result<(), RecordingError> {
 		profiling::function_scope!();

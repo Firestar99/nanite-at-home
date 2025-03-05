@@ -1,17 +1,19 @@
-use egui::Ui;
+use egui::{SliderClamping, Ui, Widget};
+use glam::UVec3;
 use rust_gpu_bindless::descriptor::Bindless;
 use space_asset_disk::meshlet::scene::MeshletSceneFile;
-use space_asset_rt::meshlet::scene::{upload_scene, MeshletSceneCpu};
+use space_asset_rt::meshlet::scene::{upload_scene, InstancedMeshletSceneCpu, MeshletSceneCpu};
 use space_asset_rt::uploader::Uploader;
-use std::io;
 use std::sync::Arc;
 
 pub struct SceneSelector<'a> {
 	bindless: Arc<Bindless>,
 	scenes: Vec<MeshletSceneFile<'a>>,
 	loaded_scene: Option<Arc<MeshletSceneCpu>>,
+	loaded_scene_instance: Option<InstancedMeshletSceneCpu>,
 	selected: i32,
 	prev_selected: i32,
+	instance_count: UVec3,
 }
 
 impl<'a> SceneSelector<'a> {
@@ -20,8 +22,10 @@ impl<'a> SceneSelector<'a> {
 			bindless,
 			scenes,
 			loaded_scene: None,
+			loaded_scene_instance: None,
 			selected: 0,
 			prev_selected: -1,
+			instance_count: UVec3::ONE,
 		}
 	}
 
@@ -29,7 +33,8 @@ impl<'a> SceneSelector<'a> {
 		self.selected = i32::rem_euclid(selected, self.scenes.len() as i32);
 	}
 
-	pub async fn get_or_load_scene(&mut self) -> io::Result<&Arc<MeshletSceneCpu>> {
+	pub async fn get_or_load_scene(&mut self) -> anyhow::Result<&InstancedMeshletSceneCpu> {
+		let mut rebuild_instance = false;
 		if self.prev_selected != self.selected {
 			self.prev_selected = self.selected;
 
@@ -37,8 +42,23 @@ impl<'a> SceneSelector<'a> {
 			println!("loading scene {:?}", new_scene);
 			let scene = load_scene(&self.bindless, new_scene).await?;
 			self.loaded_scene = Some(scene);
+			self.instance_count = UVec3::ONE;
+			rebuild_instance = true;
 		}
-		Ok(self.loaded_scene.as_ref().unwrap())
+		let scene = self.loaded_scene.as_ref().unwrap();
+
+		if self
+			.loaded_scene_instance
+			.as_ref()
+			.map_or(true, |i| i.instance_count != self.instance_count)
+		{
+			rebuild_instance = true;
+		}
+		if rebuild_instance {
+			self.loaded_scene_instance = Some(scene.instantiate(&self.bindless, self.instance_count)?);
+		}
+
+		Ok(self.loaded_scene_instance.as_ref().unwrap())
 	}
 
 	pub fn ui(&mut self, ui: &mut Ui) {
@@ -84,13 +104,26 @@ impl<'a> SceneSelector<'a> {
 				ui.label("No scene loaded");
 			}
 		});
+
+		egui::Slider::new(&mut self.instance_count.x, 1..=10)
+			.clamping(SliderClamping::Never)
+			.text("Instances X")
+			.ui(ui);
+
+		egui::Slider::new(&mut self.instance_count.y, 1..=10)
+			.clamping(SliderClamping::Never)
+			.text("Instances Y")
+			.ui(ui);
 	}
 }
 
-async fn load_scene(bindless: &Arc<Bindless>, scene_file: MeshletSceneFile<'_>) -> io::Result<Arc<MeshletSceneCpu>> {
+async fn load_scene(
+	bindless: &Arc<Bindless>,
+	scene_file: MeshletSceneFile<'_>,
+) -> anyhow::Result<Arc<MeshletSceneCpu>> {
 	profiling::function_scope!();
 	let scene = scene_file.load()?;
 	let uploader = Uploader::new(bindless.clone());
-	let cpu = upload_scene(scene.root(), &uploader).await.unwrap();
+	let cpu = upload_scene(scene.root(), &uploader).await?;
 	Ok(Arc::new(cpu))
 }

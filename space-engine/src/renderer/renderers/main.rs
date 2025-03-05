@@ -13,7 +13,7 @@ use rust_gpu_bindless::pipeline::{
 	ClearValue, ColorAttachment, DepthStencilAttachment, ImageAccessType, LoadOp, MutImageAccess, MutImageAccessExt,
 	Recording, RenderPassFormat, RenderingAttachment, SampledRead, StorageReadWrite, StoreOp,
 };
-use space_asset_rt::meshlet::scene::MeshletSceneCpu;
+use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::frame_data::FrameData;
 use space_engine_shader::renderer::g_buffer::GBuffer;
 use space_engine_shader::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
@@ -164,7 +164,7 @@ impl RendererMain {
 		&mut self,
 		cmd: &mut Recording<'_>,
 		frame_data: FrameData,
-		scene: &MeshletSceneCpu,
+		scene: &InstancedMeshletSceneCpu,
 		output_image: &MutImageAccess<'_, Image2d, StorageReadWrite>,
 	) -> anyhow::Result<()> {
 		self.image_supported(output_image)?;
