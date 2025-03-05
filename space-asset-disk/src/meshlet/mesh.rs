@@ -1,3 +1,4 @@
+use crate::meshlet::stats::SourceMeshStats;
 use rkyv::{Archive, Deserialize, Serialize};
 use space_asset_disk_shader::material::pbr::PbrVertex;
 use space_asset_disk_shader::meshlet::indices::CompressedIndices;
@@ -10,6 +11,7 @@ pub struct MeshletMeshDisk {
 	pub triangles: Vec<CompressedIndices>,
 	pub pbr_material_vertices: Vec<PbrVertex>,
 	pub pbr_material_id: Option<u32>,
+	pub stats: SourceMeshStats,
 }
 
 pub use space_asset_disk_shader::meshlet::mesh::*;

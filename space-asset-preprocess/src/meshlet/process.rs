@@ -25,6 +25,7 @@ use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::range::RangeU32;
 use space_asset_disk::shape::sphere::Sphere;
 use std::mem::{offset_of, size_of};
+use std::ops::Range;
 
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	profiling::function_scope!();
@@ -82,18 +83,17 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 				let vec = mesh.primitives().collect::<SmallVec<[_; 4]>>();
 				vec.into_par_iter()
 					.map(|primitive| {
-						let (mesh, src_stats) = process_mesh_primitive(gltf, primitive.clone())?;
+						let mesh = process_mesh_primitive(gltf, primitive.clone())?;
 						let mesh = process_lod_tree(mesh)?.to_meshlet_mesh_disk()?;
-						Ok::<_, anyhow::Error>((mesh, src_stats))
+						Ok::<_, anyhow::Error>(mesh)
 					})
 					.collect::<Result<Vec<_>, _>>()
 			})
 			.collect::<Result<Vec<_>, _>>()?
 	};
 
-	let stats = mesh_primitives.iter().flat_map(|m| m.iter().map(|s| s.1)).sum();
-
 	let (meshes, mesh2ids) = {
+		profiling::scope!("mesh2ids");
 		let mut mesh2ids = Vec::with_capacity(mesh_primitives.len());
 		let mut i = 0;
 		let meshes = mesh_primitives
@@ -102,7 +102,7 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 				let len = mesh.len() as u32;
 				mesh2ids.push(RangeU32::new(i, i + len));
 				i += len;
-				mesh.into_iter().map(|(m, _)| m)
+				mesh.into_iter()
 			})
 			.collect::<Vec<_>>();
 		(meshes, mesh2ids)
@@ -121,10 +121,22 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 			})
 			.collect::<Vec<_>>()
 	};
+
+	let stats = {
+		profiling::scope!("scene stats");
+		instances
+			.iter()
+			.flat_map(|instance| {
+				Range::<u32>::from(instance.mesh_ids)
+					.map(|mesh_id| meshes[mesh_id as usize].stats.transform(instance.transform))
+			})
+			.sum()
+	};
+
 	Ok((meshes, instances, stats))
 }
 
-fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<(MeshletMesh, SourceMeshStats)> {
+fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMesh> {
 	profiling::function_scope!();
 	if primitive.mode() != Mode::Triangles {
 		Err(MeshletError::PrimitiveMustBeTriangleList)?;
@@ -170,14 +182,12 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<(
 	let pbr_material_vertices = process_pbr_vertices(gltf, primitive.clone())?;
 	assert_eq!(pbr_material_vertices.len(), src_vertices_len);
 
-	Ok((
-		MeshletMesh {
-			lod_mesh,
-			pbr_material_vertices,
-			pbr_material_id: primitive.material().index().map(|i| i as u32),
-		},
+	Ok(MeshletMesh {
+		lod_mesh,
+		pbr_material_vertices,
+		pbr_material_id: primitive.material().index().map(|i| i as u32),
 		stats,
-	))
+	})
 }
 
 pub fn lod_mesh_build_meshlets(

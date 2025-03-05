@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{Affine3A, Vec3};
 use rkyv::{Archive, Deserialize, Serialize};
 use std::iter::Sum;
 use std::ops::{Add, AddAssign};
@@ -18,6 +18,29 @@ pub struct SourceMeshStats {
 	pub meshlet_vertices: u32,
 	pub bounds_min: Vec3,
 	pub bounds_max: Vec3,
+}
+
+impl SourceMeshStats {
+	/// This is an approximation, as rotating an AABB will always yield a larger AABB.
+	pub fn transform(&self, affine: Affine3A) -> Self {
+		let mut min = Vec3::INFINITY;
+		let mut max = Vec3::NEG_INFINITY;
+		for x in [self.bounds_min.x, self.bounds_max.x] {
+			for y in [self.bounds_min.y, self.bounds_max.y] {
+				for z in [self.bounds_min.z, self.bounds_max.z] {
+					let pos = affine.transform_point3(Vec3::new(x, y, z));
+					min = min.min(pos);
+					max = max.max(pos);
+				}
+			}
+		}
+
+		Self {
+			bounds_min: min,
+			bounds_max: max,
+			..*self
+		}
+	}
 }
 
 impl Default for SourceMeshStats {

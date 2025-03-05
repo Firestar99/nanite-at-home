@@ -4,6 +4,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use space_asset_disk::material::pbr::PbrVertex;
 use space_asset_disk::meshlet::indices::triangle_indices_load;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
+use space_asset_disk::meshlet::stats::SourceMeshStats;
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use std::ops::{Deref, DerefMut, Index};
 
@@ -12,6 +13,7 @@ pub struct MeshletMesh {
 	pub lod_mesh: LodMesh,
 	pub pbr_material_vertices: Vec<PbrVertex>,
 	pub pbr_material_id: Option<u32>,
+	pub stats: SourceMeshStats,
 }
 
 impl Deref for MeshletMesh {
@@ -49,6 +51,7 @@ impl MeshletMesh {
 			triangles: self.lod_mesh.triangles,
 			pbr_material_vertices: self.pbr_material_vertices,
 			pbr_material_id: self.pbr_material_id,
+			stats: self.stats,
 		})
 	}
 }
