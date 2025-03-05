@@ -6,6 +6,7 @@ use crate::meshlet::process::lod_mesh_build_meshlets;
 use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use space_asset_disk::material::pbr::PbrVertex;
 use space_asset_disk::meshlet::lod_level_bitmask::LodLevelBitmask;
@@ -13,7 +14,6 @@ use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::shape::sphere::Sphere;
 use static_assertions::const_assert_eq;
-use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem::{offset_of, size_of, size_of_val};
 use std::ops::Deref;
@@ -108,7 +108,7 @@ pub struct BorderTracker<'a> {
 	/// contains all borders
 	borders: Vec<Border>,
 	/// remap table to deduplicate material vertices based on their position
-	position_dedup_material_remap: HashMap<[u32; 3], MaterialVertexId>,
+	position_dedup_material_remap: FxHashMap<[u32; 3], MaterialVertexId>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -170,8 +170,8 @@ impl<'a> BorderTracker<'a> {
 			size_of::<SmallVec<[MeshletId; 1]>>(),
 			size_of::<SmallVec<[MeshletId; 4]>>()
 		);
-		let mut edge_to_meshlets: HashMap<IndexPair<MaterialVertexId>, SmallVec<[QueueId; 4]>>;
-		let mut position_dedup_material_remap: HashMap<[u32; 3], MaterialVertexId>;
+		let mut edge_to_meshlets: FxHashMap<IndexPair<MaterialVertexId>, SmallVec<[QueueId; 4]>>;
+		let mut position_dedup_material_remap: FxHashMap<[u32; 3], MaterialVertexId>;
 		// Use a SmallVec of cap 6 for adjacency:
 		// small models: 0..2
 		// large models: usually 0..6, sometimes a few meshlets have significantly more
@@ -180,9 +180,14 @@ impl<'a> BorderTracker<'a> {
 			profiling::scope!("edge_to_meshlets meshlet_adj");
 			// HashMap capacity: worst case we get 2 new edges per triangle, but around 1 edge per triangle is typical
 			// and HashMap over allocates a bit anyway
-			edge_to_meshlets = HashMap::with_capacity(queued_meshlets.len() * MESHLET_MAX_TRIANGLES as usize);
-			position_dedup_material_remap =
-				HashMap::with_capacity(queued_meshlets.len() * MESHLET_MAX_VERTICES as usize);
+			edge_to_meshlets = FxHashMap::with_capacity_and_hasher(
+				queued_meshlets.len() * MESHLET_MAX_TRIANGLES as usize,
+				FxBuildHasher::default(),
+			);
+			position_dedup_material_remap = FxHashMap::with_capacity_and_hasher(
+				queued_meshlets.len() * MESHLET_MAX_VERTICES as usize,
+				FxBuildHasher::default(),
+			);
 			meshlet_adj = vec![SortedSmallVec::new(); queued_meshlets.len()];
 			for queue_id in 0..queued_meshlets.len() {
 				let queue_id = QueueId(queue_id as u32);
@@ -357,7 +362,7 @@ impl<'a> BorderTracker<'a> {
 		let mut s_indices;
 		{
 			profiling::scope!("simplify make mesh");
-			let mut s_remap = HashMap::with_capacity(draw_vertex_cnt);
+			let mut s_remap = FxHashMap::with_capacity_and_hasher(draw_vertex_cnt, FxBuildHasher::default());
 			s_vertices = Vec::with_capacity(draw_vertex_cnt);
 			s_indices = Vec::with_capacity(triangle_cnt * 3);
 			for m in &meshlets {
@@ -376,7 +381,8 @@ impl<'a> BorderTracker<'a> {
 		let s_vertex_lock;
 		{
 			profiling::scope!("simplify vertex_lock");
-			let mut locked_dedup_material_ids = HashSet::with_capacity(draw_vertex_cnt);
+			let mut locked_dedup_material_ids =
+				FxHashSet::with_capacity_and_hasher(draw_vertex_cnt, FxBuildHasher::default());
 			for id in queue_ids.iter().copied() {
 				for oid in self.get_connected_meshlets(id) {
 					if !queue_ids.contains(&oid) {

@@ -2848,6 +2848,7 @@ dependencies = [
  "rayon",
  "rkyv",
  "rust-gpu-bindless-macro-utils",
+ "rustc-hash 2.1.1",
  "smallvec",
  "space-asset-disk",
  "static_assertions",
