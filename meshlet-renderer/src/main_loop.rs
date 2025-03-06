@@ -174,12 +174,12 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			let (sun, ambient_light) = sun_controller.eval_sun(delta_time);
 			FrameData {
 				camera,
-				nanite_error_threshold: nanite_error_selector.error,
 				debug_settings: debug_settings_selector.debug_settings.into(),
 				debug_mix: debug_settings_selector.debug_mix_adjusted(),
 				debug_lod_level: lod_selector.lod_selection(),
 				sun,
 				ambient_light,
+				nanite: nanite_error_selector.nanite,
 			}
 		};
 

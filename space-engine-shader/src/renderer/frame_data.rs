@@ -26,14 +26,33 @@ impl DebugSettings {
 #[derive(Copy, Clone, BufferStruct)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
+pub struct NaniteSettings {
+	pub error_threshold: f32,
+	pub error_scale: f32,
+	pub bounding_sphere_scale: f32,
+}
+
+impl Default for NaniteSettings {
+	fn default() -> Self {
+		Self {
+			error_threshold: 1.0,
+			error_scale: 1.0,
+			bounding_sphere_scale: 1.0,
+		}
+	}
+}
+
+#[derive(Copy, Clone, BufferStruct)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(C)]
 pub struct FrameData {
 	pub camera: Camera,
-	pub nanite_error_threshold: f32,
 	pub debug_settings: u32,
 	pub debug_mix: f32,
 	pub debug_lod_level: LodSelection,
 	pub sun: DirectionalLight,
 	pub ambient_light: Radiance,
+	pub nanite: NaniteSettings,
 }
 
 impl FrameData {
