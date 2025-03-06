@@ -99,7 +99,6 @@ pub fn project_to_screen_area(frame_data: FrameData, instance: AffineTransform, 
 	}
 
 	let radius = sphere.radius() * nanite.bounding_sphere_scale;
-	let error = error * nanite.error_scale;
 
 	let center_world = instance.affine.transform_point3(sphere.center());
 	let d = center_world.distance(camera.transform.translation()) - radius;

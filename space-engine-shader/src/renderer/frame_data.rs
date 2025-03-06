@@ -28,18 +28,7 @@ impl DebugSettings {
 #[repr(C)]
 pub struct NaniteSettings {
 	pub error_threshold: f32,
-	pub error_scale: f32,
 	pub bounding_sphere_scale: f32,
-}
-
-impl Default for NaniteSettings {
-	fn default() -> Self {
-		Self {
-			error_threshold: 1.0,
-			error_scale: 1.0,
-			bounding_sphere_scale: 1.0,
-		}
-	}
 }
 
 #[derive(Copy, Clone, BufferStruct)]
