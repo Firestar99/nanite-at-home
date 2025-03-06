@@ -2,6 +2,7 @@ use crate::app_focus::AppFocus;
 use crate::debug_settings_selector::DebugSettingsSelector;
 use crate::delta_time::DeltaTimer;
 use crate::fps_camera_controller::FpsCameraController;
+use crate::fps_ui::FpsUi;
 use crate::lod_selector::LodSelector;
 use crate::nanite_error_selector::NaniteErrorSelector;
 use crate::scene_selector::SceneSelector;
@@ -130,6 +131,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 	let mut app_focus = AppFocus::new(event_loop.clone(), window.clone());
 	let mut last_frame = DeltaTimer::default();
 	let mut sun_controller = SunController::new();
+	let mut fps_ui = FpsUi::new();
 	'outer: loop {
 		profiling::finish_frame!();
 		profiling::scope!("frame");
@@ -160,6 +162,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		let output_image = swapchain.acquire_image(None).await?;
 		let frame_data = {
 			let delta_time = last_frame.next();
+			fps_ui.update(delta_time);
 
 			let out_extent = UVec3::from(output_image.extent()).xy();
 			let fov_y = 90.;
@@ -200,6 +203,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 					sun_controller.ui(ui);
 					ui.add_space(space);
 				});
+			fps_ui.ui(ctx);
 		})?;
 
 		let output_image = bindless.execute(|cmd| {
