@@ -2,7 +2,7 @@ use crate::renderer::compacting_alloc_buffer::{CompactingAllocBufferReader, Comp
 use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
-use glam::UVec3;
+use glam::{UVec3, Vec3A};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::affine_transform::AffineTransform;
@@ -98,7 +98,15 @@ pub fn project_to_screen_area(frame_data: FrameData, instance: AffineTransform, 
 		return error;
 	}
 
-	let radius = sphere.radius() * nanite.bounding_sphere_scale;
+	let max_scale_factor = {
+		// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
+		// That is equivalent to multiplying the radius by the axis that is scaled up the most.
+		let sum = |a: Vec3A| a.x + a.y + a.z;
+		let mat = instance.affine.matrix3;
+		f32::max(f32::max(sum(mat.x_axis), sum(mat.y_axis)), sum(mat.z_axis))
+	};
+	let radius = sphere.radius() * max_scale_factor * nanite.bounding_sphere_scale;
+	let error = error * max_scale_factor;
 
 	let center_world = instance.affine.transform_point3(sphere.center());
 	let d = center_world.distance(camera.transform.translation()) - radius;
