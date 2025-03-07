@@ -1,9 +1,11 @@
+use egui::Ui;
 use space_engine_shader::renderer::frame_data::DebugSettings;
 use winit::event::{ElementState, Event, KeyEvent, WindowEvent};
 use winit::keyboard::PhysicalKey::Code;
 
 pub struct DebugSettingsSelector {
-	selected: DebugSettings,
+	pub debug_settings: DebugSettings,
+	pub debug_mix: f32,
 }
 
 impl Default for DebugSettingsSelector {
@@ -15,16 +17,17 @@ impl Default for DebugSettingsSelector {
 impl DebugSettingsSelector {
 	pub fn new() -> Self {
 		Self {
-			selected: DebugSettings::None,
+			debug_settings: DebugSettings::None,
+			debug_mix: 1.0,
 		}
 	}
 
-	pub fn set(&mut self, setting: DebugSettings) {
-		self.selected = setting;
-	}
-
-	pub fn get(&self) -> DebugSettings {
-		self.selected
+	pub fn debug_mix_adjusted(&self) -> f32 {
+		if self.debug_settings == DebugSettings::None {
+			0.
+		} else {
+			self.debug_mix
+		}
 	}
 
 	#[allow(clippy::single_match)]
@@ -44,18 +47,32 @@ impl DebugSettingsSelector {
 				..
 			} => {
 				use winit::keyboard::KeyCode::*;
-				let mut selected = u32::from(self.selected) as i32;
+				let mut selected = u32::from(self.debug_settings) as i32;
 				match code {
 					KeyQ => selected -= 1,
 					KeyE => selected += 1,
 					_ => return,
 				}
 				let selected = i32::rem_euclid(selected, DebugSettings::LEN as i32);
-				let debug_settings = DebugSettings::try_from(selected as u32).unwrap();
-				self.set(debug_settings);
-				println!("DebugSettings: {:?}", debug_settings);
+				self.debug_settings = DebugSettings::try_from(selected as u32).unwrap();
+				println!("DebugSettings: {:?}", self.debug_settings);
 			}
 			_ => {}
 		}
+	}
+
+	pub fn ui(&mut self, ui: &mut Ui) {
+		ui.strong("Debug View:");
+		egui::ComboBox::from_id_salt(concat!(file!(), line!()))
+			.selected_text(format!("{:?}", self.debug_settings))
+			.show_ui(ui, |ui| {
+				for x in (0..DebugSettings::MAX_VALUE as u32).map(|i| DebugSettings::try_from(i).unwrap()) {
+					ui.selectable_value(&mut self.debug_settings, x, format!("{:?}", x));
+				}
+			});
+		ui.add_enabled(
+			self.debug_settings != DebugSettings::None,
+			egui::Slider::new(&mut self.debug_mix, 0. ..=1.).text("color mix"),
+		);
 	}
 }

@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
-use winit::window::WindowBuilder;
+use winit::window::WindowAttributes;
 
 pub fn main() {
 	event_loop_init(|event_loop, events| async {
@@ -50,9 +50,9 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
-			let window = WindowBuilder::new().with_title("swapchain triangle").build(e)?;
+			let window = e.create_window(WindowAttributes::default().with_title("swapchain triangle"))?;
 			let extensions = ash_enumerate_required_extensions(e.display_handle()?.as_raw())?;
-			Ok::<_, anyhow::Error>((WindowRef::new(window), extensions))
+			Ok::<_, anyhow::Error>((WindowRef::new(Arc::new(window)), extensions))
 		})
 		.await?;
 
@@ -70,7 +70,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 
 	let mut swapchain = unsafe {
 		let bindless2 = bindless.clone();
-		AshSwapchain::new(&bindless, &event_loop, &window, move |surface, _| {
+		AshSwapchain::new(&bindless, &event_loop, window.clone(), move |surface, _| {
 			AshSwapchainParams::automatic_best(
 				&bindless2,
 				surface,

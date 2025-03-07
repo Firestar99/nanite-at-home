@@ -2,7 +2,7 @@ use crate::renderer::compacting_alloc_buffer::{CompactingAllocBufferReading, Com
 use crate::renderer::frame_context::FrameContext;
 use rust_gpu_bindless::descriptor::{Bindless, RCDescExt};
 use rust_gpu_bindless::pipeline::{BindlessComputePipeline, Recording, RecordingError};
-use space_asset_rt::meshlet::scene::MeshletSceneCpu;
+use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
 use space_engine_shader::renderer::meshlet::meshlet_select::Param;
 use std::sync::Arc;
@@ -16,15 +16,15 @@ impl MeshletSelectCompute {
 		)?))
 	}
 
-	#[profiling::function]
 	pub fn dispatch(
 		&self,
 		cmd: &mut Recording<'_>,
 		frame_context: &FrameContext,
-		scene: &MeshletSceneCpu,
+		scene: &InstancedMeshletSceneCpu,
 		compacting_groups_in: &CompactingAllocBufferReading<MeshletGroupInstance>,
 		compacting_instances_out: &CompactingAllocBufferWriting<MeshletInstance>,
 	) -> Result<(), RecordingError> {
+		profiling::function_scope!();
 		cmd.dispatch_indirect(
 			&self.0,
 			compacting_groups_in.indirect_args(),

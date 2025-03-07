@@ -33,8 +33,8 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 		Ok(vec)
 	}
 
-	#[profiling::function]
 	pub fn decode_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
+		profiling::function_scope!();
 		assert_eq!(dst.len(), self.decompressed_bytes());
 		match self.disk_compression {
 			DiskImageCompression::None => self.decode_none_into(src, dst),
@@ -44,21 +44,21 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 		Ok(())
 	}
 
-	#[profiling::function]
 	fn decode_none_into(&self, src: &[u8], dst: &mut [u8]) {
+		profiling::function_scope!();
 		assert_eq!(dst.len(), src.len());
 		dst.copy_from_slice(src);
 	}
 
-	#[profiling::function]
 	fn decode_bcn_zstd_into(&self, src: &[u8], mut dst: &mut [u8]) -> io::Result<()> {
+		profiling::function_scope!();
 		zstd::stream::copy_decode(src, &mut dst)?;
 		assert_eq!(0, dst.len(), "all bytes written");
 		Ok(())
 	}
 
-	#[profiling::function]
 	fn decode_embedded_into(&self, src: &[u8], dst: &mut [u8]) -> Result<(), ImageErrors> {
+		profiling::function_scope!();
 		let req_channels = self.image_type().channels() as usize;
 
 		let mut image = zune_image::image::Image::read(ZCursor::new(src), DecoderOptions::new_fast())?;

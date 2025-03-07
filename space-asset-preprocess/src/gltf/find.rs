@@ -14,8 +14,8 @@ pub struct GltfFile {
 	pub out_path: PathBuf,
 }
 
-#[profiling::function]
 pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed: bool) -> io::Result<Vec<GltfFile>> {
+	profiling::function_scope!();
 	let models_dir = fs::canonicalize(models_dir)?;
 	if print_rerun_if_changed {
 		println!("cargo:rerun-if-changed={}", models_dir.to_str().unwrap());
@@ -55,8 +55,8 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 		.collect::<Vec<_>>())
 }
 
-#[profiling::function]
 pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> Result<TokenStream, ModNodeError> {
+	profiling::function_scope!();
 	let found_crate = crate_name("space-asset-disk").unwrap();
 	let crate_name = match &found_crate {
 		FoundCrate::Itself => "crate",
@@ -93,8 +93,9 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 	};
 	let mod_hierarchy = root.to_tokens(|name, model| {
 		let out_relative = &model.out_relative;
+		let in_relative = &model.relative.join("/");
 		quote! {
-			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#out_relative) };
+			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#in_relative, #out_relative) };
 		}
 	});
 	Ok(quote! {

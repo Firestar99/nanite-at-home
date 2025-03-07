@@ -19,14 +19,16 @@ use space_asset_disk::meshlet::lod_level_bitmask::LodLevelBitmask;
 use space_asset_disk::meshlet::mesh::{MeshletData, MeshletMeshDisk};
 use space_asset_disk::meshlet::offset::MeshletOffset;
 use space_asset_disk::meshlet::scene::MeshletSceneDisk;
+use space_asset_disk::meshlet::stats::{MeshletSceneStats, SourceMeshStats};
 use space_asset_disk::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use space_asset_disk::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
 use space_asset_disk::range::RangeU32;
 use space_asset_disk::shape::sphere::Sphere;
 use std::mem::{offset_of, size_of};
+use std::ops::Range;
 
-#[profiling::function]
 pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
+	profiling::function_scope!();
 	let mut pbr_materials = None;
 	let mut meshes_instances = None;
 	rayon::in_place_scope(|scope| {
@@ -34,17 +36,18 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 		scope.spawn(|_| meshes_instances = Some(process_meshes(gltf)));
 	});
 	let pbr_materials = pbr_materials.unwrap()?;
-	let (meshes, instances) = meshes_instances.unwrap()?;
+	let (meshes, instances, src_stats) = meshes_instances.unwrap()?;
 
 	Ok(MeshletSceneDisk {
 		pbr_materials,
 		meshes,
 		instances,
+		stats: MeshletSceneStats { source: src_stats },
 	})
 }
 
-#[profiling::function]
 fn process_materials(gltf: &Gltf) -> anyhow::Result<Vec<PbrMaterialDisk>> {
+	profiling::function_scope!();
 	let image_processor = ImageProcessor::new(gltf);
 	let pbr_materials = {
 		profiling::scope!("materials 1");
@@ -70,8 +73,8 @@ fn process_materials(gltf: &Gltf) -> anyhow::Result<Vec<PbrMaterialDisk>> {
 	Ok(pbr_materials)
 }
 
-#[profiling::function]
-fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<MeshletInstanceDisk>)> {
+fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<MeshletInstanceDisk>, SourceMeshStats)> {
+	profiling::function_scope!();
 	let mesh_primitives = {
 		gltf.meshes()
 			.collect::<Vec<_>>()
@@ -90,6 +93,7 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 	};
 
 	let (meshes, mesh2ids) = {
+		profiling::scope!("mesh2ids");
 		let mut mesh2ids = Vec::with_capacity(mesh_primitives.len());
 		let mut i = 0;
 		let meshes = mesh_primitives
@@ -117,17 +121,29 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 			})
 			.collect::<Vec<_>>()
 	};
-	Ok((meshes, instances))
+
+	let stats = {
+		profiling::scope!("scene stats");
+		instances
+			.iter()
+			.flat_map(|instance| {
+				Range::<u32>::from(instance.mesh_ids)
+					.map(|mesh_id| meshes[mesh_id as usize].stats.transform(instance.transform))
+			})
+			.sum()
+	};
+
+	Ok((meshes, instances, stats))
 }
 
-#[profiling::function]
 fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<MeshletMesh> {
+	profiling::function_scope!();
 	if primitive.mode() != Mode::Triangles {
 		Err(MeshletError::PrimitiveMustBeTriangleList)?;
 	}
 
 	let reader = primitive.reader(|b| gltf.buffer(b));
-	let draw_vertices: Vec<_> = reader
+	let mut src_vertices: Vec<_> = reader
 		.read_positions()
 		.ok_or(MeshletError::NoVertexPositions)?
 		.enumerate()
@@ -136,39 +152,60 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 			material_vertex_id: MaterialVertexId(i as u32),
 		})
 		.collect();
-	let draw_vertices_len = draw_vertices.len();
+	let src_vertices_len = src_vertices.len();
 
-	let indices: Vec<_> = if let Some(indices) = reader.read_indices() {
+	let mut indices: Vec<_> = if let Some(indices) = reader.read_indices() {
 		indices.into_u32().collect()
 	} else {
-		(0..draw_vertices_len as u32).collect()
+		(0..src_vertices_len as u32).collect()
 	};
 
-	let lod_mesh = lod_mesh_build_meshlets(indices, draw_vertices, None, 0.);
+	let lod_mesh = lod_mesh_build_meshlets(&mut indices, &mut src_vertices, None, 0.);
+
+	let stats = SourceMeshStats {
+		unique_vertices: src_vertices_len as u32,
+		triangles: (indices.len() / 3) as u32,
+		meshlets: lod_mesh.meshlets.len() as u32,
+		meshlet_vertices: lod_mesh.draw_vertices.len() as u32,
+		bounds_min: src_vertices
+			.iter()
+			.map(|v| v.position)
+			.reduce(Vec3::min)
+			.unwrap_or(Vec3::ZERO),
+		bounds_max: src_vertices
+			.iter()
+			.map(|v| v.position)
+			.reduce(Vec3::max)
+			.unwrap_or(Vec3::ZERO),
+	};
+
+	let pbr_material_vertices = process_pbr_vertices(gltf, primitive.clone())?;
+	assert_eq!(pbr_material_vertices.len(), src_vertices_len);
 
 	Ok(MeshletMesh {
 		lod_mesh,
-		pbr_material_vertices: process_pbr_vertices(gltf, primitive.clone(), draw_vertices_len)?,
+		pbr_material_vertices,
 		pbr_material_id: primitive.material().index().map(|i| i as u32),
+		stats,
 	})
 }
 
-#[profiling::function]
 pub fn lod_mesh_build_meshlets(
-	mut indices: Vec<u32>,
-	mut draw_vertices: Vec<DrawVertex>,
+	indices: &mut Vec<u32>,
+	draw_vertices: &mut Vec<DrawVertex>,
 	bounds: Option<Sphere>,
 	error: f32,
 ) -> LodMesh {
+	profiling::function_scope!();
 	{
 		profiling::scope!("meshopt::optimize_vertex_fetch_in_place");
-		let vertex_cnt = meshopt::optimize_vertex_fetch_in_place(&mut indices, &mut draw_vertices);
+		let vertex_cnt = meshopt::optimize_vertex_fetch_in_place(indices, draw_vertices);
 		draw_vertices.truncate(vertex_cnt);
 	}
 
 	{
 		profiling::scope!("meshopt::optimize_vertex_cache_in_place");
-		meshopt::optimize_vertex_cache_in_place(&mut indices, draw_vertices.len());
+		meshopt::optimize_vertex_cache_in_place(indices, draw_vertices.len());
 	}
 
 	let adapter = VertexDataAdapter::new(

@@ -16,8 +16,8 @@ pub struct Gltf {
 }
 
 impl Gltf {
-	#[profiling::function]
 	pub fn open(path: &Path) -> anyhow::Result<Self> {
+		profiling::function_scope!();
 		let base = path
 			.parent()
 			.map(Path::to_path_buf)
@@ -105,8 +105,8 @@ impl From<io::Error> for GltfImageError {
 }
 
 impl Gltf {
-	#[profiling::function]
 	pub fn absolute_node_transformations(&self, scene: &Scene, base: Affine3A) -> Vec<Affine3A> {
+		profiling::function_scope!();
 		fn walk(out: &mut Vec<Affine3A>, node: Node, parent: Affine3A) {
 			let (translation, rotation, scale) = node.transform().decomposed();
 			let node_absolute = parent

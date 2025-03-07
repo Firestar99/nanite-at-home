@@ -50,3 +50,4 @@ smallvec = { workspace = true }
 clap = { workspace = true }
 walkdir = { workspace = true }
 anyhow = { workspace = true }
+rustc-hash = { workspace = true }

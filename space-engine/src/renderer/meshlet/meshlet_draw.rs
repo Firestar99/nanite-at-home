@@ -9,7 +9,7 @@ use rust_gpu_bindless::pipeline::{
 };
 use rust_gpu_bindless::shader::{BindlessShader, SpirvBinary};
 use rust_gpu_bindless::shader_type::TaskShader;
-use space_asset_rt::meshlet::scene::MeshletSceneCpu;
+use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::intermediate::MeshletInstance;
 use space_engine_shader::renderer::meshlet::mesh_shader::Param;
 use std::sync::Arc;
@@ -49,14 +49,14 @@ impl MeshletDraw {
 		Ok(Self { pipeline, sampler })
 	}
 
-	#[profiling::function]
 	pub fn draw(
 		&self,
 		cmd: &mut Rendering,
 		frame_context: &FrameContext,
-		scene: &MeshletSceneCpu,
+		scene: &InstancedMeshletSceneCpu,
 		alloc_buffer: &CompactingAllocBufferReading<MeshletInstance>,
 	) -> Result<(), RecordingError> {
+		profiling::function_scope!();
 		let param = Param {
 			frame_data: frame_context.frame_data_desc,
 			scene: scene.scene.to_transient(cmd),

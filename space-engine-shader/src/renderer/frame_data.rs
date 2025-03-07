@@ -9,9 +9,6 @@ use rust_gpu_bindless_macros::BufferStruct;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum DebugSettings {
 	None,
-	LodLevelOverlay,
-	TriangleIdOverlay,
-	MeshletIdOverlay,
 	LodLevel,
 	TriangleId,
 	MeshletId,
@@ -29,13 +26,22 @@ impl DebugSettings {
 #[derive(Copy, Clone, BufferStruct)]
 #[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
 #[repr(C)]
+pub struct NaniteSettings {
+	pub error_threshold: f32,
+	pub bounding_sphere_scale: f32,
+}
+
+#[derive(Copy, Clone, BufferStruct)]
+#[cfg_attr(not(target_arch = "spirv"), derive(Debug))]
+#[repr(C)]
 pub struct FrameData {
 	pub camera: Camera,
-	pub nanite_error_threshold: f32,
 	pub debug_settings: u32,
+	pub debug_mix: f32,
 	pub debug_lod_level: LodSelection,
 	pub sun: DirectionalLight,
 	pub ambient_light: Radiance,
+	pub nanite: NaniteSettings,
 }
 
 impl FrameData {

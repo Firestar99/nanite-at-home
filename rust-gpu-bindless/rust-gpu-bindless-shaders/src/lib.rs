@@ -9,6 +9,7 @@ pub mod buffer_content;
 pub mod descriptor;
 pub mod shader;
 pub mod shader_type;
+pub mod utils;
 
 pub use bytemuck;
 pub use bytemuck_derive;

@@ -15,11 +15,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::thread;
 use winit::event::Event;
-use winit::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
+use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 
 // EventLoop Task
 trait EventLoopTaskTrait: Send + Sync {
-	fn run(&self, event_loop: &EventLoopWindowTarget<()>);
+	fn run(&self, event_loop: &ActiveEventLoop);
 }
 
 #[repr(u8)]
@@ -34,7 +34,7 @@ enum TaskState {
 
 struct EventLoopTaskInner<R, F>
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static,
 {
@@ -48,7 +48,7 @@ where
 
 unsafe impl<R, F> Sync for EventLoopTaskInner<R, F>
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static,
 {
@@ -56,11 +56,11 @@ where
 
 impl<R, F> EventLoopTaskTrait for EventLoopTaskInner<R, F>
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static,
 {
-	fn run(&self, event_loop: &EventLoopWindowTarget<()>) {
+	fn run(&self, event_loop: &ActiveEventLoop) {
 		let func = self.func.replace(None).expect("Task ran twice?");
 		let result = func(event_loop);
 		// SAFETY: as long as state != Finished we are the only ones who have access to self.result, and this is only called by the main thread
@@ -106,7 +106,7 @@ where
 
 impl<R, F> EventLoopTaskInner<R, F>
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static,
 {
@@ -177,7 +177,7 @@ where
 
 impl<R, F> Drop for EventLoopTaskInner<R, F>
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static,
 {
@@ -201,13 +201,13 @@ where
 #[derive(Clone)]
 struct EventLoopTask<R, F>(Arc<EventLoopTaskInner<R, F>>)
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static;
 
 impl<R, F> Future for EventLoopTask<R, F>
 where
-	F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+	F: FnOnce(&ActiveEventLoop) -> R,
 	F: Send + 'static,
 	R: Send + 'static,
 {
@@ -241,7 +241,7 @@ impl EventLoopExecutor {
 
 	pub fn spawn<R, F>(&self, f: F) -> impl Future<Output = R>
 	where
-		F: FnOnce(&EventLoopWindowTarget<()>) -> R,
+		F: FnOnce(&ActiveEventLoop) -> R,
 		F: Send + 'static,
 		R: Send + 'static,
 	{
@@ -294,9 +294,10 @@ where
 
 	// plain loop without EventLoop
 	let event_loop;
+	let mut forward_msg;
 	{
-		let forward_msg = match exec_rx.recv() {
-			Ok(msg) => msg,
+		forward_msg = match exec_rx.recv() {
+			Ok(msg) => Some(msg),
 			Err(_) => {
 				// fail is always a disconnect
 				return;
@@ -314,23 +315,28 @@ where
 			*NOTIFY.lock() = Some(notify);
 			NOTIFY_CREATED.store(true, Release);
 		}
-		forward_msg.run(&event_loop);
 	}
 
 	// EventLoop loop
+	#[allow(deprecated)]
 	event_loop
 		.run(move |event, b| {
 			match event {
 				Event::UserEvent(_) => {
+					if let Some(forward_msg) = forward_msg.take() {
+						forward_msg.run(&b);
+					}
+
 					loop {
 						match exec_rx.try_recv() {
 							Ok(msg) => msg.run(b),
 							Err(e) => {
 								if matches!(e, TryRecvError::Disconnected) {
-									// Only exit when all other threads have exited!
-									// Otherwise the system start cleaning up device objects while we're also at it, causing Segfaults.
-									// Not unwrapping in case control_flow.set_exit() were to call into here again for some reason, cause you never know window systems...
+									// Only exit when all other threads have exited! Otherwise, the system start
+									// cleaning up device objects while we're also at it, causing Segfaults.
 									if let Some(join_handle) = render_join_handle.take() {
+										// Not unwrapping in case control_flow.set_exit() were to call into here again
+										// for some reason, cause you never know window systems...
 										join_handle.join().ok();
 									}
 									b.exit();

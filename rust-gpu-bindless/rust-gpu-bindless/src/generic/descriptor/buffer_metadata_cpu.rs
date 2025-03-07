@@ -7,9 +7,9 @@ use rust_gpu_bindless_shaders::descriptor::StrongDesc;
 use rust_gpu_bindless_shaders::descriptor::{DescContent, DescriptorId};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
+use thiserror::Error;
 
 // TODO I don't like that this can dynamically error and would like it gone. Instead we could have an UploadContext that
 //  allows you to convert RCDesc to StrongDesc and already (uniquely) clone RCs when the StrongDesc are created. This
@@ -40,7 +40,7 @@ impl<'a, P: BindlessPlatform> StrongMetadataCpu<'a, P> {
 	}
 
 	pub fn into_backing_refs(self) -> StrongBackingRefs<P> {
-		StrongBackingRefs(self.refs.expect("BackingRefsError occurred:").into_values().collect())
+		StrongBackingRefs(self.refs.expect("BackingRefsError occurred").into_values().collect())
 	}
 }
 
@@ -70,18 +70,14 @@ impl<'a, P: BindlessPlatform> Deref for StrongMetadataCpu<'a, P> {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Error)]
 pub enum BackingRefsError {
+	#[error("{0:?} was no longer alive while StrongDesc of it existed")]
 	NoLongerAlive(DescriptorId),
 }
 
-impl Display for BackingRefsError {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		match self {
-			BackingRefsError::NoLongerAlive(desc) => f.write_fmt(format_args!(
-				"{:?} was no longer alive while StrongDesc of it existed",
-				desc
-			)),
-		}
+impl core::fmt::Debug for BackingRefsError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		core::fmt::Display::fmt(self, f)
 	}
 }

@@ -1,5 +1,6 @@
 use crate::generic::descriptor::{
-	BindlessAllocationScheme, BindlessBufferUsage, BindlessImageUsage, Extent, SampleCount,
+	AddressMode, BindlessAllocationScheme, BindlessBufferUsage, BindlessImageUsage, BorderColor, Extent, Filter,
+	SampleCount,
 };
 use crate::generic::pipeline::{ClearValue, ImageAccessType, IndexType, LoadOp, RenderingAttachment, StoreOp};
 use crate::generic::platform::ash::Ash;
@@ -254,6 +255,46 @@ impl IndexType {
 		match self {
 			IndexType::U32 => ash::vk::IndexType::UINT32,
 			IndexType::U16 => ash::vk::IndexType::UINT16,
+		}
+	}
+}
+
+impl Filter {
+	pub fn to_ash_filter(&self) -> ash::vk::Filter {
+		match self {
+			Filter::Nearest => ash::vk::Filter::NEAREST,
+			Filter::Linear => ash::vk::Filter::LINEAR,
+		}
+	}
+
+	pub fn to_ash_mipmap_mode(&self) -> ash::vk::SamplerMipmapMode {
+		match self {
+			Filter::Nearest => ash::vk::SamplerMipmapMode::NEAREST,
+			Filter::Linear => ash::vk::SamplerMipmapMode::LINEAR,
+		}
+	}
+}
+
+impl AddressMode {
+	pub fn to_ash_address_mode(&self) -> ash::vk::SamplerAddressMode {
+		match self {
+			AddressMode::ClampToEdge => ash::vk::SamplerAddressMode::CLAMP_TO_EDGE,
+			AddressMode::Repeat => ash::vk::SamplerAddressMode::REPEAT,
+			AddressMode::MirrorRepeat => ash::vk::SamplerAddressMode::MIRRORED_REPEAT,
+			AddressMode::ClampToBorder => ash::vk::SamplerAddressMode::CLAMP_TO_BORDER,
+		}
+	}
+}
+
+impl BorderColor {
+	pub fn to_ash_border_color(&self, is_integer: bool) -> ash::vk::BorderColor {
+		match (self, is_integer) {
+			(BorderColor::TransparentBlack, false) => ash::vk::BorderColor::FLOAT_TRANSPARENT_BLACK,
+			(BorderColor::TransparentBlack, true) => ash::vk::BorderColor::INT_TRANSPARENT_BLACK,
+			(BorderColor::OpaqueBlack, false) => ash::vk::BorderColor::FLOAT_OPAQUE_BLACK,
+			(BorderColor::OpaqueBlack, true) => ash::vk::BorderColor::INT_OPAQUE_BLACK,
+			(BorderColor::OpaqueWhite, false) => ash::vk::BorderColor::FLOAT_OPAQUE_WHITE,
+			(BorderColor::OpaqueWhite, true) => ash::vk::BorderColor::INT_OPAQUE_WHITE,
 		}
 	}
 }

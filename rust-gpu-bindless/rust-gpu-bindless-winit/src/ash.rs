@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoopWindowTarget;
+use winit::event_loop::ActiveEventLoop;
 use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle};
 
 pub fn ash_enumerate_required_extensions(display_handle: RawDisplayHandle) -> VkResult<&'static [&'static CStr]> {
@@ -197,14 +197,11 @@ impl AshSwapchain {
 	pub async unsafe fn new(
 		bindless: &Arc<Bindless<Ash>>,
 		event_loop: &EventLoopExecutor,
-		window_ref: &WindowRef,
-		params: impl FnOnce(&ash::vk::SurfaceKHR, &EventLoopWindowTarget<()>) -> anyhow::Result<AshSwapchainParams>
-			+ Send
-			+ 'static,
+		window_ref: WindowRef,
+		params: impl FnOnce(&ash::vk::SurfaceKHR, &ActiveEventLoop) -> anyhow::Result<AshSwapchainParams> + Send + 'static,
 	) -> anyhow::Result<Self> {
 		let bindless = bindless.clone();
 		let event_loop_clone = event_loop.clone();
-		let window_ref = window_ref.clone();
 		event_loop
 			.spawn(move |e| {
 				let window = window_ref.get(e);
@@ -242,15 +239,15 @@ impl AshSwapchain {
 			.await
 	}
 
-	#[profiling::function]
 	unsafe fn create_swapchain(
 		bindless: &Arc<Bindless<Ash>>,
 		window: &WindowRef,
 		surface: ash::vk::SurfaceKHR,
 		params: &AshSwapchainParams,
 		old_swapchain: ash::vk::SwapchainKHR,
-		e: &EventLoopWindowTarget<()>,
+		e: &ActiveEventLoop,
 	) -> anyhow::Result<(ash::vk::SwapchainKHR, Vec<RcTableSlot>)> {
+		profiling::function_scope!();
 		unsafe {
 			let extent = {
 				let window_size = window.get(e).inner_size();

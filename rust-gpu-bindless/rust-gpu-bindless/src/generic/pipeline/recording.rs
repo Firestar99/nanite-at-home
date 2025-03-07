@@ -13,7 +13,7 @@ use crate::generic::platform::{BindlessPipelinePlatform, RecordingContext};
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -37,6 +37,12 @@ impl<'a, P: BindlessPipelinePlatform> Deref for Recording<'a, P> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.platform
+	}
+}
+
+impl<'a, P: BindlessPipelinePlatform> DerefMut for Recording<'a, P> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.platform
 	}
 }
 

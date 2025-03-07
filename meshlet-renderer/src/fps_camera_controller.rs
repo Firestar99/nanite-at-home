@@ -56,7 +56,7 @@ impl FpsCameraController {
 		Self::default()
 	}
 
-	pub fn handle_input(&mut self, event: &Event<()>) {
+	pub fn handle_input(&mut self, event: &Event<()>, focus: bool) {
 		match event {
 			Event::WindowEvent {
 				event:
@@ -88,7 +88,7 @@ impl FpsCameraController {
 				event: DeviceEvent::MouseMotion { delta, .. },
 				..
 			} => {
-				if !self.mouse_disabled {
+				if !self.mouse_disabled && focus {
 					const MOUSE_SPEED_CONST: f32 = 1. / (2. * PI);
 					let delta = DVec2::from(*delta).as_vec2() * self.mouse_speed * MOUSE_SPEED_CONST * -1.;
 					self.rotation_yaw = (self.rotation_yaw + delta.x) % (2. * PI);

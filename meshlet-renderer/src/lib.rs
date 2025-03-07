@@ -1,7 +1,8 @@
-pub mod curser_lock;
+pub mod app_focus;
 pub mod debug_settings_selector;
 pub mod delta_time;
 pub mod fps_camera_controller;
+pub mod fps_ui;
 pub mod lod_selector;
 pub mod main_loop;
 pub mod nanite_error_selector;

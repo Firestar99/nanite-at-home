@@ -8,11 +8,12 @@ use crate::generic::platform::ash::bindless_pipeline::AshPipeline;
 use crate::generic::platform::ash::{Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext};
 use crate::generic::platform::RenderingContext;
 use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
-use ash::vk::{
-	Extent2D, ImageLayout, Offset2D, PipelineBindPoint, Rect2D, RenderingAttachmentInfo, RenderingInfo, Viewport,
-};
+use ash::vk::{Extent2D, ImageLayout, Offset2D, PipelineBindPoint, Rect2D, RenderingAttachmentInfo, RenderingInfo};
+use glam::UVec2;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::TransientAccess;
+use rust_gpu_bindless_shaders::utils::rect::IRect2;
+use rust_gpu_bindless_shaders::utils::viewport::Viewport;
 use smallvec::SmallVec;
 use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
@@ -21,6 +22,10 @@ use std::sync::Arc;
 pub struct AshRenderingContext<'a, 'b> {
 	recording: &'b mut AshRecordingContext<'a>,
 	graphics_bind_descriptors: bool,
+	viewport: Viewport,
+	scissor: IRect2,
+	set_viewport: bool,
+	set_scissor: bool,
 }
 
 impl<'a, 'b> Deref for AshRenderingContext<'a, 'b> {
@@ -42,6 +47,95 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 		Self {
 			recording,
 			graphics_bind_descriptors: true,
+			viewport: Viewport::default(),
+			scissor: IRect2::default(),
+			set_viewport: true,
+			set_scissor: true,
+		}
+	}
+
+	/// Invalidates internal state that keeps track of the command buffer's state. Currently, it forces the global
+	/// descriptor set, current viewport and scissor rect to be rebound.
+	pub fn ash_invalidate_graphics(&mut self) {
+		self.ash_invalidate_graphics_descriptor_set();
+		self.ash_invalidate_graphics_viewport();
+		self.ash_invalidate_graphics_scissor();
+	}
+
+	/// Invalidates internal state that keeps track of the command buffer's state for the global descriptor set.
+	#[inline]
+	pub fn ash_invalidate_graphics_descriptor_set(&mut self) {
+		self.graphics_bind_descriptors = true;
+	}
+
+	/// Invalidates internal state that keeps track of the command buffer's state for the viewport.
+	#[inline]
+	pub fn ash_invalidate_graphics_viewport(&mut self) {
+		self.set_viewport = true;
+	}
+
+	/// Invalidates internal state that keeps track of the command buffer's state for the scissor rect.
+	#[inline]
+	pub fn ash_invalidate_graphics_scissor(&mut self) {
+		self.set_scissor = true;
+	}
+
+	/// Flushes the following graphics state changes to the command buffer:
+	/// * verify no barrier flushes are queued, illegal inside render passes
+	/// * flush viewport
+	/// * flush scissor
+	pub unsafe fn ash_flush_graphics(&mut self) -> Result<(), AshRecordingError> {
+		self.ash_must_not_flush_barriers()?;
+		self.ash_flush_viewport();
+		self.ash_flush_scissor();
+		Ok(())
+	}
+
+	pub unsafe fn ash_flush_viewport(&mut self) {
+		if self.set_viewport {
+			self.set_viewport = false;
+
+			unsafe {
+				let device = &self.recording.bindless.platform.device;
+				let viewport = self.viewport;
+				device.cmd_set_viewport(
+					self.recording.cmd,
+					0,
+					&[ash::vk::Viewport {
+						x: viewport.x,
+						y: viewport.y,
+						width: viewport.width,
+						height: viewport.height,
+						min_depth: viewport.min_depth,
+						max_depth: viewport.max_depth,
+					}],
+				);
+			}
+		}
+	}
+
+	pub unsafe fn ash_flush_scissor(&mut self) {
+		if self.set_scissor {
+			self.set_scissor = false;
+
+			unsafe {
+				let device = &self.recording.bindless.platform.device;
+				let scissor = self.scissor;
+				device.cmd_set_scissor(
+					self.recording.cmd,
+					0,
+					&[Rect2D {
+						offset: Offset2D {
+							x: scissor.origin.x,
+							y: scissor.origin.y,
+						},
+						extent: Extent2D {
+							width: scissor.extent.x,
+							height: scissor.extent.y,
+						},
+					}],
+				);
+			}
 		}
 	}
 
@@ -69,7 +163,7 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 		param: T,
 	) -> Result<(), AshRecordingError> {
 		unsafe {
-			self.ash_must_not_flush()?;
+			self.ash_flush_graphics()?;
 			let device = &self.recording.bindless.platform.device;
 			device.cmd_bind_pipeline(self.cmd, PipelineBindPoint::GRAPHICS, pipeline.pipeline);
 			if self.graphics_bind_descriptors {
@@ -108,7 +202,7 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 	unsafe fn begin_rendering(
 		recording: &'b mut AshRecordingContext<'a>,
 		_format: RenderPassFormat,
-		render_area: [u32; 2],
+		render_area: UVec2,
 		color_attachments: &[RenderingAttachment<Ash, ColorAttachment>],
 		depth_attachment: Option<RenderingAttachment<Ash, DepthStencilAttachment>>,
 	) -> Result<Self, AshRecordingError> {
@@ -121,8 +215,8 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 					.render_area(Rect2D {
 						offset: Offset2D { x: 0, y: 0 },
 						extent: Extent2D {
-							width: render_area[0],
-							height: render_area[1],
+							width: render_area.x,
+							height: render_area.y,
 						},
 					})
 					.layer_count(1)
@@ -138,18 +232,6 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 						RenderingAttachmentInfo::default()
 					}),
 			);
-			device.cmd_set_viewport(
-				recording.cmd,
-				0,
-				&[Viewport {
-					x: 0.0,
-					y: 0.0,
-					width: render_area[0] as f32,
-					height: render_area[1] as f32,
-					min_depth: 0.0,
-					max_depth: 1.0,
-				}],
-			);
 			Ok(Self::new(recording))
 		}
 	}
@@ -160,6 +242,16 @@ unsafe impl<'a, 'b> RenderingContext<'a, 'b, Ash> for AshRenderingContext<'a, 'b
 			device.cmd_end_rendering(self.cmd);
 			Ok(())
 		}
+	}
+
+	unsafe fn set_viewport(&mut self, viewport: Viewport) {
+		self.viewport = viewport;
+		self.set_viewport = true;
+	}
+
+	unsafe fn set_scissor(&mut self, scissor: IRect2) {
+		self.scissor = scissor;
+		self.set_scissor = true;
 	}
 
 	unsafe fn draw<T: BufferStruct>(

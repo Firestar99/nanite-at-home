@@ -8,10 +8,13 @@ use crate::generic::pipeline::{
 };
 use crate::generic::platform::BindlessPlatform;
 use crate::spirv_std::indirect_command::{DrawIndexedIndirectCommand, DrawIndirectCommand};
+use glam::UVec2;
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{ImageType, TransientAccess};
 use rust_gpu_bindless_shaders::shader::BindlessShader;
 use rust_gpu_bindless_shaders::shader_type::{ComputeShader, FragmentShader, MeshShader, TaskShader, VertexShader};
+use rust_gpu_bindless_shaders::utils::rect::IRect2;
+use rust_gpu_bindless_shaders::utils::viewport::Viewport;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -139,12 +142,18 @@ pub unsafe trait RenderingContext<'a, 'b, P: BindlessPipelinePlatform>: HasResou
 	unsafe fn begin_rendering(
 		recording: &'b mut P::RecordingContext<'a>,
 		format: RenderPassFormat,
-		render_area: [u32; 2],
+		render_area: UVec2,
 		color_attachments: &[RenderingAttachment<P, ColorAttachment>],
 		depth_attachment: Option<RenderingAttachment<P, DepthStencilAttachment>>,
 	) -> Result<Self, P::RecordingError>;
 
 	unsafe fn end_rendering(&mut self) -> Result<(), P::RecordingError>;
+
+	/// Set the new viewport for any following draw operations. Will always be called at least once before drawing.
+	unsafe fn set_viewport(&mut self, viewport: Viewport);
+
+	/// Set the new scissor rect for any following draw operations. Will always be called at least once before drawing.
+	unsafe fn set_scissor(&mut self, scissor: IRect2);
 
 	unsafe fn draw<T: BufferStruct>(
 		&mut self,

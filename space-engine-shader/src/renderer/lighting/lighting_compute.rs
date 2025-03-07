@@ -5,12 +5,12 @@ use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::renderer::g_buffer::GBuffer;
 use crate::renderer::lighting::is_skybox;
 use crate::utils::hsv::hsv2rgb_smooth;
-use crate::utils::srgb::linear_to_srgb_alpha;
 use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{
 	AliveDescRef, Buffer, Descriptors, Image2d, MutImage, Transient, TransientDesc,
 };
+use rust_gpu_bindless_shaders::utils::srgb::linear_to_srgb_alpha;
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone, BufferStruct)]
@@ -40,15 +40,20 @@ pub fn lighting_cs(
 		sampled_material_from_g_buffer(frame_data.camera, &descriptors, param.g_buffer, pixel, size);
 	let skybox = is_skybox(sampled.alpha);
 
-	let out_color = match frame_data.debug_settings() {
-		DebugSettings::None => material_eval(frame_data, sampled),
-		DebugSettings::MeshletIdOverlay | DebugSettings::TriangleIdOverlay | DebugSettings::LodLevelOverlay => {
-			Vec3::lerp(material_eval(frame_data, sampled), debug_color(debug_hue), 0.1)
-		}
+	let debug_color = || match frame_data.debug_settings() {
+		DebugSettings::None => Vec3::ZERO,
 		DebugSettings::MeshletId | DebugSettings::TriangleId | DebugSettings::LodLevel => debug_color(debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
 		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),
+	};
+
+	let out_color = if frame_data.debug_mix < 0.01 {
+		material_eval(frame_data, sampled)
+	} else if frame_data.debug_mix > 0.99 {
+		debug_color()
+	} else {
+		Vec3::lerp(material_eval(frame_data, sampled), debug_color(), frame_data.debug_mix)
 	};
 
 	let out_color = Vec4::from((out_color, 1.));

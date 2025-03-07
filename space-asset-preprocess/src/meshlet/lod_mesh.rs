@@ -22,6 +22,10 @@ impl LodMesh {
 		}
 	}
 
+	pub fn meshlet_mut(&mut self, index: MeshletId) -> &mut MeshletData {
+		&mut self.meshlets[index.0 as usize]
+	}
+
 	pub fn append(&mut self, other: &mut Self) {
 		let draw_vertices_start = self.draw_vertices.len();
 		let triangle_start = self.triangles.len() * INDICES_PER_WORD / 3;

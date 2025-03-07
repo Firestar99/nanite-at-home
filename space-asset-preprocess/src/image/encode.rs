@@ -105,8 +105,8 @@ pub trait Encode: Sized {
 }
 
 impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
-	#[profiling::function]
 	fn to_optimal_encode(&self, settings: EncodeSettings) -> Result<Option<Self>, GltfImageError> {
+		profiling::function_scope!();
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Ok(None);
 		}
@@ -124,8 +124,8 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 		}
 	}
 
-	#[profiling::function]
 	fn to_none_encode(&self, _: EncodeSettings) -> Result<Self, GltfImageError> {
+		profiling::function_scope!();
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Err(GltfImageError::EncodingFromBCn);
 		}
@@ -138,8 +138,8 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 		})
 	}
 
-	#[profiling::function]
 	fn to_bc_encode(&self, settings: EncodeSettings) -> Result<Self, GltfImageError> {
+		profiling::function_scope!();
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Err(GltfImageError::EncodingFromBCn);
 		}
@@ -203,8 +203,8 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 	}
 }
 
-#[profiling::function]
 fn scan_for_alpha<const IMAGE_TYPE: u32>(image: &Image2DDisk<IMAGE_TYPE>) -> bool {
+	profiling::function_scope!();
 	assert_eq!(image.metadata.disk_compression, DiskImageCompression::None);
 	match image.metadata.image_type() {
 		ImageType::R_VALUES => false,
