@@ -14,6 +14,7 @@ use rust_gpu_bindless::generic::pipeline::{
 	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
 	Present, RenderPassFormat, RenderingAttachment, StoreOp,
 };
+use rust_gpu_bindless::generic::platform::ash::Debuggers;
 use rust_gpu_bindless::generic::platform::ash::{
 	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
 };
@@ -41,6 +42,12 @@ pub fn main() {
 }
 
 pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>>) -> anyhow::Result<()> {
+	if matches!(debugger(), Debuggers::RenderDoc) {
+		// renderdoc does not yet support wayland
+		std::env::remove_var("WAYLAND_DISPLAY");
+		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+	}
+
 	let (window, window_extensions) = event_loop
 		.spawn(|e| {
 			let window = WindowBuilder::new().with_title("swapchain triangle").build(e)?;

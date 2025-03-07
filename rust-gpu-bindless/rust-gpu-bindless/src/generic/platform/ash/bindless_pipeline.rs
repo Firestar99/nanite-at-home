@@ -197,6 +197,7 @@ impl<'a, S: ShaderType, T: BufferStruct> AshShaderModule<'a, S, T> {
 			let device = &bindless.device;
 			let shader = shader.spirv_binary();
 			let module = device.create_shader_module(&ShaderModuleCreateInfo::default().code(shader.binary), None)?;
+			bindless.set_debug_object_name(module, &shader.entry_point_name.to_string_lossy())?;
 			Ok(Self {
 				bindless: bindless.clone(),
 				module,

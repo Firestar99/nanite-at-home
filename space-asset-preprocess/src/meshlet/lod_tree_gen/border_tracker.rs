@@ -74,16 +74,20 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 			}
 		}
 
-		for m in &mut lod.meshlets {
-			m.lod_level_bitmask |= LodLevelBitmask(1 << lod_level);
+		if let Some(lod_mask) = 1u32.checked_shl(lod_level) {
+			for m in &mut lod.meshlets {
+				m.lod_level_bitmask |= LodLevelBitmask(lod_mask);
+			}
 		}
 
 		queue.extend((0..lod.meshlets.len()).map(|a| MeshletId((a + mesh.lod_mesh.meshlets.len()) as u32)));
 		mesh.lod_mesh.append(&mut lod);
 	}
 
-	for meshlet_id in queue {
-		mesh.meshlets[meshlet_id.0 as usize].lod_level_bitmask |= LodLevelBitmask(!0 << lod_levels.start);
+	if let Some(lod_mask) = (!0u32).checked_shl(lod_levels.start) {
+		for meshlet_id in queue {
+			mesh.meshlets[meshlet_id.0 as usize].lod_level_bitmask |= LodLevelBitmask(lod_mask);
+		}
 	}
 	Ok(mesh)
 }
