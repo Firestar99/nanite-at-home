@@ -8,7 +8,7 @@ use crate::nanite_error_selector::NaniteErrorSelector;
 use crate::scene_selector::SceneSelector;
 use crate::sun_controller::SunController;
 use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
-use egui::{Context, Pos2};
+use egui::{Context, Pos2, RichText, Ui};
 use glam::{UVec3, Vec3Swizzles};
 use rust_gpu_bindless::descriptor::{BindlessImageUsage, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::generic::descriptor::Bindless;
@@ -192,6 +192,8 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 				.hscroll(true)
 				.show(&ctx, |ui| {
 					let space = 6.;
+					controls_ui(ui);
+					ui.add_space(space);
 					scene_selector.ui(ui);
 					ui.add_space(space);
 					debug_settings_selector.ui(ui);
@@ -230,4 +232,28 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		swapchain.present_image(output_image)?;
 	}
 	Ok(())
+}
+
+fn controls_ui(ui: &mut Ui) {
+	egui::CollapsingHeader::new(RichText::new("Controls:").strong())
+		.default_open(true)
+		.show(ui, |ui| {
+			egui::Grid::new("controls").show(ui, |ui| {
+				ui.label("Tab");
+				ui.label("switch focus to game / ui");
+				ui.end_row();
+
+				ui.label("WASD");
+				ui.label("Move the Camera");
+				ui.end_row();
+
+				ui.label("Scroll wheel");
+				ui.label("Adjust camera speed");
+				ui.end_row();
+
+				ui.label("Home");
+				ui.label("Reset Camera");
+				ui.end_row();
+			});
+		});
 }
