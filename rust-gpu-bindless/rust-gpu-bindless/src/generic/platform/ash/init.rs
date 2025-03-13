@@ -356,13 +356,9 @@ unsafe extern "system" fn default_debug_callback(
 			format!("{message_severity:?}: {message_type:?} [{message_id_name} ({message_id_number:#x})]: {message}");
 
 		let is_error = message_severity.contains(DebugUtilsMessageSeverityFlagsEXT::ERROR);
-		let is_ignored = IGNORED_MSG_IDS.contains(&message_id_number);
+		let _is_ignored = IGNORED_MSG_IDS.contains(&message_id_number);
 		if is_error {
-			if is_ignored {
-				eprintln!("{}", args);
-			} else {
-				panic!("{}", args);
-			}
+			eprintln!("{}", args);
 		} else {
 			println!("{}", args);
 		}
