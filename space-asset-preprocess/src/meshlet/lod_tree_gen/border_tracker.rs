@@ -19,7 +19,7 @@ use std::mem::{offset_of, size_of, size_of_val};
 use std::ops::Deref;
 use MeshletGroupSimplifyResult::*;
 
-const MAX_LOD_LEVEL: u32 = 15;
+const MAX_LOD_LEVEL: u32 = 50;
 const TARGET_SIMPLIFICATION_FACTOR: f32 = 0.5;
 const MINIMUM_REQUIRED_SIMPLIFICATION_FACTOR: f32 = 0.65;
 
