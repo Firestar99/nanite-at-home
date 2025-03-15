@@ -134,9 +134,11 @@ pub fn leading_zeros(mut x: u32) -> u32 {
 	// Keep shifting x by one until leftmost bit
 	// does not become 1.
 	let total_bits = core::mem::size_of_val(&x) * 8;
-
 	let mut res = 0;
-	while (x & (1 << (total_bits - 1))) == 0 {
+	for _ in 0..total_bits {
+		if (x & (1 << (total_bits - 1))) != 0 {
+			break;
+		}
 		x = x << 1;
 		res += 1;
 	}
