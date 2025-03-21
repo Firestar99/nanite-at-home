@@ -4,7 +4,7 @@ use crate::shape::sphere::Sphere;
 use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, BufferStructPlain)]
+#[derive(Copy, Clone, Debug, Default, BufferStructPlain)]
 #[cfg_attr(feature = "disk", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct MeshletData {
 	pub draw_vertex_offset: MeshletOffset,
