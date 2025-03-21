@@ -42,7 +42,7 @@ pub fn build_script(
 					.with_context(|| format!("zstd stream failed writing {:?}", model.out_path))?;
 				Ok::<(), anyhow::Error>(())
 			})
-			.collect::<Result<_, _>>()?;
+			.collect::<Result<(), _>>()?;
 	}
 
 	if let Some(models_rs) = models_rs {
