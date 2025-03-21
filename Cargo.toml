@@ -84,7 +84,6 @@ pollster = "0.4.0"
 quote = "1.0"
 proc-macro2 = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits", "visit", "visit-mut"] }
-paste = "1.0"
 konst = "0.3"
 prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
