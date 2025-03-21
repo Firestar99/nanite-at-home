@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 default-run = "meshlet-renderer"
 
+[lints]
+workspace = true
+
 [dependencies]
 # my projects
 models = { workspace = true }

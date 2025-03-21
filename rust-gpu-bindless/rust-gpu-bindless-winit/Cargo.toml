@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 ash = ["rust-gpu-bindless/ash-platform", "dep:ash", "dep:ash-window"]
 
