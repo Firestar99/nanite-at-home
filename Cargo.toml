@@ -34,6 +34,9 @@ edition = "2021"
 license = "MIT"
 repository = "https://gitlab.com/spacegamedev/space-rust"
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(target_arch, values("spirv"))'] }
+
 
 
 [workspace.dependencies]
@@ -69,8 +72,8 @@ presser = "0.3.1"
 winit = { version = "0.30" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", default-features = false }
-spirv-std = { git = "https://github.com/Firestar99/rust-gpu-new", rev = "3a391f435693ffbb32ad648ac5fd19b5af4e3f77", features = ["bytemuck"] }
+spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", default-features = false }
+spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", features = ["bytemuck"] }
 
 # async
 futures = "0.3"
@@ -87,7 +90,7 @@ prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
 
 # bytes and numbers
-glam = { version = "0.29", default-features = false, features = ["libm", "bytemuck"] }
+glam = { version = "0.29.1", default-features = false, features = ["libm", "bytemuck"] }
 libm = { version = "0.2", default-features = false }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
@@ -136,9 +139,6 @@ bitflags = "2.6.0"
 thiserror = "2.0.6"
 approx = "0.5.1"
 rustc-hash = "2.1.1"
-
-[patch.crates-io]
-glam = { git = "https://github.com/Firestar99/glam-rs.git", rev = "27649a451790a3fc8a34f021937ea3fcb45b5ff5" }
 
 
 
