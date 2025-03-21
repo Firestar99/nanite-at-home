@@ -172,6 +172,7 @@ mod tests {
 		let meshlet = MeshletData {
 			triangle_offset: MeshletOffset::new(0, indices.len() / 3),
 			draw_vertex_offset: MeshletOffset::default(),
+			..MeshletData::default()
 		};
 		let read_cpu: Vec<_> = (0..meshlet.triangle_offset.len())
 			.flat_map(|i| triangle_indices_load_cpu(meshlet, &(), i, |_, i| *vec.get(i).unwrap()).to_array())
@@ -224,6 +225,7 @@ mod tests {
 			let meshlet = MeshletData {
 				triangle_offset: MeshletOffset::new(start, triangles),
 				draw_vertex_offset: MeshletOffset::default(),
+				..MeshletData::default()
 			};
 			for tri in 0..triangles {
 				let expect = &indices[tri * 3..tri * 3 + 3];

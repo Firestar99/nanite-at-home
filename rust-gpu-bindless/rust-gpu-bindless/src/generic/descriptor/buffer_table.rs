@@ -442,7 +442,7 @@ impl<'a, P: BindlessPlatform, T: BufferContent + ?Sized> Drop for MappedBuffer<'
 	}
 }
 
-impl<'a, P: BindlessPlatform, T: BufferContent> MappedBuffer<'a, P, T> {
+impl<'a, P: BindlessPlatform, T: BufferContent + ?Sized> MappedBuffer<'a, P, T> {
 	/// Assume that the **following** operations will completely overwrite the buffer.
 	///
 	/// # Safety
@@ -450,6 +450,13 @@ impl<'a, P: BindlessPlatform, T: BufferContent> MappedBuffer<'a, P, T> {
 	/// causing memory errors.
 	pub unsafe fn assume_will_overwrite_completely(&self) {
 		*self.slot.strong_refs.lock() = StrongBackingRefs::default();
+	}
+
+	unsafe fn slab_slice(&mut self) -> &mut [u8] {
+		unsafe {
+			let slab = P::mapped_buffer_to_slab(&self.slot);
+			&mut slab.assume_initialized_as_bytes_mut()[0..self.slot.size as usize]
+		}
 	}
 }
 
@@ -469,8 +476,7 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, T> {
 		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
 		// TODO mapped buffers are initialized (not yet)
 		unsafe {
-			let slab = P::mapped_buffer_to_slab(&self.slot);
-			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[0];
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(self.slab_slice())[0];
 			T::read(t, Metadata {})
 		}
 	}
@@ -558,8 +564,7 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
 		// mapped buffers are initialized (not yet)
 		unsafe {
-			let slab = P::mapped_buffer_to_slab(&self.slot);
-			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes())[index];
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(self.slab_slice())[index];
 			T::read(t, Metadata {})
 		}
 	}
@@ -568,28 +573,21 @@ impl<'a, P: BindlessPlatform, T: BufferStruct> MappedBuffer<'a, P, [T]> {
 		// Safety: assume_initialized_as_bytes is safe if this struct has been initialized, and all
 		// mapped buffers are initialized (not yet)
 		unsafe {
-			let slab = P::mapped_buffer_to_slab(&self.slot);
-			let t = bytemuck::cast_slice::<u8, T::Transfer>(slab.assume_initialized_as_bytes());
-			t.iter().take(self.len()).copied().map(|t| T::read(t, Metadata {}))
+			let t = bytemuck::cast_slice::<u8, T::Transfer>(self.slab_slice());
+			t.iter().copied().map(|t| T::read(t, Metadata {}))
 		}
 	}
 }
 
 impl<'a, P: BindlessPlatform, T: BufferStructIdentity> MappedBuffer<'a, P, T> {
 	pub fn deref_mut(&mut self) -> &mut T {
-		unsafe {
-			let slab = P::mapped_buffer_to_slab(&self.slot);
-			&mut bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())[0]
-		}
+		unsafe { &mut bytemuck::cast_slice_mut::<u8, T>(self.slab_slice())[0] }
 	}
 }
 
 impl<'a, P: BindlessPlatform, T: BufferStructIdentity> MappedBuffer<'a, P, [T]> {
 	pub fn as_mut_slice(&mut self) -> &mut [T] {
-		unsafe {
-			let slab = P::mapped_buffer_to_slab(&self.slot);
-			&mut bytemuck::cast_slice_mut::<u8, T>(slab.assume_initialized_as_bytes_mut())[0..self.slot.len]
-		}
+		unsafe { bytemuck::cast_slice_mut::<u8, T>(self.slab_slice()) }
 	}
 }
 

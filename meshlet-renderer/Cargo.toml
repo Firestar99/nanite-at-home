@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 default-run = "meshlet-renderer"
 
+[lints]
+workspace = true
+
 [dependencies]
 # my projects
 models = { workspace = true }
@@ -28,7 +31,7 @@ glam = { workspace = true }
 num-traits = { workspace = true }
 
 # async
-rayon = "1.10"
+rayon = { workspace = true }
 
 # profiling
 profiling = { workspace = true }
@@ -39,7 +42,6 @@ egui = { workspace = true }
 
 # other
 anyhow = { workspace = true }
-parking_lot = { workspace = true }
 
 [features]
 profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
