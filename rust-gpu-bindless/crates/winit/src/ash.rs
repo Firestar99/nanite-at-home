@@ -9,19 +9,18 @@ use ash::vk::{
 	Semaphore, SemaphoreCreateInfo, SharingMode, SubmitInfo, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR,
 	TimelineSemaphoreSubmitInfo,
 };
-use rust_gpu_bindless::generic::backing::table::RcTableSlot;
-use rust_gpu_bindless::generic::descriptor::{
+use rust_gpu_bindless_core::backing::table::RcTableSlot;
+use rust_gpu_bindless_core::descriptor::{
 	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageAllocationError, ImageSlot,
 	MutDesc, MutDescExt, MutImage, SampleCount, SwapchainImageId,
 };
-use rust_gpu_bindless::generic::pipeline::{AccessLock, AccessLockError, ImageAccess};
-use rust_gpu_bindless::generic::platform::ash::{
+use rust_gpu_bindless_core::pipeline::{AccessLock, AccessLockError, ImageAccess};
+use rust_gpu_bindless_core::platform::ash::{
 	Ash, AshAllocationError, AshImage, AshMemoryAllocation, AshPendingExecution,
 };
 use std::ffi::CStr;
 use std::fmt::Display;
 use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use winit::event::{Event, WindowEvent};
@@ -96,7 +95,7 @@ impl AshSwapchainParams {
 	}
 
 	pub unsafe fn automatic_best(
-		bindless: &Arc<Bindless<Ash>>,
+		bindless: &Bindless<Ash>,
 		surface: &ash::vk::SurfaceKHR,
 		image_usage: BindlessImageUsage,
 		format_preference: SwapchainImageFormatPreference,
@@ -159,7 +158,7 @@ pub struct SwapchainSync {
 }
 
 impl SwapchainSync {
-	pub unsafe fn new(bindless: &Arc<Bindless<Ash>>) -> anyhow::Result<Self> {
+	pub unsafe fn new(bindless: &Bindless<Ash>) -> anyhow::Result<Self> {
 		unsafe {
 			Ok(Self {
 				acquire: bindless
@@ -173,7 +172,7 @@ impl SwapchainSync {
 		}
 	}
 
-	pub unsafe fn destroy(&mut self, bindless: &Arc<Bindless<Ash>>) {
+	pub unsafe fn destroy(&mut self, bindless: &Bindless<Ash>) {
 		bindless.device.destroy_semaphore(self.acquire, None);
 		bindless.device.destroy_semaphore(self.present, None);
 		bindless.device.destroy_fence(self.acquire_fence, None);
@@ -181,7 +180,7 @@ impl SwapchainSync {
 }
 
 pub struct AshSwapchain {
-	bindless: Arc<Bindless<Ash>>,
+	bindless: Bindless<Ash>,
 	event_loop: EventLoopExecutor,
 	window: WindowRef,
 	surface: ash::vk::SurfaceKHR,
@@ -195,7 +194,7 @@ pub struct AshSwapchain {
 
 impl AshSwapchain {
 	pub async unsafe fn new(
-		bindless: &Arc<Bindless<Ash>>,
+		bindless: &Bindless<Ash>,
 		event_loop: &EventLoopExecutor,
 		window_ref: WindowRef,
 		params: impl FnOnce(&ash::vk::SurfaceKHR, &ActiveEventLoop) -> anyhow::Result<AshSwapchainParams> + Send + 'static,
@@ -240,7 +239,7 @@ impl AshSwapchain {
 	}
 
 	unsafe fn create_swapchain(
-		bindless: &Arc<Bindless<Ash>>,
+		bindless: &Bindless<Ash>,
 		window: &WindowRef,
 		surface: ash::vk::SurfaceKHR,
 		params: &AshSwapchainParams,
@@ -271,18 +270,14 @@ impl AshSwapchain {
 				.map_err(AshAllocationError::from)?
 				.into_iter()
 				.enumerate()
-				.map(|(id, image)| {
-					Ok::<_, ImageAllocationError<Ash>>(Self::create_swapchain_image(
-						&bindless, params, extent, id as u32, image,
-					)?)
-				})
+				.map(|(id, image)| Self::create_swapchain_image(bindless, params, extent, id as u32, image))
 				.collect::<Result<Vec<_>, _>>()?;
 			Ok((swapchain, images))
 		}
 	}
 
 	unsafe fn create_swapchain_image(
-		bindless: &Arc<Bindless<Ash>>,
+		bindless: &Bindless<Ash>,
 		params: &AshSwapchainParams,
 		extent: Extent,
 		id: u32,
@@ -460,7 +455,7 @@ impl AshSwapchain {
 					.swapchain_image_id
 					.get()
 					.expect("Swapchain usage without swapchain_image_id set");
-				if let Some(_) = self.images[id as usize] {
+				if self.images[id as usize].is_some() {
 					return Err(PresentError::SwapchainIdOccupied(id));
 				}
 				let access = slot.access_lock.try_lock()?;

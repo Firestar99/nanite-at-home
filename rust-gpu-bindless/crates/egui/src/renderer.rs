@@ -11,18 +11,18 @@ use egui::{
 };
 use glam::{IVec2, UVec2};
 use parking_lot::Mutex;
-use rust_gpu_bindless::generic::descriptor::{
+use rust_gpu_bindless_core::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, BindlessSamplerCreateInfo, BufferAllocationError, Extent, Filter, Format, Image2d,
 	ImageDescExt, MutBoxDescExt, MutDesc, MutDescBufferExt, MutDescExt, MutImage, RCDesc, RCDescExt, Sampler,
 	SamplerAllocationError,
 };
-use rust_gpu_bindless::generic::pipeline::{
+use rust_gpu_bindless_core::pipeline::{
 	BindlessGraphicsPipeline, ColorAttachment, DepthStencilAttachment, GraphicsPipelineCreateInfo, HasResourceContext,
 	ImageAccessType, LoadOp, MutBufferAccessExt, MutImageAccess, MutImageAccessExt, Recording, RecordingError,
 	RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
-use rust_gpu_bindless::generic::platform::RecordingResourceContext;
+use rust_gpu_bindless_core::platform::RecordingResourceContext;
 use rust_gpu_bindless_egui_shaders::{Param, ParamFlags, Vertex};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Image, UnsafeDesc};
 use rust_gpu_bindless_shaders::spirv_std::indirect_command::DrawIndexedIndirectCommand;
@@ -51,13 +51,13 @@ impl<P: EguiBindlessPlatform> Deref for EguiRenderer<P> {
 }
 
 pub struct EguiRendererInner<P: EguiBindlessPlatform> {
-	bindless: Arc<Bindless<P>>,
+	bindless: Bindless<P>,
 	/// deduplicate samplers, they will never be freed if unused
 	samplers: Mutex<FxHashMap<TextureOptions, RCDesc<P, Sampler>>>,
 }
 
 impl<P: EguiBindlessPlatform> EguiRenderer<P> {
-	pub fn new(bindless: Arc<Bindless<P>>) -> Self {
+	pub fn new(bindless: Bindless<P>) -> Self {
 		EguiRenderer(Arc::new(EguiRendererInner {
 			bindless,
 			samplers: Mutex::new(FxHashMap::default()),
@@ -237,7 +237,7 @@ impl<P: EguiBindlessPlatform> EguiRenderContext<P> {
 	fn free_textures(&mut self, texture_delta: &TexturesDelta) -> Result<(), EguiRenderingError<P>> {
 		profiling::function_scope!();
 		for texture_id in &self.textures_free_queued {
-			self.textures.remove(&texture_id);
+			self.textures.remove(texture_id);
 		}
 		self.textures_free_queued.clear();
 		self.textures_free_queued.extend_from_slice(&texture_delta.free);
@@ -485,7 +485,7 @@ impl Default for EguiRenderingOptions {
 	}
 }
 
-impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
+impl<P: EguiBindlessPlatform> EguiRenderOutput<'_, P> {
 	/// render scale for window platforms
 	pub(crate) fn render_scale(&mut self, scale: f32) {
 		self.render_scale *= scale;
@@ -599,6 +599,7 @@ impl<'b, P: EguiBindlessPlatform> EguiRenderOutput<'b, P> {
 	}
 }
 
+#[allow(clippy::type_complexity)]
 fn check_format_mismatch<'a, 'b, P: EguiBindlessPlatform, A: ImageAccessType>(
 	format: Option<Format>,
 	image: Option<&'a mut MutImageAccess<'b, P, Image2d, A>>,

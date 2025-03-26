@@ -39,7 +39,7 @@ impl<P: EguiBindlessPlatform> EguiWinitContext<P> {
 	}
 
 	pub fn renderer(&self) -> &EguiRenderer<P> {
-		&self.render_ctx.renderer()
+		self.render_ctx.renderer()
 	}
 
 	pub fn render_ctx(&self) -> &EguiRenderContext<P> {
@@ -76,7 +76,7 @@ impl<P: EguiBindlessPlatform> EguiWinitContext<P> {
 	fn update_viewport_info(&mut self, is_init: bool) -> f32 {
 		let raw_input = self.winit_state.egui_input_mut();
 		let viewport_info = raw_input.viewports.entry(raw_input.viewport_id).or_default();
-		egui_winit::update_viewport_info(viewport_info, &*self.render_ctx, &self.window, is_init);
+		egui_winit::update_viewport_info(viewport_info, &self.render_ctx, &self.window, is_init);
 		viewport_info.native_pixels_per_point.unwrap()
 	}
 }
@@ -85,6 +85,6 @@ impl<P: EguiBindlessPlatform> Deref for EguiWinitContext<P> {
 	type Target = Context;
 
 	fn deref(&self) -> &Self::Target {
-		&*self.render_ctx
+		&self.render_ctx
 	}
 }

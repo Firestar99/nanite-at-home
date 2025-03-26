@@ -11,13 +11,16 @@ workspace = true
 
 [dependencies]
 # members
-rust-gpu-bindless = { workspace = true, features = ["ash-platform"] }
+rust-gpu-bindless-core = { workspace = true, features = ["ash"] }
 rust-gpu-bindless-winit = { workspace = true, features = ["ash"] }
 integration-test-shader = { workspace = true }
 
 # vulkan
 winit = { workspace = true }
 ash = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
 
 # other
 smallvec = { workspace = true }

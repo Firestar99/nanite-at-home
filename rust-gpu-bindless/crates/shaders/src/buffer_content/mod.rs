@@ -65,7 +65,7 @@ unsafe impl<T: BufferStruct> BufferContent for T {
 /// # Safety
 /// Internal interface to CPU code
 pub unsafe trait MetadataCpuInterface: Deref<Target = Metadata> {
-	fn visit_strong_descriptor<C: DescContent + ?Sized>(&mut self, desc: StrongDesc<C>);
+	fn visit_strong_descriptor<C: DescContent>(&mut self, desc: StrongDesc<C>);
 }
 
 unsafe impl<T: BufferStructPlain> BufferStruct for T {

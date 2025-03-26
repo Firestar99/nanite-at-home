@@ -24,6 +24,11 @@ pub struct ImageTypeImpl<
 	_phantom: PhantomData<SampledType>,
 }
 
+/// A type of spirv image.
+///
+/// # Safety
+/// Should only be implemented for `spirv_std::image::Image`, to convert from a struct with many generics to a trait
+/// with simpler work with associated types.
 pub unsafe trait ImageType: Sized + Send + Sync + 'static {
 	const DIM: u32;
 	const ARRAYED: u32;

@@ -1,7 +1,8 @@
 [workspace]
 members = [
-	"crates/rust-gpu-bindless",
+	"crates/bindless",
 	"crates/buffer-content",
+	"crates/core",
 	"crates/egui",
 	"crates/egui-examples",
 	"crates/egui-shaders",
@@ -31,7 +32,8 @@ unexpected_cfgs = { level = "allow", check-cfg = ['cfg(target_arch, values("spir
 
 [workspace.dependencies]
 # members
-rust-gpu-bindless = { path = "crates/rust-gpu-bindless" }
+rust-gpu-bindless = { path = "crates/bindless" }
+rust-gpu-bindless-core = { path = "crates/core" }
 rust-gpu-bindless-buffer-content = { path = "crates/buffer-content" }
 rust-gpu-bindless-egui = { path = "crates/egui" }
 rust-gpu-bindless-egui-shaders = { path = "crates/egui-shaders" }
@@ -44,16 +46,13 @@ integration-test = { path = "tests/integration-test" }
 integration-test-shader = { path = "tests/integration-test-shader" }
 
 # vulkan
+spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", default-features = false }
+spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", features = ["bytemuck"] }
 ash = "0.38.0"
 ash-window = "0.13.0"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
 presser = "0.3.1"
-
 winit = { version = "0.30" }
-
-# rust-gpu
-spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", default-features = false }
-spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", features = ["bytemuck"] }
 
 # async
 futures = "0.3"

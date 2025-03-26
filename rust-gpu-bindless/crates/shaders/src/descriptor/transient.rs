@@ -14,16 +14,16 @@ pub struct Transient<'a> {
 }
 const_assert_eq!(mem::size_of::<Transient>(), 4);
 
-impl<'a> DescRef for Transient<'a> {}
+impl DescRef for Transient<'_> {}
 
-impl<'a> AliveDescRef for Transient<'a> {
+impl AliveDescRef for Transient<'_> {
 	#[inline]
 	fn id<C: DescContent>(desc: &Desc<Self, C>) -> DescriptorId {
 		desc.r.id
 	}
 }
 
-impl<'a> Debug for Transient<'a> {
+impl Debug for Transient<'_> {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
 		f.debug_tuple("Transient").field(&self.id).finish()
 	}
@@ -50,7 +50,7 @@ impl<'a, C: DescContent> TransientDesc<'a, C> {
 	}
 }
 
-unsafe impl<'a, C: DescContent> DescStructRef<Desc<Self, C>> for Transient<'a> {
+unsafe impl<C: DescContent> DescStructRef<Desc<Self, C>> for Transient<'_> {
 	type TransferDescStruct = TransferTransient;
 
 	unsafe fn desc_write_cpu(desc: Desc<Self, C>, _meta: &mut impl MetadataCpuInterface) -> Self::TransferDescStruct {
@@ -79,7 +79,7 @@ pub unsafe trait TransientAccess<'a>: Sized {}
 
 pub struct UnsafeTransientAccess<'a>(PhantomData<&'a ()>);
 
-impl<'a> UnsafeTransientAccess<'a> {
+impl UnsafeTransientAccess<'_> {
 	/// Create a UnsafeTransientAccess. Hopefully we can remove this hack at some point.
 	///
 	/// # Safety

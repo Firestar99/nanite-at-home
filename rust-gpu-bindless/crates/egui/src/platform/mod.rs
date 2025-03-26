@@ -1,4 +1,4 @@
-use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
 
 pub mod ash;
 

@@ -5,26 +5,23 @@ use ash::vk::{
 	ColorComponentFlags, CullModeFlags, FrontFace, PipelineColorBlendAttachmentState,
 	PipelineColorBlendStateCreateInfo, PolygonMode, PrimitiveTopology,
 };
+use glam::{UVec2, Vec2, Vec4};
 use integration_test_shader::color::ColorEnum;
 use integration_test_shader::triangle::{Param, Vertex};
 use pollster::block_on;
-use rust_gpu_bindless::generic::descriptor::{
+use rust_gpu_bindless_core::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
-	BindlessImageUsage, DescBufferLenExt, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt, RCDescExt,
+	BindlessImageUsage, BindlessInstance, DescBufferLenExt, DescriptorCounts, Extent, Format, Image2d,
+	MutDescBufferExt, RCDescExt,
 };
-use rust_gpu_bindless::generic::pipeline::{
-	ClearValue, ColorAttachment, GraphicsPipelineCreateInfo, HostAccess, LoadOp, MutBufferAccessExt, MutImageAccessExt,
-	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
-	RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
+use rust_gpu_bindless_core::pipeline::{
+	ClearValue, ColorAttachment, DrawIndirectCommand, GraphicsPipelineCreateInfo, HostAccess, LoadOp,
+	MutBufferAccessExt, MutImageAccessExt, PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo,
+	PipelineRasterizationStateCreateInfo, RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
-use rust_gpu_bindless::generic::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
-};
-use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
-use rust_gpu_bindless::spirv_std::glam::{UVec2, Vec2, Vec4};
-use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
+use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
+use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
 use smallvec::SmallVec;
-use std::sync::Arc;
 
 const R: ColorEnum = ColorEnum::Red;
 const C: ColorEnum = ColorEnum::Cyan;
@@ -34,7 +31,7 @@ const Y: ColorEnum = ColorEnum::Yellow;
 #[test]
 fn test_triangle_ash() -> anyhow::Result<()> {
 	unsafe {
-		let bindless = Bindless::<Ash>::new(
+		let bindless = BindlessInstance::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
@@ -46,7 +43,7 @@ fn test_triangle_ash() -> anyhow::Result<()> {
 	}
 }
 
-async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Bindless<P>) -> anyhow::Result<()> {
 	let vertices = bindless.buffer().alloc_shared_from_iter(
 		&BindlessBufferCreateInfo {
 			name: "vertices",
@@ -111,7 +108,7 @@ async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 	)?;
 
 	let rt_download = bindless.execute(|cmd| {
-		let mut rt_download = rt_download.access::<TransferWrite>(cmd)?;
+		let rt_download = rt_download.access::<TransferWrite>(cmd)?;
 		let mut image = rt_image.access::<ColorAttachment>(cmd)?;
 		cmd.begin_rendering(
 			render_pass_format,
@@ -138,8 +135,8 @@ async fn test_triangle<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>)
 			},
 		)?;
 
-		let mut image = image.transition::<TransferRead>()?;
-		unsafe { cmd.copy_image_to_buffer(&mut image, &mut rt_download)? };
+		let image = image.transition::<TransferRead>()?;
+		unsafe { cmd.copy_image_to_buffer(&image, &rt_download)? };
 
 		Ok(rt_download.transition::<HostAccess>()?.into_desc())
 	})?;

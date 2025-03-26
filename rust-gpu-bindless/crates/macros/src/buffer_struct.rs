@@ -155,10 +155,10 @@ pub fn buffer_struct(ct: BufferStructType, content: proc_macro::TokenStream) -> 
 
 	let transfer_generics_decl = gen_name_gen.decl(match ct {
 		BufferStructType::Default => quote! {
-			#crate_shader::bytemuck::AnyBitPattern + Send + Sync
+			#crate_shader::__private::bytemuck::AnyBitPattern + Send + Sync
 		},
 		BufferStructType::Plain => quote! {
-			#crate_buffer_content::bytemuck::AnyBitPattern + Send + Sync
+			#crate_buffer_content::__private::bytemuck::AnyBitPattern + Send + Sync
 		},
 	});
 	let transfer_generics_ref = gen_ref_tys
@@ -175,7 +175,7 @@ pub fn buffer_struct(ct: BufferStructType, content: proc_macro::TokenStream) -> 
 	let transfer_ident = format_ident!("{}Transfer", ident);
 	Ok(match ct {
 		BufferStructType::Default => quote! {
-			#[derive(Copy, Clone, #crate_shader::bytemuck_derive::AnyBitPattern)]
+			#[derive(Copy, Clone, #crate_shader::__private::bytemuck_derive::AnyBitPattern)]
 			#vis struct #transfer_ident #transfer_generics_decl #transfer
 
 			unsafe impl #generics_decl #crate_buffer_content::BufferStruct for #ident #generics_ref
@@ -195,7 +195,7 @@ pub fn buffer_struct(ct: BufferStructType, content: proc_macro::TokenStream) -> 
 			}
 		},
 		BufferStructType::Plain => quote! {
-			#[derive(Copy, Clone, #crate_buffer_content::bytemuck_derive::AnyBitPattern)]
+			#[derive(Copy, Clone, #crate_buffer_content::__private::bytemuck_derive::AnyBitPattern)]
 			#vis struct #transfer_ident #transfer_generics_decl #transfer
 
 			unsafe impl #generics_decl #crate_buffer_content::BufferStructPlain for #ident #generics_ref
@@ -233,7 +233,7 @@ impl<'a> GenericsVisitor<'a> {
 	}
 }
 
-impl<'a> VisitMut for GenericsVisitor<'a> {
+impl VisitMut for GenericsVisitor<'_> {
 	fn visit_ident_mut(&mut self, i: &mut Ident) {
 		if self.generics.contains(i) {
 			self.found_generics = true;

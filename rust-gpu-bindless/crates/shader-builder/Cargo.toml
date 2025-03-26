@@ -33,6 +33,7 @@ proc-macro-crate = { workspace = true }
 
 # other
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 
 # feature use-pretty-print
 prettyplease = { workspace = true, optional = true }

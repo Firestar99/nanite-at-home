@@ -1,4 +1,4 @@
-use rust_gpu_bindless::generic::platform::ash::Debuggers;
+use rust_gpu_bindless_core::platform::ash::Debuggers;
 
 pub mod buffer_barrier;
 pub mod image_copy;
