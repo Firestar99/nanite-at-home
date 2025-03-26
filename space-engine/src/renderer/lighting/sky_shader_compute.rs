@@ -3,12 +3,11 @@ use rust_gpu_bindless::descriptor::{Bindless, Image2d, MutImage, Transient, Tran
 use rust_gpu_bindless::pipeline::{BindlessComputePipeline, Recording, RecordingError};
 use space_engine_shader::renderer::g_buffer::GBuffer;
 use space_engine_shader::renderer::lighting::sky_shader::{Param, SKY_SHADER_WG_SIZE};
-use std::sync::Arc;
 
 pub struct SkyShaderCompute(BindlessComputePipeline<Param<'static>>);
 
 impl SkyShaderCompute {
-	pub fn new(bindless: &Arc<Bindless>) -> anyhow::Result<Self> {
+	pub fn new(bindless: &Bindless) -> anyhow::Result<Self> {
 		Ok(Self(bindless.create_compute_pipeline(
 			crate::shader::renderer::lighting::sky_shader::sky_shader_cs::new(),
 		)?))

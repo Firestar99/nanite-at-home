@@ -5,12 +5,11 @@ use rust_gpu_bindless::pipeline::{BindlessComputePipeline, Recording, RecordingE
 use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::instance_cull::Param;
 use space_engine_shader::renderer::meshlet::intermediate::MeshletGroupInstance;
-use std::sync::Arc;
 
 pub struct InstanceCullCompute(BindlessComputePipeline<Param<'static>>);
 
 impl InstanceCullCompute {
-	pub fn new(bindless: &Arc<Bindless>) -> anyhow::Result<Self> {
+	pub fn new(bindless: &Bindless) -> anyhow::Result<Self> {
 		Ok(Self(bindless.create_compute_pipeline(
 			crate::shader::renderer::meshlet::instance_cull::instance_cull_compute::new(),
 		)?))

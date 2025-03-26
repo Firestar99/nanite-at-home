@@ -5,12 +5,11 @@ use rust_gpu_bindless::pipeline::{BindlessComputePipeline, Recording, RecordingE
 use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
 use space_engine_shader::renderer::meshlet::meshlet_select::Param;
-use std::sync::Arc;
 
 pub struct MeshletSelectCompute(BindlessComputePipeline<Param<'static>>);
 
 impl MeshletSelectCompute {
-	pub fn new(bindless: &Arc<Bindless>) -> anyhow::Result<Self> {
+	pub fn new(bindless: &Bindless) -> anyhow::Result<Self> {
 		Ok(Self(bindless.create_compute_pipeline(
 			crate::shader::renderer::meshlet::meshlet_select::meshlet_select_compute::new(),
 		)?))

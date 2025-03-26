@@ -17,7 +17,6 @@ use space_asset_shader::material::pbr::PbrMaterial;
 use space_asset_shader::meshlet::instance::MeshInstance;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
-use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct MeshletSceneCpu {
@@ -92,11 +91,7 @@ pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) 
 }
 
 impl MeshletSceneCpu {
-	pub fn instantiate(
-		&self,
-		bindless: &Arc<Bindless>,
-		instance_count: UVec3,
-	) -> anyhow::Result<InstancedMeshletSceneCpu> {
+	pub fn instantiate(&self, bindless: &Bindless, instance_count: UVec3) -> anyhow::Result<InstancedMeshletSceneCpu> {
 		profiling::function_scope!();
 
 		let physical_offset = self.stats.source.bounds_max - self.stats.source.bounds_min;

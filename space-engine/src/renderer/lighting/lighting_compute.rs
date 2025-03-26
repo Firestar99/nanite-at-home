@@ -4,12 +4,11 @@ use rust_gpu_bindless::pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::pipeline::{Recording, RecordingError};
 use space_engine_shader::renderer::g_buffer::GBuffer;
 use space_engine_shader::renderer::lighting::lighting_compute::{Param, LIGHTING_WG_SIZE};
-use std::sync::Arc;
 
 pub struct LightingCompute(BindlessComputePipeline<Param<'static>>);
 
 impl LightingCompute {
-	pub fn new(bindless: &Arc<Bindless>) -> anyhow::Result<Self> {
+	pub fn new(bindless: &Bindless) -> anyhow::Result<Self> {
 		Ok(Self(bindless.create_compute_pipeline(
 			crate::shader::renderer::lighting::lighting_compute::lighting_cs::new(),
 		)?))

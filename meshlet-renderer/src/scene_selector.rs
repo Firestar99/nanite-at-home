@@ -7,7 +7,7 @@ use space_asset_rt::uploader::Uploader;
 use std::sync::Arc;
 
 pub struct SceneSelector<'a> {
-	bindless: Arc<Bindless>,
+	bindless: Bindless,
 	scenes: Vec<MeshletSceneFile<'a>>,
 	loaded_scene: Option<Arc<MeshletSceneCpu>>,
 	loaded_scene_instance: Option<InstancedMeshletSceneCpu>,
@@ -17,7 +17,7 @@ pub struct SceneSelector<'a> {
 }
 
 impl<'a> SceneSelector<'a> {
-	pub fn new(bindless: Arc<Bindless>, scenes: Vec<MeshletSceneFile<'a>>) -> Self {
+	pub fn new(bindless: Bindless, scenes: Vec<MeshletSceneFile<'a>>) -> Self {
 		Self {
 			bindless,
 			scenes,
@@ -117,10 +117,7 @@ impl<'a> SceneSelector<'a> {
 	}
 }
 
-async fn load_scene(
-	bindless: &Arc<Bindless>,
-	scene_file: MeshletSceneFile<'_>,
-) -> anyhow::Result<Arc<MeshletSceneCpu>> {
+async fn load_scene(bindless: &Bindless, scene_file: MeshletSceneFile<'_>) -> anyhow::Result<Arc<MeshletSceneCpu>> {
 	profiling::function_scope!();
 	let scene = scene_file.load()?;
 	let uploader = Uploader::new(bindless.clone());
