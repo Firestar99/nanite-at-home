@@ -1,4 +1,3 @@
-use rust_gpu_bindless::buffer_content::BufferStructPlain;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, Buffer, MutBuffer, MutDesc,
 	RCDesc,
@@ -7,6 +6,7 @@ use rust_gpu_bindless::pipeline::{
 	AccessError, GeneralRead, MutBufferAccess, MutBufferAccessExt, Recording, RecordingError, ShaderRead,
 	ShaderReadWrite, TransferWrite,
 };
+use rust_gpu_bindless_shaders::buffer_content::BufferStructPlain;
 use space_engine_shader::renderer::compacting_alloc_buffer::{
 	CompactingAllocBufferReader, CompactingAllocBufferWriter,
 };

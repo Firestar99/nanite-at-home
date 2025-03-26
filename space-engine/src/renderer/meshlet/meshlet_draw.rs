@@ -7,8 +7,8 @@ use rust_gpu_bindless::pipeline::{
 	PipelineDepthStencilStateCreateInfo, PipelineRasterizationStateCreateInfo, RecordingError, RenderPassFormat,
 	Rendering,
 };
-use rust_gpu_bindless::shader::{BindlessShader, SpirvBinary};
-use rust_gpu_bindless::shader_type::TaskShader;
+use rust_gpu_bindless_shaders::shader::{BindlessShader, SpirvBinary};
+use rust_gpu_bindless_shaders::shader_type::TaskShader;
 use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::meshlet::intermediate::MeshletInstance;
 use space_engine_shader::renderer::meshlet::mesh_shader::Param;
