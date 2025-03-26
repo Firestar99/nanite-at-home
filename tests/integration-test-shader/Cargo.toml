@@ -1,0 +1,30 @@
+[package]
+name = "integration-test-shader"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["lib", "dylib"]
+
+[dependencies]
+# members
+rust-gpu-bindless-macros = { workspace = true }
+rust-gpu-bindless-shaders = { workspace = true }
+
+# rust-gpu
+spirv-std = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+
+# other
+static_assertions = { workspace = true }
+num_enum = { workspace = true }

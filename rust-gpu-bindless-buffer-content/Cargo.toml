@@ -1,0 +1,25 @@
+[package]
+name = "rust-gpu-bindless-buffer-content"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["glam"]
+glam = ["dep:glam"]
+
+[dependencies]
+# rust-gpu
+# Only needed to implement arrays on spirv, to prevent mispiles. May be removed once fixed.
+spirv-std = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true, optional = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+static_assertions = { workspace = true }

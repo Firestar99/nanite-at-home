@@ -1,0 +1,26 @@
+[package]
+name = "rust-gpu-bindless-shaders"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# members
+rust-gpu-bindless-buffer-content = { workspace = true }
+rust-gpu-bindless-macros = { workspace = true }
+
+# rust-gpu
+spirv-std = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+num-traits = { workspace = true }
+num-derive = { workspace = true }
+static_assertions = { workspace = true }
