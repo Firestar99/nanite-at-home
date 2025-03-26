@@ -4,21 +4,18 @@ use crate::debugger;
 use approx::assert_relative_eq;
 use integration_test_shader::buffer_barriers::{CopyParam, COMPUTE_COPY_WG};
 use pollster::block_on;
-use rust_gpu_bindless::generic::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
-	MutDescBufferExt,
+use rust_gpu_bindless_core::descriptor::{
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessInstance,
+	DescriptorCounts, MutDescBufferExt,
 };
-use rust_gpu_bindless::generic::pipeline::{HostAccess, MutBufferAccessExt, ShaderRead, ShaderReadWrite};
-use rust_gpu_bindless::generic::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
-};
-use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
-use std::sync::Arc;
+use rust_gpu_bindless_core::pipeline::{HostAccess, MutBufferAccessExt, ShaderRead, ShaderReadWrite};
+use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
+use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
 
 #[test]
 fn test_buffer_barrier_ash() -> anyhow::Result<()> {
 	unsafe {
-		let bindless = Bindless::<Ash>::new(
+		let bindless = BindlessInstance::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
@@ -30,7 +27,7 @@ fn test_buffer_barrier_ash() -> anyhow::Result<()> {
 	}
 }
 
-async fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Bindless<P>) -> anyhow::Result<()> {
 	let value = (0..1024).map(|i| i as f32).collect::<Vec<_>>();
 	let len = value.len();
 
@@ -54,7 +51,7 @@ async fn test_buffer_barrier<P: BindlessPipelinePlatform>(bindless: &Arc<Bindles
 		let second = second.access_as_undefined::<ShaderReadWrite>(cmd)?;
 
 		// 2. does a dispatch to copy from `first` to `second`
-		let wgs = (len as u32 + COMPUTE_COPY_WG - 1) / COMPUTE_COPY_WG;
+		let wgs = (len as u32).div_ceil(COMPUTE_COPY_WG);
 		cmd.dispatch(
 			&compute,
 			[wgs, 1, 1],

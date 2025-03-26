@@ -1,25 +1,22 @@
 #![cfg(test)]
 
 use crate::debugger;
+use glam::UVec2;
 use pollster::block_on;
-use rust_gpu_bindless::generic::descriptor::{
+use rust_gpu_bindless_core::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
-	BindlessImageUsage, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt,
+	BindlessImageUsage, BindlessInstance, DescriptorCounts, Extent, Format, Image2d, MutDescBufferExt,
 };
-use rust_gpu_bindless::generic::pipeline::{
+use rust_gpu_bindless_core::pipeline::{
 	HostAccess, MutBufferAccessExt, MutImageAccessExt, TransferRead, TransferWrite,
 };
-use rust_gpu_bindless::generic::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
-};
-use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
-use rust_gpu_bindless::spirv_std::glam::UVec2;
-use std::sync::Arc;
+use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
+use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
 
 #[test]
 fn test_image_copy_ash() -> anyhow::Result<()> {
 	unsafe {
-		let bindless = Bindless::<Ash>::new(
+		let bindless = BindlessInstance::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
@@ -31,7 +28,7 @@ fn test_image_copy_ash() -> anyhow::Result<()> {
 	}
 }
 
-async fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Bindless<P>) -> anyhow::Result<()> {
 	let extent = UVec2::new(32, 32);
 	let format = Format::R8G8B8A8_UNORM;
 	let len = (extent.x * extent.y * 4) as usize;
@@ -58,13 +55,13 @@ async fn test_image_copy<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>
 	let staging_download = bindless.buffer().alloc_slice::<u8>(&buffer_ci("staging_upload"), len)?;
 
 	let staging_download = bindless.execute(|cmd| {
-		let mut staging_upload = staging_upload.access::<TransferRead>(cmd)?;
-		let mut image = image.access::<TransferWrite>(cmd)?;
-		let mut staging_download = staging_download.access::<TransferWrite>(cmd)?;
+		let staging_upload = staging_upload.access::<TransferRead>(cmd)?;
+		let image = image.access::<TransferWrite>(cmd)?;
+		let staging_download = staging_download.access::<TransferWrite>(cmd)?;
 
-		cmd.copy_buffer_to_image(&mut staging_upload, &mut image)?;
-		let mut image = image.transition::<TransferRead>()?;
-		unsafe { cmd.copy_image_to_buffer(&mut image, &mut staging_download)? };
+		cmd.copy_buffer_to_image(&staging_upload, &image)?;
+		let image = image.transition::<TransferRead>()?;
+		unsafe { cmd.copy_image_to_buffer(&image, &staging_download)? };
 
 		Ok(staging_download.transition::<HostAccess>()?.into_desc())
 	})?;

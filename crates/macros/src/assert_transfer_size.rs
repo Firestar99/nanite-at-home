@@ -32,6 +32,6 @@ pub fn assert_transfer_size(content: proc_macro::TokenStream) -> syn::Result<Tok
 		Err(_) => format_ident!("BufferStructPlain"),
 	};
 	Ok(quote! {
-		#crate_buffer_content::static_assertions::const_assert_eq!(::core::mem::size_of::<<#ty as #crate_buffer_content::#trait_ident>::Transfer>(), #size);
+		#crate_buffer_content::__private::static_assertions::const_assert_eq!(::core::mem::size_of::<<#ty as #crate_buffer_content::#trait_ident>::Transfer>(), #size);
 	})
 }

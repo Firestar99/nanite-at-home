@@ -1,3 +1,4 @@
+use crate::symbols::find_rust_gpu_bindless;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use rust_gpu_bindless_macro_utils::modnode::ModNode;
@@ -19,10 +20,11 @@ pub fn codegen_shader_symbols<'a>(
 	_options: &CodegenOptions,
 ) -> anyhow::Result<()> {
 	let crate_name = format_ident!("{}", crate_name);
+	let rust_gpu_bindless = find_rust_gpu_bindless()?;
 
 	let mut root = ModNode::root();
 	for shader in shaders {
-		root.insert(shader.0.split("::").map(|s| Cow::Borrowed(s)), shader)?;
+		root.insert(shader.0.split("::").map(Cow::Borrowed), shader)?;
 	}
 	let tokens = root.to_tokens(|shader_ident, (entry_point_name, spv_path)| {
 		let mut mod_path = syn::parse_str::<Path>(entry_point_name).unwrap();
@@ -36,15 +38,16 @@ pub fn codegen_shader_symbols<'a>(
 		let entry_shader_type_ident = format_ident!("__Bindless_{}_ShaderType", shader_ident);
 		let param_type_ident = format_ident!("__Bindless_{}_ParamConstant", shader_ident);
 
+		// FIXME: dynamically select core or bindless!!!
 		quote! {
 			pub struct #shader_ident;
 
-			impl rust_gpu_bindless::shader::BindlessShader for #shader_ident {
+			impl #rust_gpu_bindless::__private::shader::BindlessShader for #shader_ident {
 				type ShaderType = #crate_name::#mod_path #entry_shader_type_ident;
 				type ParamConstant = #crate_name::#mod_path #param_type_ident;
 
-				fn spirv_binary(&self) -> &rust_gpu_bindless::shader::SpirvBinary {
-					&rust_gpu_bindless::shader::SpirvBinary {
+				fn spirv_binary(&self) -> &#rust_gpu_bindless::__private::shader::SpirvBinary {
+					&#rust_gpu_bindless::__private::shader::SpirvBinary {
 						binary: &[#(#spv_binary),*],
 						entry_point_name: #entry_point_name,
 					}

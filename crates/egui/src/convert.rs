@@ -1,5 +1,5 @@
 use egui::{TextureFilter, TextureWrapMode};
-use rust_gpu_bindless::generic::descriptor::{AddressMode, Filter};
+use rust_gpu_bindless_core::descriptor::{AddressMode, Filter};
 
 pub trait Egui2Bindless {
 	type Output;

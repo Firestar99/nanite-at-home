@@ -100,7 +100,7 @@ impl<'a, T> ModNode<'a, T> {
 						path.pop();
 					}
 				}
-				ModNode::Object(t) => f(&*path, t),
+				ModNode::Object(t) => f(path, t),
 			};
 		}
 		inner(&[], self, &mut f);

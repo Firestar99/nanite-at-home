@@ -2,25 +2,23 @@ use ash::vk::{
 	ColorComponentFlags, CullModeFlags, FrontFace, PipelineColorBlendAttachmentState,
 	PipelineColorBlendStateCreateInfo, PolygonMode, PrimitiveTopology,
 };
+use glam::{Vec2, Vec4};
 use integration_test::debugger;
 use integration_test_shader::color::ColorEnum;
 use integration_test_shader::triangle::{Param, Vertex};
-use rust_gpu_bindless::generic::descriptor::{
+use rust_gpu_bindless_core::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageUsage,
-	DescriptorCounts, Format, Image2d, MutDesc, MutImage, RCDescExt,
+	BindlessInstance, DescriptorCounts, Format, Image2d, MutDesc, MutImage, RCDescExt,
 };
-use rust_gpu_bindless::generic::pipeline::{
+use rust_gpu_bindless_core::pipeline::DrawIndirectCommand;
+use rust_gpu_bindless_core::pipeline::{
 	BindlessGraphicsPipeline, ClearValue, ColorAttachment, GraphicsPipelineCreateInfo, LoadOp, MutImageAccessExt,
 	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
 	Present, RenderPassFormat, RenderingAttachment, StoreOp,
 };
-use rust_gpu_bindless::generic::platform::ash::Debuggers;
-use rust_gpu_bindless::generic::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
-};
-use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
-use rust_gpu_bindless::spirv_std::glam::{Vec2, Vec4};
-use rust_gpu_bindless::spirv_std::indirect_command::DrawIndirectCommand;
+use rust_gpu_bindless_core::platform::ash::Debuggers;
+use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
+use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
 use rust_gpu_bindless_winit::ash::{
 	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
 };
@@ -57,7 +55,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>
 		.await?;
 
 	let bindless = unsafe {
-		Bindless::<Ash>::new(
+		BindlessInstance::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				instance_extensions: window_extensions,
 				extensions: &[ash::khr::swapchain::NAME],
@@ -118,7 +116,7 @@ impl TriangleRendererRTFormat {
 }
 
 pub struct TriangleRenderer<P: BindlessPipelinePlatform> {
-	bindless: Arc<Bindless<P>>,
+	bindless: Bindless<P>,
 	rt_format: TriangleRendererRTFormat,
 	pipeline: BindlessGraphicsPipeline<P, Param<'static>>,
 	timer: Instant,
@@ -127,7 +125,7 @@ pub struct TriangleRenderer<P: BindlessPipelinePlatform> {
 const VERTEX_CNT: usize = 3;
 
 impl<P: BindlessPipelinePlatform> TriangleRenderer<P> {
-	pub fn new(bindless: &Arc<Bindless<P>>, rt_format: Format) -> anyhow::Result<Self> {
+	pub fn new(bindless: &Bindless<P>, rt_format: Format) -> anyhow::Result<Self> {
 		let rt_format = TriangleRendererRTFormat { rt_format };
 
 		let pipeline = bindless.create_graphics_pipeline(
@@ -179,7 +177,7 @@ impl<P: BindlessPipelinePlatform> TriangleRenderer<P> {
 			self.generate_vertices().into_iter(),
 		)?;
 		let rt = self.bindless.execute(|cmd| {
-			let mut rt = rt.access_dont_care::<ColorAttachment>(&cmd)?;
+			let mut rt = rt.access_dont_care::<ColorAttachment>(cmd)?;
 			cmd.begin_rendering(
 				self.rt_format.to_render_pass_format(),
 				&[RenderingAttachment {

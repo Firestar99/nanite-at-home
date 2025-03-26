@@ -7,6 +7,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 pub mod codegen;
+pub mod symbols;
 
 pub use spirv_builder;
 
@@ -51,8 +52,6 @@ impl ShaderSymbolsBuilder {
 			spirv_builder: SpirvBuilder::new(absolute_crate_path, target)
 				// we want multiple *.spv files for vulkano's shader! macro to only generate needed structs
 				.multimodule(true)
-				// this needs at least NameVariables for vulkano to like the spv, but may also be Full
-				.spirv_metadata(SpirvMetadata::NameVariables)
 				// has to be DependencyOnly!
 				// may not be None as it's needed for cargo
 				// may not be Full as that's unsupported with multimodule
@@ -65,7 +64,17 @@ impl ShaderSymbolsBuilder {
 				.capability(Capability::SampledImageArrayDynamicIndexing)
 				.capability(Capability::StorageBufferArrayNonUniformIndexing)
 				.capability(Capability::StorageImageArrayNonUniformIndexing)
-				.capability(Capability::SampledImageArrayNonUniformIndexing),
+				.capability(Capability::SampledImageArrayNonUniformIndexing)
+				.capability(Capability::StorageImageExtendedFormats)
+				.capability(Capability::StorageImageReadWithoutFormat)
+				.capability(Capability::StorageImageWriteWithoutFormat)
+				// maximum debug-ability by default: enable all debug info by default
+				.spirv_metadata(SpirvMetadata::Full)
+				// and print panics
+				.shader_panic_strategy(ShaderPanicStrategy::DebugPrintfThenExit {
+					print_inputs: true,
+					print_backtrace: true,
+				}),
 			codegen: Some(CodegenOptions {
 				shader_symbols_path: String::from("shader_symbols.rs"),
 			}),

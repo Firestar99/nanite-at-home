@@ -71,21 +71,21 @@ impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
 	}
 }
 
-impl<'a, T: BufferStruct> BufferSlice<'a, T> {
+impl<T: BufferStruct> BufferSlice<'_, T> {
 	/// Loads a T from the buffer.
 	pub fn load(&self) -> T {
 		unsafe { T::read(self.buffer.load_unchecked(0), self.meta) }
 	}
 }
 
-impl<'a, T: BufferStruct> MutBufferSlice<'a, T> {
+impl<T: BufferStruct> MutBufferSlice<'_, T> {
 	/// Loads a T from the buffer.
 	pub fn load(&self) -> T {
 		self.as_ref().load()
 	}
 }
 
-impl<'a, T: BufferStructPlain> MutBufferSlice<'a, T> {
+impl<T: BufferStructPlain> MutBufferSlice<'_, T> {
 	/// Stores a T to the buffer.
 	///
 	/// # Safety
@@ -96,10 +96,15 @@ impl<'a, T: BufferStructPlain> MutBufferSlice<'a, T> {
 	}
 }
 
-impl<'a, T: BufferStruct> BufferSlice<'a, [T]> {
+impl<T: BufferStruct> BufferSlice<'_, [T]> {
 	/// The len of the buffer. The len calculation contains a potentially expensive division.
 	pub fn len(&self) -> usize {
 		self.buffer.data.len() * 4 / mem::size_of::<T::Transfer>()
+	}
+
+	/// The len of the buffer. The len calculation contains a potentially expensive division.
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
 	}
 
 	/// Loads a T at an `index` offset from the buffer.
@@ -118,10 +123,15 @@ impl<'a, T: BufferStruct> BufferSlice<'a, [T]> {
 	}
 }
 
-impl<'a, T: BufferStruct> MutBufferSlice<'a, [T]> {
+impl<T: BufferStruct> MutBufferSlice<'_, [T]> {
 	/// The len of the buffer. The len calculation contains a potentially expensive division.
 	pub fn len(&self) -> usize {
 		self.as_ref().len()
+	}
+
+	/// The len of the buffer. The len calculation contains a potentially expensive division.
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
 	}
 
 	/// Loads a T at an `index` offset from the buffer.
@@ -138,7 +148,7 @@ impl<'a, T: BufferStruct> MutBufferSlice<'a, [T]> {
 	}
 }
 
-impl<'a, T: BufferStructPlain> MutBufferSlice<'a, [T]> {
+impl<T: BufferStructPlain> MutBufferSlice<'_, [T]> {
 	/// Loads a T at an `index` offset from the buffer.
 	///
 	/// # Safety
@@ -161,7 +171,7 @@ impl<'a, T: BufferStructPlain> MutBufferSlice<'a, [T]> {
 	}
 }
 
-impl<'a, T: BufferContent + ?Sized> BufferSlice<'a, T> {
+impl<T: BufferContent + ?Sized> BufferSlice<'_, T> {
 	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
 	/// otherwise, it will get silently rounded down to the nearest multiple of 4.
 	///
@@ -182,7 +192,7 @@ impl<'a, T: BufferContent + ?Sized> BufferSlice<'a, T> {
 	}
 }
 
-impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
+impl<T: BufferContent + ?Sized> MutBufferSlice<'_, T> {
 	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
 	/// otherwise, it will get silently rounded down to the nearest multiple of 4.
 	///
@@ -203,7 +213,7 @@ impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
 	}
 }
 
-impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
+impl<T: BufferContent + ?Sized> MutBufferSlice<'_, T> {
 	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
 	/// otherwise, it will get silently rounded down to the nearest multiple of 4.
 	///
