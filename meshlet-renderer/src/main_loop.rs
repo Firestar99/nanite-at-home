@@ -10,7 +10,7 @@ use crate::sun_controller::SunController;
 use ash::vk::{PhysicalDeviceMeshShaderFeaturesEXT, ShaderStageFlags};
 use egui::{Context, Pos2, RichText, Ui};
 use glam::{UVec3, Vec3Swizzles};
-use rust_gpu_bindless::descriptor::{Bindless, BindlessImageUsage, DescriptorCounts, ImageDescExt};
+use rust_gpu_bindless::descriptor::{BindlessImageUsage, BindlessInstance, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::pipeline::{ColorAttachment, LoadOp, MutImageAccessExt, Present};
 use rust_gpu_bindless::platform::ash::{
 	ash_init_single_graphics_queue_with_push_next, AshSingleGraphicsQueueCreateInfo, Debuggers,
@@ -66,7 +66,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		.await?;
 
 	let bindless = unsafe {
-		Bindless::new(
+		BindlessInstance::new(
 			ash_init_single_graphics_queue_with_push_next(
 				AshSingleGraphicsQueueCreateInfo {
 					instance_extensions: window_extensions,
