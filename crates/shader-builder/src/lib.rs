@@ -17,23 +17,38 @@ pub struct ShaderSymbolsBuilder {
 }
 
 impl ShaderSymbolsBuilder {
-	pub fn new(relative_crate_name: &str, target: impl Into<String>) -> Self {
+	/// Build the shader crate named `crate_name` at path `../{crate_name}` relative to your `Cargo.toml`. If your crate
+	/// name and crate path do not match, use the [`Self::new_relative_path`] or [`Self::new_absolute_path`] functions
+	/// instead.
+	pub fn new(crate_name: &str, target: impl Into<String>) -> Self {
+		let found_crate = proc_macro_crate::crate_name(crate_name).unwrap();
+		let crate_ident = match &found_crate {
+			FoundCrate::Itself => crate_name,
+			FoundCrate::Name(name) => name,
+		};
+		ShaderSymbolsBuilder::new_relative_path(crate_name, crate_ident, target)
+	}
+
+	/// Build the shader crate at path `../{relative_crate_path}` relative to your `Cargo.toml` and assume the crate is
+	/// accessible with the ident `crate_ident`.
+	pub fn new_relative_path(relative_crate_path: &str, crate_ident: &str, target: impl Into<String>) -> Self {
 		let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-		let crate_path = [&manifest_dir, "..", relative_crate_name]
+		let crate_path = [&manifest_dir, "..", relative_crate_path]
 			.iter()
 			.copied()
 			.collect::<PathBuf>();
-		let found_crate = proc_macro_crate::crate_name(relative_crate_name).unwrap();
-		let crate_name = match &found_crate {
-			FoundCrate::Itself => relative_crate_name,
-			FoundCrate::Name(name) => name,
-		};
-		ShaderSymbolsBuilder::new_absolute_path(crate_path, crate_name, target)
+		ShaderSymbolsBuilder::new_absolute_path(crate_path, crate_ident, target)
 	}
 
-	pub fn new_absolute_path(path_to_crate: impl AsRef<Path>, crate_name: &str, target: impl Into<String>) -> Self {
+	/// Build the shader crate at path `absolute_crate_path` and assume the crate is
+	/// accessible with the ident `crate_ident`.
+	pub fn new_absolute_path(
+		absolute_crate_path: impl AsRef<Path>,
+		crate_ident: &str,
+		target: impl Into<String>,
+	) -> Self {
 		Self {
-			spirv_builder: SpirvBuilder::new(path_to_crate, target)
+			spirv_builder: SpirvBuilder::new(absolute_crate_path, target)
 				// we want multiple *.spv files for vulkano's shader! macro to only generate needed structs
 				.multimodule(true)
 				// this needs at least NameVariables for vulkano to like the spv, but may also be Full
@@ -43,11 +58,18 @@ impl ShaderSymbolsBuilder {
 				// may not be Full as that's unsupported with multimodule
 				.print_metadata(MetadataPrintout::DependencyOnly)
 				// required capabilities
-				.capability(Capability::RuntimeDescriptorArray),
+				.capability(Capability::RuntimeDescriptorArray)
+				.capability(Capability::ShaderNonUniform)
+				.capability(Capability::StorageBufferArrayDynamicIndexing)
+				.capability(Capability::StorageImageArrayDynamicIndexing)
+				.capability(Capability::SampledImageArrayDynamicIndexing)
+				.capability(Capability::StorageBufferArrayNonUniformIndexing)
+				.capability(Capability::StorageImageArrayNonUniformIndexing)
+				.capability(Capability::SampledImageArrayNonUniformIndexing),
 			codegen: Some(CodegenOptions {
 				shader_symbols_path: String::from("shader_symbols.rs"),
 			}),
-			crate_name: String::from(crate_name),
+			crate_name: String::from(crate_ident),
 		}
 	}
 
