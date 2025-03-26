@@ -14,7 +14,7 @@ winit = []
 
 [dependencies]
 # members
-rust-gpu-bindless = { workspace = true }
+rust-gpu-bindless-core = { workspace = true }
 rust-gpu-bindless-shaders = { workspace = true }
 rust-gpu-bindless-egui-shaders = { workspace = true, features = ["epaint"] }
 

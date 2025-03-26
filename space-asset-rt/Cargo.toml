@@ -13,7 +13,7 @@ workspace = true
 # members
 space-asset-disk = { workspace = true }
 space-asset-shader = { workspace = true }
-rust-gpu-bindless = { workspace = true, features = ["primary"] }
+rust-gpu-bindless = { workspace = true }
 rust-gpu-bindless-shaders = { workspace = true }
 
 # model loader

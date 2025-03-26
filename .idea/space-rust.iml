@@ -22,10 +22,11 @@
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/tests/integration-test-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/tests/integration-test/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/rust-gpu-bindless/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/shader-builder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/shaders/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/winit/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/bindless/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/core/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/rust-gpu-bindless/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>

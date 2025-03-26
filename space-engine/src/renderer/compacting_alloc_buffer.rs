@@ -1,4 +1,3 @@
-use rust_gpu_bindless::buffer_content::BufferStructPlain;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, Buffer, MutBuffer, MutDesc,
 	RCDesc,
@@ -7,10 +6,10 @@ use rust_gpu_bindless::pipeline::{
 	AccessError, GeneralRead, MutBufferAccess, MutBufferAccessExt, Recording, RecordingError, ShaderRead,
 	ShaderReadWrite, TransferWrite,
 };
+use rust_gpu_bindless_shaders::buffer_content::BufferStructPlain;
 use space_engine_shader::renderer::compacting_alloc_buffer::{
 	CompactingAllocBufferReader, CompactingAllocBufferWriter,
 };
-use std::sync::Arc;
 
 pub struct CompactingAllocBuffer<T: BufferStructPlain> {
 	buffer: MutDesc<MutBuffer<[T]>>,
@@ -20,7 +19,7 @@ pub struct CompactingAllocBuffer<T: BufferStructPlain> {
 
 impl<T: BufferStructPlain> CompactingAllocBuffer<T> {
 	pub fn new(
-		bindless: &Arc<Bindless>,
+		bindless: &Bindless,
 		capacity: usize,
 		indirect_args_default: [u32; 3],
 		name: &str,

@@ -324,7 +324,7 @@ where
 			match event {
 				Event::UserEvent(_) => {
 					if let Some(forward_msg) = forward_msg.take() {
-						forward_msg.run(&b);
+						forward_msg.run(b);
 					}
 
 					loop {

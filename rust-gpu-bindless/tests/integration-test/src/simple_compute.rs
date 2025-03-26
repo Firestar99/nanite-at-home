@@ -4,21 +4,18 @@ use crate::debugger;
 use approx::assert_relative_eq;
 use integration_test_shader::simple_compute::{add_calculation, Indirection, Param};
 use pollster::block_on;
-use rust_gpu_bindless::generic::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, DescriptorCounts,
-	MutDescBufferExt, RCDescExt,
+use rust_gpu_bindless_core::descriptor::{
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessInstance,
+	DescriptorCounts, MutDescBufferExt, RCDescExt,
 };
-use rust_gpu_bindless::generic::pipeline::{HostAccess, MutBufferAccessExt, ShaderReadWrite};
-use rust_gpu_bindless::generic::platform::ash::{
-	ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo,
-};
-use rust_gpu_bindless::generic::platform::BindlessPipelinePlatform;
-use std::sync::Arc;
+use rust_gpu_bindless_core::pipeline::{HostAccess, MutBufferAccessExt, ShaderReadWrite};
+use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
+use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
 
 #[test]
 fn test_simple_compute_ash() -> anyhow::Result<()> {
 	unsafe {
-		let bindless = Bindless::<Ash>::new(
+		let bindless = BindlessInstance::<Ash>::new(
 			ash_init_single_graphics_queue(AshSingleGraphicsQueueCreateInfo {
 				debug: debugger(),
 				..AshSingleGraphicsQueueCreateInfo::default()
@@ -30,7 +27,7 @@ fn test_simple_compute_ash() -> anyhow::Result<()> {
 	}
 }
 
-async fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Arc<Bindless<P>>) -> anyhow::Result<()> {
+async fn test_simple_compute<P: BindlessPipelinePlatform>(bindless: &Bindless<P>) -> anyhow::Result<()> {
 	let a = 42.2;
 	let b = [1., 2., 3.];
 	let c = 69.3;

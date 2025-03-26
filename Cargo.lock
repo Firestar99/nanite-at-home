@@ -2369,6 +2369,24 @@ dependencies = [
 name = "rust-gpu-bindless"
 version = "0.1.0"
 dependencies = [
+ "rust-gpu-bindless-core",
+]
+
+[[package]]
+name = "rust-gpu-bindless-buffer-content"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "bytemuck_derive",
+ "glam",
+ "spirv-std",
+ "static_assertions",
+]
+
+[[package]]
+name = "rust-gpu-bindless-core"
+version = "0.1.0"
+dependencies = [
  "anyhow",
  "ash",
  "bitflags 2.9.0",
@@ -2389,19 +2407,9 @@ dependencies = [
  "rangemap",
  "rust-gpu-bindless-shaders",
  "smallvec",
- "static_assertions",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "rust-gpu-bindless-buffer-content"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "bytemuck_derive",
- "glam",
  "spirv-std",
  "static_assertions",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2415,7 +2423,7 @@ dependencies = [
  "glam",
  "parking_lot",
  "profiling",
- "rust-gpu-bindless",
+ "rust-gpu-bindless-core",
  "rust-gpu-bindless-egui-shaders",
  "rust-gpu-bindless-shader-builder",
  "rust-gpu-bindless-shaders",
@@ -2472,6 +2480,7 @@ dependencies = [
  "rust-gpu-bindless-macro-utils",
  "spirv-builder",
  "syn 2.0.100",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2500,7 +2509,7 @@ dependencies = [
  "parking_lot",
  "pollster",
  "profiling",
- "rust-gpu-bindless",
+ "rust-gpu-bindless-core",
  "smallvec",
  "static_assertions",
  "thiserror 2.0.12",
@@ -2905,6 +2914,7 @@ dependencies = [
  "ash",
  "profiling",
  "rust-gpu-bindless",
+ "rust-gpu-bindless-shaders",
  "space-asset-rt",
  "space-engine-shader",
  "space-engine-shader-builder",

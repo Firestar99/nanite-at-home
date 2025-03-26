@@ -1,5 +1,5 @@
 use crate::platform::EguiBindlessPlatform;
-use rust_gpu_bindless::generic::platform::ash::Ash;
+use rust_gpu_bindless_core::platform::ash::Ash;
 
 unsafe impl EguiBindlessPlatform for Ash {
 	unsafe fn max_image_dimensions_2d(&self) -> u32 {

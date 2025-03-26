@@ -38,7 +38,7 @@ impl RenderPipelineMainFormat {
 }
 
 pub struct RenderPipelineMain {
-	pub bindless: Arc<Bindless>,
+	pub bindless: Bindless,
 	pub format: RenderPipelineMainFormat,
 	pub meshlet_group_capacity: usize,
 	pub meshlet_instance_capacity: usize,
@@ -51,7 +51,7 @@ pub struct RenderPipelineMain {
 
 impl RenderPipelineMain {
 	pub fn new(
-		bindless: &Arc<Bindless>,
+		bindless: &Bindless,
 		output_format: Format,
 		meshlet_group_capacity: usize,
 		meshlet_instance_capacity: usize,

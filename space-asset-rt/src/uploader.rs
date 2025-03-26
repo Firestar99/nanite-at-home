@@ -9,7 +9,6 @@ use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Desc, Image, Image2d};
 use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
 use std::future::Future;
-use std::sync::Arc;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T
 where
@@ -20,13 +19,13 @@ where
 }
 
 pub struct Uploader {
-	pub bindless: Arc<Bindless>,
+	pub bindless: Bindless,
 	default_white_texture: Option<RCDesc<Image<Image2d>>>,
 	default_normal_texture: Option<RCDesc<Image<Image2d>>>,
 }
 
 impl Uploader {
-	pub fn new(bindless: Arc<Bindless>) -> Self {
+	pub fn new(bindless: Bindless) -> Self {
 		let mut uploader = Self {
 			bindless,
 			default_white_texture: None,

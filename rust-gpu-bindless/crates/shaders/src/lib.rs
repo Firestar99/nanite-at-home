@@ -11,8 +11,9 @@ pub mod shader;
 pub mod shader_type;
 pub mod utils;
 
-pub use bytemuck;
-pub use bytemuck_derive;
 pub use spirv_std;
 pub use spirv_std::{spirv, Image};
-pub use static_assertions;
+
+pub mod __private {
+	pub use rust_gpu_bindless_buffer_content::__private::*;
+}

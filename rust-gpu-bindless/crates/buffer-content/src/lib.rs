@@ -8,9 +8,11 @@ use bytemuck::{AnyBitPattern, Pod};
 mod glam;
 mod primitive;
 
-pub use bytemuck;
-pub use bytemuck_derive;
-pub use static_assertions;
+pub mod __private {
+	pub use bytemuck;
+	pub use bytemuck_derive;
+	pub use static_assertions;
+}
 
 /// Trait for plain structs that need to implement `BufferStruct` and do **not** contain any references, just plain
 /// data. Use `#[derive(BufferStructPlain)]` on your struct declaration to implement this trait.

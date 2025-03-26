@@ -42,6 +42,7 @@ space-engine-shader-builder = { path = "space-engine-shader-builder" }
 
 # rust-gpu-bindless
 rust-gpu-bindless = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-core = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-buffer-content = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-egui = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-egui-shaders = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
@@ -128,7 +129,8 @@ approx = "0.5.1"
 rustc-hash = "2.1.1"
 
 [patch."https://github.com/Firestar99/rust-gpu-bindless.git"]
-rust-gpu-bindless = { path = "rust-gpu-bindless/crates/rust-gpu-bindless" }
+rust-gpu-bindless = { path = "rust-gpu-bindless/crates/bindless" }
+rust-gpu-bindless-core = { path = "rust-gpu-bindless/crates/core" }
 rust-gpu-bindless-buffer-content = { path = "rust-gpu-bindless/crates/buffer-content" }
 rust-gpu-bindless-egui = { path = "rust-gpu-bindless/crates/egui" }
 rust-gpu-bindless-egui-shaders = { path = "rust-gpu-bindless/crates/egui-shaders" }

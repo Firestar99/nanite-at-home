@@ -9,7 +9,7 @@ use bytemuck_derive::{Pod, Zeroable};
 use spirv_std::{RuntimeArray, Sampler, TypedBuffer};
 
 /// Some struct that facilitates access to a [`AliveDescRef`] pointing to some [`DescContent`]
-pub trait DescriptorAccess<'a, C: DescContent + ?Sized> {
+pub trait DescriptorAccess<'a, C: DescContent> {
 	type AccessType: 'a;
 
 	fn access(self, desc: &Desc<impl AliveDescRef, C>) -> Self::AccessType;

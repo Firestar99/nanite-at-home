@@ -1,0 +1,50 @@
+[package]
+name = "rust-gpu-bindless-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Enable the ash platform to be available.
+ash = []
+
+[dependencies]
+# members
+rust-gpu-bindless-shaders = { workspace = true }
+
+# device
+spirv-std = { workspace = true }
+ash = { workspace = true }
+gpu-allocator = { workspace = true }
+presser = { workspace = true }
+
+# async
+futures = { workspace = true }
+
+# bytes and numbers
+glam = { workspace = true }
+bytemuck = { workspace = true }
+bytemuck_derive = { workspace = true }
+num-traits = { workspace = true }
+num-derive = { workspace = true }
+
+# profiling
+profiling = { workspace = true }
+
+# other
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+static_assertions = { workspace = true }
+once_cell = { workspace = true }
+crossbeam-queue = { workspace = true }
+crossbeam-utils = { workspace = true }
+rangemap = { workspace = true }
+bitflags = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+konst = { workspace = true }
