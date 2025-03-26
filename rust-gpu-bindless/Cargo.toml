@@ -1,0 +1,139 @@
+[workspace]
+members = [
+	"crates/rust-gpu-bindless",
+	"crates/buffer-content",
+	"crates/egui",
+	"crates/egui-examples",
+	"crates/egui-shaders",
+	"crates/macro-utils",
+	"crates/macros",
+	"crates/shaders",
+	"crates/shader-builder",
+	"crates/winit",
+	"tests/integration-test",
+	"tests/integration-test-shader",
+]
+resolver = "2"
+
+
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Firestar99"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://gitlab.com/spacegamedev/space-rust"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(target_arch, values("spirv"))'] }
+
+
+
+[workspace.dependencies]
+# members
+rust-gpu-bindless = { path = "crates/rust-gpu-bindless" }
+rust-gpu-bindless-buffer-content = { path = "crates/buffer-content" }
+rust-gpu-bindless-egui = { path = "crates/egui" }
+rust-gpu-bindless-egui-shaders = { path = "crates/egui-shaders" }
+rust-gpu-bindless-macro-utils = { path = "crates/macro-utils" }
+rust-gpu-bindless-macros = { path = "crates/macros" }
+rust-gpu-bindless-shaders = { path = "crates/shaders" }
+rust-gpu-bindless-shader-builder = { path = "crates/shader-builder", default-features = false, features = ["use-installed-tools"] }
+rust-gpu-bindless-winit = { path = "crates/winit" }
+integration-test = { path = "tests/integration-test" }
+integration-test-shader = { path = "tests/integration-test-shader" }
+
+# vulkan
+ash = "0.38.0"
+ash-window = "0.13.0"
+gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
+presser = "0.3.1"
+
+winit = { version = "0.30" }
+
+# rust-gpu
+spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", default-features = false }
+spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "944a327d3e3de57e37ae2541428bcf79aaa63a83", features = ["bytemuck"] }
+
+# async
+futures = "0.3"
+pollster = "0.4.0"
+
+# codegen
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits", "visit", "visit-mut"] }
+konst = "0.3"
+prettyplease = "0.2"
+proc-macro-crate = "3.1.0"
+
+# bytes and numbers
+glam = { version = "0.29.1", default-features = false, features = ["libm", "bytemuck"] }
+libm = { version = "0.2", default-features = false }
+bytemuck = { version = "1.13", features = ["min_const_generics"] }
+bytemuck_derive = "1.4"
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+num-derive = "0.4.2"
+
+# profiling
+profiling = "1.0"
+
+# egui
+egui = "=0.29.1"
+epaint = "=0.29.1"
+egui-winit = "=0.29.1"
+egui_demo_lib = "=0.29.1"
+
+# other
+once_cell = "1.18"
+smallvec = { version = "1.11", features = ["const_generics", "const_new", "union"] }
+static_assertions = "1.1.0"
+parking_lot = "0.12"
+crossbeam-queue = "0.3"
+crossbeam-utils = "0.8"
+rangemap = "1.5.1"
+anyhow = "1.0"
+num_enum = { version = "0.7.2", default-features = false }
+bitflags = "2.6.0"
+thiserror = "2.0.6"
+approx = "0.5.1"
+rustc-hash = "2.1.1"
+
+
+
+# Following is copied from rust-gpu workspace cargo.toml
+# Enable incremental by default in release mode.
+[profile.release]
+incremental = true
+# HACK(eddyb) this is the default but without explicitly specifying it, Cargo
+# will treat the identical settings in `[profile.release.build-override]` below
+# as different sets of `rustc` flags and will not reuse artifacts between them.
+codegen-units = 256
+
+# Compile build-dependencies in release mode with the same settings
+# as regular dependencies (including the incremental enabled above).
+[profile.release.build-override]
+opt-level = 3
+incremental = true
+codegen-units = 256
+
+# my additions to make build scripts always run in release, even on dev
+[profile.dev]
+incremental = true
+codegen-units = 256
+
+[profile.dev.build-override]
+opt-level = 3
+incremental = true
+codegen-units = 256
+
+
+
+# Optimize certain crates even in dev mode:
+# egui
+[profile.dev.package.epaint]
+opt-level = 3
+[profile.dev.package.emath]
+opt-level = 3
+[profile.dev.package.ecolor]
+opt-level = 3

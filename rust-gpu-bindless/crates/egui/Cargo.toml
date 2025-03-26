@@ -40,4 +40,4 @@ rustc-hash = { workspace = true }
 parking_lot = { workspace = true }
 
 [build-dependencies]
-space-engine-shader-builder = { workspace = true }
+rust-gpu-bindless-shader-builder = { workspace = true }
