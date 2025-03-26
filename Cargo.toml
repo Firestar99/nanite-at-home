@@ -10,18 +10,6 @@ members = [
 	"space-engine",
 	"space-engine-shader",
 	"space-engine-shader-builder",
-	"rust-gpu-bindless/rust-gpu-bindless",
-	"rust-gpu-bindless/rust-gpu-bindless-buffer-content",
-	"rust-gpu-bindless/rust-gpu-bindless-egui",
-	"rust-gpu-bindless/rust-gpu-bindless-egui-examples",
-	"rust-gpu-bindless/rust-gpu-bindless-egui-shaders",
-	"rust-gpu-bindless/rust-gpu-bindless-macro-utils",
-	"rust-gpu-bindless/rust-gpu-bindless-macros",
-	"rust-gpu-bindless/rust-gpu-bindless-shaders",
-	"rust-gpu-bindless/rust-gpu-bindless-shader-builder",
-	"rust-gpu-bindless/rust-gpu-bindless-winit",
-	"rust-gpu-bindless/tests/integration-test",
-	"rust-gpu-bindless/tests/integration-test-shader",
 ]
 resolver = "2"
 
@@ -51,17 +39,17 @@ space-asset-shader = { path = "space-asset-shader" }
 space-engine = { path = "space-engine" }
 space-engine-shader = { path = "space-engine-shader" }
 space-engine-shader-builder = { path = "space-engine-shader-builder" }
-rust-gpu-bindless = { path = "rust-gpu-bindless/rust-gpu-bindless" }
-rust-gpu-bindless-buffer-content = { path = "rust-gpu-bindless/rust-gpu-bindless-buffer-content" }
-rust-gpu-bindless-egui = { path = "rust-gpu-bindless/rust-gpu-bindless-egui" }
-rust-gpu-bindless-egui-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-egui-shaders" }
-rust-gpu-bindless-macro-utils = { path = "rust-gpu-bindless/rust-gpu-bindless-macro-utils" }
-rust-gpu-bindless-macros = { path = "rust-gpu-bindless/rust-gpu-bindless-macros" }
-rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/rust-gpu-bindless-shaders" }
-rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/rust-gpu-bindless-shader-builder", default-features = false, features = ["use-installed-tools"] }
-rust-gpu-bindless-winit = { path = "rust-gpu-bindless/rust-gpu-bindless-winit" }
-integration-test = { path = "rust-gpu-bindless/tests/integration-test" }
-integration-test-shader = { path = "rust-gpu-bindless/tests/integration-test-shader" }
+
+# rust-gpu-bindless
+rust-gpu-bindless = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-buffer-content = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-egui = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-egui-shaders = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-macro-utils = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-macros = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-shaders = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
+rust-gpu-bindless-shader-builder = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a", default-features = false, features = ["use-installed-tools"] }
+rust-gpu-bindless-winit = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 
 # vulkan
 ash = "0.38.0"
@@ -138,6 +126,17 @@ bitflags = "2.6.0"
 thiserror = "2.0.6"
 approx = "0.5.1"
 rustc-hash = "2.1.1"
+
+[patch."https://github.com/Firestar99/rust-gpu-bindless.git"]
+rust-gpu-bindless = { path = "rust-gpu-bindless/crates/rust-gpu-bindless" }
+rust-gpu-bindless-buffer-content = { path = "rust-gpu-bindless/crates/buffer-content" }
+rust-gpu-bindless-egui = { path = "rust-gpu-bindless/crates/egui" }
+rust-gpu-bindless-egui-shaders = { path = "rust-gpu-bindless/crates/egui-shaders" }
+rust-gpu-bindless-macro-utils = { path = "rust-gpu-bindless/crates/macro-utils" }
+rust-gpu-bindless-macros = { path = "rust-gpu-bindless/crates/macros" }
+rust-gpu-bindless-shaders = { path = "rust-gpu-bindless/crates/shaders" }
+rust-gpu-bindless-shader-builder = { path = "rust-gpu-bindless/crates/shader-builder" }
+rust-gpu-bindless-winit = { path = "rust-gpu-bindless/crates/winit" }
 
 
 

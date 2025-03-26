@@ -14,19 +14,19 @@
       <sourceFolder url="file://$MODULE_DIR$/space-asset-preprocess/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset-rt/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/space-asset-disk-shader/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-buffer-content/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-macros/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-shader-builder/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-shaders/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-macro-utils/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/buffer-content/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/egui-examples/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/egui-shaders/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/egui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/macro-utils/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/tests/integration-test-shader/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/tests/integration-test/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-winit/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui-shaders/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui/examples" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/rust-gpu-bindless-egui-examples/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/rust-gpu-bindless/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/shader-builder/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/shaders/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rust-gpu-bindless/crates/winit/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/rust-gpu-bindless/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
