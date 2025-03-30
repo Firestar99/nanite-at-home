@@ -125,6 +125,14 @@ impl ShaderSymbolsBuilder {
 		}
 	}
 
+	#[must_use]
+	pub fn target_dir_path(self, name: impl Into<String>) -> Self {
+		Self {
+			spirv_builder: self.spirv_builder.target_dir_path(name),
+			..self
+		}
+	}
+
 	pub fn set_codegen_options(self, codegen: Option<CodegenOptions>) -> Self {
 		Self { codegen, ..self }
 	}

@@ -7,6 +7,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 		"rust_gpu_bindless_egui_shaders",
 		"spirv-unknown-vulkan1.2",
 	)
+	.target_dir_path("spirv-builder-egui-shaders")
 	.build()?;
 	Ok(())
 }
