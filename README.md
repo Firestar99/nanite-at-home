@@ -11,9 +11,12 @@
 **Nanite made from scratch in Rust as my master thesis**
 
 [<img src="docs/nanite_bistro.jpg" alt="Meshlet Bistro" width="700"/>](https://www.youtube.com/watch?v=K0du8jCp42I)
+
+![Bunny](https://github.com/user-attachments/assets/8cf7eb97-f2d7-4fb2-b67c-18318b5daf18) ![Cutlery](https://github.com/user-attachments/assets/8c8af761-742e-4add-abdc-2517e9b1c1b8) ![quixel rock](https://github.com/user-attachments/assets/48e099a4-3f0b-4b6a-9a60-a19eb7a3d51e)
+
 </div>
 
-[Showcase video](https://www.youtube.com/watch?v=K0du8jCp42I)
+[Full showcase video](https://www.youtube.com/watch?v=K0du8jCp42I)
 
 In my master thesis I've replicated UE5's Nanite, which is able to draw an object in multiple LODs, without introducing any holes or seams at LOD transitions. It's a GPU-driven renderer using meshlets and mesh shaders that can render glTF scenes as complicated as bistro. I have a custom baker to preprocess all the meshes offline, allowing me to offload the generation of Nanite's LOD tree and enabling blazing fast load times of under a second for all scenes. In the [LOD generation showcase video](https://www.youtube.com/watch?v=g002AhbOUOM), one can see the output of the LOD tree generator at its various LOD levels. At runtime, these LODs are automatically selected based on their distance to the camera, and due to the unique data structure proposed by Nanite, allow the LODs to transition mid-model.
 

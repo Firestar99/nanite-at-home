@@ -30,13 +30,16 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 	let mut queue = (0..mesh.lod_mesh.meshlets.len() as u32)
 		.map(|i| MeshletId(i))
 		.collect::<Vec<_>>();
+	let mut prev_groups = None;
 
 	let mut lod_levels = 1..MAX_LOD_LEVEL;
 	for lod_level in &mut lod_levels {
 		let lod_faction = lod_level as f32 / MAX_LOD_LEVEL as f32;
 
+		// If prev_groups exists, tracker also doesn't get recreated thanks to the optimizer, according to profiling.
+		// Manually reusing it is hard due to its lifetime, so this has to be sufficient for now.
 		let tracker = BorderTracker::from_meshlet_mesh(&mesh.lod_mesh, &queue);
-		let groups = tracker.metis_partition();
+		let groups = prev_groups.take().unwrap_or_else(|| tracker.metis_partition());
 		assert!(!groups.is_empty());
 
 		let (mut lod, parent_data) = groups
@@ -56,6 +59,12 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 			// must break before clearing queue
 			break;
 		}
+		if parent_data.iter().all(|a| matches!(a, TooLittleSimplification)) {
+			// retry with same groups, don't rerun METIS
+			prev_groups = Some(groups);
+			continue;
+		}
+
 		let groups = tracker.groups_to_meshlet_ids(&groups);
 		drop(tracker);
 		queue.clear();
