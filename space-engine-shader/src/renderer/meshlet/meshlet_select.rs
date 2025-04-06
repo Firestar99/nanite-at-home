@@ -2,7 +2,7 @@ use crate::renderer::compacting_alloc_buffer::{CompactingAllocBufferReader, Comp
 use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
-use glam::{UVec3, Vec3A};
+use glam::UVec3;
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::affine_transform::AffineTransform;
@@ -63,12 +63,10 @@ fn cull_meshlet(
 			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
 			let transform = |sphere: Sphere, radius: f32| {
 				project_to_screen_area(frame_data, instance_transform.transform, sphere, radius)
-					* (frame_data.camera.viewport_size.y as f32 * 0.5)
 			};
 			let ss_error = transform(m.bounds, m.error);
 			let ss_error_parent = transform(m.parent_bounds, m.parent_error);
-			let error_threshold = frame_data.nanite.error_threshold;
-			let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
+			let draw = ss_error && !ss_error_parent;
 			!draw
 		}
 		LodType::Static => m
@@ -91,26 +89,27 @@ fn cull_meshlet(
 // }
 
 /// https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
-pub fn project_to_screen_area(frame_data: FrameData, instance: AffineTransform, sphere: Sphere, error: f32) -> f32 {
+pub fn project_to_screen_area(frame_data: FrameData, instance: AffineTransform, sphere: Sphere, error: f32) -> bool {
 	let camera = frame_data.camera;
 	let nanite = frame_data.nanite;
 	if !error.is_finite() {
-		return error;
+		return false;
 	}
 
 	let max_scale_factor = {
 		// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
 		// That is equivalent to multiplying the radius by the axis that is scaled up the most.
-		let sum = |a: Vec3A| a.x + a.y + a.z;
 		let mat = instance.affine.matrix3;
-		f32::max(f32::max(sum(mat.x_axis), sum(mat.y_axis)), sum(mat.z_axis))
+		f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
 	};
+	// let max_scale_factor = 1.0;
 	let radius = sphere.radius() * max_scale_factor * nanite.bounding_sphere_scale;
-	let error = error * max_scale_factor;
+	let error = error * error * max_scale_factor;
 
 	let center_world = instance.affine.transform_point3(sphere.center());
 	let d = center_world.distance(camera.transform.translation()) - radius;
 	let d = f32::max(d, camera.perspective.to_cols_array_2d()[3][2]);
 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
-	error / d * (camera_proj * 0.5)
+	let projected_error = error / d * (camera_proj * 0.5) * (frame_data.camera.viewport_size.y as f32 * 0.5);
+	projected_error < nanite.error_threshold
 }
