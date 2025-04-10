@@ -100,6 +100,8 @@ impl RuntimeImageCompression {
 pub struct Image2DMetadata<const IMAGE_TYPE: u32> {
 	pub disk_compression: DiskImageCompression,
 	pub size: Size,
+	pub mip_levels: u32,
+	pub decompressed_size: usize,
 }
 
 impl<const IMAGE_TYPE: u32> ArchivedImage2DMetadata<IMAGE_TYPE> {
@@ -115,22 +117,5 @@ impl<const IMAGE_TYPE: u32> Image2DMetadata<IMAGE_TYPE> {
 
 	pub fn runtime_compression(&self) -> RuntimeImageCompression {
 		self.disk_compression.decodes_into()
-	}
-
-	pub fn decompressed_bytes(&self) -> usize {
-		let runtime = self.runtime_compression();
-		let block_size = runtime.block_size();
-		let (width, height) = if block_size != Size::new(1, 1) {
-			assert!(
-				self.size.width % block_size.width == 0 && self.size.height % block_size.height == 0,
-				"Image size {:?} was not dividable by block size {:?}",
-				self.size,
-				block_size
-			);
-			(self.size.width / block_size.width, self.size.height / block_size.height)
-		} else {
-			(self.size.width, self.size.height)
-		};
-		width as usize * height as usize * runtime.bytes_per_block(self.image_type())
 	}
 }

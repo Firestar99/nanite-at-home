@@ -1,8 +1,8 @@
 use crate::gltf::GltfImageError;
+use crate::image::generate_mips::{generate_mips, optimal_mip_levels};
 use intel_tex_2::{bc4, bc5, bc7, RSurface, RgSurface, RgbaSurface};
-use space_asset_disk::image::{
-	DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression, Size,
-};
+use rayon::prelude::*;
+use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, RuntimeImageCompression};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Bc7Settings {
@@ -14,6 +14,7 @@ pub struct Bc7Settings {
 pub struct EncodeSettings {
 	bc4_bc5: bool,
 	bc7: Option<Bc7Settings>,
+	max_mip_levels: Option<u32>,
 	zstd_level: i32,
 }
 
@@ -22,6 +23,7 @@ impl EncodeSettings {
 		Self {
 			bc4_bc5: false,
 			bc7: None,
+			max_mip_levels: Some(0),
 			zstd_level: 1,
 		}
 	}
@@ -33,6 +35,7 @@ impl EncodeSettings {
 				opaque: bc7::opaque_ultra_fast_settings(),
 				alpha: bc7::alpha_ultra_fast_settings(),
 			}),
+			max_mip_levels: None,
 			zstd_level: 3,
 		}
 	}
@@ -44,6 +47,7 @@ impl EncodeSettings {
 				opaque: bc7::opaque_very_fast_settings(),
 				alpha: bc7::alpha_very_fast_settings(),
 			}),
+			max_mip_levels: None,
 			zstd_level: 3,
 		}
 	}
@@ -55,6 +59,7 @@ impl EncodeSettings {
 				opaque: bc7::opaque_fast_settings(),
 				alpha: bc7::alpha_fast_settings(),
 			}),
+			max_mip_levels: None,
 			zstd_level: 3,
 		}
 	}
@@ -66,6 +71,7 @@ impl EncodeSettings {
 				opaque: bc7::opaque_basic_settings(),
 				alpha: bc7::alpha_basic_settings(),
 			}),
+			max_mip_levels: None,
 			zstd_level: 3,
 		}
 	}
@@ -77,6 +83,7 @@ impl EncodeSettings {
 				opaque: bc7::opaque_slow_settings(),
 				alpha: bc7::alpha_slow_settings(),
 			}),
+			max_mip_levels: None,
 			zstd_level: 5,
 		}
 	}
@@ -129,12 +136,15 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Err(GltfImageError::EncodingFromBCn);
 		}
+		let decoded = self.decode()?;
 		Ok(Self {
 			metadata: Image2DMetadata {
 				size: self.metadata.size,
+				mip_levels: self.metadata.mip_levels,
 				disk_compression: DiskImageCompression::None,
+				decompressed_size: decoded.len(),
 			},
-			bytes: self.decode()?.into(),
+			bytes: decoded.into(),
 		})
 	}
 
@@ -143,80 +153,74 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 		if self.metadata.runtime_compression() != RuntimeImageCompression::None {
 			return Err(GltfImageError::EncodingFromBCn);
 		}
-		let src_size = self.metadata.size;
-		let size = Size::new(src_size.width & !3, src_size.height & !3);
-		let stride = src_size.width * self.metadata.image_type().channels();
-		let bcn = match self.metadata.image_type() {
-			ImageType::R_VALUES => {
-				if settings.bc4_bc5 {
+
+		let decoded = self.decode()?;
+		let has_alpha = rgba_image_has_any_alpha(&decoded);
+		let mip_levels = optimal_mip_levels(self.metadata.size, settings.max_mip_levels);
+		let mip_images = generate_mips(mip_levels, &decoded);
+
+		let bcn = mip_images
+			.par_iter()
+			.map(|mip_image| match self.metadata.image_type() {
+				ImageType::R_VALUES => {
 					profiling::scope!("bc4::compress_blocks");
 					bc4::compress_blocks(&RSurface {
-						height: size.height,
-						width: size.width,
-						stride,
-						data: &self.decode()?,
+						height: mip_image.size.height,
+						width: mip_image.size.width,
+						stride: mip_image.size.width,
+						data: &mip_image.bytes,
 					})
-				} else {
-					return Err(GltfImageError::EncodingToBCnDisabled);
 				}
-			}
-			ImageType::RG_VALUES => {
-				if settings.bc4_bc5 {
+				ImageType::RG_VALUES => {
 					profiling::scope!("bc5::compress_blocks");
 					bc5::compress_blocks(&RgSurface {
-						height: size.height,
-						width: size.width,
-						stride,
-						data: &self.decode()?,
+						height: mip_image.size.height,
+						width: mip_image.size.width,
+						stride: mip_image.size.width * 2,
+						data: &mip_image.bytes,
 					})
-				} else {
-					return Err(GltfImageError::EncodingToBCnDisabled);
 				}
-			}
-			ImageType::RGBA_LINEAR | ImageType::RGBA_COLOR => {
-				if let Some(setting) = settings.bc7 {
-					profiling::scope!("bc7::compress_blocks");
-					let none = self.to_none_encode(settings)?;
-					let has_alpha = scan_for_alpha(&none);
-					bc7::compress_blocks(
-						if has_alpha { &setting.alpha } else { &setting.opaque },
-						&RgbaSurface {
-							height: size.height,
-							width: size.width,
-							stride,
-							data: &none.bytes,
-						},
-					)
-				} else {
-					return Err(GltfImageError::EncodingToBCnDisabled);
+				ImageType::RGBA_LINEAR | ImageType::RGBA_COLOR => {
+					if let Some(setting) = settings.bc7 {
+						profiling::scope!("bc7::compress_blocks");
+						bc7::compress_blocks(
+							if has_alpha { &setting.alpha } else { &setting.opaque },
+							&RgbaSurface {
+								height: mip_image.size.height,
+								width: mip_image.size.width,
+								stride: mip_image.size.width * 4,
+								data: &mip_image.bytes,
+							},
+						)
+					} else {
+						panic!("{:?}", GltfImageError::EncodingToBCnDisabled);
+					}
 				}
-			}
-		};
+			})
+			.flatten()
+			.collect::<Vec<_>>();
+
+		let decompressed_size = bcn.len();
 		let bytes = zstd::bulk::compress(&bcn, settings.zstd_level)?.into();
 		Ok(Image2DDisk {
 			metadata: Image2DMetadata {
-				size,
+				size: self.metadata.size,
+				mip_levels: mip_levels.mip_levels,
 				disk_compression: DiskImageCompression::BCn_zstd,
+				decompressed_size,
 			},
 			bytes,
 		})
 	}
 }
 
-fn scan_for_alpha<const IMAGE_TYPE: u32>(image: &Image2DDisk<IMAGE_TYPE>) -> bool {
+fn rgba_image_has_any_alpha(image: &[u8]) -> bool {
 	profiling::function_scope!();
-	assert_eq!(image.metadata.disk_compression, DiskImageCompression::None);
-	match image.metadata.image_type() {
-		ImageType::R_VALUES => false,
-		ImageType::RG_VALUES => false,
-		ImageType::RGBA_LINEAR | ImageType::RGBA_COLOR => {
-			assert_eq!(image.bytes.len() % 4, 0);
-			for x in image.bytes.chunks_exact(4) {
-				if x[3] != 255 {
-					return true;
-				}
-			}
-			false
+	assert_eq!(image.len() % 4, 0);
+	for x in image.chunks_exact(4) {
+		if x[3] != 255 {
+			return true;
 		}
 	}
+	false
 }

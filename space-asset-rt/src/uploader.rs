@@ -39,6 +39,8 @@ impl Uploader {
 				metadata: Image2DMetadata {
 					size: Size::new(1, 1),
 					disk_compression: DiskImageCompression::None,
+					mip_levels: 0,
+					decompressed_size: 4,
 				},
 				bytes,
 			};

@@ -73,7 +73,7 @@ impl<'a> ImageProcessor<'a> {
 					Source::Uri { uri, .. } => Scheme::parse(uri).ok_or(GltfImageError::UnsupportedUri)?,
 				};
 				Self::process_individual_image(gltf, settings, &scheme, types)
-					.with_context(|| format!("image scheme: {:?}", scheme))
+					.with_context(|| format!("scheme: {:?}, settings: {:?}, types: {:?}", scheme, settings, types))
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
@@ -109,7 +109,7 @@ impl<'a> ImageProcessor<'a> {
 		Option<Image2DDisk<{ ImageType::RGBA_LINEAR as u32 }>>,
 		Option<Image2DDisk<{ ImageType::RGBA_COLOR as u32 }>>,
 	)> {
-		profiling::scope!("process image");
+		profiling::function_scope!(&format!("{:?}", scheme));
 		let bytes = {
 			profiling::scope!("read into memory");
 			Arc::<[u8]>::from(scheme.read(gltf.base())?)
@@ -133,25 +133,16 @@ impl<'a> ImageProcessor<'a> {
 			bytes: Arc<[u8]>,
 			settings: EncodeSettings,
 		) -> anyhow::Result<Image2DDisk<IMAGE_TYPE>> {
-			profiling::scope!(
-				"into_optimal()",
-				&format!("{:?}", ImageType::try_from_const(IMAGE_TYPE))
-			);
-			Image2DDisk {
+			Ok(Image2DDisk {
 				metadata: Image2DMetadata {
 					size,
+					mip_levels: 1,
 					disk_compression: DiskImageCompression::Embedded,
+					decompressed_size: (size.width * size.height * 4) as usize,
 				},
 				bytes,
 			}
-			.into_optimal_encode(settings)
-			.with_context(|| {
-				format!(
-					"into_optimal_encode::<{:?}>({:?}) failed",
-					ImageType::try_from_const(IMAGE_TYPE),
-					settings
-				)
-			})
+			.into_optimal_encode(settings)?)
 		}
 		let r_values = types[0]
 			.then(|| into_optimal::<{ ImageType::R_VALUES as u32 }>(size, bytes.clone(), settings))

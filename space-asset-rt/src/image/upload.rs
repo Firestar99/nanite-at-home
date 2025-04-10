@@ -41,7 +41,7 @@ fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 					name: &format!("staging image: {name}"),
 					allocation_scheme: BindlessAllocationScheme::AllocatorManaged,
 				},
-				this.decompressed_bytes(),
+				this.decompressed_size,
 			)?;
 			this.decode_into(src, upload_buffer.mapped_immediate()?.as_mut_slice())?;
 			upload_buffer
