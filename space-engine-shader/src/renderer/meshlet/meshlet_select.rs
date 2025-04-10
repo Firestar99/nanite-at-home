@@ -69,22 +69,22 @@ fn cull_meshlet(
 			// let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			// !draw
 
-			// let world_scale = {
-			// 	// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
-			// 	// That is equivalent to multiplying the radius by the axis that is scaled up the most.
-			// 	let mat = instance_transform.transform.affine.matrix3;
-			// 	f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
-			// };
-			let world_scale = 1.0;
+			let world_scale = {
+				// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
+				// That is equivalent to multiplying the radius by the axis that is scaled up the most.
+				let mat = instance_transform.transform.affine.matrix3;
+				f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
+			};
+			// let world_scale = 1.0;
 
-			let lod_is_ok = lod_error_is_imperceptible2(
+			let lod_is_ok = lod_error_is_imperceptible(
 				frame_data,
 				m.bounds,
 				m.error,
 				instance_transform.transform.affine,
 				world_scale,
 			);
-			let parent_lod_is_ok = lod_error_is_imperceptible2(
+			let parent_lod_is_ok = lod_error_is_imperceptible(
 				frame_data,
 				m.parent_bounds,
 				m.parent_error,
