@@ -1,8 +1,7 @@
 #![allow(non_camel_case_types)]
 
-use crate::image::Size;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use rkyv::{Archive, Deserialize, Infallible, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive, Archive, Serialize, Deserialize)]

@@ -2,7 +2,7 @@ use crate::image::{ImageType, RuntimeImage, RuntimeImageMetadata};
 use glam::UVec3;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::borrow::Cow;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 /// Some Image that can be stored on disk
 #[derive(Clone, Debug, Archive, Serialize, Deserialize)]
