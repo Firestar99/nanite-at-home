@@ -9,6 +9,12 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+image_decoding = ["image"]
+image_png_decoding = ["image/png"]
+image_jpeg_decoding = ["image/jpeg"]
+image_bcn_encoding = ["intel_tex_2"]
+
 [dependencies]
 # members
 space-asset-disk-shader = { workspace = true, features = ["disk"] }
@@ -19,7 +25,8 @@ rust-gpu-bindless-buffer-content = { workspace = true }
 rayon = { workspace = true }
 
 # model loader
-zune-image = { workspace = true }
+image = { workspace = true, optional = true }
+intel_tex_2 = { workspace = true, optional = true }
 
 # bytes and numbers
 glam = { workspace = true, features = ["rkyv"] }

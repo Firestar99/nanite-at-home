@@ -104,8 +104,8 @@ impl<'a> ImageProcessor<'a> {
 		scheme: &Scheme,
 		types: [bool; IMAGE_TYPES],
 	) -> anyhow::Result<(
-		Option<Image2DDisk<{ ImageType::R_VALUES as u32 }>>,
-		Option<Image2DDisk<{ ImageType::RG_VALUES as u32 }>>,
+		Option<Image2DDisk<{ ImageType::R_VALUE as u32 }>>,
+		Option<Image2DDisk<{ ImageType::RG_VALUE as u32 }>>,
 		Option<Image2DDisk<{ ImageType::RGBA_LINEAR as u32 }>>,
 		Option<Image2DDisk<{ ImageType::RGBA_COLOR as u32 }>>,
 	)> {
@@ -154,10 +154,10 @@ impl<'a> ImageProcessor<'a> {
 			})
 		}
 		let r_values = types[0]
-			.then(|| into_optimal::<{ ImageType::R_VALUES as u32 }>(size, bytes.clone(), settings))
+			.then(|| into_optimal::<{ ImageType::R_VALUE as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		let rg_values = types[1]
-			.then(|| into_optimal::<{ ImageType::RG_VALUES as u32 }>(size, bytes.clone(), settings))
+			.then(|| into_optimal::<{ ImageType::RG_VALUE as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		let rgba_linear = types[2]
 			.then(|| into_optimal::<{ ImageType::RGBA_LINEAR as u32 }>(size, bytes.clone(), settings))
@@ -170,8 +170,8 @@ impl<'a> ImageProcessor<'a> {
 }
 
 pub struct ImageAccessor {
-	images_r_values: Box<[Option<Image2DDisk<{ ImageType::R_VALUES as u32 }>>]>,
-	images_rg_values: Box<[Option<Image2DDisk<{ ImageType::RG_VALUES as u32 }>>]>,
+	images_r_values: Box<[Option<Image2DDisk<{ ImageType::R_VALUE as u32 }>>]>,
+	images_rg_values: Box<[Option<Image2DDisk<{ ImageType::RG_VALUE as u32 }>>]>,
 	images_rgba_linear: Box<[Option<Image2DDisk<{ ImageType::RGBA_LINEAR as u32 }>>]>,
 	images_rgba_color: Box<[Option<Image2DDisk<{ ImageType::RGBA_COLOR as u32 }>>]>,
 }
@@ -186,14 +186,14 @@ impl<const IMAGE_TYPE: u32> RequestedImage<IMAGE_TYPE> {
 	}
 }
 
-impl RequestedImage<{ ImageType::R_VALUES as u32 }> {
-	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::R_VALUES as u32 }> {
+impl RequestedImage<{ ImageType::R_VALUE as u32 }> {
+	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::R_VALUE as u32 }> {
 		access.images_r_values[self.image_index].clone().unwrap()
 	}
 }
 
-impl RequestedImage<{ ImageType::RG_VALUES as u32 }> {
-	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::RG_VALUES as u32 }> {
+impl RequestedImage<{ ImageType::RG_VALUE as u32 }> {
+	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::RG_VALUE as u32 }> {
 		access.images_rg_values[self.image_index].clone().unwrap()
 	}
 }

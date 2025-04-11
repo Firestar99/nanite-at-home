@@ -67,14 +67,14 @@ fn upload_image2d<'a, const IMAGE_TYPE: u32>(
 pub fn select_format<const IMAGE_TYPE: u32>(this: &Image2DMetadata<IMAGE_TYPE>) -> Format {
 	match this.runtime_compression() {
 		RuntimeImageCompression::None => match this.image_type() {
-			ImageType::R_VALUES => Format::R8_UNORM,
-			ImageType::RG_VALUES => Format::R8G8_UNORM,
+			ImageType::R_VALUE => Format::R8_UNORM,
+			ImageType::RG_VALUE => Format::R8G8_UNORM,
 			ImageType::RGBA_LINEAR => Format::R8G8B8A8_UNORM,
 			ImageType::RGBA_COLOR => Format::R8G8B8A8_SRGB,
 		},
 		RuntimeImageCompression::BCn => match this.image_type() {
-			ImageType::R_VALUES => Format::BC4_UNORM_BLOCK,
-			ImageType::RG_VALUES => Format::BC5_UNORM_BLOCK,
+			ImageType::R_VALUE => Format::BC4_UNORM_BLOCK,
+			ImageType::RG_VALUE => Format::BC5_UNORM_BLOCK,
 			ImageType::RGBA_LINEAR => Format::BC7_UNORM_BLOCK,
 			ImageType::RGBA_COLOR => Format::BC7_SRGB_BLOCK,
 		},

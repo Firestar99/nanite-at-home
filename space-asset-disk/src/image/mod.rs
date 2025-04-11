@@ -1,16 +1,11 @@
-mod decode;
-mod metadata;
-mod size;
+#[cfg(feature = "image_bcn_encoding")]
+mod bcn_encoding;
+mod image_codecs;
+mod image_disk;
+mod image_type;
+mod runtime;
 
-pub use metadata::*;
-pub use size::*;
-
-use rkyv::{Archive, Deserialize, Serialize};
-use std::sync::Arc;
-
-#[repr(C)]
-#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
-pub struct Image2DDisk<const IMAGE_TYPE: u32> {
-	pub bytes: Arc<[u8]>,
-	pub metadata: Image2DMetadata<{ IMAGE_TYPE }>,
-}
+pub use image_codecs::*;
+pub use image_disk::*;
+pub use image_type::*;
+pub use runtime::*;
