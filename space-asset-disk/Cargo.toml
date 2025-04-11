@@ -19,6 +19,7 @@ rust-gpu-bindless-buffer-content = { workspace = true }
 rayon = { workspace = true }
 
 # model loader
+image = { workspace = true }
 zune-image = { workspace = true }
 
 # bytes and numbers
@@ -36,3 +37,4 @@ profiling = { workspace = true }
 # other
 static_assertions = { workspace = true }
 num_enum = { workspace = true }
+thiserror = { workspace = true }

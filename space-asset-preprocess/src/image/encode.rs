@@ -147,7 +147,7 @@ impl<const IMAGE_TYPE: u32> Encode for Image2DDisk<IMAGE_TYPE> {
 		let size = Size::new(src_size.width & !3, src_size.height & !3);
 		let stride = src_size.width * self.metadata.image_type().channels();
 		let bcn = match self.metadata.image_type() {
-			ImageType::R_VALUES => {
+			ImageType::R_LINEAR => {
 				if settings.bc4_bc5 {
 					profiling::scope!("bc4::compress_blocks");
 					bc4::compress_blocks(&RSurface {
@@ -207,7 +207,7 @@ fn scan_for_alpha<const IMAGE_TYPE: u32>(image: &Image2DDisk<IMAGE_TYPE>) -> boo
 	profiling::function_scope!();
 	assert_eq!(image.metadata.disk_compression, DiskImageCompression::None);
 	match image.metadata.image_type() {
-		ImageType::R_VALUES => false,
+		ImageType::R_LINEAR => false,
 		ImageType::RG_VALUES => false,
 		ImageType::RGBA_LINEAR | ImageType::RGBA_COLOR => {
 			assert_eq!(image.bytes.len() % 4, 0);
