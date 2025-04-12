@@ -57,7 +57,12 @@ pub enum DiskImageMetadata<const IMAGE_TYPE: u32> {
 	Uncompressed(UncompressedImageMetadata<IMAGE_TYPE>),
 	BCn(BCnImageMetadata<IMAGE_TYPE>),
 	ZstdBCn(ZstdBCnImageMetadata<IMAGE_TYPE>),
-	// Embedded(EmbeddedMetadata<IMAGE_TYPE>),
+	Embedded(EmbeddedImageMetadata<IMAGE_TYPE>),
+}
+
+#[cold]
+fn missing_image_decoding_feature() -> ! {
+	panic!("Missing feature \"image_decoding\" to decode an embedded image");
 }
 
 impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for DiskImageMetadata<IMAGE_TYPE> {
@@ -66,6 +71,10 @@ impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for DiskImageMetadata<IMAGE_TYP
 			DiskImageMetadata::Uncompressed(m) => m.decoded_metadata(),
 			DiskImageMetadata::BCn(m) => m.decoded_metadata(),
 			DiskImageMetadata::ZstdBCn(m) => m.decoded_metadata(),
+			#[cfg(feature = "image_decoding")]
+			DiskImageMetadata::Embedded(m) => m.decoded_metadata(),
+			#[cfg(not(feature = "image_decoding"))]
+			DiskImageMetadata::Embedded(_) => missing_image_decoding_feature(),
 		}
 	}
 
@@ -74,6 +83,10 @@ impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for DiskImageMetadata<IMAGE_TYP
 			DiskImageMetadata::Uncompressed(m) => m.decode_into(src, dst),
 			DiskImageMetadata::BCn(m) => m.decode_into(src, dst),
 			DiskImageMetadata::ZstdBCn(m) => m.decode_into(src, dst),
+			#[cfg(feature = "image_decoding")]
+			DiskImageMetadata::Embedded(m) => m.decode_into(src, dst),
+			#[cfg(not(feature = "image_decoding"))]
+			DiskImageMetadata::Embedded(_) => missing_image_decoding_feature(),
 		}
 	}
 
@@ -82,6 +95,10 @@ impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for DiskImageMetadata<IMAGE_TYP
 			DiskImageMetadata::Uncompressed(m) => m.decode(src),
 			DiskImageMetadata::BCn(m) => m.decode(src),
 			DiskImageMetadata::ZstdBCn(m) => m.decode(src),
+			#[cfg(feature = "image_decoding")]
+			DiskImageMetadata::Embedded(m) => m.decode(src),
+			#[cfg(not(feature = "image_decoding"))]
+			DiskImageMetadata::Embedded(_) => missing_image_decoding_feature(),
 		}
 	}
 }
@@ -211,5 +228,18 @@ impl<const IMAGE_TYPE: u32> ZstdBCnImage<'_, IMAGE_TYPE> {
 		}
 		// we already own it, doesn't clone anything
 		.into_owned()
+	}
+}
+
+pub type EmbeddedImage<'a, const IMAGE_TYPE: u32> = Image<'a, EmbeddedImageMetadata<IMAGE_TYPE>>;
+
+#[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
+pub struct EmbeddedImageMetadata<const IMAGE_TYPE: u32> {
+	pub extent: UVec3,
+}
+
+impl<const IMAGE_TYPE: u32> EmbeddedImageMetadata<IMAGE_TYPE> {
+	pub fn image_type() -> ImageType {
+		ImageType::try_from(IMAGE_TYPE).unwrap()
 	}
 }

@@ -2913,7 +2913,6 @@ dependencies = [
  "urlencoding",
  "walkdir",
  "zstd",
- "zune-image",
 ]
 
 [[package]]

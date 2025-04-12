@@ -1,5 +1,4 @@
 use crate::gltf::Gltf;
-use crate::image::encode::EncodeSettings;
 use crate::image::image_processor::ImageProcessor;
 use crate::material::pbr::{process_pbr_material, process_pbr_vertices};
 use crate::meshlet::error::MeshletError;
@@ -12,6 +11,7 @@ use gltf::Primitive;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use space_asset_disk::image::EncodeSettings;
 use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;

@@ -1,18 +1,16 @@
 use crate::gltf::{Gltf, GltfImageError, Scheme};
-use crate::image::encode::{Encode, EncodeSettings};
 use anyhow::Context;
 use gltf::image::Source;
 use gltf::Image;
 use rayon::prelude::*;
-use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
+use space_asset_disk::image::{
+	EmbeddedImage, EncodeSettings, ImageDiskRLinear, ImageDiskRgLinear, ImageDiskRgbaLinear, ImageDiskRgbaSrgb,
+	ImageType,
+};
 use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
-use zune_image::codecs::png::zune_core::bytestream::ZCursor;
-use zune_image::codecs::png::zune_core::options::DecoderOptions;
-use zune_image::codecs::ImageFormat;
-use zune_image::errors::ImageErrors;
 
 const IMAGE_TYPES: usize = ImageType::IMAGE_TYPE_COUNT as usize;
 
@@ -104,29 +102,17 @@ impl<'a> ImageProcessor<'a> {
 		scheme: &Scheme,
 		types: [bool; IMAGE_TYPES],
 	) -> anyhow::Result<(
-		Option<Image2DDisk<{ ImageType::R_VALUE as u32 }>>,
-		Option<Image2DDisk<{ ImageType::RG_VALUE as u32 }>>,
-		Option<Image2DDisk<{ ImageType::RGBA_LINEAR as u32 }>>,
-		Option<Image2DDisk<{ ImageType::RGBA_COLOR as u32 }>>,
+		Option<ImageDiskRLinear>,
+		Option<ImageDiskRgLinear>,
+		Option<ImageDiskRgbaLinear>,
+		Option<ImageDiskRgbaSrgb>,
 	)> {
 		profiling::scope!("process image");
 		let bytes = {
 			profiling::scope!("read into memory");
 			Arc::<[u8]>::from(scheme.read(gltf.base())?)
 		};
-		let (format, _) = ImageFormat::guess_format(ZCursor::new(&bytes)).ok_or(GltfImageError::UnknownImageFormat)?;
-		let image_metadata = {
-			profiling::scope!("decode metadata");
-			format
-				.decoder_with_options(ZCursor::new(&bytes), DecoderOptions::new_fast())?
-				.read_headers()
-				.map_err(ImageErrors::from)?
-				.expect("Image decoder reads metadata")
-		};
-		let size = Size::new(
-			image_metadata.dimensions().0 as u32,
-			image_metadata.dimensions().1 as u32,
-		);
+		let image = EmbeddedImage::new(bytes)?;
 
 		fn into_optimal<const IMAGE_TYPE: u32>(
 			size: Size,
@@ -154,10 +140,10 @@ impl<'a> ImageProcessor<'a> {
 			})
 		}
 		let r_values = types[0]
-			.then(|| into_optimal::<{ ImageType::R_VALUE as u32 }>(size, bytes.clone(), settings))
+			.then(|| into_optimal::<{ ImageType::R_LINEAR as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		let rg_values = types[1]
-			.then(|| into_optimal::<{ ImageType::RG_VALUE as u32 }>(size, bytes.clone(), settings))
+			.then(|| into_optimal::<{ ImageType::RG_VALUES as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		let rgba_linear = types[2]
 			.then(|| into_optimal::<{ ImageType::RGBA_LINEAR as u32 }>(size, bytes.clone(), settings))
@@ -170,10 +156,10 @@ impl<'a> ImageProcessor<'a> {
 }
 
 pub struct ImageAccessor {
-	images_r_values: Box<[Option<Image2DDisk<{ ImageType::R_VALUE as u32 }>>]>,
-	images_rg_values: Box<[Option<Image2DDisk<{ ImageType::RG_VALUE as u32 }>>]>,
-	images_rgba_linear: Box<[Option<Image2DDisk<{ ImageType::RGBA_LINEAR as u32 }>>]>,
-	images_rgba_color: Box<[Option<Image2DDisk<{ ImageType::RGBA_COLOR as u32 }>>]>,
+	images_r_values: Box<[Option<ImageDiskRLinear>]>,
+	images_rg_values: Box<[Option<ImageDiskRgLinear>]>,
+	images_rgba_linear: Box<[Option<ImageDiskRgbaLinear>]>,
+	images_rgba_color: Box<[Option<ImageDiskRgbaSrgb>]>,
 }
 
 pub struct RequestedImage<const IMAGE_TYPE: u32> {
@@ -186,26 +172,26 @@ impl<const IMAGE_TYPE: u32> RequestedImage<IMAGE_TYPE> {
 	}
 }
 
-impl RequestedImage<{ ImageType::R_VALUE as u32 }> {
-	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::R_VALUE as u32 }> {
+impl RequestedImage<{ ImageType::R_LINEAR as u32 }> {
+	pub fn get(&self, access: &ImageAccessor) -> ImageDiskRLinear {
 		access.images_r_values[self.image_index].clone().unwrap()
 	}
 }
 
-impl RequestedImage<{ ImageType::RG_VALUE as u32 }> {
-	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::RG_VALUE as u32 }> {
+impl RequestedImage<{ ImageType::RG_VALUES as u32 }> {
+	pub fn get(&self, access: &ImageAccessor) -> ImageDiskRgLinear {
 		access.images_rg_values[self.image_index].clone().unwrap()
 	}
 }
 
 impl RequestedImage<{ ImageType::RGBA_LINEAR as u32 }> {
-	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::RGBA_LINEAR as u32 }> {
+	pub fn get(&self, access: &ImageAccessor) -> ImageDiskRgbaLinear {
 		access.images_rgba_linear[self.image_index].clone().unwrap()
 	}
 }
 
 impl RequestedImage<{ ImageType::RGBA_COLOR as u32 }> {
-	pub fn get(&self, access: &ImageAccessor) -> Image2DDisk<{ ImageType::RGBA_COLOR as u32 }> {
+	pub fn get(&self, access: &ImageAccessor) -> ImageDiskRgbaSrgb {
 		access.images_rgba_color[self.image_index].clone().unwrap()
 	}
 }
