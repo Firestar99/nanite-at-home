@@ -134,7 +134,7 @@ impl<'a> ImageProcessor<'a> {
 			.with_context(|| {
 				format!(
 					"into_optimal_encode::<{:?}>({:?}) failed",
-					ImageType::try_from_const(IMAGE_TYPE),
+					ImageType::from_u32(IMAGE_TYPE),
 					settings
 				)
 			})
@@ -146,10 +146,10 @@ impl<'a> ImageProcessor<'a> {
 			.then(|| into_optimal::<{ ImageType::RG_VALUES as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		let rgba_linear = types[2]
-			.then(|| into_optimal::<{ ImageType::RGBA_LINEAR as u32 }>(size, bytes.clone(), settings))
+			.then(|| into_optimal::<{ ImageType::RgbaLinear as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		let rgba_color = types[3]
-			.then(|| into_optimal::<{ ImageType::RGBA_COLOR as u32 }>(size, bytes.clone(), settings))
+			.then(|| into_optimal::<{ ImageType::RgbaColor as u32 }>(size, bytes.clone(), settings))
 			.transpose()?;
 		Ok((r_values, rg_values, rgba_linear, rgba_color))
 	}
@@ -168,7 +168,7 @@ pub struct RequestedImage<const IMAGE_TYPE: u32> {
 
 impl<const IMAGE_TYPE: u32> RequestedImage<IMAGE_TYPE> {
 	pub const fn image_type(&self) -> ImageType {
-		ImageType::try_from_const(IMAGE_TYPE)
+		ImageType::from_u32(IMAGE_TYPE)
 	}
 }
 
@@ -184,13 +184,13 @@ impl RequestedImage<{ ImageType::RG_VALUES as u32 }> {
 	}
 }
 
-impl RequestedImage<{ ImageType::RGBA_LINEAR as u32 }> {
+impl RequestedImage<{ ImageType::RgbaLinear as u32 }> {
 	pub fn get(&self, access: &ImageAccessor) -> ImageDiskRgbaLinear {
 		access.images_rgba_linear[self.image_index].clone().unwrap()
 	}
 }
 
-impl RequestedImage<{ ImageType::RGBA_COLOR as u32 }> {
+impl RequestedImage<{ ImageType::RgbaColor as u32 }> {
 	pub fn get(&self, access: &ImageAccessor) -> ImageDiskRgbaSrgb {
 		access.images_rgba_color[self.image_index].clone().unwrap()
 	}

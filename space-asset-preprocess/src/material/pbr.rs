@@ -28,9 +28,9 @@ pub fn process_pbr_vertices(gltf: &Gltf, primitive: Primitive) -> anyhow::Result
 
 pub struct ProcessedPbrMaterial<'a> {
 	material: Material<'a>,
-	base_color: Option<RequestedImage<{ ImageType::RGBA_COLOR as u32 }>>,
-	normal: Option<RequestedImage<{ ImageType::RG_VALUE as u32 }>>,
-	occlusion_roughness_metallic: Option<RequestedImage<{ ImageType::RGBA_LINEAR as u32 }>>,
+	base_color: Option<RequestedImage<{ ImageType::RgbaColor as u32 }>>,
+	normal: Option<RequestedImage<{ ImageType::RgValue as u32 }>>,
+	occlusion_roughness_metallic: Option<RequestedImage<{ ImageType::RgbaLinear as u32 }>>,
 }
 
 pub fn process_pbr_material<'a>(
@@ -43,10 +43,10 @@ pub fn process_pbr_material<'a>(
 		base_color: material
 			.pbr_metallic_roughness()
 			.base_color_texture()
-			.map(|tex| image_processor.image::<{ ImageType::RGBA_COLOR as u32 }>(tex.texture().source())),
+			.map(|tex| image_processor.image::<{ ImageType::RgbaColor as u32 }>(tex.texture().source())),
 		normal: material
 			.normal_texture()
-			.map(|tex| image_processor.image::<{ ImageType::RG_VALUE as u32 }>(tex.texture().source())),
+			.map(|tex| image_processor.image::<{ ImageType::RgValue as u32 }>(tex.texture().source())),
 		occlusion_roughness_metallic: material
 			.pbr_metallic_roughness()
 			.metallic_roughness_texture()
@@ -56,7 +56,7 @@ pub fn process_pbr_material<'a>(
 					.specular()
 					.and_then(|s| s.specular_texture().or(s.specular_color_texture()))
 			})
-			.map(|tex| image_processor.image::<{ ImageType::RGBA_LINEAR as u32 }>(tex.texture().source())),
+			.map(|tex| image_processor.image::<{ ImageType::RgbaLinear as u32 }>(tex.texture().source())),
 		material,
 	})
 }

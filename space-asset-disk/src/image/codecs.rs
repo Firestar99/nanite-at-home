@@ -1,13 +1,15 @@
 use crate::image::{ImageType, RuntimeImage, RuntimeImageMetadata};
 use glam::UVec3;
+use rkyv::with::AsOwned;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::Debug;
 
 /// Some Image that can be stored on disk
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 pub struct Image<'a, M> {
 	pub meta: M,
+	#[rkyv(with = AsOwned)]
 	pub data: Cow<'a, [u8]>,
 }
 
@@ -52,12 +54,14 @@ pub trait DecodeToRuntimeImage {
 	}
 }
 
+pub type DynImage<'a> = Image<'a, DynImageMetadata>;
+
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
-pub enum DiskImageMetadata<const IMAGE_TYPE: u32> {
-	Uncompressed(UncompressedImageMetadata<IMAGE_TYPE>),
-	BCn(BCnImageMetadata<IMAGE_TYPE>),
-	ZstdBCn(ZstdBCnImageMetadata<IMAGE_TYPE>),
-	Embedded(EmbeddedImageMetadata<IMAGE_TYPE>),
+pub enum DynImageMetadata {
+	Uncompressed(UncompressedImageMetadata),
+	BCn(BCnImageMetadata),
+	ZstdBCn(ZstdBCnImageMetadata),
+	Embedded(EmbeddedImageMetadata),
 }
 
 #[cold]
@@ -65,63 +69,62 @@ fn missing_image_decoding_feature() -> ! {
 	panic!("Missing feature \"image_decoding\" to decode an embedded image");
 }
 
-impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for DiskImageMetadata<IMAGE_TYPE> {
+impl DecodeToRuntimeImage for DynImageMetadata {
 	fn decoded_metadata(&self) -> RuntimeImageMetadata {
 		match self {
-			DiskImageMetadata::Uncompressed(m) => m.decoded_metadata(),
-			DiskImageMetadata::BCn(m) => m.decoded_metadata(),
-			DiskImageMetadata::ZstdBCn(m) => m.decoded_metadata(),
+			DynImageMetadata::Uncompressed(m) => m.decoded_metadata(),
+			DynImageMetadata::BCn(m) => m.decoded_metadata(),
+			DynImageMetadata::ZstdBCn(m) => m.decoded_metadata(),
 			#[cfg(feature = "image_decoding")]
-			DiskImageMetadata::Embedded(m) => m.decoded_metadata(),
+			DynImageMetadata::Embedded(m) => m.decoded_metadata(),
 			#[cfg(not(feature = "image_decoding"))]
-			DiskImageMetadata::Embedded(_) => missing_image_decoding_feature(),
+			DynImageMetadata::Embedded(_) => missing_image_decoding_feature(),
 		}
 	}
 
 	fn decode_into(&self, src: &[u8], dst: &mut [u8]) {
 		match self {
-			DiskImageMetadata::Uncompressed(m) => m.decode_into(src, dst),
-			DiskImageMetadata::BCn(m) => m.decode_into(src, dst),
-			DiskImageMetadata::ZstdBCn(m) => m.decode_into(src, dst),
+			DynImageMetadata::Uncompressed(m) => m.decode_into(src, dst),
+			DynImageMetadata::BCn(m) => m.decode_into(src, dst),
+			DynImageMetadata::ZstdBCn(m) => m.decode_into(src, dst),
 			#[cfg(feature = "image_decoding")]
-			DiskImageMetadata::Embedded(m) => m.decode_into(src, dst),
+			DynImageMetadata::Embedded(m) => m.decode_into(src, dst),
 			#[cfg(not(feature = "image_decoding"))]
-			DiskImageMetadata::Embedded(_) => missing_image_decoding_feature(),
+			DynImageMetadata::Embedded(_) => missing_image_decoding_feature(),
 		}
 	}
 
 	fn decode<'a>(&self, src: &'a [u8]) -> RuntimeImage<'a> {
 		match self {
-			DiskImageMetadata::Uncompressed(m) => m.decode(src),
-			DiskImageMetadata::BCn(m) => m.decode(src),
-			DiskImageMetadata::ZstdBCn(m) => m.decode(src),
+			DynImageMetadata::Uncompressed(m) => m.decode(src),
+			DynImageMetadata::BCn(m) => m.decode(src),
+			DynImageMetadata::ZstdBCn(m) => m.decode(src),
 			#[cfg(feature = "image_decoding")]
-			DiskImageMetadata::Embedded(m) => m.decode(src),
+			DynImageMetadata::Embedded(m) => m.decode(src),
 			#[cfg(not(feature = "image_decoding"))]
-			DiskImageMetadata::Embedded(_) => missing_image_decoding_feature(),
+			DynImageMetadata::Embedded(_) => missing_image_decoding_feature(),
 		}
 	}
 }
 
-pub type UncompressedImage<'a, const IMAGE_TYPE: u32> = Image<'a, UncompressedImageMetadata<IMAGE_TYPE>>;
+pub type UncompressedImage<'a> = Image<'a, UncompressedImageMetadata>;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
-pub struct UncompressedImageMetadata<const IMAGE_TYPE: u32> {
+pub struct UncompressedImageMetadata {
+	pub image_type: ImageType,
 	pub extent: UVec3,
 	pub mip_layers: u32,
 }
 
-impl<const IMAGE_TYPE: u32> UncompressedImageMetadata<IMAGE_TYPE> {
-	pub fn image_type() -> ImageType {
-		ImageType::try_from(IMAGE_TYPE).unwrap()
-	}
-}
-
-impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for UncompressedImageMetadata<IMAGE_TYPE> {
+impl DecodeToRuntimeImage for UncompressedImageMetadata {
 	fn decoded_metadata(&self) -> RuntimeImageMetadata {
-		let image_type = Self::image_type();
-		RuntimeImageMetadata::new_uncompressed(image_type, self.extent, image_type.channels(), self.mip_layers)
+		RuntimeImageMetadata::new_uncompressed(
+			self.image_type,
+			self.extent,
+			self.image_type.channels(),
+			self.mip_layers,
+		)
 	}
 
 	fn decode_into(&self, src: &[u8], dst: &mut [u8]) {
@@ -136,44 +139,39 @@ impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for UncompressedImageMetadata<I
 	}
 }
 
-pub type BCnImage<'a, const IMAGE_TYPE: u32> = Image<'a, BCnImageMetadata<IMAGE_TYPE>>;
+pub type BCnImage<'a> = Image<'a, BCnImageMetadata>;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
-pub struct BCnImageMetadata<const IMAGE_TYPE: u32> {
+pub struct BCnImageMetadata {
+	pub image_type: ImageType,
 	pub extent: UVec3,
 	pub mip_layers: u32,
 }
 
-impl<const IMAGE_TYPE: u32> BCnImageMetadata<IMAGE_TYPE> {
-	pub fn image_type() -> ImageType {
-		ImageType::try_from(IMAGE_TYPE).unwrap()
-	}
+impl BCnImageMetadata {
+	pub const BLOCK_SIZE: UVec3 = UVec3::new(4, 4, 1);
 
-	pub fn block_size() -> UVec3 {
-		UVec3::new(4, 4, 1)
-	}
-
-	pub fn bytes_per_block() -> u32 {
-		match Self::image_type() {
+	pub fn bytes_per_block(&self) -> u32 {
+		match self.image_type {
 			// BC4
-			ImageType::R_VALUE => 8,
+			ImageType::RValue => 8,
 			// BC5
-			ImageType::RG_VALUE => 16,
+			ImageType::RgValue => 16,
 			// BC7
-			ImageType::RGBA_LINEAR => 16,
-			ImageType::RGBA_COLOR => 16,
+			ImageType::RgbaLinear => 16,
+			ImageType::RgbaColor => 16,
 		}
 	}
 }
 
-impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for BCnImageMetadata<IMAGE_TYPE> {
+impl DecodeToRuntimeImage for BCnImageMetadata {
 	fn decoded_metadata(&self) -> RuntimeImageMetadata {
 		RuntimeImageMetadata::new(
-			ImageType::try_from(IMAGE_TYPE).unwrap(),
+			self.image_type,
 			self.extent,
-			Self::block_size(),
-			Self::bytes_per_block(),
+			Self::BLOCK_SIZE,
+			self.bytes_per_block(),
 			self.mip_layers,
 		)
 	}
@@ -191,8 +189,8 @@ impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for BCnImageMetadata<IMAGE_TYPE
 	}
 }
 
-impl<const IMAGE_TYPE: u32> BCnImage<'_, IMAGE_TYPE> {
-	pub fn compress_to_zstd(&self, zstd_level: i32) -> ZstdBCnImage<'static, IMAGE_TYPE> {
+impl BCnImage<'_> {
+	pub fn compress_to_zstd(&self, zstd_level: i32) -> ZstdBCnImage<'static> {
 		profiling::function_scope!();
 		ZstdBCnImage {
 			meta: ZstdBCnImageMetadata { inner: self.meta },
@@ -201,14 +199,14 @@ impl<const IMAGE_TYPE: u32> BCnImage<'_, IMAGE_TYPE> {
 	}
 }
 
-pub type ZstdBCnImage<'a, const IMAGE_TYPE: u32> = Image<'a, ZstdBCnImageMetadata<IMAGE_TYPE>>;
+pub type ZstdBCnImage<'a> = Image<'a, ZstdBCnImageMetadata>;
 
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
-pub struct ZstdBCnImageMetadata<const IMAGE_TYPE: u32> {
-	pub inner: BCnImageMetadata<IMAGE_TYPE>,
+pub struct ZstdBCnImageMetadata {
+	pub inner: BCnImageMetadata,
 }
 
-impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for ZstdBCnImageMetadata<IMAGE_TYPE> {
+impl DecodeToRuntimeImage for ZstdBCnImageMetadata {
 	fn decoded_metadata(&self) -> RuntimeImageMetadata {
 		self.inner.decoded_metadata()
 	}
@@ -219,8 +217,8 @@ impl<const IMAGE_TYPE: u32> DecodeToRuntimeImage for ZstdBCnImageMetadata<IMAGE_
 	}
 }
 
-impl<const IMAGE_TYPE: u32> ZstdBCnImage<'_, IMAGE_TYPE> {
-	pub fn decompress_to_bcn(&self) -> BCnImage<'static, IMAGE_TYPE> {
+impl ZstdBCnImage<'_> {
+	pub fn decompress_to_bcn(&self) -> BCnImage<'static> {
 		profiling::function_scope!();
 		BCnImage {
 			meta: self.meta.inner,
@@ -231,15 +229,11 @@ impl<const IMAGE_TYPE: u32> ZstdBCnImage<'_, IMAGE_TYPE> {
 	}
 }
 
-pub type EmbeddedImage<'a, const IMAGE_TYPE: u32> = Image<'a, EmbeddedImageMetadata<IMAGE_TYPE>>;
+// Embedded image file, like png or jpg
+pub type EmbeddedImage<'a> = Image<'a, EmbeddedImageMetadata>;
 
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
-pub struct EmbeddedImageMetadata<const IMAGE_TYPE: u32> {
+pub struct EmbeddedImageMetadata {
+	pub image_type: ImageType,
 	pub extent: UVec3,
-}
-
-impl<const IMAGE_TYPE: u32> EmbeddedImageMetadata<IMAGE_TYPE> {
-	pub fn image_type() -> ImageType {
-		ImageType::try_from(IMAGE_TYPE).unwrap()
-	}
 }

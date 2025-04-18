@@ -36,7 +36,7 @@ impl Uploader {
 		let default_texture = |uploader: &Uploader, name: &str, color: Vec4| {
 			let color = color.to_array().map(|f| (f * 255.) as u8);
 			let bytes = Vec::from(color).into();
-			let disk = Image2DDisk::<{ ImageType::RGBA_LINEAR as u32 }> {
+			let disk = Image2DDisk::<{ ImageType::RgbaLinear as u32 }> {
 				metadata: Image2DMetadata {
 					size: Size::new(1, 1),
 					disk_compression: DiskImageCompression::None,
