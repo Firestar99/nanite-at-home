@@ -61,8 +61,8 @@ presser = "0.3.1"
 winit = { version = "0.30" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "a01aafbac8e586996a14bd929d668de0075a214f", default-features = false }
-spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "a01aafbac8e586996a14bd929d668de0075a214f", features = ["bytemuck"] }
+spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "d64dd36f8ce925e4389774d317d057891a90563b", default-features = false }
+spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "d64dd36f8ce925e4389774d317d057891a90563b", features = ["bytemuck"] }
 
 # async
 futures = "0.3"
@@ -78,7 +78,7 @@ prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
 
 # bytes and numbers
-glam = { version = "0.29.1", default-features = false, features = ["libm", "bytemuck"] }
+glam = { version = "0.30.2", default-features = false, features = ["libm", "bytemuck"] }
 libm = { version = "0.2", default-features = false }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"
@@ -87,14 +87,12 @@ num-derive = "0.4.2"
 memoffset = "0.9.1"
 
 # serde
-rkyv = { version = "0.7", default-features = false, features = ["std", "size_64"] }
+rkyv = { version = "0.8.10", default-features = false, features = ["std", "pointer_width_64"] }
 zstd = { version = "0.13" }
-
-# image
-zune-image = { version = "0.5.0-rc0", default-features = false, features = ["png", "jpeg", "simd"] }
 
 # model loader
 gltf = { version = "1.4.0", default-features = false, features = ["names", "utils", "KHR_lights_punctual", "KHR_materials_specular"] }
+image = { version = "0.25.6", default-features = false }
 base64 = "0.22"
 urlencoding = "2.1"
 meshopt = "0.4"
@@ -180,13 +178,11 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.zune-core]
 opt-level = 3
-[profile.dev.package.zune-image]
-opt-level = 3
-[profile.dev.package.zune-inflate]
-opt-level = 3
 [profile.dev.package.zune-jpeg]
 opt-level = 3
-[profile.dev.package.zune-png]
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.png]
 opt-level = 3
 [profile.dev.package.epaint]
 opt-level = 3

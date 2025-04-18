@@ -1,3 +1,4 @@
+use crate::image::upload::UploadedImages;
 use crate::material::pbr::{default_pbr_material, upload_pbr_material, PbrMaterials};
 use crate::meshlet::mesh::upload_mesh;
 use crate::upload_traits::ToStrong;
@@ -33,24 +34,25 @@ pub struct InstancedMeshletSceneCpu {
 }
 
 pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) -> anyhow::Result<MeshletSceneCpu> {
-	profiling::scope!("ArchivedMeshletSceneDisk::upload");
+	profiling::function_scope!();
+
+	let uploaded_images = {
+		profiling::scope!("image upload");
+		UploadedImages::new(&uploader.bindless, &this.image_storage).await?
+	};
 
 	let pbr_materials: Vec<PbrMaterial<RC>> = {
 		profiling::scope!("material upload");
-		join_all(
-			this.pbr_materials
-				.par_iter()
-				.map(|mat| upload_pbr_material(mat, uploader))
-				.collect::<Vec<_>>(),
-		)
-		.await
-		.into_iter()
-		.collect::<Result<_, _>>()?
+		this.pbr_materials
+			.par_iter()
+			.map(|mat| upload_pbr_material(mat, &uploaded_images))
+			.collect::<Result<_, _>>()?
 	};
 	let pbr_materials = PbrMaterials {
 		pbr_materials: &pbr_materials,
-		default_pbr_material: &default_pbr_material(uploader),
+		default_pbr_material: &default_pbr_material(&uploaded_images),
 	};
+	drop(uploaded_images);
 
 	let meshes: Vec<MeshletMesh<RC>> = {
 		profiling::scope!("mesh upload");

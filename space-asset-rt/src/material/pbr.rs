@@ -1,11 +1,9 @@
-use crate::image::upload::upload_image2d_archive;
+use crate::image::upload::UploadedImages;
 use crate::upload_traits::ToStrong;
-use crate::uploader::Uploader;
 use rust_gpu_bindless::descriptor::{RCDescExt, RC};
 use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::material::pbr::ArchivedPbrMaterialDisk;
 use space_asset_shader::material::pbr::PbrMaterial;
-use std::future::Future;
 
 pub struct PbrMaterials<'a> {
 	pub pbr_materials: &'a [PbrMaterial<RC>],
@@ -29,50 +27,45 @@ impl ToStrong for PbrMaterial<RC> {
 	}
 }
 
-pub fn upload_pbr_material<'a>(
-	this: &'a ArchivedPbrMaterialDisk,
-	uploader: &'a Uploader,
-) -> impl Future<Output = anyhow::Result<PbrMaterial<RC>>> + 'a {
+pub fn upload_pbr_material(
+	this: &ArchivedPbrMaterialDisk,
+	uploader: &UploadedImages,
+) -> anyhow::Result<PbrMaterial<RC>> {
 	profiling::scope!("upload_pbr_material");
-	let base_color = this
-		.base_color
-		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, "base_color", uploader));
-	let normal = this
-		.normal
-		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, "normal", uploader));
-	let occlusion_roughness_metallic = this
-		.occlusion_roughness_metallic
-		.as_ref()
-		.map(|tex| upload_image2d_archive(tex, "occlusion_roughness_metallic", uploader));
-	async {
-		Ok(PbrMaterial {
-			base_color: uploader
-				.await_or_default_texture(base_color, Uploader::default_white_texture)
-				.await?,
-			base_color_factor: this.base_color_factor,
-			normal: uploader
-				.await_or_default_texture(normal, Uploader::default_normal_texture)
-				.await?,
-			normal_scale: this.normal_scale,
-			occlusion_roughness_metallic: uploader
-				.await_or_default_texture(occlusion_roughness_metallic, Uploader::default_white_texture)
-				.await?,
-			occlusion_strength: this.occlusion_strength,
-			metallic_factor: this.metallic_factor,
-			roughness_factor: this.roughness_factor,
-		})
-	}
+	Ok(PbrMaterial {
+		base_color: this
+			.base_color
+			.as_ref()
+			.map(|tex| uploader.archived_image(tex))
+			.unwrap_or(&uploader.default_white_texture)
+			.clone(),
+		base_color_factor: this.base_color_factor.map(|i| i.to_native()),
+		normal: this
+			.normal
+			.as_ref()
+			.map(|tex| uploader.archived_image(tex))
+			.unwrap_or(&uploader.default_normal_texture)
+			.clone(),
+		normal_scale: this.normal_scale.to_native(),
+		occlusion_roughness_metallic: this
+			.occlusion_roughness_metallic
+			.as_ref()
+			.map(|tex| uploader.archived_image(tex))
+			.unwrap_or(&uploader.default_white_texture)
+			.clone(),
+		occlusion_strength: this.occlusion_strength.to_native(),
+		metallic_factor: this.metallic_factor.to_native(),
+		roughness_factor: this.roughness_factor.to_native(),
+	})
 }
 
-pub fn default_pbr_material(uploader: &Uploader) -> PbrMaterial<RC> {
+pub fn default_pbr_material(uploader: &UploadedImages) -> PbrMaterial<RC> {
 	PbrMaterial {
-		base_color: uploader.default_white_texture(),
+		base_color: uploader.default_white_texture.clone(),
 		base_color_factor: [1.; 4],
-		normal: uploader.default_normal_texture(),
+		normal: uploader.default_normal_texture.clone(),
 		normal_scale: 1.,
-		occlusion_roughness_metallic: uploader.default_white_texture(),
+		occlusion_roughness_metallic: uploader.default_white_texture.clone(),
 		occlusion_strength: 1.,
 		metallic_factor: 1.,
 		roughness_factor: 1.,

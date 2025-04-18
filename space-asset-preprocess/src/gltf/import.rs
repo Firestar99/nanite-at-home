@@ -7,7 +7,6 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use zune_image::errors::ImageErrors;
 
 pub struct Gltf {
 	pub document: Document,
@@ -69,7 +68,6 @@ pub enum GltfImageError {
 	UnknownImageFormat,
 	EncodingFromBCn,
 	EncodingToBCnDisabled,
-	ImageErrors(ImageErrors),
 	IoError(io::Error),
 }
 
@@ -84,19 +82,12 @@ impl Display for GltfImageError {
 			GltfImageError::EncodingToBCnDisabled => {
 				f.write_str("Encoding into suitable BCn format disabled by settings")
 			}
-			GltfImageError::ImageErrors(err) => Display::fmt(err, f),
 			GltfImageError::IoError(err) => Display::fmt(err, f),
 		}
 	}
 }
 
 impl std::error::Error for GltfImageError {}
-
-impl From<ImageErrors> for GltfImageError {
-	fn from(value: ImageErrors) -> Self {
-		Self::ImageErrors(value)
-	}
-}
 
 impl From<io::Error> for GltfImageError {
 	fn from(value: io::Error) -> Self {
