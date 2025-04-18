@@ -1,6 +1,8 @@
 use crate::image::upload::upload_image2d_disk;
 use glam::Vec4;
 use pollster::block_on;
+use rkyv::api::high::HighDeserializer;
+use rkyv::rancor::Panic;
 use rkyv::Deserialize;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, RCDesc, RC,
@@ -12,10 +14,9 @@ use std::future::Future;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T
 where
-	A: Deserialize<T, rkyv::Infallible>,
+	A: Deserialize<T, HighDeserializer<Panic>>,
 {
-	let t: T = a.deserialize(&mut rkyv::Infallible).unwrap();
-	t
+	rkyv::deserialize(a).unwrap()
 }
 
 pub struct Uploader {

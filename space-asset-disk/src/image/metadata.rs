@@ -2,7 +2,7 @@
 
 use crate::image::Size;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use rkyv::{Archive, Deserialize, Infallible, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive, Archive, Serialize, Deserialize)]
@@ -104,7 +104,7 @@ pub struct Image2DMetadata<const IMAGE_TYPE: u32> {
 
 impl<const IMAGE_TYPE: u32> ArchivedImage2DMetadata<IMAGE_TYPE> {
 	pub fn deserialize(&self) -> Image2DMetadata<IMAGE_TYPE> {
-		Deserialize::deserialize(self, &mut Infallible).unwrap()
+		rkyv::deserialize::<_, rkyv::rancor::Panic>(self).unwrap()
 	}
 }
 

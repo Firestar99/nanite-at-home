@@ -51,17 +51,17 @@ pub fn upload_pbr_material<'a>(
 			base_color: uploader
 				.await_or_default_texture(base_color, Uploader::default_white_texture)
 				.await?,
-			base_color_factor: this.base_color_factor,
+			base_color_factor: this.base_color_factor.map(|i| i.to_native()),
 			normal: uploader
 				.await_or_default_texture(normal, Uploader::default_normal_texture)
 				.await?,
-			normal_scale: this.normal_scale,
+			normal_scale: this.normal_scale.to_native(),
 			occlusion_roughness_metallic: uploader
 				.await_or_default_texture(occlusion_roughness_metallic, Uploader::default_white_texture)
 				.await?,
-			occlusion_strength: this.occlusion_strength,
-			metallic_factor: this.metallic_factor,
-			roughness_factor: this.roughness_factor,
+			occlusion_strength: this.occlusion_strength.to_native(),
+			metallic_factor: this.metallic_factor.to_native(),
+			roughness_factor: this.roughness_factor.to_native(),
 		})
 	}
 }

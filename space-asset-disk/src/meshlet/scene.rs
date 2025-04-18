@@ -2,12 +2,12 @@ use crate::material::pbr::PbrMaterialDisk;
 use crate::meshlet::instance::MeshletInstanceDisk;
 use crate::meshlet::mesh::MeshletMeshDisk;
 use crate::meshlet::stats::MeshletSceneStats;
-use rkyv::ser::serializers::{
-	AllocScratch, CompositeSerializer, CompositeSerializerError, FallbackScratch, HeapScratch, SharedSerializeMap,
-	WriteSerializer,
-};
+use rkyv::api::serialize_using;
+use rkyv::ser::sharing::Share;
+use rkyv::ser::writer::IoWriter;
 use rkyv::ser::Serializer;
-use rkyv::{AlignedVec, Archive, Deserialize, Serialize};
+use rkyv::util::{with_arena, AlignedVec};
+use rkyv::{Archive, Deserialize, Serialize};
 use std::io::{BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::{fs, io};
@@ -23,16 +23,14 @@ pub struct MeshletSceneDisk {
 impl MeshletSceneDisk {
 	pub fn serialize_to(&self, write: impl Write) -> io::Result<()> {
 		profiling::function_scope!();
-		let mut serializer = CompositeSerializer::new(
-			WriteSerializer::new(BufWriter::with_capacity(128 * 1024, write)),
-			FallbackScratch::<HeapScratch<1024>, AllocScratch>::default(),
-			SharedSerializeMap::default(),
-		);
-		serializer.serialize_value(self).map_err(|err| match err {
-			CompositeSerializerError::SerializerError(e) => e,
-			CompositeSerializerError::ScratchSpaceError(e) => panic!("{:?}", e),
-			CompositeSerializerError::SharedError(e) => panic!("{:?}", e),
-		})?;
+		with_arena(|arena| {
+			let mut serializer = Serializer::new(
+				IoWriter::new(BufWriter::with_capacity(128 * 1024, write)),
+				arena.acquire(),
+				Share::default(),
+			);
+			serialize_using::<_, rkyv::rancor::Panic>(self, &mut serializer).unwrap();
+		});
 		Ok(())
 	}
 }
@@ -111,6 +109,6 @@ impl<'a> MeshletSceneFile<'a> {
 
 impl LoadedMeshletScene {
 	pub fn root(&self) -> &ArchivedMeshletSceneDisk {
-		unsafe { rkyv::archived_root::<MeshletSceneDisk>(&self.archive) }
+		unsafe { rkyv::access_unchecked::<ArchivedMeshletSceneDisk>(&self.archive) }
 	}
 }
