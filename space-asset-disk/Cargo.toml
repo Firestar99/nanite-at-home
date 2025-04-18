@@ -11,8 +11,8 @@ workspace = true
 
 [features]
 image_decoding = ["image"]
-image_png_decoding = ["image/png"]
-image_jpeg_decoding = ["image/jpeg"]
+image_png_decoding = ["image_decoding", "image/png"]
+image_jpeg_decoding = ["image_decoding", "image/jpeg"]
 image_bcn_encoding = ["intel_tex_2"]
 
 [dependencies]

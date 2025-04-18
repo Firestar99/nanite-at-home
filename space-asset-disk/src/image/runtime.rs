@@ -11,7 +11,7 @@ pub struct RuntimeImage<'a> {
 	pub data: Cow<'a, [u8]>,
 }
 
-impl<'a> RuntimeImage<'a> {
+impl RuntimeImage<'_> {
 	pub fn to_static(self) -> RuntimeImage<'static> {
 		RuntimeImage {
 			meta: self.meta,
@@ -20,10 +20,18 @@ impl<'a> RuntimeImage<'a> {
 	}
 }
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
+pub enum RuntimeImageCompression {
+	None,
+	BCn,
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
 pub struct RuntimeImageMetadata {
 	pub image_type: ImageType,
+	pub compression: RuntimeImageCompression,
 	pub extent: UVec3,
 	pub block_size: UVec3,
 	pub bytes_per_block: u32,
@@ -66,9 +74,17 @@ impl RuntimeImageMetadata {
 		(0..mip).map(|i| self.mip_size(i)).sum()
 	}
 
-	pub fn new(image_type: ImageType, extent: UVec3, block_size: UVec3, bytes_per_block: u32, mip_layers: u32) -> Self {
+	pub fn new(
+		image_type: ImageType,
+		compression: RuntimeImageCompression,
+		extent: UVec3,
+		block_size: UVec3,
+		bytes_per_block: u32,
+		mip_layers: u32,
+	) -> Self {
 		let mut out = Self {
 			image_type,
+			compression,
 			extent,
 			block_size,
 			bytes_per_block,
@@ -85,6 +101,13 @@ impl RuntimeImageMetadata {
 		bytes_per_pixel: u32,
 		mip_layers: u32,
 	) -> RuntimeImageMetadata {
-		Self::new(image_type, extent, UVec3::ONE, bytes_per_pixel, mip_layers)
+		Self::new(
+			image_type,
+			RuntimeImageCompression::None,
+			extent,
+			UVec3::ONE,
+			bytes_per_pixel,
+			mip_layers,
+		)
 	}
 }

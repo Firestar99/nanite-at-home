@@ -1,6 +1,3 @@
-use crate::image::upload::upload_image2d_disk;
-use glam::Vec4;
-use pollster::block_on;
 use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Panic;
 use rkyv::Deserialize;
@@ -9,7 +6,6 @@ use rust_gpu_bindless::descriptor::{
 };
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Desc, Image, Image2d};
-use space_asset_disk::image::{DiskImageCompression, Image2DDisk, Image2DMetadata, ImageType, Size};
 use std::future::Future;
 
 pub fn deserialize_infallible<A, T>(a: &A) -> T
@@ -21,34 +17,11 @@ where
 
 pub struct Uploader {
 	pub bindless: Bindless,
-	default_white_texture: Option<RCDesc<Image<Image2d>>>,
-	default_normal_texture: Option<RCDesc<Image<Image2d>>>,
 }
 
 impl Uploader {
 	pub fn new(bindless: Bindless) -> Self {
-		let mut uploader = Self {
-			bindless,
-			default_white_texture: None,
-			default_normal_texture: None,
-		};
-
-		let default_texture = |uploader: &Uploader, name: &str, color: Vec4| {
-			let color = color.to_array().map(|f| (f * 255.) as u8);
-			let bytes = Vec::from(color).into();
-			let disk = Image2DDisk::<{ ImageType::RgbaLinear as u32 }> {
-				metadata: Image2DMetadata {
-					size: Size::new(1, 1),
-					disk_compression: DiskImageCompression::None,
-				},
-				bytes,
-			};
-			block_on(upload_image2d_disk(&disk, name, &uploader)).unwrap()
-		};
-
-		uploader.default_white_texture = Some(default_texture(&uploader, "default_white_texture", Vec4::splat(1.)));
-		uploader.default_normal_texture = Some(default_texture(&uploader, "default_normal_texture", Vec4::splat(0.5)));
-		uploader
+		Self { bindless }
 	}
 
 	// TODO eventually these should use a staging buffer to upload to non-host accessible memory, if required
@@ -86,14 +59,6 @@ impl Uploader {
 			iter,
 		);
 		async { Ok(buffer?) }
-	}
-
-	pub fn default_white_texture(&self) -> RCDesc<Image<Image2d>> {
-		self.default_white_texture.as_ref().unwrap().clone()
-	}
-
-	pub fn default_normal_texture(&self) -> RCDesc<Image<Image2d>> {
-		self.default_normal_texture.as_ref().unwrap().clone()
 	}
 
 	pub async fn await_or_default_texture(

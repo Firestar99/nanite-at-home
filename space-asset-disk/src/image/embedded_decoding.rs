@@ -3,19 +3,24 @@ use crate::image::{
 	UncompressedImageMetadata,
 };
 use glam::UVec3;
+use image::ImageDecoder;
 use image::{ImageReader, ImageResult};
 use std::borrow::Cow;
+use std::io::Cursor;
 
-impl EmbeddedImage<'_> {
-	pub fn new(image_type: ImageType, src: &[u8]) -> ImageResult<Self> {
-		let decoder = ImageReader::new(src).with_guessed_format()?.into_decoder()?;
-		let dim = decoder.dimensions();
+impl<'a> EmbeddedImage<'a> {
+	pub fn new(image_type: ImageType, data: Cow<'a, [u8]>) -> ImageResult<Self> {
+		profiling::function_scope!();
+		let dim = ImageReader::new(Cursor::new(data.as_ref()))
+			.with_guessed_format()?
+			.into_decoder()?
+			.dimensions();
 		Ok(Self {
 			meta: EmbeddedImageMetadata {
 				image_type,
 				extent: UVec3::new(dim.0, dim.1, 1),
 			},
-			data: Cow::Borrowed(src),
+			data,
 		})
 	}
 
@@ -41,7 +46,7 @@ impl DecodeToRuntimeImage for EmbeddedImageMetadata {
 
 	fn decode_into(&self, src: &[u8], dst: &mut [u8]) {
 		profiling::function_scope!();
-		let decoder = ImageReader::new(src)
+		let decoder = ImageReader::new(Cursor::new(src))
 			.with_guessed_format()
 			.unwrap()
 			.into_decoder()

@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 # my projects
-space-asset-disk = { workspace = true, features = ["image_bcn_encoding"] }
+space-asset-disk = { workspace = true, features = ["image_bcn_encoding", "image_jpeg_decoding", "image_png_decoding"] }
 rust-gpu-bindless-macro-utils = { workspace = true }
 
 # async

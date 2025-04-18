@@ -2,7 +2,7 @@ use crate::image::DynImage;
 use rkyv::{Archive, Deserialize, Serialize};
 
 #[repr(u32)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Archive, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Archive, Serialize, Deserialize)]
 pub enum ImageType {
 	/// Single channel of values.
 	/// Usually represented by R8 or BC4.
@@ -58,13 +58,25 @@ pub type ImageDiskRgbaSrgb = ImageDisk<{ ImageType::RgbaColor as u32 }>;
 
 pub trait ImageDiskTrait {
 	const IMAGE_TYPE: ImageType;
+
+	fn new(id: usize) -> Self;
+
+	fn id(&self) -> usize;
 }
 
 impl<const IMAGE_TYPE: u32> ImageDiskTrait for ImageDisk<IMAGE_TYPE> {
 	const IMAGE_TYPE: ImageType = ImageType::from_u32(IMAGE_TYPE);
+
+	fn new(id: usize) -> Self {
+		Self { id }
+	}
+
+	fn id(&self) -> usize {
+		self.id
+	}
 }
 
 #[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 pub struct ImageStorage {
-	images: Vec<DynImage<'static>>,
+	pub images: Vec<(DynImage<'static>, String)>,
 }

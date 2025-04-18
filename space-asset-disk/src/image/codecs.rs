@@ -1,5 +1,7 @@
-use crate::image::{ImageType, RuntimeImage, RuntimeImageMetadata};
+use crate::image::{ImageType, RuntimeImage, RuntimeImageCompression, RuntimeImageMetadata};
 use glam::UVec3;
+use rkyv::api::high::HighDeserializer;
+use rkyv::rancor::Panic;
 use rkyv::with::AsOwned;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::borrow::Cow;
@@ -15,9 +17,23 @@ pub struct Image<'a, M> {
 
 impl<M> Image<'_, M> {
 	pub fn into_owned(self) -> Image<'static, M> {
+		profiling::function_scope!();
 		Image {
 			meta: self.meta,
 			data: Cow::Owned(self.data.into_owned()),
+		}
+	}
+}
+
+impl<M> ArchivedImage<'_, M>
+where
+	M: Archive,
+	M::Archived: Deserialize<M, HighDeserializer<Panic>>,
+{
+	pub fn to_image(&self) -> Image<'_, M> {
+		Image {
+			meta: rkyv::deserialize(&self.meta).unwrap(),
+			data: Cow::Borrowed(&self.data),
 		}
 	}
 }
@@ -54,6 +70,26 @@ pub trait DecodeToRuntimeImage {
 	}
 }
 
+impl<'a, M: ToDynImage> Image<'a, M> {
+	pub fn to_dyn_image(&self) -> DynImage {
+		DynImage {
+			meta: self.meta.to_dyn_image(),
+			data: Cow::Borrowed(&self.data),
+		}
+	}
+
+	pub fn into_dyn_image(self) -> DynImage<'a> {
+		DynImage {
+			meta: self.meta.to_dyn_image(),
+			data: self.data,
+		}
+	}
+}
+
+pub trait ToDynImage {
+	fn to_dyn_image(&self) -> DynImageMetadata;
+}
+
 pub type DynImage<'a> = Image<'a, DynImageMetadata>;
 
 #[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
@@ -62,9 +98,11 @@ pub enum DynImageMetadata {
 	BCn(BCnImageMetadata),
 	ZstdBCn(ZstdBCnImageMetadata),
 	Embedded(EmbeddedImageMetadata),
+	SinglePixel(SinglePixelMetadata),
 }
 
 #[cold]
+#[cfg(not(feature = "image_decoding"))]
 fn missing_image_decoding_feature() -> ! {
 	panic!("Missing feature \"image_decoding\" to decode an embedded image");
 }
@@ -79,6 +117,7 @@ impl DecodeToRuntimeImage for DynImageMetadata {
 			DynImageMetadata::Embedded(m) => m.decoded_metadata(),
 			#[cfg(not(feature = "image_decoding"))]
 			DynImageMetadata::Embedded(_) => missing_image_decoding_feature(),
+			DynImageMetadata::SinglePixel(m) => m.decoded_metadata(),
 		}
 	}
 
@@ -91,6 +130,7 @@ impl DecodeToRuntimeImage for DynImageMetadata {
 			DynImageMetadata::Embedded(m) => m.decode_into(src, dst),
 			#[cfg(not(feature = "image_decoding"))]
 			DynImageMetadata::Embedded(_) => missing_image_decoding_feature(),
+			DynImageMetadata::SinglePixel(m) => m.decode_into(src, dst),
 		}
 	}
 
@@ -103,6 +143,7 @@ impl DecodeToRuntimeImage for DynImageMetadata {
 			DynImageMetadata::Embedded(m) => m.decode(src),
 			#[cfg(not(feature = "image_decoding"))]
 			DynImageMetadata::Embedded(_) => missing_image_decoding_feature(),
+			DynImageMetadata::SinglePixel(m) => m.decode(src),
 		}
 	}
 }
@@ -115,6 +156,12 @@ pub struct UncompressedImageMetadata {
 	pub image_type: ImageType,
 	pub extent: UVec3,
 	pub mip_layers: u32,
+}
+
+impl ToDynImage for UncompressedImageMetadata {
+	fn to_dyn_image(&self) -> DynImageMetadata {
+		DynImageMetadata::Uncompressed(*self)
+	}
 }
 
 impl DecodeToRuntimeImage for UncompressedImageMetadata {
@@ -149,6 +196,12 @@ pub struct BCnImageMetadata {
 	pub mip_layers: u32,
 }
 
+impl ToDynImage for BCnImageMetadata {
+	fn to_dyn_image(&self) -> DynImageMetadata {
+		DynImageMetadata::BCn(*self)
+	}
+}
+
 impl BCnImageMetadata {
 	pub const BLOCK_SIZE: UVec3 = UVec3::new(4, 4, 1);
 
@@ -169,6 +222,7 @@ impl DecodeToRuntimeImage for BCnImageMetadata {
 	fn decoded_metadata(&self) -> RuntimeImageMetadata {
 		RuntimeImageMetadata::new(
 			self.image_type,
+			RuntimeImageCompression::BCn,
 			self.extent,
 			Self::BLOCK_SIZE,
 			self.bytes_per_block(),
@@ -206,6 +260,12 @@ pub struct ZstdBCnImageMetadata {
 	pub inner: BCnImageMetadata,
 }
 
+impl ToDynImage for ZstdBCnImageMetadata {
+	fn to_dyn_image(&self) -> DynImageMetadata {
+		DynImageMetadata::ZstdBCn(*self)
+	}
+}
+
 impl DecodeToRuntimeImage for ZstdBCnImageMetadata {
 	fn decoded_metadata(&self) -> RuntimeImageMetadata {
 		self.inner.decoded_metadata()
@@ -236,4 +296,59 @@ pub type EmbeddedImage<'a> = Image<'a, EmbeddedImageMetadata>;
 pub struct EmbeddedImageMetadata {
 	pub image_type: ImageType,
 	pub extent: UVec3,
+}
+
+impl ToDynImage for EmbeddedImageMetadata {
+	fn to_dyn_image(&self) -> DynImageMetadata {
+		DynImageMetadata::Embedded(*self)
+	}
+}
+
+// Embedded image file, like png or jpg
+pub type SinglePixelImage<'a> = Image<'a, SinglePixelMetadata>;
+
+#[derive(Copy, Clone, Debug, Archive, Serialize, Deserialize)]
+pub struct SinglePixelMetadata {
+	pub image_type: ImageType,
+	pub color: [u8; 4],
+}
+
+impl SinglePixelMetadata {
+	pub fn new(image_type: ImageType, color: [u8; 4]) -> Self {
+		Self { image_type, color }
+	}
+	pub fn new_r_values(color: u8) -> Self {
+		Self::new(ImageType::RgValue, [color, 1, 1, 1])
+	}
+	pub fn new_rg_values(color: [u8; 2]) -> Self {
+		Self::new(ImageType::RgValue, [color[0], color[1], 1, 1])
+	}
+	pub fn new_rgba_linear(color: [u8; 4]) -> Self {
+		Self::new(ImageType::RgbaLinear, color)
+	}
+	pub fn new_rgba_srgb(color: [u8; 4]) -> Self {
+		Self::new(ImageType::RgbaColor, color)
+	}
+	pub fn to_image(&self) -> SinglePixelImage {
+		SinglePixelImage {
+			meta: *self,
+			data: Cow::Borrowed(&[]),
+		}
+	}
+}
+
+impl ToDynImage for SinglePixelMetadata {
+	fn to_dyn_image(&self) -> DynImageMetadata {
+		DynImageMetadata::SinglePixel(*self)
+	}
+}
+
+impl DecodeToRuntimeImage for SinglePixelMetadata {
+	fn decoded_metadata(&self) -> RuntimeImageMetadata {
+		RuntimeImageMetadata::new_uncompressed(self.image_type, UVec3::ONE, self.image_type.channels(), 1)
+	}
+
+	fn decode_into(&self, _src: &[u8], dst: &mut [u8]) {
+		dst.copy_from_slice(&self.color[0..dst.len()])
+	}
 }

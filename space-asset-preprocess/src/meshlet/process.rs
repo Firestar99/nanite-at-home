@@ -11,7 +11,7 @@ use gltf::Primitive;
 use meshopt::VertexDataAdapter;
 use rayon::prelude::*;
 use smallvec::SmallVec;
-use space_asset_disk::image::EncodeSettings;
+use space_asset_disk::image::{EncodeSettings, ImageStorage};
 use space_asset_disk::material::pbr::PbrMaterialDisk;
 use space_asset_disk::meshlet::indices::triangle_indices_write_vec;
 use space_asset_disk::meshlet::instance::MeshletInstanceDisk;
@@ -35,10 +35,11 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 		scope.spawn(|_| pbr_materials = Some(process_materials(gltf)));
 		scope.spawn(|_| meshes_instances = Some(process_meshes(gltf)));
 	});
-	let pbr_materials = pbr_materials.unwrap()?;
+	let (image_storage, pbr_materials) = pbr_materials.unwrap()?;
 	let (meshes, instances, src_stats) = meshes_instances.unwrap()?;
 
 	Ok(MeshletSceneDisk {
+		image_storage,
 		pbr_materials,
 		meshes,
 		instances,
@@ -46,31 +47,23 @@ pub fn process_meshlets(gltf: &Gltf) -> anyhow::Result<MeshletSceneDisk> {
 	})
 }
 
-fn process_materials(gltf: &Gltf) -> anyhow::Result<Vec<PbrMaterialDisk>> {
+fn process_materials(gltf: &Gltf) -> anyhow::Result<(ImageStorage, Vec<PbrMaterialDisk>)> {
 	profiling::function_scope!();
 	let image_processor = ImageProcessor::new(gltf);
 	let pbr_materials = {
-		profiling::scope!("materials 1");
+		profiling::scope!("materials");
 		gltf.materials()
 			.map(|mat| process_pbr_material(gltf, &image_processor, mat))
 			.collect::<Result<Vec<_>, _>>()?
 	};
 
-	let image_accessor = {
+	let image_storage = {
 		profiling::scope!("images");
 		let encode_settings = EncodeSettings::ultra_fast();
 		image_processor.process(encode_settings)?
 	};
 
-	let pbr_materials = {
-		profiling::scope!("materials 2");
-		pbr_materials
-			.into_iter()
-			.map(|mat| mat.finish(&image_accessor))
-			.collect::<Result<Vec<_>, _>>()?
-	};
-
-	Ok(pbr_materials)
+	Ok((image_storage, pbr_materials))
 }
 
 fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<MeshletInstanceDisk>, SourceMeshStats)> {

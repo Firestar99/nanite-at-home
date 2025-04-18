@@ -1,3 +1,4 @@
+use crate::image::ImageStorage;
 use crate::material::pbr::PbrMaterialDisk;
 use crate::meshlet::instance::MeshletInstanceDisk;
 use crate::meshlet::mesh::MeshletMeshDisk;
@@ -12,8 +13,9 @@ use std::io::{BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::{fs, io};
 
-#[derive(Clone, Default, Debug, Archive, Serialize, Deserialize)]
+#[derive(Clone, Debug, Archive, Serialize, Deserialize)]
 pub struct MeshletSceneDisk {
+	pub image_storage: ImageStorage,
 	pub pbr_materials: Vec<PbrMaterialDisk>,
 	pub meshes: Vec<MeshletMeshDisk>,
 	pub instances: Vec<MeshletInstanceDisk>,

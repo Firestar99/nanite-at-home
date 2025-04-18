@@ -16,9 +16,6 @@ space-asset-shader = { workspace = true }
 rust-gpu-bindless = { workspace = true }
 rust-gpu-bindless-shaders = { workspace = true }
 
-# model loader
-zune-image = { workspace = true }
-
 # bytes and numbers
 glam = { workspace = true }
 
