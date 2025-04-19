@@ -2914,6 +2914,7 @@ name = "space-asset-rt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ash",
  "futures",
  "glam",
  "pollster",
@@ -2922,6 +2923,7 @@ dependencies = [
  "rkyv",
  "rust-gpu-bindless",
  "rust-gpu-bindless-shaders",
+ "smallvec",
  "space-asset-disk",
  "space-asset-shader",
 ]

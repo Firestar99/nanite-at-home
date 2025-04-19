@@ -1,3 +1,4 @@
+use ash::vk::{BufferImageCopy2, CopyBufferToImageInfo2, Extent3D, ImageAspectFlags, ImageSubresourceLayers, Offset3D};
 use futures::future::join_all;
 use glam::Vec4;
 use rayon::prelude::*;
@@ -8,8 +9,11 @@ use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, Extent, Format, MutDescBufferExt, RCDesc,
 };
-use rust_gpu_bindless::pipeline::{MutBufferAccessExt, MutImageAccessExt, TransferRead, TransferWrite};
+use rust_gpu_bindless::pipeline::{
+	HasResourceContext, ImageAccessType, MutBufferAccessExt, MutImageAccessExt, TransferRead, TransferWrite,
+};
 use rust_gpu_bindless_shaders::descriptor::{Image, Image2d};
+use smallvec::SmallVec;
 use space_asset_disk::image::{
 	ArchivedImageStorage, DynImage, ImageDiskTrait, ImageType, RuntimeImageCompression, RuntimeImageMetadata,
 	SinglePixelMetadata,
@@ -80,7 +84,7 @@ pub fn upload_image<'a>(
 	let result: anyhow::Result<_> = (|| {
 		let meta = image.decoded_metadata();
 
-		let upload_buffer = {
+		let staging_buffer = {
 			profiling::scope!("image decode to host buffer");
 			let upload_buffer = bindless.buffer().alloc_slice(
 				&BindlessBufferCreateInfo {
@@ -99,6 +103,7 @@ pub fn upload_image<'a>(
 			bindless.image().alloc(&BindlessImageCreateInfo {
 				format: select_format(meta),
 				extent: Extent::from(meta.extent),
+				mip_levels: meta.mip_levels,
 				usage: BindlessImageUsage::SAMPLED | BindlessImageUsage::TRANSFER_DST,
 				name,
 				..BindlessImageCreateInfo::default()
@@ -108,8 +113,43 @@ pub fn upload_image<'a>(
 		{
 			profiling::scope!("image copy cmd");
 			Ok(bindless.execute(|cmd| {
-				let mut image = image.access::<TransferWrite>(&cmd)?;
-				cmd.copy_buffer_to_image(&mut upload_buffer.access::<TransferRead>(&cmd)?, &mut image)?;
+				let buffer = staging_buffer.access::<TransferRead>(&cmd)?;
+				let image = image.access::<TransferWrite>(&cmd)?;
+
+				unsafe {
+					cmd.ash_flush();
+					let device = &cmd.bindless().platform.device;
+					let buffer = buffer.inner_slot();
+					let image = image.inner_slot();
+					let regions = (0..image.mip_levels)
+						.map(|mip| {
+							BufferImageCopy2 {
+								buffer_offset: meta.mip_start(mip) as u64,
+								buffer_row_length: 0,
+								buffer_image_height: 0,
+								image_subresource: ImageSubresourceLayers {
+									aspect_mask: ImageAspectFlags::COLOR,
+									mip_level: mip,
+									base_array_layer: 0,
+									layer_count: image.array_layers,
+								},
+								image_offset: Offset3D::default(),
+								image_extent: Extent3D::from(Extent::from(meta.mip_extent(mip))),
+								..Default::default()
+							}
+							// 13 allows for all mips up to 8192² images
+						})
+						.collect::<SmallVec<[_; 13]>>();
+
+					device.cmd_copy_buffer_to_image2(
+						cmd.ash_command_buffer(),
+						&CopyBufferToImageInfo2::default()
+							.src_buffer(buffer.buffer)
+							.dst_image(image.image)
+							.dst_image_layout(TransferWrite::IMAGE_ACCESS.to_ash_image_access().image_layout)
+							.regions(&regions),
+					);
+				}
 				Ok(image.into_shared())
 			})?)
 		}
