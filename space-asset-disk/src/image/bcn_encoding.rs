@@ -8,13 +8,13 @@ impl UncompressedImage<'_> {
 		let bcn_meta = BCnImageMetadata {
 			image_type: self.meta.image_type,
 			extent: self.meta.extent,
-			mip_layers: self.meta.mip_layers,
+			mip_levels: self.meta.mip_levels,
 		};
 		let meta_in = self.meta.decoded_metadata();
 		let meta_out = bcn_meta.decoded_metadata();
 		let mut data = vec![0; meta_out.total_size];
 
-		for mip in 0..meta_out.mip_layers {
+		for mip in 0..meta_out.mip_levels {
 			let mip_extent = meta_in.mip_extent(mip);
 			let pixels_in = &self.data[meta_in.mip_start(mip)..meta_in.mip_size(mip)];
 			let blocks_out = &mut data[meta_out.mip_start(mip)..meta_out.mip_size(mip)];

@@ -155,7 +155,7 @@ pub type UncompressedImage<'a> = Image<'a, UncompressedImageMetadata>;
 pub struct UncompressedImageMetadata {
 	pub image_type: ImageType,
 	pub extent: UVec3,
-	pub mip_layers: u32,
+	pub mip_levels: u32,
 }
 
 impl ToDynImage for UncompressedImageMetadata {
@@ -170,7 +170,7 @@ impl DecodeToRuntimeImage for UncompressedImageMetadata {
 			self.image_type,
 			self.extent,
 			self.image_type.channels(),
-			self.mip_layers,
+			self.mip_levels,
 		)
 	}
 
@@ -193,7 +193,7 @@ pub type BCnImage<'a> = Image<'a, BCnImageMetadata>;
 pub struct BCnImageMetadata {
 	pub image_type: ImageType,
 	pub extent: UVec3,
-	pub mip_layers: u32,
+	pub mip_levels: u32,
 }
 
 impl ToDynImage for BCnImageMetadata {
@@ -226,7 +226,7 @@ impl DecodeToRuntimeImage for BCnImageMetadata {
 			self.extent,
 			Self::BLOCK_SIZE,
 			self.bytes_per_block(),
-			self.mip_layers,
+			self.mip_levels,
 		)
 	}
 
