@@ -3,6 +3,7 @@ use glam::UVec3;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::ops::Range;
 
 /// An Image that can be read directly by the GPU, like [`BCnImage`] and [`UncompressedImage`].
 #[derive(Clone, Debug, Archive, Serialize, Deserialize)]
@@ -67,6 +68,11 @@ impl RuntimeImageMetadata {
 			* mip_extent.y.div_ceil(self.block_size.y) as usize
 			* mip_extent.z.div_ceil(self.block_size.z) as usize
 			* self.bytes_per_block as usize
+	}
+
+	pub fn mip_range(&self, mip: u32) -> Range<usize> {
+		let start = self.mip_start(mip);
+		start..start + self.mip_size(mip)
 	}
 
 	/// Query the start offset of a mip layer.
