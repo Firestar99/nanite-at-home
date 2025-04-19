@@ -16,6 +16,9 @@ space-asset-shader = { workspace = true }
 rust-gpu-bindless = { workspace = true }
 rust-gpu-bindless-shaders = { workspace = true }
 
+# vulkan
+ash = { workspace = true }
+
 # bytes and numbers
 glam = { workspace = true }
 
@@ -32,3 +35,4 @@ profiling = { workspace = true }
 
 # other
 anyhow = { workspace = true }
+smallvec = { workspace = true }
