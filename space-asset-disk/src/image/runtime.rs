@@ -35,7 +35,7 @@ pub struct RuntimeImageMetadata {
 	pub extent: UVec3,
 	pub block_size: UVec3,
 	pub bytes_per_block: u32,
-	pub mip_layers: u32,
+	pub mip_levels: u32,
 	/// The size in bytes of the entire image with all mips.
 	pub total_size: usize,
 }
@@ -80,7 +80,7 @@ impl RuntimeImageMetadata {
 		extent: UVec3,
 		block_size: UVec3,
 		bytes_per_block: u32,
-		mip_layers: u32,
+		mip_levels: u32,
 	) -> Self {
 		let mut out = Self {
 			image_type,
@@ -88,10 +88,10 @@ impl RuntimeImageMetadata {
 			extent,
 			block_size,
 			bytes_per_block,
-			mip_layers,
+			mip_levels,
 			total_size: 0,
 		};
-		out.total_size = out.mip_start(mip_layers);
+		out.total_size = out.mip_start(mip_levels);
 		out
 	}
 
@@ -99,7 +99,7 @@ impl RuntimeImageMetadata {
 		image_type: ImageType,
 		extent: UVec3,
 		bytes_per_pixel: u32,
-		mip_layers: u32,
+		mip_levels: u32,
 	) -> RuntimeImageMetadata {
 		Self::new(
 			image_type,
@@ -107,7 +107,7 @@ impl RuntimeImageMetadata {
 			extent,
 			UVec3::ONE,
 			bytes_per_pixel,
-			mip_layers,
+			mip_levels,
 		)
 	}
 }
