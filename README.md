@@ -35,16 +35,14 @@ Once started, you can resize or maximize the window as you wish. The UI has the 
 
 ## Scenes
 
-The Lantern scene is always available, for additional scenes checkout the `scenes` branch with ~1GiB of additional scenes available. You may also add scenes in the `gltf` or `glb` format yourself by putting them in `/models/models/local/` and restarting, which should list them in the scenes ComboBox.
+You can add `gltf`/`glb` scenes by placing them in `/models/models/local/` and restarting, which should list them in the scenes ComboBox.
 
-Available scenes:
-* [Lantern](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Lantern): CC0 1.0 Universal, Microsoft, Frank Galligan
-* [Not a Stanford Bunny](https://jocelyndaprato.artstation.com/projects/g8PKBm), no right to sell, Feel free to share, use, modify, by Jocelyn Da Prato
-* [Amazon Lumberyard Bistro](https://developer.nvidia.com/orca/amazon-lumberyard-bistro), CC-BY 4.0, 2017 Amazon Lumberyard
-* [Sponza](https://casual-effects.com/data/): CC BY 3.0, 2010 Frank Meinl, Crytek
-* [San Miguel](https://casual-effects.com/data/): CC BY 3.0, Guillermo M. Leal Llaguno
-* [Rungholt](https://casual-effects.com/data/): CC BY 3.0, kescha
-* [Damaged Helmet](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DamagedHelmet): CC BY 4.0, ctxwing, theblueturtle_
+Some scenes which are known to work well:
+* [Not a Stanford Bunny](https://drive.usercontent.google.com/download?id=1Qdm4axU-1pCHirEKBzW5JdQz0hVNiz5z&export=download) by [Jocelyn Da Prato](https://jocelyndaprato.artstation.com/projects/g8PKBm), no right to sell, Feel free to share, use, modify
+* [Bistro](https://drive.usercontent.google.com/download?id=1aGQ1gHkXodYV1MRGihZRIJHFx8kVE1Kq&export=download) by [Amazon Lumberyard](https://developer.nvidia.com/orca/amazon-lumberyard-bistro), CC-BY 4.0, 2017 Amazon Lumberyard
+* [Crytek Sponza](https://drive.usercontent.google.com/download?id=1C0oij95AXw7OaNPYq5O-bTaQPbbSe7in&export=download) from [casual-effects.com](https://casual-effects.com/data/): CC BY 3.0, 2010 Frank Meinl, Crytek
+* Lantern (included by default) from [gltf sample assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Lantern): CC0 1.0 Universal, Microsoft, Frank Galligan
+* any [Quixel model from fab](https://www.fab.com/sellers/Quixel?is_free=1), the individual models often have a glb version available
 
 ## Technical Details
 
