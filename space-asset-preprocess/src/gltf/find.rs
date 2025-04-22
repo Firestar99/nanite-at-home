@@ -39,7 +39,7 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 					Component::Normal(s) => Some(s),
 					_ => None,
 				})
-				.chain([src_path.file_stem().unwrap()])
+				.chain([src_path.file_name().unwrap()])
 				.map(|s| String::from(s.to_str().unwrap()))
 				.collect::<Vec<_>>();
 			let out_relative = format!("{}.bin", relative.join("/"));
