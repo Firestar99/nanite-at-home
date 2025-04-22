@@ -302,7 +302,7 @@ dependencies = [
  "bitflags 2.9.0",
  "log",
  "polling",
- "rustix 0.38.44",
+ "rustix",
  "slab",
  "thiserror 1.0.69",
 ]
@@ -314,7 +314,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95a66a987056935f7efce4ab5668920b5d0dac4a7c99991a67395f13702ddd20"
 dependencies = [
  "calloop",
- "rustix 0.38.44",
+ "rustix",
  "wayland-backend",
  "wayland-client",
 ]
@@ -738,12 +738,6 @@ name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
-
-[[package]]
-name = "fastrand"
-version = "2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "fdeflate"
@@ -1395,12 +1389,6 @@ name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
-
-[[package]]
-name = "linux-raw-sys"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "litemap"
@@ -2111,7 +2099,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi 0.4.0",
  "pin-project-lite",
- "rustix 0.38.44",
+ "rustix",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -2598,7 +2586,7 @@ dependencies = [
  "rspirv",
  "rustc-demangle",
  "rustc_codegen_spirv-types",
- "rustix 0.38.44",
+ "rustix",
  "sanitize-filename",
  "smallvec",
  "spirt",
@@ -2638,22 +2626,9 @@ dependencies = [
  "errno",
  "itoa",
  "libc",
- "linux-raw-sys 0.4.15",
+ "linux-raw-sys",
  "once_cell",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "rustix"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d97817398dd4bb2e6da002002db259209759911da105da92bec29ccb12cf58bf"
-dependencies = [
- "bitflags 2.9.0",
- "errno",
- "libc",
- "linux-raw-sys 0.9.4",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2811,7 +2786,7 @@ dependencies = [
  "libc",
  "log",
  "memmap2",
- "rustix 0.38.44",
+ "rustix",
  "thiserror 1.0.69",
  "wayland-backend",
  "wayland-client",
@@ -3052,9 +3027,7 @@ name = "spirv-tools"
 version = "0.10.0"
 source = "git+https://github.com/Rust-GPU/spirv-tools-rs.git?rev=611df9ddf98b94069293cf959e65987907fb7140#611df9ddf98b94069293cf959e65987907fb7140"
 dependencies = [
- "memchr",
  "spirv-tools-sys",
- "tempfile",
 ]
 
 [[package]]
@@ -3124,19 +3097,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tempfile"
-version = "3.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7437ac7763b9b123ccf33c338a5cc1bac6f69b45a136c19bdd8a65e3916435bf"
-dependencies = [
- "fastrand",
- "getrandom 0.3.2",
- "once_cell",
- "rustix 1.0.5",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3584,7 +3544,7 @@ checksum = "b7208998eaa3870dad37ec8836979581506e0c5c64c20c9e79e9d2a10d6f47bf"
 dependencies = [
  "cc",
  "downcast-rs",
- "rustix 0.38.44",
+ "rustix",
  "scoped-tls",
  "smallvec",
  "wayland-sys",
@@ -3597,7 +3557,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2120de3d33638aaef5b9f4472bff75f07c56379cf76ea320bd3a3d65ecaf73f"
 dependencies = [
  "bitflags 2.9.0",
- "rustix 0.38.44",
+ "rustix",
  "wayland-backend",
  "wayland-scanner",
 ]
@@ -3619,7 +3579,7 @@ version = "0.31.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a93029cbb6650748881a00e4922b076092a6a08c11e7fbdb923f064b23968c5d"
 dependencies = [
- "rustix 0.38.44",
+ "rustix",
  "wayland-client",
  "xcursor",
 ]
@@ -4054,7 +4014,7 @@ dependencies = [
  "pin-project",
  "raw-window-handle",
  "redox_syscall 0.4.1",
- "rustix 0.38.44",
+ "rustix",
  "sctk-adwaita",
  "smithay-client-toolkit",
  "smol_str",
@@ -4126,7 +4086,7 @@ dependencies = [
  "libc",
  "libloading",
  "once_cell",
- "rustix 0.38.44",
+ "rustix",
  "x11rb-protocol",
 ]
 

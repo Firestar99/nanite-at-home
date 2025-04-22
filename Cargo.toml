@@ -49,7 +49,7 @@ rust-gpu-bindless-egui-shaders = { git = "https://github.com/Firestar99/rust-gpu
 rust-gpu-bindless-macro-utils = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-macros = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-shaders = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
-rust-gpu-bindless-shader-builder = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a", default-features = false, features = ["use-installed-tools"] }
+rust-gpu-bindless-shader-builder = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a", default-features = false, features = ["use-compiled-tools"] }
 rust-gpu-bindless-winit = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 
 # vulkan
