@@ -1,7 +1,9 @@
 use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferReading;
 use crate::renderer::frame_context::FrameContext;
-use ash::vk::{ColorComponentFlags, CompareOp, Filter, PipelineColorBlendAttachmentState, SamplerCreateInfo};
-use rust_gpu_bindless::descriptor::{Bindless, RCDesc, RCDescExt, Sampler};
+use ash::vk::{ColorComponentFlags, CompareOp, PipelineColorBlendAttachmentState};
+use rust_gpu_bindless::descriptor::{
+	AddressMode, Bindless, BindlessSamplerCreateInfo, Filter, RCDesc, RCDescExt, Sampler,
+};
 use rust_gpu_bindless::pipeline::{
 	BindlessMeshGraphicsPipeline, MeshGraphicsPipelineCreateInfo, PipelineColorBlendStateCreateInfo,
 	PipelineDepthStencilStateCreateInfo, PipelineRasterizationStateCreateInfo, RecordingError, RenderPassFormat,
@@ -39,11 +41,15 @@ impl MeshletDraw {
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_fragment_g_buffer::new(),
 		)?;
 
-		let sampler = bindless.sampler().alloc_ash(
-			&SamplerCreateInfo::default()
-				.mag_filter(Filter::LINEAR)
-				.min_filter(Filter::LINEAR),
-		)?;
+		let sampler = bindless.sampler().alloc(&BindlessSamplerCreateInfo {
+			min_filter: Filter::Linear,
+			mag_filter: Filter::Linear,
+			mipmap_mode: Filter::Linear,
+			address_mode_u: AddressMode::Repeat,
+			address_mode_v: AddressMode::Repeat,
+			address_mode_w: AddressMode::Repeat,
+			..BindlessSamplerCreateInfo::default()
+		})?;
 
 		Ok(Self { pipeline, sampler })
 	}
