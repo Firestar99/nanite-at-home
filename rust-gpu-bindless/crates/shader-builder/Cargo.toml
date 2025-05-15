@@ -10,9 +10,6 @@ repository.workspace = true
 workspace = true
 
 [features]
-default = ["use-compiled-tools"]
-use-installed-tools = ["spirv-builder/use-installed-tools"]
-use-compiled-tools = ["spirv-builder/use-compiled-tools"]
 use-pretty-print = ["dep:prettyplease"]
 
 [dependencies]
@@ -23,7 +20,7 @@ rust-gpu-bindless-macro-utils = { workspace = true }
 ash = { workspace = true }
 
 # rust-gpu
-spirv-builder = { workspace = true }
+cargo-gpu = { workspace = true }
 
 # codegen
 proc-macro2 = { workspace = true }
