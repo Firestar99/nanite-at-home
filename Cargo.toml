@@ -49,7 +49,7 @@ rust-gpu-bindless-egui-shaders = { git = "https://github.com/Firestar99/rust-gpu
 rust-gpu-bindless-macro-utils = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-macros = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-shaders = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
-rust-gpu-bindless-shader-builder = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a", default-features = false, features = ["use-compiled-tools"] }
+rust-gpu-bindless-shader-builder = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 rust-gpu-bindless-winit = { git = "https://github.com/Firestar99/rust-gpu-bindless.git", rev = "11b3cf34dea82cb063d84851988f2a1617e5144a" }
 
 # vulkan
@@ -61,7 +61,7 @@ presser = "0.3.1"
 winit = { version = "0.30" }
 
 # rust-gpu
-spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", default-features = false }
+cargo-gpu = { git = "https://github.com/rust-gpu/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
 spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", features = ["bytemuck"] }
 
 # async

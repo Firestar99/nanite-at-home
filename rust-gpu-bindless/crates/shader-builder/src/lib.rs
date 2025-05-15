@@ -1,4 +1,5 @@
 use crate::codegen::{codegen_shader_symbols, CodegenOptions};
+use cargo_gpu::Install;
 use proc_macro_crate::FoundCrate;
 use spirv_builder::{
 	Capability, CompileResult, MetadataPrintout, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvMetadata,
@@ -9,7 +10,9 @@ use std::path::{Path, PathBuf};
 pub mod codegen;
 pub mod symbols;
 
-pub use spirv_builder;
+pub use anyhow;
+use anyhow::Context;
+pub use cargo_gpu::spirv_builder;
 
 pub struct ShaderSymbolsBuilder {
 	spirv_builder: SpirvBuilder,
@@ -21,7 +24,7 @@ impl ShaderSymbolsBuilder {
 	/// Build the shader crate named `crate_name` at path `../{crate_name}` relative to your `Cargo.toml`. If your crate
 	/// name and crate path do not match, use the [`Self::new_relative_path`] or [`Self::new_absolute_path`] functions
 	/// instead.
-	pub fn new(crate_name: &str, target: impl Into<String>) -> Self {
+	pub fn new(crate_name: &str, target: &str) -> anyhow::Result<Self> {
 		let found_crate = proc_macro_crate::crate_name(crate_name).unwrap();
 		let crate_ident = match &found_crate {
 			FoundCrate::Itself => crate_name,
@@ -32,8 +35,9 @@ impl ShaderSymbolsBuilder {
 
 	/// Build the shader crate at path `../{relative_crate_path}` relative to your `Cargo.toml` and assume the crate is
 	/// accessible with the ident `crate_ident`.
-	pub fn new_relative_path(relative_crate_path: &str, crate_ident: &str, target: impl Into<String>) -> Self {
-		let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+	pub fn new_relative_path(relative_crate_path: &str, crate_ident: &str, target: &str) -> anyhow::Result<Self> {
+		let manifest_dir =
+			env::var("CARGO_MANIFEST_DIR").context("missing env var, must be called within a build script")?;
 		let crate_path = [&manifest_dir, "..", relative_crate_path]
 			.iter()
 			.copied()
@@ -43,13 +47,12 @@ impl ShaderSymbolsBuilder {
 
 	/// Build the shader crate at path `absolute_crate_path` and assume the crate is
 	/// accessible with the ident `crate_ident`.
-	pub fn new_absolute_path(
-		absolute_crate_path: impl AsRef<Path>,
-		crate_ident: &str,
-		target: impl Into<String>,
-	) -> Self {
-		Self {
-			spirv_builder: SpirvBuilder::new(absolute_crate_path, target)
+	pub fn new_absolute_path(absolute_crate_path: PathBuf, crate_ident: &str, target: &str) -> anyhow::Result<Self> {
+		let install = Install::from_shader_crate(absolute_crate_path.clone()).run()?;
+
+		Ok(Self {
+			spirv_builder: install
+				.to_spirv_builder(absolute_crate_path, target)
 				// we want multiple *.spv files for vulkano's shader! macro to only generate needed structs
 				.multimodule(true)
 				// has to be DependencyOnly!
@@ -79,7 +82,7 @@ impl ShaderSymbolsBuilder {
 				shader_symbols_path: String::from("shader_symbols.rs"),
 			}),
 			crate_name: String::from(crate_ident),
-		}
+		})
 	}
 
 	pub fn with_spirv_builder<F>(self, f: F) -> Self
