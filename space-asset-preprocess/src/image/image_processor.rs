@@ -1,4 +1,5 @@
 use crate::gltf::{Gltf, GltfImageError, Scheme};
+use crate::image::generate_mips::generate_mips;
 use anyhow::Context;
 use gltf::image::Source;
 use parking_lot::Mutex;
@@ -64,6 +65,7 @@ impl<'a> ImageProcessor<'a> {
 
 		let dyn_images = gltf_image_to_disk_id
 			.into_par_iter()
+			.panic_fuse()
 			.map(|((image_index, image_type), disk_id)| {
 				let image = gltf.images().nth(image_index).unwrap();
 				let scheme = match image.source() {
@@ -109,8 +111,9 @@ impl<'a> ImageProcessor<'a> {
 			scheme.read(gltf.base())?
 		};
 		let embedded_image = EmbeddedImage::new(image_type, bytes)?;
-		let uncompressed_image = embedded_image.decode_to_uncompressed();
+		let mut uncompressed_image = embedded_image.decode_to_uncompressed();
 		drop(embedded_image);
+		generate_mips(&mut uncompressed_image, None);
 		let zstd_bcn_image = uncompressed_image.compress_to_zstd_bcn(settings);
 		drop(uncompressed_image);
 		Ok(zstd_bcn_image.into_dyn_image())

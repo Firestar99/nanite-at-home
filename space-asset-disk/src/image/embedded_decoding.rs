@@ -29,7 +29,7 @@ impl<'a> EmbeddedImage<'a> {
 			meta: UncompressedImageMetadata {
 				image_type: self.meta.image_type,
 				extent: self.meta.extent,
-				mip_layers: 1,
+				mip_levels: 1,
 			},
 			data: self.meta.decode(self.data.as_ref()).data,
 		}

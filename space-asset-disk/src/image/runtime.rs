@@ -3,6 +3,7 @@ use glam::UVec3;
 use rkyv::{Archive, Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::ops::Range;
 
 /// An Image that can be read directly by the GPU, like [`BCnImage`] and [`UncompressedImage`].
 #[derive(Clone, Debug, Archive, Serialize, Deserialize)]
@@ -35,7 +36,7 @@ pub struct RuntimeImageMetadata {
 	pub extent: UVec3,
 	pub block_size: UVec3,
 	pub bytes_per_block: u32,
-	pub mip_layers: u32,
+	pub mip_levels: u32,
 	/// The size in bytes of the entire image with all mips.
 	pub total_size: usize,
 }
@@ -69,6 +70,11 @@ impl RuntimeImageMetadata {
 			* self.bytes_per_block as usize
 	}
 
+	pub fn mip_range(&self, mip: u32) -> Range<usize> {
+		let start = self.mip_start(mip);
+		start..start + self.mip_size(mip)
+	}
+
 	/// Query the start offset of a mip layer.
 	pub fn mip_start(&self, mip: u32) -> usize {
 		(0..mip).map(|i| self.mip_size(i)).sum()
@@ -80,7 +86,7 @@ impl RuntimeImageMetadata {
 		extent: UVec3,
 		block_size: UVec3,
 		bytes_per_block: u32,
-		mip_layers: u32,
+		mip_levels: u32,
 	) -> Self {
 		let mut out = Self {
 			image_type,
@@ -88,10 +94,10 @@ impl RuntimeImageMetadata {
 			extent,
 			block_size,
 			bytes_per_block,
-			mip_layers,
+			mip_levels,
 			total_size: 0,
 		};
-		out.total_size = out.mip_start(mip_layers);
+		out.total_size = out.mip_start(mip_levels);
 		out
 	}
 
@@ -99,7 +105,7 @@ impl RuntimeImageMetadata {
 		image_type: ImageType,
 		extent: UVec3,
 		bytes_per_pixel: u32,
-		mip_layers: u32,
+		mip_levels: u32,
 	) -> RuntimeImageMetadata {
 		Self::new(
 			image_type,
@@ -107,7 +113,7 @@ impl RuntimeImageMetadata {
 			extent,
 			UVec3::ONE,
 			bytes_per_pixel,
-			mip_layers,
+			mip_levels,
 		)
 	}
 }
