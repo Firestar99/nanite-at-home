@@ -1,10 +1,10 @@
 use rust_gpu_bindless_shader_builder::spirv_builder::{Capability, ShaderPanicStrategy, SpirvMetadata};
-use rust_gpu_bindless_shader_builder::ShaderSymbolsBuilder;
+use rust_gpu_bindless_shader_builder::{anyhow, ShaderSymbolsBuilder};
 
 pub use rust_gpu_bindless_shader_builder;
 
-pub fn shader_symbols_builder_configured_for_space_engine(shader_crate: &str) -> ShaderSymbolsBuilder {
-	ShaderSymbolsBuilder::new(shader_crate, "spirv-unknown-vulkan1.2")
+pub fn shader_symbols_builder_configured_for_space_engine(shader_crate: &str) -> anyhow::Result<ShaderSymbolsBuilder> {
+	Ok(ShaderSymbolsBuilder::new(shader_crate, "spirv-unknown-vulkan1.2")?
 		.capability(Capability::MeshShadingEXT)
 		.capability(Capability::GroupNonUniform)
 		.capability(Capability::GroupNonUniformBallot)
@@ -17,5 +17,5 @@ pub fn shader_symbols_builder_configured_for_space_engine(shader_crate: &str) ->
 		.shader_panic_strategy(ShaderPanicStrategy::DebugPrintfThenExit {
 			print_inputs: true,
 			print_backtrace: true,
-		})
+		}))
 }
