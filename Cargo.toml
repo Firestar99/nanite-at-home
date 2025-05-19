@@ -140,7 +140,10 @@ rust-gpu-bindless-winit = { path = "rust-gpu-bindless/crates/winit" }
 
 
 
-# Following is copied from rust-gpu workspace cargo.toml
+# Configuration to preprocess models from `models/build.rs` in release mode.
+# The following is copied from rust-gpu workspace Cargo.toml, although with
+# cargo-gpu we don't rely on it anymore for rustc_backend_spirv compilation.
+
 # Enable incremental by default in release mode.
 [profile.release]
 incremental = true
