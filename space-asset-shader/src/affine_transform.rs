@@ -6,7 +6,7 @@ use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
 #[derive(Copy, Clone, Default, Debug, BufferStructPlain)]
 pub struct AffineTransform {
 	pub affine: Affine3A,
-	pub normals: Mat3A,
+	pub normal: Mat3A,
 }
 assert_transfer_size!(AffineTransform, 24 * 4);
 
@@ -14,7 +14,7 @@ impl AffineTransform {
 	pub fn new(transform: Affine3A) -> Self {
 		Self {
 			affine: transform,
-			normals: transform.matrix3.inverse().transpose(),
+			normal: transform.matrix3.inverse().transpose(),
 		}
 	}
 

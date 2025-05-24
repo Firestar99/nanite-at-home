@@ -84,7 +84,7 @@ pub fn meshlet_mesh(
 			let draw_vertex = meshlet.load_draw_vertex(&descriptors, i);
 			let position = frame_data
 				.camera
-				.transform_vertex(instance.transform, draw_vertex.position);
+				.transform_vertex(instance.world_from_local, draw_vertex.position);
 			let pbr_vertex = meshlet.load_pbr_material_vertex(&descriptors, draw_vertex.material_vertex_id);
 			let vertex = InterpolationVertex {
 				world_pos: position.world_space,
@@ -161,7 +161,7 @@ pub fn meshlet_fragment_g_buffer(
 	let frame_data = param.frame_data.access(&descriptors).load();
 	let loc = SurfaceLocation::new(
 		out_vertex.world_pos,
-		frame_data.camera.transform.translation(),
+		frame_data.camera.view_from_world.translation(),
 		out_vertex.normal,
 		out_vertex.tangent,
 		out_vertex.tex_coord,
