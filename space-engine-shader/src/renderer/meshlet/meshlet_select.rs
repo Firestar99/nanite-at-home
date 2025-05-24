@@ -58,7 +58,7 @@ fn cull_meshlet(
 	let m = mesh.meshlet(descriptors, instance.meshlet_id as usize);
 	match frame_data.debug_lod_level.lod_type() {
 		LodType::Nanite => {
-			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
+			// let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
 			// let transform = |sphere: Sphere, radius: f32| {
 			// 	project_to_screen_area(frame_data, instance_transform.world_from_local.affine, sphere, radius)
 			// 		* (frame_data.camera.viewport_size.y as f32)
@@ -69,28 +69,28 @@ fn cull_meshlet(
 			// let draw = ss_error <= error_threshold && error_threshold < ss_error_parent;
 			// !draw
 
-			let world_scale = {
-				// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
-				// That is equivalent to multiplying the radius by the axis that is scaled up the most.
-				let mat = instance_transform.transform.affine.matrix3;
-				f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
-			};
-			// let world_scale = 1.0;
+			// let world_from_local = instance_transform.transform.affine;
+			let world_from_local = Affine3A::default();
+			// let world_scale = {
+			// 	// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
+			// 	// That is equivalent to multiplying the radius by the axis that is scaled up the most.
+			// 	let mat = instance_transform.transform.affine.matrix3;
+			// 	f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
+			// };
+			let world_scale = 1.0;
 
-			let lod_is_ok = lod_error_is_imperceptible(
-				frame_data,
-				m.bounds,
-				m.error,
-				instance_transform.transform.affine,
-				world_scale,
-			);
-			let parent_lod_is_ok = lod_error_is_imperceptible(
+			let lod_projected_error =
+				lod_error_is_imperceptible(frame_data, m.bounds, m.error, world_from_local, world_scale);
+			let parent_lod_projected_error = lod_error_is_imperceptible(
 				frame_data,
 				m.parent_bounds,
 				m.parent_error,
-				instance_transform.transform.affine,
+				world_from_local,
 				world_scale,
 			);
+			let error_threshold = frame_data.nanite.error_threshold;
+			let lod_is_ok = lod_projected_error.map_or(false, |a| a < error_threshold);
+			let parent_lod_is_ok = parent_lod_projected_error.map_or(false, |a| a < error_threshold);
 			!lod_is_ok || parent_lod_is_ok
 		}
 		LodType::Static => m
@@ -113,29 +113,29 @@ fn cull_meshlet(
 // }
 
 /// https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
-pub fn lod_error_is_imperceptible2(
-	frame_data: FrameData,
-	lod_sphere: Sphere,
-	simplification_error: f32,
-	world_from_local: Affine3A,
-	world_scale: f32,
-) -> bool {
-	let camera = frame_data.camera;
-	let nanite = frame_data.nanite;
-	if !simplification_error.is_finite() {
-		return false;
-	}
-
-	let radius = lod_sphere.radius() * world_scale * nanite.bounding_sphere_scale;
-	let error = simplification_error * world_scale;
-
-	let center_world = world_from_local.transform_point3(lod_sphere.center());
-	let d = center_world.distance(camera.transform.translation()) - radius;
-	let d = f32::max(d, camera.perspective.to_cols_array_2d()[3][2]);
-	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
-	let projected_error = (error / d) * (camera_proj * 0.5) * camera.viewport_size.x as f32;
-	projected_error < nanite.error_threshold
-}
+// pub fn lod_error_is_imperceptible2(
+// 	frame_data: FrameData,
+// 	lod_sphere: Sphere,
+// 	simplification_error: f32,
+// 	world_from_local: Affine3A,
+// 	world_scale: f32,
+// ) -> bool {
+// 	let camera = frame_data.camera;
+// 	let nanite = frame_data.nanite;
+// 	if !simplification_error.is_finite() {
+// 		return false;
+// 	}
+//
+// 	let radius = lod_sphere.radius() * world_scale * nanite.bounding_sphere_scale;
+// 	let error = simplification_error * world_scale;
+//
+// 	let center_world = world_from_local.transform_point3(lod_sphere.center());
+// 	let d = center_world.distance(camera.transform.translation()) - radius;
+// 	let d = f32::max(d, camera.perspective.to_cols_array_2d()[3][2]);
+// 	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
+// 	let projected_error = (error / d) * (camera_proj * 0.5) * camera.viewport_size.x as f32;
+// 	projected_error < nanite.error_threshold
+// }
 
 // https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
 fn lod_error_is_imperceptible(
@@ -144,9 +144,9 @@ fn lod_error_is_imperceptible(
 	simplification_error: f32,
 	world_from_local: Affine3A,
 	world_scale: f32,
-) -> bool {
+) -> Option<f32> {
 	if !simplification_error.is_finite() {
-		return false;
+		return None;
 	}
 
 	let camera = frame_data.camera;
@@ -163,12 +163,16 @@ fn lod_error_is_imperceptible(
 		Vec3::distance(sphere_world_space, camera.view_from_world.translation()) - radius_world_space;
 	let distance_to_closest_point_on_sphere_clamped_to_znear = f32::max(
 		distance_to_closest_point_on_sphere,
-		camera.clip_from_view.to_cols_array_2d()[3][2],
+		-camera.clip_from_view.to_cols_array_2d()[3][2],
 	);
+	// let distance_to_closest_point_on_sphere_clamped_to_znear = f32::min(
+	// 	distance_to_closest_point_on_sphere,
+	// 	camera.perspective.to_cols_array_2d()[3][2].abs(),
+	// );
 	projected_error /= distance_to_closest_point_on_sphere_clamped_to_znear;
 	// }
 	projected_error *= camera.clip_from_view.to_cols_array_2d()[1][1] * 0.5;
-	projected_error *= camera.viewport_size.x as f32;
+	projected_error *= camera.viewport_size.y as f32;
 
-	projected_error < nanite.error_threshold
+	Some(projected_error)
 }
