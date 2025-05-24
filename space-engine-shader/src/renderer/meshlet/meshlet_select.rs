@@ -92,20 +92,21 @@ pub fn project_to_screen_area(frame_data: FrameData, world_from_local: Affine3A,
 		return false;
 	}
 
-	let max_scale_factor = {
-		// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
-		// That is equivalent to multiplying the radius by the axis that is scaled up the most.
-		let mat = world_from_local.matrix3;
-		f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
-	};
-	// let max_scale_factor = 1.0;
+	// let max_scale_factor = {
+	// 	// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
+	// 	// That is equivalent to multiplying the radius by the axis that is scaled up the most.
+	// 	let mat = world_from_local.matrix3;
+	// 	f32::max(f32::max(mat.x_axis.length(), mat.y_axis.length()), mat.z_axis.length())
+	// };
+	let max_scale_factor = 1.0;
 	let radius = sphere.radius() * max_scale_factor * nanite.bounding_sphere_scale;
-	let error = error * error * max_scale_factor;
+	let error = error * max_scale_factor;
 
 	let center_world = world_from_local.transform_point3(sphere.center());
 	let d = center_world.distance(camera.view_from_world.translation()) - radius;
-	let d = f32::max(d, camera.clip_from_view.to_cols_array_2d()[3][2]);
-	let camera_proj = camera.clip_from_view.to_cols_array_2d()[1][1];
-	let projected_error = error / d * (camera_proj * 0.5) * (frame_data.camera.viewport_size.y as f32 * 0.5);
+	// let d = f32::max(d, camera.clip_from_view.to_cols_array_2d()[3][2]);
+	let d = f32::min(d, f32::abs(camera.clip_from_view.to_cols_array_2d()[3][2]));
+	let camera_proj = camera.clip_from_view.to_cols_array_2d()[1][1] * 0.5;
+	let projected_error = error / d * camera_proj * frame_data.camera.viewport_size.y as f32;
 	projected_error < nanite.error_threshold
 }
