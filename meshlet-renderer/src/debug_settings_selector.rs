@@ -66,7 +66,7 @@ impl DebugSettingsSelector {
 		egui::ComboBox::from_id_salt(concat!(file!(), line!()))
 			.selected_text(format!("{:?}", self.debug_settings))
 			.show_ui(ui, |ui| {
-				for x in (0..DebugSettings::MAX_VALUE as u32).map(|i| DebugSettings::try_from(i).unwrap()) {
+				for x in (0..DebugSettings::LEN).map(|i| DebugSettings::try_from(i).unwrap()) {
 					ui.selectable_value(&mut self.debug_settings, x, format!("{:?}", x));
 				}
 			});
