@@ -49,17 +49,18 @@ impl Camera {
 		viewport_size: UVec2,
 		fov_y: f32,
 		z_near: f32,
-		z_far: f32,
+		_z_far: f32,
 		transform: AffineTransform,
 	) -> Self {
-		let projection = Mat4::perspective_rh(fov_y, viewport_size.x as f32 / viewport_size.y as f32, z_near, z_far)
-			* Mat4::from_cols(
-				vec4(1., 0., 0., 0.),
-				vec4(0., -1., 0., 0.),
-				vec4(0., 0., 1., 0.),
-				vec4(0., 0., 0., 1.),
-			);
-		Self::new(projection, viewport_size, fov_y, z_near, transform)
+		let projection =
+			Mat4::perspective_infinite_reverse_rh(fov_y, viewport_size.x as f32 / viewport_size.y as f32, z_near);
+		let y_flip = Mat4::from_cols(
+			vec4(1., 0., 0., 0.),
+			vec4(0., -1., 0., 0.),
+			vec4(0., 0., 1., 0.),
+			vec4(0., 0., 0., 1.),
+		);
+		Self::new(projection * y_flip, viewport_size, fov_y, z_near, transform)
 	}
 
 	pub fn transform_vertex(&self, world_from_local: AffineTransform, vertex_pos: Vec3) -> TransformedPosition {

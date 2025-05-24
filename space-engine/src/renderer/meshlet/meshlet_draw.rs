@@ -34,7 +34,7 @@ impl MeshletDraw {
 				depth_stencil_state: PipelineDepthStencilStateCreateInfo::default()
 					.depth_test_enable(true)
 					.depth_write_enable(true)
-					.depth_compare_op(CompareOp::LESS),
+					.depth_compare_op(CompareOp::GREATER),
 			},
 			Option::<&FakeTaskShader>::None,
 			crate::shader::renderer::meshlet::mesh_shader::meshlet_mesh::new(),

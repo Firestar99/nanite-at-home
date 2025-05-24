@@ -226,7 +226,7 @@ impl RendererMain {
 			],
 			Some(RenderingAttachment {
 				image: &mut depth_image,
-				load_op: LoadOp::Clear(ClearValue::DepthStencil { depth: 1., stencil: 0 }),
+				load_op: LoadOp::Clear(ClearValue::DepthStencil { depth: 0., stencil: 0 }),
 				store_op: StoreOp::Store,
 			}),
 			|rendering| {
