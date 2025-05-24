@@ -41,10 +41,7 @@ pub fn meshlet_select_compute(
 			meshlet_id: group_instance.meshlet_start + instance_id,
 		};
 		if !cull_meshlet(&descriptors, frame_data, param.scene, instance) {
-			param
-				.compacting_instances_out
-				.allocate(&mut descriptors)
-				.write(&mut descriptors, instance);
+			param.compacting_instances_out.allocate(&mut descriptors, instance);
 		}
 	}
 }

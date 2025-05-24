@@ -18,13 +18,12 @@ impl<'a, T: BufferStructPlain> CompactingAllocBufferWriter<'a, T> {
 	/// only the active invocations will write T's. Returns true if successful, false if the buffer ran out of capacity.
 	///
 	/// Uses subgroup intrinsics to efficiently allocate space with just a single atomic operation per subgroup.
-	#[must_use]
-	pub fn allocate<'b>(&'b self, descriptors: &mut Descriptors) -> Allocation<'b, T> {
+	pub fn allocate<'b>(&'b self, descriptors: &mut Descriptors, t: T) -> bool {
 		let index = unsafe {
 			let ballot = subgroup_ballot(true);
 			let count = subgroup_ballot_bit_count(ballot);
 			let base_index = if subgroup_elect() {
-				let atomic_counter = &mut self.indirect_args.access(descriptors).into_raw_mut()[0];
+				let atomic_counter = &mut self.indirect_args.access(&mut *descriptors).into_raw_mut()[0];
 				atomic_i_add::<_, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(atomic_counter, count)
 			} else {
 				0
@@ -33,20 +32,10 @@ impl<'a, T: BufferStructPlain> CompactingAllocBufferWriter<'a, T> {
 			let inv_index = subgroup_ballot_exclusive_bit_count(ballot);
 			base_index + inv_index
 		} as usize;
-		Allocation { writer: self, index }
-	}
-}
 
-pub struct Allocation<'a, T: BufferStructPlain> {
-	writer: &'a CompactingAllocBufferWriter<'a, T>,
-	index: usize,
-}
-
-impl<'a, T: BufferStructPlain> Allocation<'a, T> {
-	pub fn write(self, descriptors: &mut Descriptors, t: T) -> bool {
-		let mut buffer = self.writer.buffer.access(descriptors);
-		if self.index < buffer.len() {
-			unsafe { buffer.store(self.index, t) };
+		let mut buffer = self.buffer.access(descriptors);
+		if index < buffer.len() {
+			unsafe { buffer.store(index, t) };
 			true
 		} else {
 			false
