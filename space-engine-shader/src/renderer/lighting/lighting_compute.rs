@@ -46,6 +46,7 @@ pub fn lighting_cs(
 		DebugSettings::BaseColor => sampled.albedo,
 		DebugSettings::Normals | DebugSettings::VertexNormals => sampled.normal,
 		DebugSettings::RoughnessMetallic => vec3(0., sampled.roughness, sampled.metallic),
+		DebugSettings::MeshletError | DebugSettings::ProjectedError => vec3(debug_hue, 0., 0.),
 	};
 
 	let out_color = if frame_data.debug_mix < 0.01 {

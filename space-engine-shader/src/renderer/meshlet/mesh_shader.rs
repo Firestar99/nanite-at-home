@@ -2,6 +2,7 @@ use crate::material::pbr::{PbrMaterialSample, SurfaceLocation};
 use crate::renderer::compacting_alloc_buffer::CompactingAllocBufferReader;
 use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::renderer::meshlet::intermediate::MeshletInstance;
+use crate::renderer::meshlet::meshlet_select::lod_error_is_imperceptible;
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
@@ -101,14 +102,25 @@ pub fn meshlet_mesh(
 		}
 	}
 
-	let debug_hue = |primitive_id: u32| {
-		let seed = match frame_data.debug_settings() {
-			DebugSettings::MeshletId => meshlet_instance.meshlet_id,
-			DebugSettings::TriangleId => meshlet_instance.meshlet_id.wrapping_add(primitive_id),
-			DebugSettings::LodLevel => 32 - leading_zeros(meshlet.lod_level_bitmask.0),
-			_ => return 0.,
-		};
-		GpuRng(seed.wrapping_add(1)).next_f32()
+	let debug_hue = |primitive_id: u32| match frame_data.debug_settings() {
+		DebugSettings::MeshletError => meshlet.error,
+		DebugSettings::ProjectedError => lod_error_is_imperceptible(
+			frame_data,
+			meshlet.bounds,
+			meshlet.error,
+			instance.world_from_local.affine,
+			1.,
+		)
+		.unwrap_or(0.),
+		_ => {
+			let seed = match frame_data.debug_settings() {
+				DebugSettings::MeshletId => meshlet_instance.meshlet_id,
+				DebugSettings::TriangleId => meshlet_instance.meshlet_id.wrapping_add(primitive_id),
+				DebugSettings::LodLevel => 32 - leading_zeros(meshlet.lod_level_bitmask.0),
+				_ => return 0.,
+			};
+			GpuRng(seed.wrapping_add(1)).next_f32()
+		}
 	};
 
 	// process primitives

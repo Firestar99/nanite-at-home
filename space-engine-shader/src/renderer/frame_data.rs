@@ -16,10 +16,12 @@ pub enum DebugSettings {
 	Normals,
 	VertexNormals,
 	RoughnessMetallic,
+	MeshletError,
+	ProjectedError,
 }
 
 impl DebugSettings {
-	pub const MAX_VALUE: DebugSettings = DebugSettings::RoughnessMetallic;
+	pub const MAX_VALUE: DebugSettings = DebugSettings::ProjectedError;
 	pub const LEN: u32 = Self::MAX_VALUE as u32 + 1;
 }
 

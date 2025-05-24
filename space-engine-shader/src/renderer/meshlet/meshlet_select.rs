@@ -138,7 +138,7 @@ fn cull_meshlet(
 // }
 
 // https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
-fn lod_error_is_imperceptible(
+pub fn lod_error_is_imperceptible(
 	frame_data: FrameData,
 	lod_sphere: Sphere,
 	simplification_error: f32,
