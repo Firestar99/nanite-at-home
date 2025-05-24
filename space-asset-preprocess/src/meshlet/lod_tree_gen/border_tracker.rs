@@ -3,7 +3,6 @@ use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
 use crate::meshlet::mesh::MeshletMesh;
 use crate::meshlet::process::lod_mesh_build_meshlets;
-use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
@@ -361,7 +360,7 @@ impl<'a> BorderTracker<'a> {
 		&self,
 		queue_ids: &[QueueId],
 		pbr_material_vertices: &[PbrVertex],
-		lod_faction: f32,
+		_lod_faction: f32,
 	) -> MeshletGroupSimplifyResult {
 		profiling::function_scope!();
 		let meshlets = queue_ids
@@ -451,7 +450,7 @@ impl<'a> BorderTracker<'a> {
 
 		let original_indices_cnt = s_indices.len();
 		let target_count = (original_indices_cnt as f32 * TARGET_SIMPLIFICATION_FACTOR) as usize;
-		let target_error = f32::lerp(0.01, 0.9, lod_faction);
+		// let target_error = f32::lerp(0.01, 0.9, lod_faction);
 
 		let adapter = VertexDataAdapter::new(
 			bytemuck::cast_slice::<DrawVertex, u8>(&s_vertices),
@@ -471,8 +470,8 @@ impl<'a> BorderTracker<'a> {
 				size_of_val(&vertex_attrib_weights),
 				&s_vertex_lock,
 				target_count,
-				target_error,
-				SimplifyOptions::empty(),
+				f32::MAX,
+				SimplifyOptions::ErrorAbsolute,
 				Some(&mut relative_error),
 			);
 		}
@@ -482,13 +481,17 @@ impl<'a> BorderTracker<'a> {
 			return TooLittleSimplification;
 		}
 
-		let mut mesh_space_error = {
-			profiling::scope!("meshopt::simplify_scale");
-			// relative -> absolute error
-			relative_error * meshopt::simplify_scale(&adapter)
-		};
-		let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
-		mesh_space_error += max_child_error;
+		// let mut mesh_space_error = {
+		// 	profiling::scope!("meshopt::simplify_scale");
+		// 	// relative -> absolute error
+		// 	relative_error * meshopt::simplify_scale(&adapter)
+		// };
+		let mut mesh_space_error = relative_error;
+		for meshlet in &meshlets {
+			mesh_space_error = mesh_space_error.max(meshlet.error);
+		}
+		// let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
+		// mesh_space_error += max_child_error;
 
 		let group_sphere =
 			Sphere::merge_spheres_approx(&meshlets.iter().map(|m| m.bounds).collect::<SmallVec<[_; 6]>>()).unwrap();
