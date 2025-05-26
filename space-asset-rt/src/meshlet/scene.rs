@@ -78,7 +78,7 @@ pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) 
 		.instances
 		.iter()
 		.map(|instance| MeshInstance {
-			transform: AffineTransform::new(instance.transform),
+			world_from_local: AffineTransform::new(instance.world_from_local),
 			mesh_ids: deserialize_infallible::<ArchivedRangeU32, RangeU32>(&instance.mesh_ids),
 		})
 		.collect::<Vec<_>>();
@@ -104,7 +104,8 @@ impl MeshletSceneCpu {
 				for z in 0..instance_count.z {
 					let instance_offset = UVec3::new(x, y, z);
 					for mut i in self.instances.iter().copied() {
-						i.transform.affine.translation += Vec3A::from(physical_offset * instance_offset.as_vec3());
+						i.world_from_local.affine.translation +=
+							Vec3A::from(physical_offset * instance_offset.as_vec3());
 						instances.push(i);
 					}
 				}

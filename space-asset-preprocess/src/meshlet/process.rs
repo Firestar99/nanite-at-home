@@ -108,7 +108,7 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 		gltf.nodes()
 			.flat_map(|node| {
 				node.mesh().map(|mesh| MeshletInstanceDisk {
-					transform: node_transforms[node.index()],
+					world_from_local: node_transforms[node.index()],
 					mesh_ids: mesh2ids[mesh.index()],
 				})
 			})
@@ -121,7 +121,7 @@ fn process_meshes(gltf: &Gltf) -> anyhow::Result<(Vec<MeshletMeshDisk>, Vec<Mesh
 			.iter()
 			.flat_map(|instance| {
 				Range::<u32>::from(instance.mesh_ids)
-					.map(|mesh_id| meshes[mesh_id as usize].stats.transform(instance.transform))
+					.map(|mesh_id| meshes[mesh_id as usize].stats.transform(instance.world_from_local))
 			})
 			.sum()
 	};

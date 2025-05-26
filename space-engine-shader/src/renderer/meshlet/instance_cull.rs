@@ -42,7 +42,7 @@ pub fn instance_cull_compute(
 			let mut meshlet_start = meshlet_offset * MAX_MESHLET_CNT;
 			while meshlet_start < mesh.num_meshlets {
 				let meshlet_cnt = u32::clamp(meshlet_start + MAX_MESHLET_CNT, 0, mesh.num_meshlets) - meshlet_start;
-				let _ = param.compacting_groups_out.allocate(&mut descriptors).write(
+				let _ = param.compacting_groups_out.allocate(
 					&mut descriptors,
 					MeshletGroupInstance {
 						instance_id,

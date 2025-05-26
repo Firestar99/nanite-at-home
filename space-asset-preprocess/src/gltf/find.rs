@@ -3,14 +3,14 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote, TokenStreamExt};
 use rust_gpu_bindless_macro_utils::modnode::{ModNode, ModNodeError};
 use smallvec::SmallVec;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::{fs, io};
 
 #[derive(Debug)]
 pub struct GltfFile {
 	pub src_path: PathBuf,
-	pub relative: Vec<String>,
-	pub out_relative: String,
+	pub relative: PathBuf,
+	pub out_relative: PathBuf,
 	pub out_path: PathBuf,
 }
 
@@ -29,20 +29,11 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 		.filter(|e| e.path().extension().map_or(false, |ext| ext == "gltf" || ext == "glb"))
 		.map(|e| {
 			let src_path = e.into_path();
-			let relative = src_path
-				.parent()
-				.unwrap()
-				.strip_prefix(&models_dir)
-				.unwrap()
-				.components()
-				.filter_map(|c| match c {
-					Component::Normal(s) => Some(s),
-					_ => None,
-				})
-				.chain([src_path.file_name().unwrap()])
-				.map(|s| String::from(s.to_str().unwrap()))
-				.collect::<Vec<_>>();
-			let out_relative = format!("{}.bin", relative.join("/"));
+			let relative = src_path.strip_prefix(&models_dir).unwrap().to_path_buf();
+			let out_relative = relative.with_file_name(format!(
+				"{}.bin",
+				relative.file_name().map(|c| c.to_string_lossy()).unwrap_or_default()
+			));
 			let out_path = out_dir.join(&out_relative);
 			GltfFile {
 				src_path,
@@ -51,7 +42,6 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 				out_path,
 			}
 		})
-		.filter(|s| !s.relative.iter().any(|c| c.starts_with('.') && c != "." && c != ".."))
 		.collect::<Vec<_>>())
 }
 
@@ -69,7 +59,8 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 		root.insert(
 			model
 				.relative
-				.iter()
+				.components()
+				.filter_map(|c| c.as_os_str().to_str())
 				.map(|s| s.chars().map(filter_chars_for_typename).collect::<String>().into()),
 			model,
 		)?;
@@ -92,10 +83,10 @@ pub fn to_mod_hierarchy<'a>(model_paths: impl Iterator<Item = &'a GltfFile>) -> 
 		}
 	};
 	let mod_hierarchy = root.to_tokens(|name, model| {
-		let out_relative = &model.out_relative;
-		let in_relative = &model.relative.join("/");
+		let relative = &model.relative.to_string_lossy();
+		let out_relative = &model.out_relative.to_string_lossy();
 		quote! {
-			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#in_relative, #out_relative) };
+			pub const #name: #crate_name::meshlet::scene::MeshletSceneFile<'static> = unsafe { #crate_name::meshlet::scene::MeshletSceneFile::new(#relative, #out_relative) };
 		}
 	});
 	Ok(quote! {

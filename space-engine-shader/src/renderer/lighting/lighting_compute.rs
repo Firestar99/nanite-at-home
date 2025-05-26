@@ -87,7 +87,7 @@ fn sampled_material_from_g_buffer(
 	let position = camera.reconstruct_from_depth(pixel.as_vec2() / size.as_vec2(), depth);
 	let sampled = SampledMaterial {
 		world_pos: position.world_space,
-		v: V::new(position.world_space, camera.transform.translation()),
+		v: V::new(position.world_space, camera.view_from_world.translation()),
 		albedo,
 		alpha,
 		normal,

@@ -2,10 +2,9 @@ use crate::renderer::compacting_alloc_buffer::{CompactingAllocBufferReader, Comp
 use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
-use glam::{UVec3, Vec3A};
+use glam::{Affine3A, UVec3, Vec3A};
 use rust_gpu_bindless_macros::{bindless, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
-use space_asset_shader::affine_transform::AffineTransform;
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use space_asset_shader::shape::sphere::Sphere;
@@ -41,10 +40,7 @@ pub fn meshlet_select_compute(
 			meshlet_id: group_instance.meshlet_start + instance_id,
 		};
 		if !cull_meshlet(&descriptors, frame_data, param.scene, instance) {
-			param
-				.compacting_instances_out
-				.allocate(&mut descriptors)
-				.write(&mut descriptors, instance);
+			param.compacting_instances_out.allocate(&mut descriptors, instance);
 		}
 	}
 }
@@ -62,7 +58,7 @@ fn cull_meshlet(
 		LodType::Nanite => {
 			let instance_transform = scene.instances.access(descriptors).load(instance.instance_id as usize);
 			let transform = |sphere: Sphere, radius: f32| {
-				project_to_screen_area(frame_data, instance_transform.transform, sphere, radius)
+				project_to_screen_area(frame_data, instance_transform.world_from_local.affine, sphere, radius)
 					* (frame_data.camera.viewport_size.y as f32 * 0.5)
 			};
 			let ss_error = transform(m.bounds, m.error);
@@ -91,7 +87,7 @@ fn cull_meshlet(
 // }
 
 /// https://github.com/zeux/meshoptimizer/blob/1e48e96c7e8059321de492865165e9ef071bffba/demo/nanite.cpp#L115
-pub fn project_to_screen_area(frame_data: FrameData, instance: AffineTransform, sphere: Sphere, error: f32) -> f32 {
+pub fn project_to_screen_area(frame_data: FrameData, world_from_local: Affine3A, sphere: Sphere, error: f32) -> f32 {
 	let camera = frame_data.camera;
 	let nanite = frame_data.nanite;
 	if !error.is_finite() {
@@ -102,15 +98,15 @@ pub fn project_to_screen_area(frame_data: FrameData, instance: AffineTransform, 
 		// Scaling a sphere turns it into an ellipsoid, to turn it back into a sphere we place a sphere around it.
 		// That is equivalent to multiplying the radius by the axis that is scaled up the most.
 		let sum = |a: Vec3A| a.x + a.y + a.z;
-		let mat = instance.affine.matrix3;
+		let mat = world_from_local.matrix3;
 		f32::max(f32::max(sum(mat.x_axis), sum(mat.y_axis)), sum(mat.z_axis))
 	};
 	let radius = sphere.radius() * max_scale_factor * nanite.bounding_sphere_scale;
 	let error = error * max_scale_factor;
 
-	let center_world = instance.affine.transform_point3(sphere.center());
-	let d = center_world.distance(camera.transform.translation()) - radius;
-	let d = f32::max(d, camera.perspective.to_cols_array_2d()[3][2]);
-	let camera_proj = camera.perspective.to_cols_array_2d()[1][1];
+	let center_world = world_from_local.transform_point3(sphere.center());
+	let d = center_world.distance(camera.view_from_world.translation()) - radius;
+	let d = f32::max(d, camera.clip_from_view.to_cols_array_2d()[3][2]);
+	let camera_proj = camera.clip_from_view.to_cols_array_2d()[1][1];
 	error / d * (camera_proj * 0.5)
 }
