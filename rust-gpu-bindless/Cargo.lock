@@ -176,6 +176,9 @@ name = "bitflags"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c8214115b7bf84099f1309324e63141d4c5d7cc26862f97a0a857dbefe165bd"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block"
@@ -254,6 +257,38 @@ dependencies = [
  "rustix 0.38.44",
  "wayland-backend",
  "wayland-client",
+]
+
+[[package]]
+name = "camino"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0da45bc31171d8d6960122e222a67740df867c1dd53b4d51caa297084c185cab"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e35af189006b9c0f00a064685c727031e3ed2d8020f7ba284d78cc2671bd36ea"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd5eb614ed4c27c5d706420e4320fbe3216ab31fa1c33cd8246ac36dae4479ba"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -2187,7 +2222,7 @@ checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 [[package]]
 name = "rustc_codegen_spirv"
 version = "0.9.0"
-source = "git+https://github.com/rust-gpu/rust-gpu?rev=ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b#ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
 dependencies = [
  "ahash",
  "ar",
@@ -2202,6 +2237,7 @@ dependencies = [
  "regex",
  "rspirv",
  "rustc-demangle",
+ "rustc_codegen_spirv-target-specs",
  "rustc_codegen_spirv-types",
  "rustix 0.38.44",
  "sanitize-filename",
@@ -2215,13 +2251,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc_codegen_spirv-target-specs"
+version = "0.9.0"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
+
+[[package]]
 name = "rustc_codegen_spirv-types"
 version = "0.9.0"
-source = "git+https://github.com/rust-gpu/rust-gpu?rev=ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b#ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
 dependencies = [
  "rspirv",
  "serde",
  "serde_json",
+ "spirv",
 ]
 
 [[package]]
@@ -2331,6 +2373,9 @@ name = "semver"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"
@@ -2470,29 +2515,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eda41003dc44290527a59b13432d4a0379379fa074b70174882adfbdfd917844"
 dependencies = [
  "bitflags 2.9.0",
+ "serde",
 ]
 
 [[package]]
 name = "spirv-builder"
 version = "0.9.0"
-source = "git+https://github.com/rust-gpu/rust-gpu?rev=ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b#ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
 dependencies = [
+ "cargo_metadata",
  "memchr",
  "raw-string",
  "rustc_codegen_spirv",
+ "rustc_codegen_spirv-target-specs",
  "rustc_codegen_spirv-types",
+ "semver",
  "serde",
  "serde_json",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "spirv-std"
 version = "0.9.0"
-source = "git+https://github.com/rust-gpu/rust-gpu?rev=ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b#ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
 dependencies = [
  "bitflags 1.3.2",
  "bytemuck",
  "glam",
+ "libm",
  "num-traits",
  "spirv-std-macros",
  "spirv-std-types",
@@ -2501,7 +2552,7 @@ dependencies = [
 [[package]]
 name = "spirv-std-macros"
 version = "0.9.0"
-source = "git+https://github.com/rust-gpu/rust-gpu?rev=ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b#ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2512,13 +2563,13 @@ dependencies = [
 [[package]]
 name = "spirv-std-types"
 version = "0.9.0"
-source = "git+https://github.com/rust-gpu/rust-gpu?rev=ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b#ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b"
+source = "git+https://github.com/rust-gpu/rust-gpu?rev=e6d017d5504c4441a84edcc27f4eca61de6fc8cf#e6d017d5504c4441a84edcc27f4eca61de6fc8cf"
 
 [[package]]
 name = "spirv-tools"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcb3b0832881834994b7ec82b709ec5491043ceb4bf8101e27da6b5234b24261"
+checksum = "aa073f1f465ad80b16f0e2b0151389c9fcfeee83c5daa4361fe8c1d24f0e0b0c"
 dependencies = [
  "memchr",
  "spirv-tools-sys",
@@ -2527,9 +2578,9 @@ dependencies = [
 
 [[package]]
 name = "spirv-tools-sys"
-version = "0.8.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48e68b55a97aa6856e010a6f2477425875a97873e147bb0232160e73c45bdae7"
+checksum = "f4c95b52623ba771b5172dea9f04799928ce53ebc2ffc360c69d0fea3c3248d8"
 dependencies = [
  "cc",
 ]
