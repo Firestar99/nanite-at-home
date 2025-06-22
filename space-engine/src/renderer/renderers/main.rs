@@ -249,10 +249,10 @@ impl RendererMain {
 		};
 		self.pipeline
 			.sky_shader
-			.dispatch(cmd, &frame_context, g_buffer, output_image.to_mut_transient())?;
+			.dispatch(cmd, &frame_context, g_buffer, output_image)?;
 		self.pipeline
 			.lighting
-			.dispatch(cmd, &frame_context, g_buffer, output_image.to_mut_transient())?;
+			.dispatch(cmd, &frame_context, g_buffer, output_image)?;
 
 		self.resources = Some(RendererMainResources {
 			extent: resources.extent,

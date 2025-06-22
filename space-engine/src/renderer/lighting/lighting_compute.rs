@@ -1,6 +1,6 @@
 use crate::renderer::frame_context::FrameContext;
-use rust_gpu_bindless::descriptor::{Bindless, Image2d, MutImage, Transient, TransientDesc};
-use rust_gpu_bindless::pipeline::BindlessComputePipeline;
+use rust_gpu_bindless::descriptor::{Bindless, Image2d, Transient};
+use rust_gpu_bindless::pipeline::{BindlessComputePipeline, MutImageAccess, StorageReadWrite};
 use rust_gpu_bindless::pipeline::{Recording, RecordingError};
 use space_engine_shader::renderer::g_buffer::GBuffer;
 use space_engine_shader::renderer::lighting::lighting_compute::{Param, LIGHTING_WG_SIZE};
@@ -19,7 +19,7 @@ impl LightingCompute {
 		cmd: &mut Recording<'_>,
 		frame_context: &FrameContext,
 		g_buffer: GBuffer<Transient>,
-		output_image: TransientDesc<MutImage<Image2d>>,
+		output_image: &MutImageAccess<'_, Image2d, StorageReadWrite>,
 	) -> Result<(), RecordingError> {
 		profiling::function_scope!();
 		let image_size = frame_context.frame_data.camera.viewport_size;
@@ -34,7 +34,7 @@ impl LightingCompute {
 			Param {
 				frame_data: frame_context.frame_data_desc,
 				g_buffer,
-				output_image,
+				output_image: output_image.to_mut_transient(),
 			},
 		)
 	}
