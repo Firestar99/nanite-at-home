@@ -7,16 +7,18 @@ use crate::renderer::meshlet::meshlet_draw::MeshletDraw;
 use crate::renderer::meshlet::meshlet_select_compute::MeshletSelectCompute;
 use crate::screen_space_trace::screen_space_shadows::{DirectionalShadowConfig, TraceDirectionalShadowsCompute};
 use anyhow::anyhow;
-use ash::vk::{BlitImageInfo2, ImageAspectFlags, ImageBlit2, ImageLayout, ImageSubresourceLayers, Offset3D};
+use ash::vk::{
+	BlitImageInfo2, ClearColorValue, ImageAspectFlags, ImageBlit2, ImageLayout, ImageSubresourceLayers,
+	ImageSubresourceRange, Offset3D,
+};
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Filter, Format, Image2d, ImageDescExt, MutDesc,
 	MutImage,
 };
 use rust_gpu_bindless::pipeline::{
 	ClearValue, ColorAttachment, DepthStencilAttachment, ImageAccessType, LoadOp, MutImageAccess, MutImageAccessExt,
-	Recording, RenderPassFormat, RenderingAttachment, SampledRead, StorageReadWrite, StoreOp,
+	Recording, RenderPassFormat, RenderingAttachment, SampledRead, StorageReadWrite, StoreOp, TransferWrite,
 };
-use rust_gpu_bindless_shaders::spirv_std::glam::{IVec2, Vec3};
 use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::frame_data::FrameData;
 use space_engine_shader::renderer::g_buffer::GBuffer;
@@ -138,7 +140,10 @@ impl RendererMainResources {
 		let sun_screen_space_trace = pipeline.bindless.image().alloc(&BindlessImageCreateInfo {
 			format: Format::R8_UNORM,
 			extent,
-			usage: BindlessImageUsage::STORAGE | BindlessImageUsage::SAMPLED | BindlessImageUsage::TRANSFER_SRC,
+			usage: BindlessImageUsage::STORAGE
+				| BindlessImageUsage::SAMPLED
+				| BindlessImageUsage::TRANSFER_SRC
+				| BindlessImageUsage::TRANSFER_DST,
 			name: "sun_screen_space_trace",
 			..Default::default()
 		})?;
@@ -256,9 +261,29 @@ impl RendererMain {
 		let g_normal = g_normal.transition::<SampledRead>()?;
 		let g_roughness_metallic = g_roughness_metallic.transition::<SampledRead>()?;
 		let depth_image = depth_image.transition::<SampledRead>()?;
+
 		let sun_screen_space_trace = resources
 			.sun_screen_space_trace
-			.access_dont_care::<StorageReadWrite>(&cmd)?;
+			.access_dont_care::<TransferWrite>(&cmd)?;
+		unsafe {
+			cmd.ash_flush();
+			let device = &self.pipeline.bindless.device;
+			let input = sun_screen_space_trace.inner_slot();
+			device.cmd_clear_color_image(
+				cmd.ash_command_buffer(),
+				input.image,
+				ImageLayout::TRANSFER_DST_OPTIMAL,
+				&ClearColorValue::default(),
+				&[ImageSubresourceRange::default()
+					.aspect_mask(ImageAspectFlags::COLOR)
+					.base_array_layer(0)
+					.layer_count(1)
+					.base_mip_level(0)
+					.level_count(1)],
+			);
+		}
+
+		let sun_screen_space_trace = sun_screen_space_trace.transition::<StorageReadWrite>()?;
 
 		self.pipeline.trace_directional_shadows.dispatch(
 			cmd,
@@ -267,24 +292,26 @@ impl RendererMain {
 				out_image: &sun_screen_space_trace,
 				trace_length: 0,
 				object_thickness: 0.0,
-				trace_direction: Vec3::new(1., 0., 0.),
+				// trace_direction: frame_data.camera.view_from_world.normal * frame_data.sun.direction,
+				trace_direction: rust_gpu_bindless_shaders::spirv_std::glam::Vec3::new(1., 0., 0.),
 			},
 		)?;
 
-		let g_buffer = GBuffer {
-			g_albedo: g_albedo.to_transient_sampled()?,
-			g_normal: g_normal.to_transient_sampled()?,
-			g_roughness_metallic: g_roughness_metallic.to_transient_sampled()?,
-			depth_image: depth_image.to_transient_sampled()?,
-		};
-		self.pipeline
-			.sky_shader
-			.dispatch(cmd, &frame_context, g_buffer, output_image)?;
-		self.pipeline
-			.lighting
-			.dispatch(cmd, &frame_context, g_buffer, output_image)?;
+		// let g_buffer = GBuffer {
+		// 	g_albedo: g_albedo.to_transient_sampled()?,
+		// 	g_normal: g_normal.to_transient_sampled()?,
+		// 	g_roughness_metallic: g_roughness_metallic.to_transient_sampled()?,
+		// 	depth_image: depth_image.to_transient_sampled()?,
+		// };
+		// self.pipeline
+		// 	.sky_shader
+		// 	.dispatch(cmd, &frame_context, g_buffer, output_image)?;
+		// self.pipeline
+		// 	.lighting
+		// 	.dispatch(cmd, &frame_context, g_buffer, output_image)?;
 
 		unsafe {
+			cmd.ash_flush();
 			let device = &self.pipeline.bindless.device;
 			let input = sun_screen_space_trace.inner_slot();
 			let out = output_image.inner_slot();

@@ -35,13 +35,13 @@ pub fn directional_shadows(
 	// #[spirv(workgroup)] shared: &[f32; SHARED_SIZE],
 ) {
 	let dir = param.trace_direction;
-	let start = dir.major_dir() * wg_id.x as i32 + dir.minor_dir() * wg_id.y as i32;
+	let start = dir.major_dir() * wg_id.x as i32 * 64 + dir.minor_dir() * wg_id.y as i32;
 	let inv_id = inv_id.x;
 	let inv_offset = (dir.to_vec2() * inv_id as f32 - 0.5).as_ivec2();
 
 	let out_image = param.out_image.access(&descriptors);
 	unsafe {
-		out_image.write(start + inv_offset, Vec4::splat(inv_id as f32 / 64.));
+		out_image.write(start + inv_offset, Vec4::splat(inv_id as f32 / 64. + 1. / 64.));
 	}
 }
 
