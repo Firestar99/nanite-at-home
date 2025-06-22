@@ -31,3 +31,7 @@ num-traits = { workspace = true }
 # other
 static_assertions = { workspace = true }
 num_enum = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+glam = { workspace = true, features = ["approx"] }

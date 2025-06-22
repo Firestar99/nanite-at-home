@@ -5,14 +5,18 @@ use crate::renderer::lighting::sky_shader_compute::SkyShaderCompute;
 use crate::renderer::meshlet::instance_cull_compute::InstanceCullCompute;
 use crate::renderer::meshlet::meshlet_draw::MeshletDraw;
 use crate::renderer::meshlet::meshlet_select_compute::MeshletSelectCompute;
+use crate::screen_space_trace::screen_space_shadows::{DirectionalShadowConfig, TraceDirectionalShadowsCompute};
 use anyhow::anyhow;
+use ash::vk::{BlitImageInfo2, ImageAspectFlags, ImageBlit2, ImageLayout, ImageSubresourceLayers, Offset3D};
 use rust_gpu_bindless::descriptor::{
-	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Format, Image2d, ImageDescExt, MutDesc, MutImage,
+	Bindless, BindlessImageCreateInfo, BindlessImageUsage, Extent, Filter, Format, Image2d, ImageDescExt, MutDesc,
+	MutImage,
 };
 use rust_gpu_bindless::pipeline::{
 	ClearValue, ColorAttachment, DepthStencilAttachment, ImageAccessType, LoadOp, MutImageAccess, MutImageAccessExt,
 	Recording, RenderPassFormat, RenderingAttachment, SampledRead, StorageReadWrite, StoreOp,
 };
+use rust_gpu_bindless_shaders::spirv_std::glam::{IVec2, Vec3};
 use space_asset_rt::meshlet::scene::InstancedMeshletSceneCpu;
 use space_engine_shader::renderer::frame_data::FrameData;
 use space_engine_shader::renderer::g_buffer::GBuffer;
@@ -47,6 +51,7 @@ pub struct RenderPipelineMain {
 	pub meshlet_draw: MeshletDraw,
 	pub lighting: LightingCompute,
 	pub sky_shader: SkyShaderCompute,
+	pub trace_directional_shadows: TraceDirectionalShadowsCompute,
 }
 
 impl RenderPipelineMain {
@@ -75,6 +80,7 @@ impl RenderPipelineMain {
 			meshlet_draw: MeshletDraw::new(bindless, format.to_g_buffer_rp())?,
 			lighting: LightingCompute::new(bindless)?,
 			sky_shader: SkyShaderCompute::new(bindless)?,
+			trace_directional_shadows: TraceDirectionalShadowsCompute::new(bindless)?,
 		}))
 	}
 
@@ -94,6 +100,7 @@ struct RendererMainResources {
 	g_normal: MutDesc<MutImage<Image2d>>,
 	g_roughness_metallic: MutDesc<MutImage<Image2d>>,
 	depth_image: MutDesc<MutImage<Image2d>>,
+	sun_screen_space_trace: MutDesc<MutImage<Image2d>>,
 	compacting_meshlet_groups: CompactingAllocBuffer<MeshletGroupInstance>,
 	compacting_meshlet_instances: CompactingAllocBuffer<MeshletInstance>,
 }
@@ -128,6 +135,13 @@ impl RendererMainResources {
 			name: "g_depth",
 			..Default::default()
 		})?;
+		let sun_screen_space_trace = pipeline.bindless.image().alloc(&BindlessImageCreateInfo {
+			format: Format::R8_UNORM,
+			extent,
+			usage: BindlessImageUsage::STORAGE | BindlessImageUsage::SAMPLED | BindlessImageUsage::TRANSFER_SRC,
+			name: "sun_screen_space_trace",
+			..Default::default()
+		})?;
 		let compacting_meshlet_groups = CompactingAllocBuffer::new(
 			&pipeline.bindless,
 			pipeline.meshlet_group_capacity,
@@ -146,6 +160,7 @@ impl RendererMainResources {
 			g_albedo,
 			g_normal,
 			g_roughness_metallic,
+			sun_screen_space_trace,
 			compacting_meshlet_groups,
 			compacting_meshlet_instances,
 		})
@@ -241,6 +256,21 @@ impl RendererMain {
 		let g_normal = g_normal.transition::<SampledRead>()?;
 		let g_roughness_metallic = g_roughness_metallic.transition::<SampledRead>()?;
 		let depth_image = depth_image.transition::<SampledRead>()?;
+		let sun_screen_space_trace = resources
+			.sun_screen_space_trace
+			.access_dont_care::<StorageReadWrite>(&cmd)?;
+
+		self.pipeline.trace_directional_shadows.dispatch(
+			cmd,
+			DirectionalShadowConfig {
+				depth_image: depth_image.to_transient_sampled()?,
+				out_image: &sun_screen_space_trace,
+				trace_length: 0,
+				object_thickness: 0.0,
+				trace_direction: Vec3::new(1., 0., 0.),
+			},
+		)?;
+
 		let g_buffer = GBuffer {
 			g_albedo: g_albedo.to_transient_sampled()?,
 			g_normal: g_normal.to_transient_sampled()?,
@@ -254,12 +284,41 @@ impl RendererMain {
 			.lighting
 			.dispatch(cmd, &frame_context, g_buffer, output_image)?;
 
+		unsafe {
+			let device = &self.pipeline.bindless.device;
+			let input = sun_screen_space_trace.inner_slot();
+			let out = output_image.inner_slot();
+			device.cmd_blit_image2(
+				cmd.ash_command_buffer(),
+				&BlitImageInfo2::default()
+					.src_image(input.image)
+					.src_image_layout(ImageLayout::GENERAL)
+					.dst_image(out.image)
+					.dst_image_layout(ImageLayout::GENERAL)
+					.regions(&[ImageBlit2::default()
+						.src_subresource(
+							ImageSubresourceLayers::default()
+								.aspect_mask(ImageAspectFlags::COLOR)
+								.layer_count(1),
+						)
+						.src_offsets([Offset3D::default(), input.extent.into()])
+						.dst_subresource(
+							ImageSubresourceLayers::default()
+								.aspect_mask(ImageAspectFlags::COLOR)
+								.layer_count(1),
+						)
+						.dst_offsets([Offset3D::default(), out.extent.into()])])
+					.filter(Filter::Nearest.to_ash_filter()),
+			);
+		}
+
 		self.resources = Some(RendererMainResources {
 			extent: resources.extent,
 			g_albedo: g_albedo.into_desc(),
 			g_normal: g_normal.into_desc(),
 			g_roughness_metallic: g_roughness_metallic.into_desc(),
 			depth_image: depth_image.into_desc(),
+			sun_screen_space_trace: sun_screen_space_trace.into_desc(),
 			compacting_meshlet_groups: meshlet_groups.transition_reset(),
 			compacting_meshlet_instances: meshlet_instances.transition_reset(),
 		});

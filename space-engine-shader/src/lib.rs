@@ -8,4 +8,6 @@ extern crate core;
 
 pub mod material;
 pub mod renderer;
+pub mod screen_space_trace;
+// pub mod screen_space_old;
 pub mod utils;

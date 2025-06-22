@@ -5,8 +5,8 @@ use crate::descriptor::{
 use crate::pipeline::{ClearValue, ImageAccessType, IndexType, LoadOp, RenderingAttachment, StoreOp};
 use crate::platform::ash::Ash;
 use ash::vk::{
-	AttachmentLoadOp, AttachmentStoreOp, Extent2D, ImageLayout, ImageType as VkImageType, RenderingAttachmentInfo,
-	ShaderStageFlags,
+	AttachmentLoadOp, AttachmentStoreOp, Extent2D, ImageLayout, ImageType as VkImageType, Offset2D, Offset3D,
+	RenderingAttachmentInfo, ShaderStageFlags,
 };
 use ash::vk::{BufferUsageFlags, Extent3D, ImageUsageFlags, ImageViewType, SampleCountFlags};
 use gpu_allocator::vulkan::AllocationScheme;
@@ -115,6 +115,25 @@ impl SampleCount {
 			SampleCount::Sample16 => SampleCountFlags::TYPE_16,
 			SampleCount::Sample32 => SampleCountFlags::TYPE_32,
 			SampleCount::Sample64 => SampleCountFlags::TYPE_64,
+		}
+	}
+}
+
+impl From<Extent> for Offset3D {
+	fn from(value: Extent) -> Self {
+		Offset3D {
+			x: value.width as i32,
+			y: value.height as i32,
+			z: value.depth as i32,
+		}
+	}
+}
+
+impl From<Extent> for Offset2D {
+	fn from(value: Extent) -> Self {
+		Offset2D {
+			x: value.width as i32,
+			y: value.height as i32,
 		}
 	}
 }

@@ -34,7 +34,7 @@ use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::WindowAttributes;
 
-const DEBUGGER: Debuggers = Debuggers::None;
+const DEBUGGER: Debuggers = Debuggers::RenderDoc;
 
 /// how many `MeshletInstance`s can be dynamically allocated, 1 << 17 = 131072
 /// about double what bistro needs if all meshlets rendered
@@ -92,7 +92,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			AshSwapchainParams::automatic_best(
 				&bindless2,
 				surface,
-				BindlessImageUsage::STORAGE | BindlessImageUsage::COLOR_ATTACHMENT,
+				BindlessImageUsage::STORAGE | BindlessImageUsage::COLOR_ATTACHMENT | BindlessImageUsage::TRANSFER_DST,
 				SwapchainImageFormatPreference::UNORM,
 			)
 		})
