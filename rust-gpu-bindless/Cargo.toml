@@ -40,14 +40,14 @@ rust-gpu-bindless-egui-shaders = { path = "crates/egui-shaders" }
 rust-gpu-bindless-macro-utils = { path = "crates/macro-utils" }
 rust-gpu-bindless-macros = { path = "crates/macros" }
 rust-gpu-bindless-shaders = { path = "crates/shaders" }
-rust-gpu-bindless-shader-builder = { path = "crates/shader-builder", default-features = false, features = ["use-installed-tools"] }
+rust-gpu-bindless-shader-builder = { path = "crates/shader-builder" }
 rust-gpu-bindless-winit = { path = "crates/winit" }
 integration-test = { path = "tests/integration-test" }
 integration-test-shader = { path = "tests/integration-test-shader" }
 
 # vulkan
-spirv-builder = { git = "https://github.com/rust-gpu/rust-gpu", rev = "ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b", default-features = false }
-spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "ea25c7e71770ae4bd6446b83c5cdeee3fc5e295b", features = ["bytemuck"] }
+cargo-gpu = { git = "https://github.com/rust-gpu/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
+spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", features = ["bytemuck"] }
 ash = "0.38.0"
 ash-window = "0.13.0"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
@@ -97,34 +97,6 @@ bitflags = "2.6.0"
 thiserror = "2.0.6"
 approx = "0.5.1"
 rustc-hash = "2.1.1"
-
-
-
-# Following is copied from rust-gpu workspace cargo.toml
-# Enable incremental by default in release mode.
-[profile.release]
-incremental = true
-# HACK(eddyb) this is the default but without explicitly specifying it, Cargo
-# will treat the identical settings in `[profile.release.build-override]` below
-# as different sets of `rustc` flags and will not reuse artifacts between them.
-codegen-units = 256
-
-# Compile build-dependencies in release mode with the same settings
-# as regular dependencies (including the incremental enabled above).
-[profile.release.build-override]
-opt-level = 3
-incremental = true
-codegen-units = 256
-
-# my additions to make build scripts always run in release, even on dev
-[profile.dev]
-incremental = true
-codegen-units = 256
-
-[profile.dev.build-override]
-opt-level = 3
-incremental = true
-codegen-units = 256
 
 
 

@@ -1,6 +1,7 @@
 use glam::{Affine3A, Vec3, Vec3A};
 
 pub trait AffineTranspose {
+	#[must_use]
 	fn transpose(&self) -> Self;
 	fn transform_point3_transposed(&self, rhs: Vec3) -> Vec3;
 	fn transform_vector3_transposed(&self, rhs: Vec3) -> Vec3;
@@ -13,7 +14,6 @@ impl AffineTranspose for Affine3A {
 	///
 	/// Note that if the transform is not invertible the result will be invalid.
 	#[inline]
-	#[must_use]
 	fn transpose(&self) -> Self {
 		let matrix3 = self.matrix3.transpose();
 		// transform negative translation by the matrix inverse:
