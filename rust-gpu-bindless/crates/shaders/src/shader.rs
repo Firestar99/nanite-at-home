@@ -9,7 +9,7 @@ pub trait BindlessShader {
 	/// Get the spirv binary and the entry point name.
 	/// Currently, `&self` isn't really necessary as it would always be returning `SpirvBinary<'static>`, but it makes
 	/// it easier to work with.
-	fn spirv_binary(&self) -> &SpirvBinary;
+	fn spirv_binary(&self) -> &SpirvBinary<'_>;
 }
 
 pub struct SpirvBinary<'a> {

@@ -58,7 +58,7 @@ impl<'a, T: BufferContent + ?Sized> MutBufferSlice<'a, T> {
 		}
 	}
 
-	pub fn as_ref(&self) -> BufferSlice<T> {
+	pub fn as_ref(&self) -> BufferSlice<'_, T> {
 		BufferSlice {
 			buffer: self.buffer.as_ref(),
 			meta: self.meta,
