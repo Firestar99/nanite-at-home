@@ -46,7 +46,7 @@ pub fn codegen_shader_symbols<'a>(
 				type ShaderType = #crate_name::#mod_path #entry_shader_type_ident;
 				type ParamConstant = #crate_name::#mod_path #param_type_ident;
 
-				fn spirv_binary(&self) -> &#rust_gpu_bindless::__private::shader::SpirvBinary {
+				fn spirv_binary(&self) -> &#rust_gpu_bindless::__private::shader::SpirvBinary<'static> {
 					&#rust_gpu_bindless::__private::shader::SpirvBinary {
 						binary: &[#(#spv_binary),*],
 						entry_point_name: #entry_point_name,

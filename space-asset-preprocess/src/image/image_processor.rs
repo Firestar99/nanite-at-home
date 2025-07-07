@@ -80,7 +80,7 @@ impl<'a> ImageProcessor<'a> {
 					Source::Uri { uri, .. } => Scheme::parse(uri).ok_or(GltfImageError::UnsupportedUri)?,
 				};
 				let image = Self::process_individual_image(gltf, &scheme, image_type, settings)
-					.with_context(|| format!("gltf image {} scheme {:?}", image_index, scheme))?;
+					.with_context(|| format!("gltf image {image_index} scheme {scheme:?}"))?;
 				Ok((disk_id, image))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;

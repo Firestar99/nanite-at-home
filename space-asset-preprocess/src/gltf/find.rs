@@ -26,7 +26,7 @@ pub fn find_gltf_files(models_dir: &Path, out_dir: &Path, print_rerun_if_changed
 		.into_iter()
 		.filter_map(|e| e.ok())
 		.filter(|e| e.file_type().is_file())
-		.filter(|e| e.path().extension().map_or(false, |ext| ext == "gltf" || ext == "glb"))
+		.filter(|e| e.path().extension().is_some_and(|ext| ext == "gltf" || ext == "glb"))
 		.map(|e| {
 			let src_path = e.into_path();
 			let relative = src_path.strip_prefix(&models_dir).unwrap().to_path_buf();

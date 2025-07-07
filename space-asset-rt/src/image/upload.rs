@@ -40,9 +40,9 @@ impl UploadedImages {
 			.map(|(color, name)| {
 				let color = color.to_array().map(|f| (f * 255.) as u8);
 				upload_image(
-					&bindless,
+					bindless,
 					&SinglePixelMetadata::new_rgba_linear(color).to_image().to_dyn_image(),
-					&name,
+					name,
 				)
 			}),
 		);
@@ -50,9 +50,8 @@ impl UploadedImages {
 			storage
 				.images
 				.par_iter()
-				.map(|i| upload_image(&bindless, &i.0.to_image(), &i.1))
-				.collect::<Vec<_>>()
-				.into_iter(),
+				.map(|i| upload_image(bindless, &i.0.to_image(), &i.1))
+				.collect::<Vec<_>>(),
 		);
 		async {
 			let defaults = defaults.await;
@@ -113,8 +112,8 @@ pub fn upload_image<'a>(
 		{
 			profiling::scope!("image copy cmd");
 			Ok(bindless.execute(|cmd| {
-				let buffer = staging_buffer.access::<TransferRead>(&cmd)?;
-				let image = image.access::<TransferWrite>(&cmd)?;
+				let buffer = staging_buffer.access::<TransferRead>(cmd)?;
+				let image = image.access::<TransferWrite>(cmd)?;
 
 				unsafe {
 					cmd.ash_flush();

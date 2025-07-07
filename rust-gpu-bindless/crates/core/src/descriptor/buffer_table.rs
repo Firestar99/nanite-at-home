@@ -363,19 +363,19 @@ where
 
 pub trait MutDescBufferExt<P: BindlessPlatform, T: BufferContent + ?Sized> {
 	/// Map and access the buffer's contents on the host
-	fn mapped(&self) -> impl Future<Output = Result<MappedBuffer<P, T>, MapError>>;
+	fn mapped(&self) -> impl Future<Output = Result<MappedBuffer<'_, P, T>, MapError>>;
 
 	/// Map and access the buffer's contents on the host
-	fn mapped_immediate(&self) -> Result<MappedBuffer<P, T>, MapError>;
+	fn mapped_immediate(&self) -> Result<MappedBuffer<'_, P, T>, MapError>;
 }
 
 impl<P: BindlessPlatform, T: BufferContent + ?Sized> MutDescBufferExt<P, T> for MutDesc<P, MutBuffer<T>> {
-	async fn mapped(&self) -> Result<MappedBuffer<P, T>, MapError> {
+	async fn mapped(&self) -> Result<MappedBuffer<'_, P, T>, MapError> {
 		self.pending_execution().clone().await;
 		self.mapped_immediate()
 	}
 
-	fn mapped_immediate(&self) -> Result<MappedBuffer<P, T>, MapError> {
+	fn mapped_immediate(&self) -> Result<MappedBuffer<'_, P, T>, MapError> {
 		if !self.pending_execution().completed() {
 			return Err(MapError::PendingExecution);
 		}

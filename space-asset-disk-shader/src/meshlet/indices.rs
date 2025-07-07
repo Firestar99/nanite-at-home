@@ -29,7 +29,7 @@ impl CompressedIndices {
 impl Debug for CompressedIndices {
 	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
 		for i in self.to_values() {
-			write!(f, "{:3}", i)?;
+			write!(f, "{i:3}")?;
 		}
 		Ok(())
 	}
@@ -107,9 +107,8 @@ pub fn triangle_indices_load<T>(
 
 // write
 pub fn triangle_indices_write_capacity(indices_cnt: usize) -> usize {
-	let required_words = (indices_cnt + INDICES_PER_WORD - 1) / INDICES_PER_WORD;
-	let padded_next_mul_of_3 = (required_words + 3 - 1) / 3 * 3;
-	padded_next_mul_of_3
+	let required_words = indices_cnt.div_ceil(INDICES_PER_WORD);
+	required_words.div_ceil(3) * 3
 }
 
 pub fn triangle_indices_write<Iter>(src: Iter, dst: &mut [CompressedIndices])
@@ -128,7 +127,7 @@ where
 
 	for (i, s) in src.enumerate() {
 		let sm = s & INDICES_MASK;
-		assert_eq!(s, sm, "src index {} is too large for {} bits", s, MESHLET_INDICES_BITS);
+		assert_eq!(s, sm, "src index {s} is too large for {MESHLET_INDICES_BITS} bits");
 		let index = i / INDICES_PER_WORD;
 		let rem = i % INDICES_PER_WORD;
 		dst[index].0 |= sm << (rem as u32 * MESHLET_INDICES_BITS);

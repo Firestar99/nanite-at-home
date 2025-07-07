@@ -37,7 +37,7 @@ impl AsRef<LodMesh> for MeshletMesh {
 }
 
 impl MeshletMesh {
-	pub fn meshlet(&self, index: usize) -> MeshletReader<Self> {
+	pub fn meshlet(&self, index: usize) -> MeshletReader<'_, Self> {
 		MeshletReader {
 			data: self.meshlets[index],
 			mesh: self,

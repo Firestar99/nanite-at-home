@@ -64,8 +64,8 @@ impl<'a> Debug for Scheme<'a> {
 		match self {
 			Scheme::Slice(slice) => write!(f, "Scheme(slice len: {})", slice.len()),
 			Scheme::Base64(slice) => write!(f, "Scheme(base64 len: ~{})", base64::decoded_len_estimate(slice.len())),
-			Scheme::AbsoluteFile(path) => write!(f, "Scheme(file://{})", path),
-			Scheme::RelativeFile(path) => write!(f, "Scheme(./{})", path),
+			Scheme::AbsoluteFile(path) => write!(f, "Scheme(file://{path})"),
+			Scheme::RelativeFile(path) => write!(f, "Scheme(./{path})"),
 		}
 	}
 }

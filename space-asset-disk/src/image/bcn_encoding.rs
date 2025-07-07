@@ -46,7 +46,7 @@ impl UncompressedImage<'_> {
 				ImageType::RgbaLinear | ImageType::RgbaColor => {
 					let setting = settings.expect("Compressing to bc7 requires Bc7Settings");
 					profiling::scope!("bc7::compress_blocks");
-					let has_alpha = scan_for_alpha(self.meta.image_type, &pixels_in);
+					let has_alpha = scan_for_alpha(self.meta.image_type, pixels_in);
 					bc7::compress_blocks_into(
 						if has_alpha { &setting.alpha } else { &setting.opaque },
 						&RgbaSurface {

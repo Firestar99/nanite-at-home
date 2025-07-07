@@ -22,6 +22,6 @@ pub fn main() -> anyhow::Result<()> {
 		args.models_rs.as_deref(),
 		false,
 	)?;
-	println!("{:#?}", result);
+	println!("{result:#?}");
 	Ok(())
 }
