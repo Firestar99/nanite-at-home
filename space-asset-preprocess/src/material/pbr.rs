@@ -36,14 +36,14 @@ pub fn process_pbr_material<'a>(
 		base_color: material.pbr_metallic_roughness().base_color_texture().map(|tex| {
 			image_processor.image(
 				tex.texture().source(),
-				format!("base_color of material {}", material_id_format),
+				format!("base_color of material {material_id_format}"),
 			)
 		}),
 		base_color_factor: material.pbr_metallic_roughness().base_color_factor(),
 		normal: material.normal_texture().map(|tex| {
 			image_processor.image(
 				tex.texture().source(),
-				format!("normal of material {}", material_id_format),
+				format!("normal of material {material_id_format}"),
 			)
 		}),
 		normal_scale: material.normal_texture().map_or(1., |n| n.scale()),
@@ -56,12 +56,7 @@ pub fn process_pbr_material<'a>(
 					.specular()
 					.and_then(|s| s.specular_texture().or(s.specular_color_texture()))
 			})
-			.map(|tex| {
-				image_processor.image(
-					tex.texture().source(),
-					format!("orm of material {}", material_id_format),
-				)
-			}),
+			.map(|tex| image_processor.image(tex.texture().source(), format!("orm of material {material_id_format}"))),
 		occlusion_strength: 0.,
 		roughness_factor: material.pbr_metallic_roughness().roughness_factor(),
 		metallic_factor: material.pbr_metallic_roughness().metallic_factor(),

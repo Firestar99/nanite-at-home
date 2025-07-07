@@ -259,7 +259,7 @@ impl<I: TableInterface> Table<I> {
 	}
 
 	#[inline]
-	pub fn drain_flush_queue(&self) -> DrainFlushQueue<I> {
+	pub fn drain_flush_queue(&self) -> DrainFlushQueue<'_, I> {
 		DrainFlushQueue(self)
 	}
 }

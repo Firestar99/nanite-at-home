@@ -12,7 +12,7 @@ impl Sphere {
 	}
 
 	pub fn merge_spheres_approx(spheres: &[Sphere]) -> Option<Sphere> {
-		if spheres.len() == 0 {
+		if spheres.is_empty() {
 			return None;
 		}
 

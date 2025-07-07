@@ -45,7 +45,7 @@ pub struct MeshletMesh<R: DescRef> {
 }
 
 impl<R: AliveDescRef> MeshletMesh<R> {
-	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> MeshletReader<R> {
+	pub fn meshlet(&self, descriptors: &Descriptors, index: usize) -> MeshletReader<'_, R> {
 		assert!(
 			index < self.num_meshlets as usize,
 			"meshlet index out of bounds: the len is {} but the index is {}",
@@ -60,7 +60,7 @@ impl<R: AliveDescRef> MeshletMesh<R> {
 
 	/// # Safety
 	/// index must be in bounds
-	pub unsafe fn meshlet_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletReader<R> {
+	pub unsafe fn meshlet_unchecked(&self, descriptors: &Descriptors, index: usize) -> MeshletReader<'_, R> {
 		MeshletReader {
 			data: unsafe { self.meshlets.access(descriptors).load_unchecked(index) },
 			mesh: self,

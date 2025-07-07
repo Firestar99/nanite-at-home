@@ -47,7 +47,7 @@ impl<M: DecodeToRuntimeImage> Image<'_, M> {
 		self.meta.decode_into(&self.data, dst)
 	}
 
-	pub fn decode(&self) -> RuntimeImage {
+	pub fn decode(&self) -> RuntimeImage<'_> {
 		self.meta.decode(&self.data)
 	}
 }
@@ -71,7 +71,7 @@ pub trait DecodeToRuntimeImage {
 }
 
 impl<'a, M: ToDynImage> Image<'a, M> {
-	pub fn to_dyn_image(&self) -> DynImage {
+	pub fn to_dyn_image(&self) -> DynImage<'_> {
 		DynImage {
 			meta: self.meta.to_dyn_image(),
 			data: Cow::Borrowed(&self.data),
@@ -329,7 +329,7 @@ impl SinglePixelMetadata {
 	pub fn new_rgba_srgb(color: [u8; 4]) -> Self {
 		Self::new(ImageType::RgbaColor, color)
 	}
-	pub fn to_image(&self) -> SinglePixelImage {
+	pub fn to_image(&self) -> SinglePixelImage<'_> {
 		SinglePixelImage {
 			meta: *self,
 			data: Cow::Borrowed(&[]),

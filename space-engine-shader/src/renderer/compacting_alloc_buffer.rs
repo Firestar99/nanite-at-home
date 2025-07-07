@@ -18,7 +18,7 @@ impl<'a, T: BufferStructPlain> CompactingAllocBufferWriter<'a, T> {
 	/// only the active invocations will write T's. Returns true if successful, false if the buffer ran out of capacity.
 	///
 	/// Uses subgroup intrinsics to efficiently allocate space with just a single atomic operation per subgroup.
-	pub fn allocate<'b>(&'b self, descriptors: &mut Descriptors, t: T) -> bool {
+	pub fn allocate(&self, descriptors: &mut Descriptors, t: T) -> bool {
 		let index = unsafe {
 			let ballot = subgroup_ballot(true);
 			let count = subgroup_ballot_bit_count(ballot);
@@ -73,6 +73,7 @@ impl<'a, T: BufferStructPlain> CompactingAllocBufferReaderAccessed<'a, T> {
 		self.len == 0
 	}
 
+	/// Read a T at `index` or panic
 	pub fn read(&self, index: u32) -> T {
 		unsafe {
 			let len = self.len;
@@ -80,11 +81,15 @@ impl<'a, T: BufferStructPlain> CompactingAllocBufferReaderAccessed<'a, T> {
 				self.read_unchecked(index)
 			} else {
 				// len must not be referred to as self.len but as a local variable, rust-gpu doesn't like it otherwise
-				panic!("index out of bounds: the len is {} but the index is {}", len, index);
+				panic!("index out of bounds: the len is {len} but the index is {index}");
 			}
 		}
 	}
 
+	/// Read a T at `index`
+	///
+	/// # Safety
+	/// index must be in bounds
 	pub unsafe fn read_unchecked(&self, index: u32) -> T {
 		self.buffer.load_unchecked(index as usize)
 	}

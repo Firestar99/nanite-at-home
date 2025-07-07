@@ -240,7 +240,7 @@ impl ClearValue {
 }
 
 impl<A: ImageAccessType> RenderingAttachment<'_, '_, Ash, A> {
-	pub unsafe fn to_ash(&self, layout: ImageLayout) -> RenderingAttachmentInfo {
+	pub unsafe fn to_ash(&self, layout: ImageLayout) -> RenderingAttachmentInfo<'_> {
 		RenderingAttachmentInfo::default()
 			.image_view(self.image.inner_slot().image_view.unwrap())
 			.image_layout(layout)

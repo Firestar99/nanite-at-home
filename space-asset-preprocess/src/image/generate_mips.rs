@@ -19,6 +19,7 @@ pub fn generate_mips(image: &mut UncompressedImage, mip_levels: Option<u32>) {
 }
 
 // TODO doesn't support 3d textures
+#[allow(clippy::needless_range_loop)]
 fn generate_mips_inner<const CHANNELS: usize>(data: &mut Vec<u8>, meta: RuntimeImageMetadata) {
 	profiling::function_scope!();
 

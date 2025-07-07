@@ -133,17 +133,17 @@ impl<P: BindlessPlatform> Bindless<P> {
 	}
 
 	#[inline]
-	pub fn buffer(&self) -> BufferTableAccess<P> {
+	pub fn buffer(&self) -> BufferTableAccess<'_, P> {
 		BufferTableAccess(self)
 	}
 
 	#[inline]
-	pub fn image(&self) -> ImageTableAccess<P> {
+	pub fn image(&self) -> ImageTableAccess<'_, P> {
 		ImageTableAccess(self)
 	}
 
 	#[inline]
-	pub fn sampler(&self) -> SamplerTableAccess<P> {
+	pub fn sampler(&self) -> SamplerTableAccess<'_, P> {
 		SamplerTableAccess(self)
 	}
 

@@ -76,7 +76,7 @@ pub fn meshlet_mesh(
 	// process vertices
 	// Safety: panics within loops mispile
 	unsafe {
-		for iter in 0..((vertex_count + MESH_WG_SIZE - 1) / MESH_WG_SIZE) {
+		for iter in 0..vertex_count.div_ceil(MESH_WG_SIZE) {
 			let i = iter * MESH_WG_SIZE + inv_id;
 			let inbounds = i < vertex_count;
 			let i = if inbounds { i } else { vertex_count - 1 };
@@ -114,7 +114,7 @@ pub fn meshlet_mesh(
 	// process primitives
 	// Safety: panics within pools mispile
 	unsafe {
-		for iter in 0..((triangle_count + MESH_WG_SIZE - 1) / MESH_WG_SIZE) {
+		for iter in 0..triangle_count.div_ceil(MESH_WG_SIZE) {
 			let i = iter * MESH_WG_SIZE + inv_id;
 			let inbounds = i < triangle_count;
 			let i = if inbounds { i } else { triangle_count - 1 };
@@ -139,7 +139,7 @@ pub fn leading_zeros(mut x: u32) -> u32 {
 		if (x & (1 << (total_bits - 1))) != 0 {
 			break;
 		}
-		x = x << 1;
+		x <<= 1;
 		res += 1;
 	}
 	res
@@ -169,9 +169,8 @@ pub fn meshlet_fragment_g_buffer(
 	let mut sampled = mesh
 		.pbr_material
 		.sample(&descriptors, param.sampler.access(&descriptors), loc);
-	match frame_data.debug_settings() {
-		DebugSettings::VertexNormals => sampled.normal = loc.vertex_normal.normalize(),
-		_ => (),
+	if frame_data.debug_settings() == DebugSettings::VertexNormals {
+		sampled.normal = loc.vertex_normal.normalize()
 	}
 
 	if sampled.alpha < 0.01 {

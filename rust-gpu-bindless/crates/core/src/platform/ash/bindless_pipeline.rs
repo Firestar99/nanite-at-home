@@ -207,7 +207,7 @@ impl<'a, S: ShaderType, T: BufferStruct> AshShaderModule<'a, S, T> {
 		}
 	}
 
-	pub fn to_shader_stage_create_info(&self) -> PipelineShaderStageCreateInfo {
+	pub fn to_shader_stage_create_info(&self) -> PipelineShaderStageCreateInfo<'_> {
 		PipelineShaderStageCreateInfo::default()
 			.module(self.module)
 			.stage(S::SHADER.to_ash_shader_stage())

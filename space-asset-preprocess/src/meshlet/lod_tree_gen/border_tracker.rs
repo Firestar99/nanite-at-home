@@ -28,7 +28,7 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 		m.lod_level_bitmask = LodLevelBitmask(1);
 	}
 	let mut queue = (0..mesh.lod_mesh.meshlets.len() as u32)
-		.map(|i| MeshletId(i))
+		.map(MeshletId)
 		.collect::<Vec<_>>();
 	let mut prev_groups = None;
 
@@ -45,7 +45,7 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 		let (mut lod, parent_data) = groups
 			.par_iter()
 			.map(
-				|group| match tracker.simplify_meshlet_group(&group, &mesh.pbr_material_vertices, lod_faction) {
+				|group| match tracker.simplify_meshlet_group(group, &mesh.pbr_material_vertices, lod_faction) {
 					SimplifiedMeshlets(mesh, sphere, error) => {
 						(mesh, SimplifiedMeshlets(LodMesh::default(), sphere, error))
 					}
@@ -85,7 +85,7 @@ pub fn process_lod_tree(mut mesh: MeshletMesh) -> anyhow::Result<MeshletMesh> {
 							mesh.lod_mesh.meshlet_mut(*id).lod_level_bitmask |= lod_mask;
 						}
 					}
-					queue.extend_from_slice(&meshlet_ids);
+					queue.extend_from_slice(meshlet_ids);
 				}
 				SimplifiedToNothing => (),
 			}
@@ -199,11 +199,11 @@ impl<'a> BorderTracker<'a> {
 			// and HashMap over allocates a bit anyway
 			edge_to_meshlets = FxHashMap::with_capacity_and_hasher(
 				queued_meshlets.len() * MESHLET_MAX_TRIANGLES as usize,
-				FxBuildHasher::default(),
+				FxBuildHasher,
 			);
 			position_dedup_material_remap = FxHashMap::with_capacity_and_hasher(
 				queued_meshlets.len() * MESHLET_MAX_VERTICES as usize,
-				FxBuildHasher::default(),
+				FxBuildHasher,
 			);
 			meshlet_adj = vec![SortedSmallVec::new(); queued_meshlets.len()];
 			for queue_id in 0..queued_meshlets.len() {
@@ -221,7 +221,7 @@ impl<'a> BorderTracker<'a> {
 					let edges = (0..3).map(|i| IndexPair::new(indices[i], indices[(i + 1) % 3]));
 					for edge in edges {
 						// it's not worth optimizing this search for (typically) at most 2 entries, just do a linear scan
-						let vec = edge_to_meshlets.entry(edge).or_insert_with(SmallVec::new);
+						let vec = edge_to_meshlets.entry(edge).or_default();
 						if !vec.is_empty() {
 							if vec.contains(&queue_id) {
 								continue;
@@ -307,10 +307,11 @@ impl<'a> BorderTracker<'a> {
 		}
 	}
 
+	#[allow(clippy::needless_range_loop)]
 	pub fn metis_partition(&self) -> Vec<SmallVec<[QueueId; 6]>> {
 		profiling::function_scope!();
 		let meshlet_merge_cnt = 4;
-		let n_partitions = (self.queued_meshlets() + meshlet_merge_cnt - 1) / meshlet_merge_cnt;
+		let n_partitions = self.queued_meshlets().div_ceil(meshlet_merge_cnt);
 		if n_partitions <= 1 {
 			return Vec::from([(0..self.queued_meshlets.len()).map(|i| QueueId(i as u32)).collect()]);
 		}
@@ -379,7 +380,7 @@ impl<'a> BorderTracker<'a> {
 		let mut s_indices;
 		{
 			profiling::scope!("simplify make mesh");
-			let mut s_remap = FxHashMap::with_capacity_and_hasher(draw_vertex_cnt, FxBuildHasher::default());
+			let mut s_remap = FxHashMap::with_capacity_and_hasher(draw_vertex_cnt, FxBuildHasher);
 			s_vertices = Vec::with_capacity(draw_vertex_cnt);
 			s_indices = Vec::with_capacity(triangle_cnt * 3);
 			for m in &meshlets {
@@ -398,8 +399,7 @@ impl<'a> BorderTracker<'a> {
 		let s_vertex_lock;
 		{
 			profiling::scope!("simplify vertex_lock");
-			let mut locked_dedup_material_ids =
-				FxHashSet::with_capacity_and_hasher(draw_vertex_cnt, FxBuildHasher::default());
+			let mut locked_dedup_material_ids = FxHashSet::with_capacity_and_hasher(draw_vertex_cnt, FxBuildHasher);
 			for id in queue_ids.iter().copied() {
 				for oid in self.get_connected_meshlets(id) {
 					if !queue_ids.contains(&oid) {
@@ -487,13 +487,13 @@ impl<'a> BorderTracker<'a> {
 			// relative -> absolute error
 			relative_error * meshopt::simplify_scale(&adapter)
 		};
-		let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(&b)).unwrap();
+		let max_child_error = meshlets.iter().map(|m| m.error).max_by(|a, b| a.total_cmp(b)).unwrap();
 		mesh_space_error += max_child_error;
 
 		let group_sphere =
 			Sphere::merge_spheres_approx(&meshlets.iter().map(|m| m.bounds).collect::<SmallVec<[_; 6]>>()).unwrap();
 
-		if s_indices.len() > 0 {
+		if !s_indices.is_empty() {
 			SimplifiedMeshlets(
 				lod_mesh_build_meshlets(&mut s_indices, &mut s_vertices, Some(group_sphere), mesh_space_error),
 				group_sphere,

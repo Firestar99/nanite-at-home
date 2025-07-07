@@ -59,7 +59,7 @@ pub async fn upload_scene(this: &ArchivedMeshletSceneDisk, uploader: &Uploader) 
 		join_all(
 			this.meshes
 				.par_iter()
-				.map(|mesh| upload_mesh(&mesh, uploader, &pbr_materials))
+				.map(|mesh| upload_mesh(mesh, uploader, &pbr_materials))
 				.collect::<Vec<_>>(),
 		)
 		.await

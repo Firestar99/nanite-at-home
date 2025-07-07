@@ -15,7 +15,7 @@ pub struct LodMesh {
 }
 
 impl LodMesh {
-	pub fn meshlet(&self, index: MeshletId) -> MeshletReader<Self> {
+	pub fn meshlet(&self, index: MeshletId) -> MeshletReader<'_, Self> {
 		MeshletReader {
 			data: self.meshlets[index.0 as usize],
 			mesh: self,

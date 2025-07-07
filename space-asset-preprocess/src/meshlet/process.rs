@@ -184,7 +184,7 @@ fn process_mesh_primitive(gltf: &Gltf, primitive: Primitive) -> anyhow::Result<M
 }
 
 pub fn lod_mesh_build_meshlets(
-	indices: &mut Vec<u32>,
+	indices: &mut [u32],
 	draw_vertices: &mut Vec<DrawVertex>,
 	bounds: Option<Sphere>,
 	error: f32,
@@ -202,7 +202,7 @@ pub fn lod_mesh_build_meshlets(
 	}
 
 	let adapter = VertexDataAdapter::new(
-		bytemuck::cast_slice::<DrawVertex, u8>(&draw_vertices),
+		bytemuck::cast_slice::<DrawVertex, u8>(draw_vertices),
 		size_of::<DrawVertex>(),
 		offset_of!(DrawVertex, position),
 	)
@@ -211,7 +211,7 @@ pub fn lod_mesh_build_meshlets(
 	let out = {
 		profiling::scope!("meshopt::build_meshlets");
 		meshopt::build_meshlets(
-			&indices,
+			indices,
 			&adapter,
 			MESHLET_MAX_VERTICES as usize,
 			MESHLET_MAX_TRIANGLES as usize,
