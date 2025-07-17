@@ -18,7 +18,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 authors = ["Firestar99"]
-edition = "2021"
+edition = "2024"
 license = "MIT"
 repository = "https://gitlab.com/spacegamedev/space-rust"
 
