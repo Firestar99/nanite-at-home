@@ -4,7 +4,7 @@ pub use crate::vertex::*;
 use bitflags::bitflags;
 use core::fmt;
 use glam::{Vec2, Vec4, Vec4Swizzles};
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{
 	Buffer, Descriptors, Image, Image2d, Sampler, StrongDesc, TransientDesc, UnsafeDesc,
 };

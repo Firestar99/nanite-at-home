@@ -1,4 +1,4 @@
-use glam::{vec4, Vec2, Vec4};
+use glam::{Vec2, Vec4, vec4};
 use rust_gpu_bindless_macros::BufferStructPlain;
 
 /// Vertex represents an egui vertex and should match it exactly

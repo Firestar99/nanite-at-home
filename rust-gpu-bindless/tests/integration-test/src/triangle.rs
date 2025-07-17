@@ -19,8 +19,8 @@ use rust_gpu_bindless_core::pipeline::{
 	MutBufferAccessExt, MutImageAccessExt, PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo,
 	PipelineRasterizationStateCreateInfo, RenderPassFormat, RenderingAttachment, StoreOp, TransferRead, TransferWrite,
 };
-use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless_core::platform::ash::{Ash, AshSingleGraphicsQueueCreateInfo, ash_init_single_graphics_queue};
 use smallvec::SmallVec;
 
 const R: ColorEnum = ColorEnum::Red;

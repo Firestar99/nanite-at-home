@@ -1,12 +1,12 @@
 use crate::symbols::Symbols;
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use std::collections::HashSet;
 use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
 use syn::{
-	visit_mut, Fields, GenericParam, Generics, ItemStruct, Lifetime, PathSegment, Result, Token, TypeParam,
-	TypeParamBound,
+	Fields, GenericParam, Generics, ItemStruct, Lifetime, PathSegment, Result, Token, TypeParam, TypeParamBound,
+	visit_mut,
 };
 
 pub enum BufferStructType {

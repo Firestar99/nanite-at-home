@@ -1,5 +1,5 @@
 use glam::UVec3;
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, MutBuffer, TransientDesc};
 use static_assertions::const_assert_eq;
 

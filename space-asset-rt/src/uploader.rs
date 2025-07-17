@@ -1,8 +1,8 @@
+use rkyv::Deserialize;
 use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Panic;
-use rkyv::Deserialize;
 use rust_gpu_bindless::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, RCDesc, RC,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, RC, RCDesc,
 };
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Desc, Image, Image2d};

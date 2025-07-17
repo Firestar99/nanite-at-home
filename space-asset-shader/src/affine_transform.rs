@@ -1,5 +1,5 @@
 use glam::{Affine3A, Mat3A, Vec3};
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
+use rust_gpu_bindless_macros::{BufferStructPlain, assert_transfer_size};
 
 /// Affine transformation like [`Affine3A`] but also stores a matrix to transform normals.
 #[repr(C)]

@@ -1,4 +1,4 @@
-use rust_gpu_bindless_shader_builder::{anyhow, ShaderSymbolsBuilder};
+use rust_gpu_bindless_shader_builder::{ShaderSymbolsBuilder, anyhow};
 
 fn main() -> anyhow::Result<()> {
 	ShaderSymbolsBuilder::new_relative_path(

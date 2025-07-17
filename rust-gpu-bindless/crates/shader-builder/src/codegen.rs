@@ -66,11 +66,7 @@ pub fn codegen_shader_symbols<'a>(
 	let (content, error) = codegen_try_pretty_print(tokens);
 	fs::write(out_path, content)?;
 	eprintln!("Shader file written to {}", out_path.display());
-	if let Some(e) = error {
-		Err(e)?
-	} else {
-		Ok(())
-	}
+	if let Some(e) = error { Err(e)? } else { Ok(()) }
 }
 
 #[cfg(not(feature = "use-pretty-print"))]

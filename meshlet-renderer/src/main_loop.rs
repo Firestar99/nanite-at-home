@@ -13,12 +13,12 @@ use glam::{UVec3, Vec3Swizzles};
 use rust_gpu_bindless::descriptor::{BindlessImageUsage, BindlessInstance, DescriptorCounts, ImageDescExt};
 use rust_gpu_bindless::pipeline::{ColorAttachment, LoadOp, MutImageAccessExt, Present};
 use rust_gpu_bindless::platform::ash::{
-	ash_init_single_graphics_queue_with_push_next, AshSingleGraphicsQueueCreateInfo, Debuggers,
+	AshSingleGraphicsQueueCreateInfo, Debuggers, ash_init_single_graphics_queue_with_push_next,
 };
 use rust_gpu_bindless_egui::renderer::{EguiRenderPipeline, EguiRenderer, EguiRenderingOptions};
 use rust_gpu_bindless_egui::winit_integration::EguiWinitContext;
 use rust_gpu_bindless_winit::ash::{
-	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
+	AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference, ash_enumerate_required_extensions,
 };
 use rust_gpu_bindless_winit::event_loop::EventLoopExecutor;
 use rust_gpu_bindless_winit::window_ref::WindowRef;
@@ -27,8 +27,8 @@ use space_engine::renderer::renderers::main::RenderPipelineMain;
 use space_engine_shader::renderer::camera::Camera;
 use space_engine_shader::renderer::frame_data::FrameData;
 use std::f32::consts::PI;
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use winit::dpi::PhysicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;

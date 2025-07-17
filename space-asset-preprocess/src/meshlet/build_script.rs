@@ -1,5 +1,5 @@
-use crate::gltf::{find_gltf_files, Gltf};
-use crate::gltf::{to_mod_hierarchy, GltfFile};
+use crate::gltf::{Gltf, find_gltf_files};
+use crate::gltf::{GltfFile, to_mod_hierarchy};
 use crate::meshlet::process::process_meshlets;
 use anyhow::Context;
 use rayon::prelude::*;

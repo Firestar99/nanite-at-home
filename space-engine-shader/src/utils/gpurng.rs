@@ -1,5 +1,5 @@
 use crate::utils::hsv::hsv2rgb_smooth;
-use glam::{vec3, Vec3};
+use glam::{Vec3, vec3};
 
 /// An PCG PRNG that is optimized for GPUs, in that it is fast to evaluate and accepts sequential ids as it's initial
 /// state without sacrificing on RNG quality.

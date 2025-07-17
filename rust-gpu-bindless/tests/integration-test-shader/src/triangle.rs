@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec4};
-use rust_gpu_bindless_macros::{bindless, BufferStruct, BufferStructPlain};
+use rust_gpu_bindless_macros::{BufferStruct, BufferStructPlain, bindless};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, TransientDesc};
 
 #[derive(Copy, Clone, BufferStructPlain)]

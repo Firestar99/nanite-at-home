@@ -1,7 +1,7 @@
 use crate::meshlet::lod_level_bitmask::LodLevelBitmask;
 use crate::meshlet::offset::MeshletOffset;
 use crate::shape::sphere::Sphere;
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
+use rust_gpu_bindless_macros::{BufferStructPlain, assert_transfer_size};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, BufferStructPlain)]

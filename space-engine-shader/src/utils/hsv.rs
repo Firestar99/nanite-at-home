@@ -1,4 +1,4 @@
-use glam::{vec3, Vec3};
+use glam::{Vec3, vec3};
 
 /// HSV to RGB conversion with smooth color transitions
 /// MIT by Inigo Quilez, from https://www.shadertoy.com/view/MsS3Wc

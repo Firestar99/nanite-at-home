@@ -1,5 +1,5 @@
 use rust_gpu_bindless_shader_builder::spirv_builder::{Capability, ShaderPanicStrategy, SpirvMetadata};
-use rust_gpu_bindless_shader_builder::{anyhow, ShaderSymbolsBuilder};
+use rust_gpu_bindless_shader_builder::{ShaderSymbolsBuilder, anyhow};
 
 pub use rust_gpu_bindless_shader_builder;
 

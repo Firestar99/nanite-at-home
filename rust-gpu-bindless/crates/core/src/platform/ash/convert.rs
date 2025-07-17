@@ -9,8 +9,8 @@ use ash::vk::{
 	ShaderStageFlags,
 };
 use ash::vk::{BufferUsageFlags, Extent3D, ImageUsageFlags, ImageViewType, SampleCountFlags};
-use gpu_allocator::vulkan::AllocationScheme;
 use gpu_allocator::MemoryLocation;
+use gpu_allocator::vulkan::AllocationScheme;
 use rust_gpu_bindless_shaders::descriptor::ImageType;
 use rust_gpu_bindless_shaders::shader_type::Shader;
 use spirv_std::image::{Arrayed, Dimensionality};

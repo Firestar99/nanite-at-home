@@ -67,11 +67,11 @@ pub unsafe trait ImageType: Sized + Send + Sync + 'static {
 }
 
 unsafe impl<
-		SampledType: SampleType<{ ImageFormat::Unknown as u32 }, 4>,
-		const DIM: u32,
-		const ARRAYED: u32,
-		const MULTISAMPLED: u32,
-	> ImageType for ImageTypeImpl<SampledType, DIM, ARRAYED, MULTISAMPLED>
+	SampledType: SampleType<{ ImageFormat::Unknown as u32 }, 4>,
+	const DIM: u32,
+	const ARRAYED: u32,
+	const MULTISAMPLED: u32,
+> ImageType for ImageTypeImpl<SampledType, DIM, ARRAYED, MULTISAMPLED>
 {
 	const DIM: u32 = DIM;
 	const ARRAYED: u32 = ARRAYED;

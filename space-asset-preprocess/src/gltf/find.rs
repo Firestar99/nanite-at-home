@@ -1,6 +1,6 @@
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::TokenStream;
-use proc_macro_crate::{crate_name, FoundCrate};
-use quote::{format_ident, quote, TokenStreamExt};
+use quote::{TokenStreamExt, format_ident, quote};
 use rust_gpu_bindless_macro_utils::modnode::{ModNode, ModNodeError};
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};

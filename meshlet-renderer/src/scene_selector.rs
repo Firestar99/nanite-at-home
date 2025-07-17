@@ -2,7 +2,7 @@ use egui::{SliderClamping, Ui, Widget};
 use glam::UVec3;
 use rust_gpu_bindless::descriptor::Bindless;
 use space_asset_disk::meshlet::scene::MeshletSceneFile;
-use space_asset_rt::meshlet::scene::{upload_scene, InstancedMeshletSceneCpu, MeshletSceneCpu};
+use space_asset_rt::meshlet::scene::{InstancedMeshletSceneCpu, MeshletSceneCpu, upload_scene};
 use space_asset_rt::uploader::Uploader;
 use std::sync::Arc;
 

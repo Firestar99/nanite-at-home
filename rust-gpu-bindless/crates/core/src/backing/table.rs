@@ -1,4 +1,4 @@
-use crate::backing::ab::{ABArray, AB};
+use crate::backing::ab::{AB, ABArray};
 use crate::backing::range_set::{DescriptorIndexIterator, DescriptorIndexRangeSet};
 use crate::backing::slot_array::SlotArray;
 use crossbeam_queue::SegQueue;
@@ -15,7 +15,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ops::{Deref, Index};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use std::sync::atomic::{fence, AtomicU32};
+use std::sync::atomic::{AtomicU32, fence};
 use std::sync::{Arc, Weak};
 
 pub trait TableInterface: Sized + 'static {

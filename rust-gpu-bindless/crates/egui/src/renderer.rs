@@ -7,7 +7,7 @@ use ash::vk::{
 };
 use egui::epaint::Primitive;
 use egui::{
-	epaint, Context, FullOutput, ImageData, PlatformOutput, RawInput, Rect, TextureId, TextureOptions, TexturesDelta,
+	Context, FullOutput, ImageData, PlatformOutput, RawInput, Rect, TextureId, TextureOptions, TexturesDelta, epaint,
 };
 use glam::{IVec2, UVec2};
 use parking_lot::Mutex;

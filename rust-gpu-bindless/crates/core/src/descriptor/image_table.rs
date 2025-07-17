@@ -37,11 +37,7 @@ impl SwapchainImageId {
 	}
 
 	pub fn get(&self) -> Option<u32> {
-		if self.0 != !0 {
-			Some(self.0)
-		} else {
-			None
-		}
+		if self.0 != !0 { Some(self.0) } else { None }
 	}
 }
 

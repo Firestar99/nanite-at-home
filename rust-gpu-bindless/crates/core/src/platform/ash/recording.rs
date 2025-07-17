@@ -13,8 +13,8 @@ use crate::platform::{BindlessPipelinePlatform, RecordingContext, RecordingResou
 use ash::vk::{
 	BufferCopy, BufferImageCopy2, BufferMemoryBarrier2, CommandBuffer, CommandBufferBeginInfo, CommandBufferUsageFlags,
 	CopyBufferToImageInfo2, CopyImageToBufferInfo2, DependencyInfo, Fence, ImageMemoryBarrier2, ImageSubresourceLayers,
-	ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint, PipelineStageFlags, SubmitInfo,
-	TimelineSemaphoreSubmitInfo, QUEUE_FAMILY_IGNORED, REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, WHOLE_SIZE,
+	ImageSubresourceRange, MemoryBarrier2, Offset3D, PipelineBindPoint, PipelineStageFlags, QUEUE_FAMILY_IGNORED,
+	REMAINING_ARRAY_LAYERS, REMAINING_MIP_LEVELS, SubmitInfo, TimelineSemaphoreSubmitInfo, WHOLE_SIZE,
 };
 use rust_gpu_bindless_shaders::buffer_content::{BufferContent, BufferStruct};
 use rust_gpu_bindless_shaders::descriptor::{BindlessPushConstant, ImageType, TransientAccess};

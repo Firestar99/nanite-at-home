@@ -1,13 +1,13 @@
 use crate::image::upload::UploadedImages;
-use crate::material::pbr::{default_pbr_material, upload_pbr_material, PbrMaterials};
+use crate::material::pbr::{PbrMaterials, default_pbr_material, upload_pbr_material};
 use crate::meshlet::mesh::upload_mesh;
 use crate::upload_traits::ToStrong;
-use crate::uploader::{deserialize_infallible, Uploader};
+use crate::uploader::{Uploader, deserialize_infallible};
 use futures::future::join_all;
 use glam::{UVec3, Vec3A};
 use rayon::prelude::*;
 use rust_gpu_bindless::descriptor::{
-	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, RCDesc, RCDescExt, RC,
+	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, RC, RCDesc, RCDescExt,
 };
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Strong};
 use space_asset_disk::meshlet::scene::ArchivedMeshletSceneDisk;

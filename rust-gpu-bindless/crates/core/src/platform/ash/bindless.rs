@@ -5,12 +5,12 @@ use crate::descriptor::{
 	BindlessSamplerCreateInfo, BufferAllocationError, BufferInterface, BufferSlot, DescriptorCounts,
 	ImageAllocationError, ImageInterface, SamplerAllocationError, SamplerInterface, WeakBindless,
 };
+use crate::platform::BindlessPlatform;
 use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{
-	bindless_image_type_to_vk_image_type, bindless_image_type_to_vk_image_view_type, AshExecutionManager,
-	AshPendingExecution,
+	AshExecutionManager, AshPendingExecution, bindless_image_type_to_vk_image_type,
+	bindless_image_type_to_vk_image_view_type,
 };
-use crate::platform::BindlessPlatform;
 use ash::ext::{debug_utils, mesh_shader};
 use ash::khr::{surface, swapchain};
 use ash::prelude::VkResult;
@@ -19,18 +19,18 @@ use ash::vk::{
 	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
 	DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo,
 	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, Handle, ImageLayout,
-	ImageSubresourceRange, ImageTiling, ImageViewCreateInfo, PhysicalDeviceProperties2,
+	ImageSubresourceRange, ImageTiling, ImageViewCreateInfo, LOD_CLAMP_NONE, PhysicalDeviceProperties2,
 	PhysicalDeviceVulkan12Properties, PipelineCache, PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange,
-	SamplerCreateInfo, ShaderStageFlags, SharingMode, WriteDescriptorSet, LOD_CLAMP_NONE,
+	SamplerCreateInfo, ShaderStageFlags, SharingMode, WriteDescriptorSet,
 };
-use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::AllocationError;
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use parking_lot::lock_api::MutexGuard;
 use parking_lot::{Mutex, RawMutex};
 use presser::Slab;
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::descriptor::{
-	BindlessPushConstant, ImageType, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
+	BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE, BindlessPushConstant, ImageType,
 };
 use static_assertions::assert_impl_all;
 use std::cell::UnsafeCell;

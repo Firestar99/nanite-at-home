@@ -6,15 +6,11 @@ pub struct IndexPair<T: Copy + Ord>((T, T));
 
 impl<T: Copy + Ord> IndexPair<T> {
 	pub fn new(a: T, b: T) -> Self {
-		if a < b {
-			Self((a, b))
-		} else {
-			Self((b, a))
-		}
+		if a < b { Self((a, b)) } else { Self((b, a)) }
 	}
 
 	pub fn to_array(&self) -> [T; 2] {
-		[self.0 .0, self.0 .1]
+		[self.0.0, self.0.1]
 	}
 
 	pub fn iter(&self) -> impl Iterator<Item = T> + '_ {

@@ -4,11 +4,11 @@ use crate::pipeline::{
 	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, Recording, RecordingError,
 	RenderPassFormat,
 };
+use crate::platform::BindlessPipelinePlatform;
 use crate::platform::ash::rendering::AshRenderingContext;
 use crate::platform::ash::{
-	ash_record_and_execute, Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext, ShaderAshExt,
+	Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext, ShaderAshExt, ash_record_and_execute,
 };
-use crate::platform::BindlessPipelinePlatform;
 use ash::prelude::VkResult;
 use ash::vk::{
 	ComputePipelineCreateInfo, DynamicState, Extent2D, Offset2D, Pipeline, PipelineCache,

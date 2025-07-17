@@ -1,5 +1,5 @@
 use crate::delta_time::DeltaTime;
-use glam::{vec3, Affine3A, DVec2, Quat, Vec3};
+use glam::{Affine3A, DVec2, Quat, Vec3, vec3};
 use num_traits::clamp;
 use std::f32;
 use std::f32::consts::PI;

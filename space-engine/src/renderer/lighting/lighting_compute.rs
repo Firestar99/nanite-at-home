@@ -3,7 +3,7 @@ use rust_gpu_bindless::descriptor::{Bindless, Image2d, MutImage, Transient, Tran
 use rust_gpu_bindless::pipeline::BindlessComputePipeline;
 use rust_gpu_bindless::pipeline::{Recording, RecordingError};
 use space_engine_shader::renderer::g_buffer::GBuffer;
-use space_engine_shader::renderer::lighting::lighting_compute::{Param, LIGHTING_WG_SIZE};
+use space_engine_shader::renderer::lighting::lighting_compute::{LIGHTING_WG_SIZE, Param};
 
 pub struct LightingCompute(BindlessComputePipeline<Param<'static>>);
 

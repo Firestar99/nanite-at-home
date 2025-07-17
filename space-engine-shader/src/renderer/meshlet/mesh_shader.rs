@@ -4,13 +4,13 @@ use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::renderer::meshlet::intermediate::MeshletInstance;
 use crate::utils::gpurng::GpuRng;
 use glam::{UVec3, Vec2, Vec3, Vec4};
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;
 use space_asset_shader::meshlet::{MESHLET_MAX_TRIANGLES, MESHLET_MAX_VERTICES};
-use spirv_std::arch::{set_mesh_outputs_ext, IndexUnchecked};
 use spirv_std::Sampler;
+use spirv_std::arch::{IndexUnchecked, set_mesh_outputs_ext};
 use static_assertions::const_assert_eq;
 
 #[derive(Copy, Clone, BufferStruct)]

@@ -1,7 +1,7 @@
 use crate::material::pbr::PbrMaterials;
 use crate::upload_traits::ToStrong;
-use crate::uploader::{deserialize_infallible, Uploader};
-use rust_gpu_bindless::descriptor::{RCDescExt, RC};
+use crate::uploader::{Uploader, deserialize_infallible};
+use rust_gpu_bindless::descriptor::{RC, RCDescExt};
 use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::meshlet::mesh::ArchivedMeshletMeshDisk;
 use space_asset_shader::meshlet::mesh::MeshletMesh;

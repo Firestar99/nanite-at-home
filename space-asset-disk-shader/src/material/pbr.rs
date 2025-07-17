@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec3, Vec4};
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferStructPlain};
+use rust_gpu_bindless_macros::{BufferStructPlain, assert_transfer_size};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, BufferStructPlain)]

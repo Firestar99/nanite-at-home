@@ -16,18 +16,18 @@ use rust_gpu_bindless_core::pipeline::{
 	PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineRasterizationStateCreateInfo,
 	Present, RenderPassFormat, RenderingAttachment, StoreOp,
 };
-use rust_gpu_bindless_core::platform::ash::Debuggers;
-use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless_core::platform::ash::Debuggers;
+use rust_gpu_bindless_core::platform::ash::{Ash, AshSingleGraphicsQueueCreateInfo, ash_init_single_graphics_queue};
 use rust_gpu_bindless_winit::ash::{
-	ash_enumerate_required_extensions, AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference,
+	AshSwapchain, AshSwapchainParams, SwapchainImageFormatPreference, ash_enumerate_required_extensions,
 };
-use rust_gpu_bindless_winit::event_loop::{event_loop_init, EventLoopExecutor};
+use rust_gpu_bindless_winit::event_loop::{EventLoopExecutor, event_loop_init};
 use rust_gpu_bindless_winit::window_ref::WindowRef;
 use smallvec::SmallVec;
 use std::f32::consts::PI;
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 use winit::event::{Event, WindowEvent};
 use winit::raw_window_handle::HasDisplayHandle;

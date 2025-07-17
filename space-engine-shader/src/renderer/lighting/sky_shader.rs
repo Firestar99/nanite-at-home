@@ -5,8 +5,8 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::g_buffer::GBuffer;
 use crate::renderer::lighting::is_skybox;
 use core::f32::consts::PI;
-use glam::{vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4};
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use glam::{UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, vec3};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Image2d, MutImage, Transient, TransientDesc};
 #[cfg(target_arch = "spirv")]
 use spirv_std::num_traits::Float;
@@ -22,11 +22,7 @@ pub fn acos_approx(v: f32) -> f32 {
 	let mut res = -0.155972 * x + 1.56467; // p(x)
 	res *= (1.0f32 - x).sqrt();
 
-	if v >= 0.0 {
-		res
-	} else {
-		PI - res
-	}
+	if v >= 0.0 { res } else { PI - res }
 }
 
 pub fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {

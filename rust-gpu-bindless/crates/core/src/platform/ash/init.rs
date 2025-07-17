@@ -1,5 +1,6 @@
 use crate::platform::ash::{AshCreateInfo, AshExtensions};
 use anyhow::anyhow;
+use ash::Entry;
 use ash::ext::{debug_utils, mesh_shader};
 use ash::khr::{surface, swapchain};
 use ash::vk::{
@@ -9,13 +10,12 @@ use ash::vk::{
 	PhysicalDeviceVulkan11Features, PhysicalDeviceVulkan12Features, PhysicalDeviceVulkan13Features,
 	PipelineCacheCreateInfo, QueueFlags, ShaderStageFlags, ValidationFeatureEnableEXT, ValidationFeaturesEXT,
 };
-use ash::Entry;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use gpu_allocator::{AllocationSizes, AllocatorDebugSettings};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use std::borrow::Cow;
-use std::ffi::{c_void, CStr};
+use std::ffi::{CStr, c_void};
 use std::fmt::Debug;
 
 pub fn required_features() -> PhysicalDeviceFeatures {

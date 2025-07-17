@@ -1,5 +1,5 @@
-use crate::meshlet::mesh::MeshletData;
 use crate::meshlet::MESHLET_INDICES_BITS;
+use crate::meshlet::mesh::MeshletData;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use glam::UVec3;

@@ -5,8 +5,8 @@ use crate::descriptor::{
 use crate::pipeline::{AccessLock, BufferAccess};
 use crate::platform::ash::{Ash, AshAllocationError, AshBuffer, AshMemoryAllocation};
 use ash::vk::{DebugUtilsObjectNameInfoEXT, SamplerCreateInfo};
-use gpu_allocator::vulkan::AllocationCreateDesc;
 use gpu_allocator::MemoryLocation;
+use gpu_allocator::vulkan::AllocationCreateDesc;
 use rust_gpu_bindless_shaders::buffer_content::BufferContent;
 use rust_gpu_bindless_shaders::descriptor::MutBuffer;
 use std::ffi::CString;
