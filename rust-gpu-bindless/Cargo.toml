@@ -46,8 +46,8 @@ integration-test = { path = "tests/integration-test" }
 integration-test-shader = { path = "tests/integration-test-shader" }
 
 # vulkan
-cargo-gpu = { git = "https://github.com/rust-gpu/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
-spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", features = ["bytemuck"] }
+cargo-gpu = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", features = ["bytemuck"] }
 ash = "0.38.0"
 ash-window = "0.13.0"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
