@@ -41,9 +41,11 @@ pub fn main() {
 
 pub async fn main_loop(event_loop: EventLoopExecutor, events: Receiver<Event<()>>) -> anyhow::Result<()> {
 	if matches!(debugger(), Debuggers::RenderDoc) {
-		// renderdoc does not yet support wayland
-		std::env::remove_var("WAYLAND_DISPLAY");
-		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+		unsafe {
+			// renderdoc does not yet support wayland
+			std::env::remove_var("WAYLAND_DISPLAY");
+			std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+		}
 	}
 
 	let (window, window_extensions) = event_loop

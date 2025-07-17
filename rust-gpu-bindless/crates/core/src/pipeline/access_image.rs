@@ -115,7 +115,7 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 	}
 
 	/// Turns this mutable access to a [`MutImage`] into a shared [`RCDesc`]
-	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Image<T>>> {
+	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Image<T>>> + use<P, T, A> {
 		unsafe {
 			// cannot fail
 			self.transition_inner(A::IMAGE_ACCESS, ImageAccess::GeneralRead)

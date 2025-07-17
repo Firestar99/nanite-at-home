@@ -135,17 +135,19 @@ pub unsafe fn ash_record_and_execute<R>(
 	bindless: &Bindless<Ash>,
 	f: impl FnOnce(&mut Recording<'_, Ash>) -> Result<R, RecordingError<Ash>>,
 ) -> Result<R, RecordingError<Ash>> {
-	let resource = AshRecordingResourceContext::new(
-		bindless
-			.execution_manager
-			.new_execution()
-			.map_err(AshRecordingError::from)?,
-	);
-	let mut recording = Recording::new(AshRecordingContext::new(&resource)?);
-	let r = f(&mut recording)?;
-	let cmd = recording.into_inner().ash_end()?;
-	ash_submit(bindless, resource, cmd)?;
-	Ok(r)
+	unsafe {
+		let resource = AshRecordingResourceContext::new(
+			bindless
+				.execution_manager
+				.new_execution()
+				.map_err(AshRecordingError::from)?,
+		);
+		let mut recording = Recording::new(AshRecordingContext::new(&resource)?);
+		let r = f(&mut recording)?;
+		let cmd = recording.into_inner().ash_end()?;
+		ash_submit(bindless, resource, cmd)?;
+		Ok(r)
+	}
 }
 
 pub unsafe fn ash_submit(
@@ -153,54 +155,56 @@ pub unsafe fn ash_submit(
 	resource_context: AshRecordingResourceContext,
 	cmd: CommandBuffer,
 ) -> Result<(), AshRecordingError> {
-	let device = &bindless.platform.device;
-	// Safety: dependencies keeps the semaphores alive
-	let dependencies = resource_context
-		.dependencies
-		.into_inner()
-		.iter()
-		.filter_map(|a| a.upgrade_ash_resource())
-		.filter(|a| !a.completed())
-		.collect::<SmallVec<[_; 4]>>();
-	let wait_semaphores = dependencies
-		.iter()
-		.map(|d| d.resource().semaphore)
-		.collect::<SmallVec<[_; 4]>>();
-	let wait_dst_stage_mask = dependencies
-		.iter()
-		// TODO ALL_COMMANDS should not be necessary here if we bind AccessFlags to PendingExecution
-		.map(|_| PipelineStageFlags::ALL_COMMANDS)
-		.collect::<SmallVec<[_; 4]>>();
-	let wait_values = dependencies
-		.iter()
-		.map(|d| d.resource().timeline_value)
-		.collect::<SmallVec<[_; 4]>>();
+	unsafe {
+		let device = &bindless.platform.device;
+		// Safety: dependencies keeps the semaphores alive
+		let dependencies = resource_context
+			.dependencies
+			.into_inner()
+			.iter()
+			.filter_map(|a| a.upgrade_ash_resource())
+			.filter(|a| !a.completed())
+			.collect::<SmallVec<[_; 4]>>();
+		let wait_semaphores = dependencies
+			.iter()
+			.map(|d| d.resource().semaphore)
+			.collect::<SmallVec<[_; 4]>>();
+		let wait_dst_stage_mask = dependencies
+			.iter()
+			// TODO ALL_COMMANDS should not be necessary here if we bind AccessFlags to PendingExecution
+			.map(|_| PipelineStageFlags::ALL_COMMANDS)
+			.collect::<SmallVec<[_; 4]>>();
+		let wait_values = dependencies
+			.iter()
+			.map(|d| d.resource().timeline_value)
+			.collect::<SmallVec<[_; 4]>>();
 
-	bindless.flush();
+		bindless.flush();
 
-	{
-		let execution_resource = resource_context.execution.resource();
-		let queue = bindless.queue.lock();
-		device.queue_submit(
-			*queue,
-			&[SubmitInfo::default()
-				.command_buffers(&[cmd])
-				.wait_semaphores(&wait_semaphores)
-				.wait_dst_stage_mask(&wait_dst_stage_mask)
-				.signal_semaphores(&[execution_resource.semaphore])
-				.push_next(
-					&mut TimelineSemaphoreSubmitInfo::default()
-						.wait_semaphore_values(&wait_values)
-						.signal_semaphore_values(&[execution_resource.timeline_value]),
-				)],
-			Fence::null(),
-		)?;
+		{
+			let execution_resource = resource_context.execution.resource();
+			let queue = bindless.queue.lock();
+			device.queue_submit(
+				*queue,
+				&[SubmitInfo::default()
+					.command_buffers(&[cmd])
+					.wait_semaphores(&wait_semaphores)
+					.wait_dst_stage_mask(&wait_dst_stage_mask)
+					.signal_semaphores(&[execution_resource.semaphore])
+					.push_next(
+						&mut TimelineSemaphoreSubmitInfo::default()
+							.wait_semaphore_values(&wait_values)
+							.signal_semaphore_values(&[execution_resource.timeline_value]),
+					)],
+				Fence::null(),
+			)?;
+		}
+
+		bindless
+			.execution_manager
+			.submit_for_waiting(resource_context.execution)?;
+		Ok(())
 	}
-
-	bindless
-		.execution_manager
-		.submit_for_waiting(resource_context.execution)?;
-	Ok(())
 }
 
 pub struct AshRecordingContext<'a> {

@@ -32,7 +32,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 				return Err(Error::new(
 					e.span(),
 					"Entry points may not contain a receiver (eg. self) argument!",
-				))
+				));
 			}
 			FnArg::Typed(e) => e,
 		};

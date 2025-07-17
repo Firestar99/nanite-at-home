@@ -79,7 +79,7 @@ pub fn upload_image<'a>(
 	bindless: &'a Bindless,
 	image: &DynImage,
 	name: &str,
-) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
+) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + use<'a> {
 	let result: anyhow::Result<_> = (|| {
 		let meta = image.decoded_metadata();
 

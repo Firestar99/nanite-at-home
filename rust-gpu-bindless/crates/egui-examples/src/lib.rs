@@ -31,9 +31,11 @@ pub async fn main_loop(
 	mut run_ui: impl FnMut(&egui::Context),
 ) -> anyhow::Result<()> {
 	if matches!(debugger(), Debuggers::RenderDoc) {
-		// renderdoc does not yet support wayland
-		std::env::remove_var("WAYLAND_DISPLAY");
-		std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+		unsafe {
+			// renderdoc does not yet support wayland
+			std::env::remove_var("WAYLAND_DISPLAY");
+			std::env::set_var("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
+		}
 	}
 
 	let (window, window_extensions) = event_loop

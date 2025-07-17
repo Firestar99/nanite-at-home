@@ -241,12 +241,14 @@ impl ClearValue {
 
 impl<A: ImageAccessType> RenderingAttachment<'_, '_, Ash, A> {
 	pub unsafe fn to_ash(&self, layout: ImageLayout) -> RenderingAttachmentInfo<'_> {
-		RenderingAttachmentInfo::default()
-			.image_view(self.image.inner_slot().image_view.unwrap())
-			.image_layout(layout)
-			.load_op(self.load_op.to_ash())
-			.store_op(self.store_op.to_ash())
-			.clear_value(self.load_op.to_ash_clear_color())
+		unsafe {
+			RenderingAttachmentInfo::default()
+				.image_view(self.image.inner_slot().image_view.unwrap())
+				.image_layout(layout)
+				.load_op(self.load_op.to_ash())
+				.store_op(self.store_op.to_ash())
+				.clear_value(self.load_op.to_ash_clear_color())
+		}
 	}
 }
 

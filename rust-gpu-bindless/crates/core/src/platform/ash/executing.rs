@@ -230,11 +230,13 @@ impl AshExecutionManager {
 	}
 
 	pub unsafe fn new_execution_no_frame(&self) -> VkResult<Arc<AshExecution>> {
-		let bindless = self.bindless();
-		Ok(Arc::new(AshExecution::new_no_frame(
-			self.pop_free_pool(&bindless)?,
-			bindless,
-		)))
+		unsafe {
+			let bindless = self.bindless();
+			Ok(Arc::new(AshExecution::new_no_frame(
+				self.pop_free_pool(&bindless)?,
+				bindless,
+			)))
+		}
 	}
 
 	fn pop_free_pool(&self, bindless: &Bindless<Ash>) -> VkResult<AshExecutionResource> {

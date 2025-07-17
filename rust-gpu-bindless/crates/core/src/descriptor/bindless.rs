@@ -92,24 +92,26 @@ impl<P: BindlessPlatform> BindlessInstance<P> {
 	/// * There must only be one global Bindless instance for each [`Device`].
 	/// * The [general bindless safety requirements](crate#safety) apply
 	pub unsafe fn new(ci: P::PlatformCreateInfo, counts: DescriptorCounts) -> Self {
-		let bindless = Bindless(Arc::new_cyclic(|weak| {
-			let weak = WeakBindless(weak.clone());
-			// TODO propagate error
-			let platform = P::create_platform(ci, &weak).unwrap();
-			counts.assert_within_limits::<P>(&platform);
+		unsafe {
+			let bindless = Bindless(Arc::new_cyclic(|weak| {
+				let weak = WeakBindless(weak.clone());
+				// TODO propagate error
+				let platform = P::create_platform(ci, &weak).unwrap();
+				counts.assert_within_limits::<P>(&platform);
 
-			let table_sync = TableSync::new();
-			BindlessInner {
-				buffer: BufferTable::new(&table_sync, counts, weak.clone()),
-				image: ImageTable::new(&table_sync, counts, weak.clone()),
-				sampler: SamplerTable::new(&table_sync, counts, weak),
-				descriptor_set: Some(platform.create_descriptor_set(counts)),
-				table_sync,
-				platform,
-			}
-		}));
-		bindless.platform.bindless_initialized(&bindless);
-		BindlessInstance(bindless)
+				let table_sync = TableSync::new();
+				BindlessInner {
+					buffer: BufferTable::new(&table_sync, counts, weak.clone()),
+					image: ImageTable::new(&table_sync, counts, weak.clone()),
+					sampler: SamplerTable::new(&table_sync, counts, weak),
+					descriptor_set: Some(platform.create_descriptor_set(counts)),
+					table_sync,
+					platform,
+				}
+			}));
+			bindless.platform.bindless_initialized(&bindless);
+			BindlessInstance(bindless)
+		}
 	}
 }
 

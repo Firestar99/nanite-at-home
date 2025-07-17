@@ -173,9 +173,11 @@ impl SwapchainSync {
 	}
 
 	pub unsafe fn destroy(&mut self, bindless: &Bindless<Ash>) {
-		bindless.device.destroy_semaphore(self.acquire, None);
-		bindless.device.destroy_semaphore(self.present, None);
-		bindless.device.destroy_fence(self.acquire_fence, None);
+		unsafe {
+			bindless.device.destroy_semaphore(self.acquire, None);
+			bindless.device.destroy_semaphore(self.present, None);
+			bindless.device.destroy_fence(self.acquire_fence, None);
+		}
 	}
 }
 
@@ -199,43 +201,45 @@ impl AshSwapchain {
 		window_ref: WindowRef,
 		params: impl FnOnce(&ash::vk::SurfaceKHR, &ActiveEventLoop) -> anyhow::Result<AshSwapchainParams> + Send + 'static,
 	) -> anyhow::Result<Self> {
-		let bindless = bindless.clone();
-		let event_loop_clone = event_loop.clone();
-		event_loop
-			.spawn(move |e| {
-				let window = window_ref.get(e);
-				let surface = ash_window::create_surface(
-					&bindless.entry,
-					&bindless.instance,
-					window.display_handle()?.as_raw(),
-					window.window_handle()?.as_raw(),
-					None,
-				)?;
-				let params = params(&surface, e)?;
-				let (swapchain, images) = Self::create_swapchain(
-					&bindless,
-					&window_ref,
-					surface,
-					&params,
-					ash::vk::SwapchainKHR::null(),
-					e,
-				)?;
-				let images = images.into_iter().map(Some).collect::<Vec<_>>();
-				let image_semaphores = (0..images.len()).map(|_| None).collect();
-				Ok(Self {
-					bindless,
-					event_loop: event_loop_clone,
-					window: window_ref,
-					params,
-					surface,
-					swapchain,
-					images,
-					image_semaphores,
-					sync_pool: Vec::new(),
-					should_recreate: false,
+		unsafe {
+			let bindless = bindless.clone();
+			let event_loop_clone = event_loop.clone();
+			event_loop
+				.spawn(move |e| {
+					let window = window_ref.get(e);
+					let surface = ash_window::create_surface(
+						&bindless.entry,
+						&bindless.instance,
+						window.display_handle()?.as_raw(),
+						window.window_handle()?.as_raw(),
+						None,
+					)?;
+					let params = params(&surface, e)?;
+					let (swapchain, images) = Self::create_swapchain(
+						&bindless,
+						&window_ref,
+						surface,
+						&params,
+						ash::vk::SwapchainKHR::null(),
+						e,
+					)?;
+					let images = images.into_iter().map(Some).collect::<Vec<_>>();
+					let image_semaphores = (0..images.len()).map(|_| None).collect();
+					Ok(Self {
+						bindless,
+						event_loop: event_loop_clone,
+						window: window_ref,
+						params,
+						surface,
+						swapchain,
+						images,
+						image_semaphores,
+						sync_pool: Vec::new(),
+						should_recreate: false,
+					})
 				})
-			})
-			.await
+				.await
+		}
 	}
 
 	unsafe fn create_swapchain(

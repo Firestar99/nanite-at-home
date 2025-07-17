@@ -645,7 +645,8 @@ pub enum EguiRenderingError<P: EguiBindlessPlatform> {
 	},
 	#[error("Color RT with extent {color:?} must match depth RT with extent {depth:?}")]
 	MismatchExtent { color: Extent, depth: Extent },
-	#[error("TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?"
+	#[error(
+		"TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?"
 	)]
 	MissingTexture(TextureId),
 	#[error("Recording Error: {0}")]

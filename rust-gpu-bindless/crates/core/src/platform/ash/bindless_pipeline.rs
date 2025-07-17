@@ -37,29 +37,31 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		bindless: &Bindless<Self>,
 		compute_shader: &impl BindlessShader<ShaderType = ComputeShader, ParamConstant = T>,
 	) -> Result<Self::ComputePipeline, Self::PipelineCreationError> {
-		let compute = AshShaderModule::new(bindless, compute_shader)?;
-		let device = &bindless.device;
-		let pipelines = device
-			.create_compute_pipelines(
-				bindless.cache.unwrap_or(PipelineCache::null()),
-				&[ComputePipelineCreateInfo::default()
-					.layout(bindless.global_descriptor_set().pipeline_layout)
-					.stage(compute.to_shader_stage_create_info())],
-				None,
-			)
-			// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
-			.map_err(|e| e.1)?;
-		Ok(AshComputePipeline(AshPipeline {
-			bindless: bindless.clone(),
-			pipeline: pipelines[0],
-		}))
+		unsafe {
+			let compute = AshShaderModule::new(bindless, compute_shader)?;
+			let device = &bindless.device;
+			let pipelines = device
+				.create_compute_pipelines(
+					bindless.cache.unwrap_or(PipelineCache::null()),
+					&[ComputePipelineCreateInfo::default()
+						.layout(bindless.global_descriptor_set().pipeline_layout)
+						.stage(compute.to_shader_stage_create_info())],
+					None,
+				)
+				// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
+				.map_err(|e| e.1)?;
+			Ok(AshComputePipeline(AshPipeline {
+				bindless: bindless.clone(),
+				pipeline: pipelines[0],
+			}))
+		}
 	}
 
 	unsafe fn record_and_execute<R: Send + Sync>(
 		bindless: &Bindless<Self>,
 		f: impl FnOnce(&mut Recording<'_, Self>) -> Result<R, RecordingError<Self>>,
 	) -> Result<R, RecordingError<Self>> {
-		ash_record_and_execute(bindless, f)
+		unsafe { ash_record_and_execute(bindless, f) }
 	}
 
 	type GraphicsPipeline = AshGraphicsPipeline;
@@ -73,20 +75,22 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		vertex_shader: &impl BindlessShader<ShaderType = VertexShader, ParamConstant = T>,
 		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
 	) -> Result<Self::GraphicsPipeline, Self::PipelineCreationError> {
-		let vertex = AshShaderModule::new(bindless, vertex_shader)?;
-		let fragment = AshShaderModule::new(bindless, fragment_shader)?;
-		Ok(AshGraphicsPipeline(Self::ash_create_abstract_graphics_pipeline(
-			bindless,
-			render_pass,
-			create_info.input_assembly_state,
-			create_info.rasterization_state,
-			create_info.depth_stencil_state,
-			create_info.color_blend_state,
-			&[
-				vertex.to_shader_stage_create_info(),
-				fragment.to_shader_stage_create_info(),
-			],
-		)?))
+		unsafe {
+			let vertex = AshShaderModule::new(bindless, vertex_shader)?;
+			let fragment = AshShaderModule::new(bindless, fragment_shader)?;
+			Ok(AshGraphicsPipeline(Self::ash_create_abstract_graphics_pipeline(
+				bindless,
+				render_pass,
+				create_info.input_assembly_state,
+				create_info.rasterization_state,
+				create_info.depth_stencil_state,
+				create_info.color_blend_state,
+				&[
+					vertex.to_shader_stage_create_info(),
+					fragment.to_shader_stage_create_info(),
+				],
+			)?))
+		}
 	}
 
 	unsafe fn create_mesh_graphics_pipeline<T: BufferStruct>(
@@ -97,28 +101,30 @@ unsafe impl BindlessPipelinePlatform for Ash {
 		mesh_shader: &impl BindlessShader<ShaderType = MeshShader, ParamConstant = T>,
 		fragment_shader: &impl BindlessShader<ShaderType = FragmentShader, ParamConstant = T>,
 	) -> Result<Self::MeshGraphicsPipeline, Self::PipelineCreationError> {
-		let task = task_shader
-			.map(|task_shader| AshShaderModule::new(bindless, task_shader))
-			.transpose()?;
-		let mesh = AshShaderModule::new(bindless, mesh_shader)?;
-		let fragment = AshShaderModule::new(bindless, fragment_shader)?;
-		let stages = [task.as_ref().map(AshShaderModule::to_shader_stage_create_info)]
-			.into_iter()
-			.flatten()
-			.chain([
-				mesh.to_shader_stage_create_info(),
-				fragment.to_shader_stage_create_info(),
-			])
-			.collect::<SmallVec<[_; 3]>>();
-		Ok(AshMeshGraphicsPipeline(Self::ash_create_abstract_graphics_pipeline(
-			bindless,
-			render_pass,
-			PipelineInputAssemblyStateCreateInfo::default(),
-			create_info.rasterization_state,
-			create_info.depth_stencil_state,
-			create_info.color_blend_state,
-			&stages,
-		)?))
+		unsafe {
+			let task = task_shader
+				.map(|task_shader| AshShaderModule::new(bindless, task_shader))
+				.transpose()?;
+			let mesh = AshShaderModule::new(bindless, mesh_shader)?;
+			let fragment = AshShaderModule::new(bindless, fragment_shader)?;
+			let stages = [task.as_ref().map(AshShaderModule::to_shader_stage_create_info)]
+				.into_iter()
+				.flatten()
+				.chain([
+					mesh.to_shader_stage_create_info(),
+					fragment.to_shader_stage_create_info(),
+				])
+				.collect::<SmallVec<[_; 3]>>();
+			Ok(AshMeshGraphicsPipeline(Self::ash_create_abstract_graphics_pipeline(
+				bindless,
+				render_pass,
+				PipelineInputAssemblyStateCreateInfo::default(),
+				create_info.rasterization_state,
+				create_info.depth_stencil_state,
+				create_info.color_blend_state,
+				&stages,
+			)?))
+		}
 	}
 }
 
@@ -133,51 +139,54 @@ impl Ash {
 		color_blend_state: PipelineColorBlendStateCreateInfo,
 		stages: &[PipelineShaderStageCreateInfo],
 	) -> VkResult<AshPipeline> {
-		let device = &bindless.device;
-		let pipelines = device
-			.create_graphics_pipelines(
-				bindless.cache.unwrap_or(PipelineCache::null()),
-				&[ash::vk::GraphicsPipelineCreateInfo::default()
-					.layout(bindless.global_descriptor_set().pipeline_layout)
-					.stages(stages)
-					.vertex_input_state(&PipelineVertexInputStateCreateInfo::default())
-					.input_assembly_state(&input_assembly_state)
-					.tessellation_state(&PipelineTessellationStateCreateInfo::default())
-					.viewport_state(
-						&PipelineViewportStateCreateInfo::default()
-							.viewports(&[Viewport::default()])
-							.scissors(&[Rect2D {
-								offset: Offset2D { x: 0, y: 0 },
-								extent: Extent2D {
-									width: i32::MAX as u32,
-									height: i32::MAX as u32,
-								},
-							}]),
-					)
-					.rasterization_state(&rasterization_state.line_width(1.0))
-					.multisample_state(
-						&PipelineMultisampleStateCreateInfo::default().rasterization_samples(SampleCountFlags::TYPE_1),
-					)
-					.depth_stencil_state(&depth_stencil_state)
-					.color_blend_state(&color_blend_state)
-					.dynamic_state(
-						&PipelineDynamicStateCreateInfo::default()
-							.dynamic_states(&[DynamicState::VIEWPORT, DynamicState::SCISSOR]),
-					)
-					.layout(bindless.global_descriptor_set().pipeline_layout)
-					.push_next(
-						&mut PipelineRenderingCreateInfo::default()
-							.color_attachment_formats(&render_pass.color_attachments)
-							.depth_attachment_format(render_pass.depth_attachment.unwrap_or_default()),
-					)],
-				None,
-			)
-			// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
-			.map_err(|e| e.1)?;
-		Ok(AshPipeline {
-			bindless: bindless.clone(),
-			pipeline: pipelines[0],
-		})
+		unsafe {
+			let device = &bindless.device;
+			let pipelines = device
+				.create_graphics_pipelines(
+					bindless.cache.unwrap_or(PipelineCache::null()),
+					&[ash::vk::GraphicsPipelineCreateInfo::default()
+						.layout(bindless.global_descriptor_set().pipeline_layout)
+						.stages(stages)
+						.vertex_input_state(&PipelineVertexInputStateCreateInfo::default())
+						.input_assembly_state(&input_assembly_state)
+						.tessellation_state(&PipelineTessellationStateCreateInfo::default())
+						.viewport_state(
+							&PipelineViewportStateCreateInfo::default()
+								.viewports(&[Viewport::default()])
+								.scissors(&[Rect2D {
+									offset: Offset2D { x: 0, y: 0 },
+									extent: Extent2D {
+										width: i32::MAX as u32,
+										height: i32::MAX as u32,
+									},
+								}]),
+						)
+						.rasterization_state(&rasterization_state.line_width(1.0))
+						.multisample_state(
+							&PipelineMultisampleStateCreateInfo::default()
+								.rasterization_samples(SampleCountFlags::TYPE_1),
+						)
+						.depth_stencil_state(&depth_stencil_state)
+						.color_blend_state(&color_blend_state)
+						.dynamic_state(
+							&PipelineDynamicStateCreateInfo::default()
+								.dynamic_states(&[DynamicState::VIEWPORT, DynamicState::SCISSOR]),
+						)
+						.layout(bindless.global_descriptor_set().pipeline_layout)
+						.push_next(
+							&mut PipelineRenderingCreateInfo::default()
+								.color_attachment_formats(&render_pass.color_attachments)
+								.depth_attachment_format(render_pass.depth_attachment.unwrap_or_default()),
+						)],
+					None,
+				)
+				// as we only alloc one pipeline, `e.0.len() == 0` and we don't need to write drop logic
+				.map_err(|e| e.1)?;
+			Ok(AshPipeline {
+				bindless: bindless.clone(),
+				pipeline: pipelines[0],
+			})
+		}
 	}
 }
 

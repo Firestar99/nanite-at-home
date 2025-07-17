@@ -92,7 +92,7 @@ impl<T: BufferStructPlain> MutBufferSlice<'_, T> {
 	/// Stores from different waves or invocations must not alias.
 	/// Loading data written by another thread or invocation without a memory barrier in between is UB.
 	pub unsafe fn store(&mut self, t: T) {
-		self.buffer.store_unchecked(0, T::write(t));
+		unsafe { self.buffer.store_unchecked(0, T::write(t)) }
 	}
 }
 
@@ -144,7 +144,7 @@ impl<T: BufferStruct> MutBufferSlice<'_, [T]> {
 	/// # Safety
 	/// `byte_index` must be in bounds of the buffer.
 	pub unsafe fn load_unchecked(&self, index: usize) -> T {
-		self.as_ref().load_unchecked(index)
+		unsafe { self.as_ref().load_unchecked(index) }
 	}
 }
 
@@ -155,8 +155,10 @@ impl<T: BufferStructPlain> MutBufferSlice<'_, [T]> {
 	/// Stores from different waves or invocations must not alias.
 	/// Loading data written by another thread or invocation without a memory barrier in between is UB.
 	pub unsafe fn store(&mut self, index: usize, t: T) {
-		let byte_offset = index * mem::size_of::<T::Transfer>();
-		self.buffer.store(byte_offset as u32, T::write(t));
+		unsafe {
+			let byte_offset = index * mem::size_of::<T::Transfer>();
+			self.buffer.store(byte_offset as u32, T::write(t));
+		}
 	}
 
 	/// Loads a T at an `index` offset from the buffer.
@@ -166,8 +168,10 @@ impl<T: BufferStructPlain> MutBufferSlice<'_, [T]> {
 	/// Loading data written by another thread or invocation without a memory barrier in between is UB.
 	/// `byte_index` must be in bounds of the buffer.
 	pub unsafe fn store_unchecked(&mut self, index: usize, t: T) {
-		let byte_offset = index * mem::size_of::<T::Transfer>();
-		self.buffer.store_unchecked(byte_offset as u32, T::write(t));
+		unsafe {
+			let byte_offset = index * mem::size_of::<T::Transfer>();
+			self.buffer.store_unchecked(byte_offset as u32, T::write(t));
+		}
 	}
 }
 
@@ -199,7 +203,7 @@ impl<T: BufferContent + ?Sized> MutBufferSlice<'_, T> {
 	/// # Safety
 	/// E must be a valid arbitrary BufferStruct type located at that `byte_offset`.
 	pub unsafe fn load_at_arbitrary_offset<E: BufferStruct>(&self, byte_offset: usize) -> E {
-		self.as_ref().load_at_arbitrary_offset(byte_offset)
+		unsafe { self.as_ref().load_at_arbitrary_offset(byte_offset) }
 	}
 
 	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
@@ -209,7 +213,7 @@ impl<T: BufferContent + ?Sized> MutBufferSlice<'_, T> {
 	/// E must be a valid arbitrary BufferStruct type located at that `byte_offset`.
 	/// `byte_index` must be in bounds of the buffer.
 	pub unsafe fn load_at_arbitrary_offset_unchecked<E: BufferStruct>(&self, byte_offset: usize) -> E {
-		self.as_ref().load_at_arbitrary_offset_unchecked(byte_offset)
+		unsafe { self.as_ref().load_at_arbitrary_offset_unchecked(byte_offset) }
 	}
 }
 
@@ -220,7 +224,7 @@ impl<T: BufferContent + ?Sized> MutBufferSlice<'_, T> {
 	/// # Safety
 	/// E must be a valid arbitrary BufferStruct type located at that `byte_offset`.
 	pub unsafe fn store_at_arbitrary_offset<E: BufferStructPlain>(&mut self, byte_offset: usize, e: E) {
-		self.buffer.store_unchecked(byte_offset as u32, E::write(e));
+		unsafe { self.buffer.store_unchecked(byte_offset as u32, E::write(e)) }
 	}
 
 	/// Loads an arbitrary type E at an `byte_index` offset from the buffer. `byte_index` must be a multiple of 4,
@@ -230,6 +234,6 @@ impl<T: BufferContent + ?Sized> MutBufferSlice<'_, T> {
 	/// E must be a valid arbitrary BufferStruct type located at that `byte_offset`.
 	/// `byte_index` must be in bounds of the buffer.
 	pub unsafe fn store_at_arbitrary_offset_unchecked<E: BufferStructPlain>(&mut self, byte_offset: usize, e: E) {
-		self.buffer.store_unchecked(byte_offset as u32, E::write(e));
+		unsafe { self.buffer.store_unchecked(byte_offset as u32, E::write(e)) }
 	}
 }
