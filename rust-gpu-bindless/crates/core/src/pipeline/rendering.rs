@@ -337,7 +337,8 @@ pub enum RenderingError {
 		format: Format,
 		expected: Format,
 	},
-	#[error("Color attachment {index} \"{name}\" has size {size:?} but was expected to have a common size of {expected_size:?}"
+	#[error(
+		"Color attachment {index} \"{name}\" has size {size:?} but was expected to have a common size of {expected_size:?}"
 	)]
 	MismatchedColorAttachmentSize {
 		index: usize,

@@ -2,7 +2,7 @@ use crate::descriptor::id::DescriptorId;
 use crate::descriptor::transient::TransientDesc;
 use crate::descriptor::{Desc, DescContent, DescRef, UnsafeTransientAccess};
 use core::fmt::{Debug, Formatter};
-use rust_gpu_bindless_macros::{assert_transfer_size, BufferStruct};
+use rust_gpu_bindless_macros::{BufferStruct, assert_transfer_size};
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, BufferStruct)]
 pub struct Weak {

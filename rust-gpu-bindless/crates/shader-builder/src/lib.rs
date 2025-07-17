@@ -1,4 +1,4 @@
-use crate::codegen::{codegen_shader_symbols, CodegenOptions};
+use crate::codegen::{CodegenOptions, codegen_shader_symbols};
 use cargo_gpu::Install;
 use proc_macro_crate::FoundCrate;
 use spirv_builder::{

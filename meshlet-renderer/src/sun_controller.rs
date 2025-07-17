@@ -1,6 +1,6 @@
 use crate::delta_time::DeltaTime;
 use egui::{Slider, SliderClamping, Ui, Widget};
-use glam::{vec3, Mat3, Vec3};
+use glam::{Mat3, Vec3, vec3};
 use space_engine_shader::material::light::DirectionalLight;
 use space_engine_shader::material::radiance::Radiance;
 use space_engine_shader::renderer::lighting::sky_shader::preetham_sky;

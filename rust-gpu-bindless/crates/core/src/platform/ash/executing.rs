@@ -1,13 +1,13 @@
 use crate::descriptor::{Bindless, BindlessFrame, WeakBindless};
-use crate::platform::ash::{Ash, AshCreateInfo, DeviceExt};
 use crate::platform::PendingExecution;
+use crate::platform::ash::{Ash, AshCreateInfo, DeviceExt};
+use ash::Device;
 use ash::prelude::VkResult;
 use ash::vk::{
 	CommandBufferAllocateInfo, CommandBufferLevel, CommandPoolCreateFlags, CommandPoolCreateInfo,
 	CommandPoolResetFlags, SemaphoreCreateInfo, SemaphoreSignalInfo, SemaphoreType, SemaphoreTypeCreateInfo,
 	SemaphoreWaitFlags, SemaphoreWaitInfo,
 };
-use ash::Device;
 use crossbeam_queue::SegQueue;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
@@ -230,11 +230,13 @@ impl AshExecutionManager {
 	}
 
 	pub unsafe fn new_execution_no_frame(&self) -> VkResult<Arc<AshExecution>> {
-		let bindless = self.bindless();
-		Ok(Arc::new(AshExecution::new_no_frame(
-			self.pop_free_pool(&bindless)?,
-			bindless,
-		)))
+		unsafe {
+			let bindless = self.bindless();
+			Ok(Arc::new(AshExecution::new_no_frame(
+				self.pop_free_pool(&bindless)?,
+				bindless,
+			)))
+		}
 	}
 
 	fn pop_free_pool(&self, bindless: &Bindless<Ash>) -> VkResult<AshExecutionResource> {

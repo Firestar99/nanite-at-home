@@ -3,6 +3,7 @@ use crate::meshlet::lod_tree_gen::indices::{IndexPair, MeshletId};
 use crate::meshlet::lod_tree_gen::sorted_smallvec::SortedSmallVec;
 use crate::meshlet::mesh::MeshletMesh;
 use crate::meshlet::process::lod_mesh_build_meshlets;
+use MeshletGroupSimplifyResult::*;
 use glam::FloatExt;
 use meshopt::{SimplifyOptions, VertexDataAdapter};
 use rayon::prelude::*;
@@ -17,7 +18,6 @@ use static_assertions::const_assert_eq;
 use std::fmt::Debug;
 use std::mem::{offset_of, size_of, size_of_val};
 use std::ops::Deref;
-use MeshletGroupSimplifyResult::*;
 
 const MAX_LOD_LEVEL: u32 = 50;
 const TARGET_SIMPLIFICATION_FACTOR: f32 = 0.5;

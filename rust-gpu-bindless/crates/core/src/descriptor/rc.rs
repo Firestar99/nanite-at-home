@@ -95,10 +95,12 @@ pub trait RCDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq {
 impl<P: BindlessPlatform, C: DescContentCpu> RCDescExt<P, C> for RCDesc<P, C> {
 	#[inline]
 	unsafe fn new(slot: RcTableSlot) -> Self {
-		Desc::new_inner(RC {
-			slot,
-			_phantom: PhantomData {},
-		})
+		unsafe {
+			Desc::new_inner(RC {
+				slot,
+				_phantom: PhantomData {},
+			})
+		}
 	}
 
 	#[inline]

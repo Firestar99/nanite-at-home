@@ -72,10 +72,10 @@ unsafe impl<T: BufferStructPlain> BufferStruct for T {
 	type Transfer = T::Transfer;
 
 	unsafe fn write_cpu(self, _meta: &mut impl MetadataCpuInterface) -> Self::Transfer {
-		T::write(self)
+		unsafe { T::write(self) }
 	}
 
 	unsafe fn read(from: Self::Transfer, _meta: Metadata) -> Self {
-		T::read(from)
+		unsafe { T::read(from) }
 	}
 }

@@ -9,8 +9,8 @@ use ash::vk::{
 	ShaderStageFlags,
 };
 use ash::vk::{BufferUsageFlags, Extent3D, ImageUsageFlags, ImageViewType, SampleCountFlags};
-use gpu_allocator::vulkan::AllocationScheme;
 use gpu_allocator::MemoryLocation;
+use gpu_allocator::vulkan::AllocationScheme;
 use rust_gpu_bindless_shaders::descriptor::ImageType;
 use rust_gpu_bindless_shaders::shader_type::Shader;
 use spirv_std::image::{Arrayed, Dimensionality};
@@ -241,12 +241,14 @@ impl ClearValue {
 
 impl<A: ImageAccessType> RenderingAttachment<'_, '_, Ash, A> {
 	pub unsafe fn to_ash(&self, layout: ImageLayout) -> RenderingAttachmentInfo<'_> {
-		RenderingAttachmentInfo::default()
-			.image_view(self.image.inner_slot().image_view.unwrap())
-			.image_layout(layout)
-			.load_op(self.load_op.to_ash())
-			.store_op(self.store_op.to_ash())
-			.clear_value(self.load_op.to_ash_clear_color())
+		unsafe {
+			RenderingAttachmentInfo::default()
+				.image_view(self.image.inner_slot().image_view.unwrap())
+				.image_layout(layout)
+				.load_op(self.load_op.to_ash())
+				.store_op(self.store_op.to_ash())
+				.clear_value(self.load_op.to_ash_clear_color())
+		}
 	}
 }
 

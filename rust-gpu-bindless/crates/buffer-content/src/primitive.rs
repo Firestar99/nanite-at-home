@@ -49,12 +49,12 @@ where
 
 	#[inline]
 	unsafe fn write(self) -> Self::Transfer {
-		Wrapping(T::write(self.0))
+		unsafe { Wrapping(T::write(self.0)) }
 	}
 
 	#[inline]
 	unsafe fn read(from: Self::Transfer) -> Self {
-		Wrapping(T::read(from.0))
+		unsafe { Wrapping(T::read(from.0)) }
 	}
 }
 

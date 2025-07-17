@@ -91,7 +91,7 @@ impl DescriptorType {
 	/// `DescriptorType` yourself and instead let `TableSync::register` do that for you.
 	pub const unsafe fn new(type_id: u32) -> Option<Self> {
 		if type_id == type_id & ID_TYPE_MASK {
-			Some(Self::new_unchecked(type_id))
+			unsafe { Some(Self::new_unchecked(type_id)) }
 		} else {
 			None
 		}
@@ -126,7 +126,7 @@ impl DescriptorIndex {
 	/// The supplied `index` must be a valid `DescriptorIndex` in whichever context it is used
 	pub const unsafe fn new(index: u32) -> Option<Self> {
 		if index == index & ID_INDEX_MASK {
-			Some(Self::new_unchecked(index))
+			unsafe { Some(Self::new_unchecked(index)) }
 		} else {
 			None
 		}
@@ -169,7 +169,7 @@ impl DescriptorVersion {
 	/// The supplied `version` must be a valid `DescriptorVersion` in whichever context it is used
 	pub const unsafe fn new(version: u32) -> Option<Self> {
 		if version == version & ID_VERSION_MASK {
-			Some(Self::new_unchecked(version))
+			unsafe { Some(Self::new_unchecked(version)) }
 		} else {
 			None
 		}

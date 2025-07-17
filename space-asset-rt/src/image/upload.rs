@@ -2,9 +2,9 @@ use ash::vk::{BufferImageCopy2, CopyBufferToImageInfo2, Extent3D, ImageAspectFla
 use futures::future::join_all;
 use glam::Vec4;
 use rayon::prelude::*;
+use rkyv::Deserialize;
 use rkyv::api::high::HighDeserializer;
 use rkyv::rancor::Panic;
-use rkyv::Deserialize;
 use rust_gpu_bindless::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessImageCreateInfo,
 	BindlessImageUsage, Extent, Format, MutDescBufferExt, RCDesc,
@@ -79,7 +79,7 @@ pub fn upload_image<'a>(
 	bindless: &'a Bindless,
 	image: &DynImage,
 	name: &str,
-) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + 'a {
+) -> impl Future<Output = anyhow::Result<RCDesc<Image<Image2d>>>> + use<'a> {
 	let result: anyhow::Result<_> = (|| {
 		let meta = image.decoded_metadata();
 

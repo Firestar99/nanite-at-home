@@ -65,7 +65,7 @@ pub trait MutDescExt<P: BindlessPlatform, C: DescContentCpu>: Sized + Hash + Eq 
 impl<P: BindlessPlatform, C: DescContentCpu> MutDescExt<P, C> for MutDesc<P, C> {
 	#[inline]
 	unsafe fn new(slot: RcTableSlot, last: P::PendingExecution) -> Self {
-		Desc::new_inner(Mut { slot, last })
+		unsafe { Desc::new_inner(Mut { slot, last }) }
 	}
 
 	#[inline]

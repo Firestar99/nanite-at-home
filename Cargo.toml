@@ -18,7 +18,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 authors = ["Firestar99"]
-edition = "2021"
+edition = "2024"
 license = "MIT"
 repository = "https://gitlab.com/spacegamedev/space-rust"
 
@@ -61,8 +61,8 @@ presser = "0.3.1"
 winit = { version = "0.30" }
 
 # rust-gpu
-cargo-gpu = { git = "https://github.com/rust-gpu/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
-spirv-std = { git = "https://github.com/rust-gpu/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", features = ["bytemuck"] }
+cargo-gpu = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "8ee9f2f99788134a9c0912238add509539742596", features = ["bytemuck"] }
 
 # async
 futures = "0.3"
@@ -78,7 +78,7 @@ prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
 
 # bytes and numbers
-glam = { version = "0.30.2", default-features = false, features = ["libm", "bytemuck"] }
+glam = { version = "0.30.3", default-features = false, features = ["libm", "bytemuck"] }
 libm = { version = "0.2", default-features = false }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"

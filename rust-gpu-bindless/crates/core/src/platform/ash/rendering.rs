@@ -4,9 +4,9 @@ use crate::pipeline::{
 	DrawIndexedIndirectCommand, DrawIndirectCommand, HasResourceContext, IndexReadable, IndexTypeTrait,
 	IndirectCommandReadable, MutOrSharedBuffer, RecordingError, RenderPassFormat, RenderingAttachment,
 };
+use crate::platform::RenderingContext;
 use crate::platform::ash::bindless_pipeline::AshPipeline;
 use crate::platform::ash::{Ash, AshRecordingContext, AshRecordingError, AshRecordingResourceContext};
-use crate::platform::RenderingContext;
 use ash::vk::{Extent2D, ImageLayout, Offset2D, PipelineBindPoint, Rect2D, RenderingAttachmentInfo, RenderingInfo};
 use glam::UVec2;
 use rust_gpu_bindless_shaders::buffer_content::BufferStruct;
@@ -83,10 +83,12 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 	/// * flush viewport
 	/// * flush scissor
 	pub unsafe fn ash_flush_graphics(&mut self) -> Result<(), AshRecordingError> {
-		self.ash_must_not_flush_barriers()?;
-		self.ash_flush_viewport();
-		self.ash_flush_scissor();
-		Ok(())
+		unsafe {
+			self.ash_must_not_flush_barriers()?;
+			self.ash_flush_viewport();
+			self.ash_flush_scissor();
+			Ok(())
+		}
 	}
 
 	pub unsafe fn ash_flush_viewport(&mut self) {
@@ -143,7 +145,7 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 		pipeline: &BindlessGraphicsPipeline<Ash, T>,
 		param: T,
 	) -> Result<(), AshRecordingError> {
-		self.ash_bind_any_graphics(&pipeline.inner().0, param)
+		unsafe { self.ash_bind_any_graphics(&pipeline.inner().0, param) }
 	}
 
 	#[inline]
@@ -152,7 +154,7 @@ impl<'a, 'b> AshRenderingContext<'a, 'b> {
 		pipeline: &BindlessMeshGraphicsPipeline<Ash, T>,
 		param: T,
 	) -> Result<(), AshRecordingError> {
-		self.ash_bind_any_graphics(&pipeline.inner().0, param)
+		unsafe { self.ash_bind_any_graphics(&pipeline.inner().0, param) }
 	}
 
 	pub unsafe fn ash_bind_any_graphics<T: BufferStruct>(

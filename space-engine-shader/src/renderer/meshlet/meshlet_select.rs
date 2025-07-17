@@ -3,7 +3,7 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::lod_selection::LodType;
 use crate::renderer::meshlet::intermediate::{MeshletGroupInstance, MeshletInstance};
 use glam::{Affine3A, UVec3, Vec3A};
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::meshlet::mesh::MeshletMesh;
 use space_asset_shader::meshlet::scene::MeshletScene;

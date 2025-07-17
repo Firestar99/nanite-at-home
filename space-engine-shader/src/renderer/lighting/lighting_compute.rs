@@ -5,8 +5,8 @@ use crate::renderer::frame_data::{DebugSettings, FrameData};
 use crate::renderer::g_buffer::GBuffer;
 use crate::renderer::lighting::is_skybox;
 use crate::utils::hsv::hsv2rgb_smooth;
-use glam::{uvec2, vec3, UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use glam::{UVec2, UVec3, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles, uvec2, vec3};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{
 	AliveDescRef, Buffer, Descriptors, Image2d, MutImage, Transient, TransientDesc,
 };

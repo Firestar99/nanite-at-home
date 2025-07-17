@@ -1,6 +1,6 @@
 use crate::utils::affine::AffineTranspose;
 use bytemuck_derive::AnyBitPattern;
-use glam::{vec4, Mat4, UVec2, Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{Mat4, UVec2, Vec2, Vec3, Vec4, Vec4Swizzles, vec4};
 use rust_gpu_bindless_macros::BufferStruct;
 use space_asset_shader::affine_transform::AffineTransform;
 

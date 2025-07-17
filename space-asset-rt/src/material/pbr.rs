@@ -1,6 +1,6 @@
 use crate::image::upload::UploadedImages;
 use crate::upload_traits::ToStrong;
-use rust_gpu_bindless::descriptor::{RCDescExt, RC};
+use rust_gpu_bindless::descriptor::{RC, RCDescExt};
 use rust_gpu_bindless_shaders::descriptor::Strong;
 use space_asset_disk::material::pbr::ArchivedPbrMaterialDisk;
 use space_asset_shader::material::pbr::PbrMaterial;

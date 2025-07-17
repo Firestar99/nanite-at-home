@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote, TokenStreamExt};
+use quote::{TokenStreamExt, format_ident, quote};
 use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::collections::HashMap;

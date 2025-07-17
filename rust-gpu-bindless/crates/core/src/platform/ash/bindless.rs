@@ -5,12 +5,12 @@ use crate::descriptor::{
 	BindlessSamplerCreateInfo, BufferAllocationError, BufferInterface, BufferSlot, DescriptorCounts,
 	ImageAllocationError, ImageInterface, SamplerAllocationError, SamplerInterface, WeakBindless,
 };
+use crate::platform::BindlessPlatform;
 use crate::platform::ash::image_format::FormatExt;
 use crate::platform::ash::{
-	bindless_image_type_to_vk_image_type, bindless_image_type_to_vk_image_view_type, AshExecutionManager,
-	AshPendingExecution,
+	AshExecutionManager, AshPendingExecution, bindless_image_type_to_vk_image_type,
+	bindless_image_type_to_vk_image_view_type,
 };
-use crate::platform::BindlessPlatform;
 use ash::ext::{debug_utils, mesh_shader};
 use ash::khr::{surface, swapchain};
 use ash::prelude::VkResult;
@@ -19,18 +19,18 @@ use ash::vk::{
 	DescriptorPool, DescriptorPoolCreateFlags, DescriptorPoolCreateInfo, DescriptorPoolSize, DescriptorSet,
 	DescriptorSetAllocateInfo, DescriptorSetLayout, DescriptorSetLayoutBindingFlagsCreateInfo,
 	DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType, Handle, ImageLayout,
-	ImageSubresourceRange, ImageTiling, ImageViewCreateInfo, PhysicalDeviceProperties2,
+	ImageSubresourceRange, ImageTiling, ImageViewCreateInfo, LOD_CLAMP_NONE, PhysicalDeviceProperties2,
 	PhysicalDeviceVulkan12Properties, PipelineCache, PipelineLayout, PipelineLayoutCreateInfo, PushConstantRange,
-	SamplerCreateInfo, ShaderStageFlags, SharingMode, WriteDescriptorSet, LOD_CLAMP_NONE,
+	SamplerCreateInfo, ShaderStageFlags, SharingMode, WriteDescriptorSet,
 };
-use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use gpu_allocator::AllocationError;
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 use parking_lot::lock_api::MutexGuard;
 use parking_lot::{Mutex, RawMutex};
 use presser::Slab;
 use rangemap::RangeSet;
 use rust_gpu_bindless_shaders::descriptor::{
-	BindlessPushConstant, ImageType, BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE,
+	BINDING_BUFFER, BINDING_SAMPLED_IMAGE, BINDING_SAMPLER, BINDING_STORAGE_IMAGE, BindlessPushConstant, ImageType,
 };
 use static_assertions::assert_impl_all;
 use std::cell::UnsafeCell;
@@ -54,14 +54,16 @@ impl Ash {
 	}
 
 	pub unsafe fn set_debug_object_name(&self, handle: impl Handle, name: &str) -> VkResult<()> {
-		if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
-			debug_marker.set_debug_utils_object_name(
-				&DebugUtilsObjectNameInfoEXT::default()
-					.object_handle(handle)
-					.object_name(&CString::new(name).unwrap()),
-			)?;
+		unsafe {
+			if let Some(debug_marker) = self.extensions.debug_utils.as_ref() {
+				debug_marker.set_debug_utils_object_name(
+					&DebugUtilsObjectNameInfoEXT::default()
+						.object_handle(handle)
+						.object_name(&CString::new(name).unwrap()),
+				)?;
+			}
+			Ok(())
 		}
-		Ok(())
 	}
 
 	pub unsafe fn create_image_view<T: ImageType>(
@@ -69,28 +71,30 @@ impl Ash {
 		image: ash::vk::Image,
 		create_info: &BindlessImageCreateInfo<T>,
 	) -> Result<Option<ash::vk::ImageView>, <Ash as BindlessPlatform>::AllocationError> {
-		let image_view_type = bindless_image_type_to_vk_image_view_type::<T>().expect("Unsupported ImageType");
-		Ok(if create_info.usage.has_image_view() {
-			let image_view = self.device.create_image_view(
-				&ImageViewCreateInfo::default()
-					.image(image)
-					.view_type(image_view_type)
-					.format(create_info.format)
-					.components(ComponentMapping::default()) // identity
-					.subresource_range(ImageSubresourceRange {
-						aspect_mask: create_info.format.aspect(),
-						base_mip_level: 0,
-						level_count: create_info.mip_levels,
-						base_array_layer: 0,
-						layer_count: create_info.array_layers,
-					}),
-				None,
-			)?;
-			self.set_debug_object_name(image_view, create_info.name)?;
-			Some(image_view)
-		} else {
-			None
-		})
+		unsafe {
+			let image_view_type = bindless_image_type_to_vk_image_view_type::<T>().expect("Unsupported ImageType");
+			Ok(if create_info.usage.has_image_view() {
+				let image_view = self.device.create_image_view(
+					&ImageViewCreateInfo::default()
+						.image(image)
+						.view_type(image_view_type)
+						.format(create_info.format)
+						.components(ComponentMapping::default()) // identity
+						.subresource_range(ImageSubresourceRange {
+							aspect_mask: create_info.format.aspect(),
+							base_mip_level: 0,
+							level_count: create_info.mip_levels,
+							base_array_layer: 0,
+							layer_count: create_info.array_layers,
+						}),
+					None,
+				)?;
+				self.set_debug_object_name(image_view, create_info.name)?;
+				Some(image_view)
+			} else {
+				None
+			})
+		}
 	}
 }
 
@@ -289,105 +293,111 @@ unsafe impl BindlessPlatform for Ash {
 	}
 
 	unsafe fn update_after_bind_descriptor_limits(&self) -> DescriptorCounts {
-		let mut vulkan12properties = PhysicalDeviceVulkan12Properties::default();
-		let mut properties2 = PhysicalDeviceProperties2::default().push_next(&mut vulkan12properties);
-		self.instance
-			.get_physical_device_properties2(self.physical_device, &mut properties2);
-		DescriptorCounts {
-			buffers: vulkan12properties.max_descriptor_set_update_after_bind_storage_buffers,
-			image: u32::min(
-				vulkan12properties.max_per_stage_descriptor_update_after_bind_storage_images,
-				vulkan12properties.max_descriptor_set_update_after_bind_sampled_images,
-			),
-			samplers: vulkan12properties.max_descriptor_set_update_after_bind_samplers,
+		unsafe {
+			let mut vulkan12properties = PhysicalDeviceVulkan12Properties::default();
+			let mut properties2 = PhysicalDeviceProperties2::default().push_next(&mut vulkan12properties);
+			self.instance
+				.get_physical_device_properties2(self.physical_device, &mut properties2);
+			DescriptorCounts {
+				buffers: vulkan12properties.max_descriptor_set_update_after_bind_storage_buffers,
+				image: u32::min(
+					vulkan12properties.max_per_stage_descriptor_update_after_bind_storage_images,
+					vulkan12properties.max_descriptor_set_update_after_bind_sampled_images,
+				),
+				samplers: vulkan12properties.max_descriptor_set_update_after_bind_samplers,
+			}
 		}
 	}
 
 	unsafe fn create_descriptor_set(&self, counts: DescriptorCounts) -> Self::BindlessDescriptorSet {
-		let bindings = [
-			ash::vk::DescriptorSetLayoutBinding::default()
-				.binding(BINDING_BUFFER)
-				.descriptor_type(DescriptorType::STORAGE_BUFFER)
-				.descriptor_count(counts.buffers)
-				.stage_flags(self.shader_stages),
-			ash::vk::DescriptorSetLayoutBinding::default()
-				.binding(BINDING_STORAGE_IMAGE)
-				.descriptor_type(DescriptorType::STORAGE_IMAGE)
-				.descriptor_count(counts.image)
-				.stage_flags(self.shader_stages),
-			ash::vk::DescriptorSetLayoutBinding::default()
-				.binding(BINDING_SAMPLED_IMAGE)
-				.descriptor_type(DescriptorType::SAMPLED_IMAGE)
-				.descriptor_count(counts.image)
-				.stage_flags(self.shader_stages),
-			ash::vk::DescriptorSetLayoutBinding::default()
-				.binding(BINDING_SAMPLER)
-				.descriptor_type(DescriptorType::SAMPLER)
-				.descriptor_count(counts.samplers)
-				.stage_flags(self.shader_stages),
-		];
-		let binding_flags = [DescriptorBindingFlags::UPDATE_AFTER_BIND
-			| DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING
-			| DescriptorBindingFlags::PARTIALLY_BOUND; 4];
-		assert_eq!(bindings.len(), binding_flags.len());
+		unsafe {
+			let bindings = [
+				ash::vk::DescriptorSetLayoutBinding::default()
+					.binding(BINDING_BUFFER)
+					.descriptor_type(DescriptorType::STORAGE_BUFFER)
+					.descriptor_count(counts.buffers)
+					.stage_flags(self.shader_stages),
+				ash::vk::DescriptorSetLayoutBinding::default()
+					.binding(BINDING_STORAGE_IMAGE)
+					.descriptor_type(DescriptorType::STORAGE_IMAGE)
+					.descriptor_count(counts.image)
+					.stage_flags(self.shader_stages),
+				ash::vk::DescriptorSetLayoutBinding::default()
+					.binding(BINDING_SAMPLED_IMAGE)
+					.descriptor_type(DescriptorType::SAMPLED_IMAGE)
+					.descriptor_count(counts.image)
+					.stage_flags(self.shader_stages),
+				ash::vk::DescriptorSetLayoutBinding::default()
+					.binding(BINDING_SAMPLER)
+					.descriptor_type(DescriptorType::SAMPLER)
+					.descriptor_count(counts.samplers)
+					.stage_flags(self.shader_stages),
+			];
+			let binding_flags = [DescriptorBindingFlags::UPDATE_AFTER_BIND
+				| DescriptorBindingFlags::UPDATE_UNUSED_WHILE_PENDING
+				| DescriptorBindingFlags::PARTIALLY_BOUND; 4];
+			assert_eq!(bindings.len(), binding_flags.len());
 
-		let set_layout = self
-			.device
-			.create_descriptor_set_layout(
-				&DescriptorSetLayoutCreateInfo::default()
-					.flags(DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
-					.bindings(&bindings)
-					.push_next(&mut DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&binding_flags)),
-				None,
-			)
-			.unwrap();
+			let set_layout = self
+				.device
+				.create_descriptor_set_layout(
+					&DescriptorSetLayoutCreateInfo::default()
+						.flags(DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL)
+						.bindings(&bindings)
+						.push_next(
+							&mut DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&binding_flags),
+						),
+					None,
+				)
+				.unwrap();
 
-		let pipeline_layout = self
-			.device
-			.create_pipeline_layout(
-				&PipelineLayoutCreateInfo::default()
-					.set_layouts(&[set_layout])
-					.push_constant_ranges(&[PushConstantRange {
-						offset: 0,
-						size: size_of::<BindlessPushConstant>() as u32,
-						stage_flags: self.shader_stages,
-					}]),
-				None,
-			)
-			.unwrap();
+			let pipeline_layout = self
+				.device
+				.create_pipeline_layout(
+					&PipelineLayoutCreateInfo::default()
+						.set_layouts(&[set_layout])
+						.push_constant_ranges(&[PushConstantRange {
+							offset: 0,
+							size: size_of::<BindlessPushConstant>() as u32,
+							stage_flags: self.shader_stages,
+						}]),
+					None,
+				)
+				.unwrap();
 
-		let pool = self
-			.device
-			.create_descriptor_pool(
-				&DescriptorPoolCreateInfo::default()
-					.flags(DescriptorPoolCreateFlags::UPDATE_AFTER_BIND)
-					.pool_sizes(&bindings.map(|b| {
-						DescriptorPoolSize::default()
-							.ty(b.descriptor_type)
-							.descriptor_count(b.descriptor_count)
-					}))
-					.max_sets(1),
-				None,
-			)
-			.unwrap();
+			let pool = self
+				.device
+				.create_descriptor_pool(
+					&DescriptorPoolCreateInfo::default()
+						.flags(DescriptorPoolCreateFlags::UPDATE_AFTER_BIND)
+						.pool_sizes(&bindings.map(|b| {
+							DescriptorPoolSize::default()
+								.ty(b.descriptor_type)
+								.descriptor_count(b.descriptor_count)
+						}))
+						.max_sets(1),
+					None,
+				)
+				.unwrap();
 
-		let set = self
-			.device
-			.allocate_descriptor_sets(
-				&DescriptorSetAllocateInfo::default()
-					.descriptor_pool(pool)
-					.set_layouts(&[set_layout]),
-			)
-			.unwrap()
-			.into_iter()
-			.next()
-			.unwrap();
+			let set = self
+				.device
+				.allocate_descriptor_sets(
+					&DescriptorSetAllocateInfo::default()
+						.descriptor_pool(pool)
+						.set_layouts(&[set_layout]),
+				)
+				.unwrap()
+				.into_iter()
+				.next()
+				.unwrap();
 
-		AshBindlessDescriptorSet {
-			pipeline_layout,
-			set_layout,
-			pool,
-			set,
+			AshBindlessDescriptorSet {
+				pipeline_layout,
+				set_layout,
+				pool,
+				set,
+			}
 		}
 	}
 
@@ -406,135 +416,139 @@ unsafe impl BindlessPlatform for Ash {
 		mut images: DrainFlushQueue<ImageInterface<Self>>,
 		mut samplers: DrainFlushQueue<SamplerInterface<Self>>,
 	) {
-		let (buffer_table, buffers) = buffers.into_inner();
-		let mut storage_buffers = DescriptorIndexRangeSet::new(buffer_table, RangeSet::new());
-		for buffer_id in buffers {
-			let buffer = unsafe { buffer_table.get_slot_unchecked(buffer_id) };
-			if buffer.usage.contains(BindlessBufferUsage::STORAGE_BUFFER) {
-				storage_buffers.insert(buffer_id);
+		unsafe {
+			let (buffer_table, buffers) = buffers.into_inner();
+			let mut storage_buffers = DescriptorIndexRangeSet::new(buffer_table, RangeSet::new());
+			for buffer_id in buffers {
+				let buffer = buffer_table.get_slot_unchecked(buffer_id);
+				if buffer.usage.contains(BindlessBufferUsage::STORAGE_BUFFER) {
+					storage_buffers.insert(buffer_id);
+				}
 			}
+
+			let buffer_infos = storage_buffers
+				.iter()
+				.map(|(_, buffer)| {
+					DescriptorBufferInfo::default()
+						.buffer(buffer.buffer)
+						.offset(0)
+						.range(buffer.size)
+				})
+				.collect::<Vec<_>>();
+			let mut buffer_info_index = 0;
+			let buffers = storage_buffers.iter_ranges().map(|(range, _)| {
+				let count = range.end.to_usize() - range.start.to_usize();
+				WriteDescriptorSet::default()
+					.dst_set(set.set)
+					.dst_binding(BINDING_BUFFER)
+					.descriptor_type(DescriptorType::STORAGE_BUFFER)
+					.dst_array_element(range.start.to_u32())
+					.descriptor_count(count as u32)
+					.buffer_info({
+						let buffer_info_start = buffer_info_index;
+						buffer_info_index += count;
+						&buffer_infos[buffer_info_start..buffer_info_start + count]
+					})
+			});
+
+			let (image_table, images) = images.into_inner();
+			let mut storage_images = DescriptorIndexRangeSet::new(image_table, RangeSet::new());
+			let mut sampled_images = DescriptorIndexRangeSet::new(image_table, RangeSet::new());
+			for image_id in images {
+				let image = image_table.get_slot_unchecked(image_id);
+				if image.usage.contains(BindlessImageUsage::STORAGE) {
+					storage_images.insert(image_id);
+				}
+				if image.usage.contains(BindlessImageUsage::SAMPLED) {
+					sampled_images.insert(image_id);
+				}
+			}
+
+			let storage_image_infos = storage_images
+				.iter()
+				.map(|(_, storage_image)| {
+					DescriptorImageInfo::default()
+						.image_view(*storage_image.image_view.as_ref().unwrap())
+						.image_layout(ImageLayout::GENERAL)
+				})
+				.collect::<Vec<_>>();
+			let mut storage_image_info_index = 0;
+			let storage_images = storage_images.iter_ranges().map(|(range, _)| {
+				let count = range.end.to_usize() - range.start.to_usize();
+				WriteDescriptorSet::default()
+					.dst_set(set.set)
+					.dst_binding(BINDING_STORAGE_IMAGE)
+					.descriptor_type(DescriptorType::STORAGE_IMAGE)
+					.dst_array_element(range.start.to_u32())
+					.descriptor_count(count as u32)
+					.image_info({
+						let storage_image_info_start = storage_image_info_index;
+						storage_image_info_index += count;
+						&storage_image_infos[storage_image_info_start..storage_image_info_start + count]
+					})
+			});
+
+			let sampled_image_infos = sampled_images
+				.iter()
+				.map(|(_, sampled_image)| {
+					DescriptorImageInfo::default()
+						.image_view(*sampled_image.image_view.as_ref().unwrap())
+						.image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+				})
+				.collect::<Vec<_>>();
+			let mut sampled_image_info_index = 0;
+			let sampled_images = sampled_images.iter_ranges().map(|(range, _)| {
+				let count = range.end.to_usize() - range.start.to_usize();
+				WriteDescriptorSet::default()
+					.dst_set(set.set)
+					.dst_binding(BINDING_SAMPLED_IMAGE)
+					.descriptor_type(DescriptorType::SAMPLED_IMAGE)
+					.dst_array_element(range.start.to_u32())
+					.descriptor_count(count as u32)
+					.image_info({
+						let sampled_image_info_start = sampled_image_info_index;
+						sampled_image_info_index += count;
+						&sampled_image_infos[sampled_image_info_start..sampled_image_info_start + count]
+					})
+			});
+
+			let samplers = samplers.into_range_set();
+			let sampler_infos = samplers
+				.iter()
+				.map(|(_, sampler)| DescriptorImageInfo::default().sampler(*sampler))
+				.collect::<Vec<_>>();
+			let mut sampler_info_index = 0;
+			let samplers = samplers.iter_ranges().map(|(range, _)| {
+				let count = range.end.to_usize() - range.start.to_usize();
+				WriteDescriptorSet::default()
+					.dst_set(set.set)
+					.dst_binding(BINDING_SAMPLER)
+					.descriptor_type(DescriptorType::SAMPLER)
+					.dst_array_element(range.start.to_u32())
+					.descriptor_count(count as u32)
+					.image_info({
+						let sampler_info_start = sampler_info_index;
+						sampler_info_index += count;
+						&sampler_infos[sampler_info_start..sampler_info_start + count]
+					})
+			});
+
+			let writes = buffers
+				.chain(storage_images)
+				.chain(sampled_images)
+				.chain(samplers)
+				.collect::<Vec<_>>();
+			self.device.update_descriptor_sets(&writes, &[]);
 		}
-
-		let buffer_infos = storage_buffers
-			.iter()
-			.map(|(_, buffer)| {
-				DescriptorBufferInfo::default()
-					.buffer(buffer.buffer)
-					.offset(0)
-					.range(buffer.size)
-			})
-			.collect::<Vec<_>>();
-		let mut buffer_info_index = 0;
-		let buffers = storage_buffers.iter_ranges().map(|(range, _)| {
-			let count = range.end.to_usize() - range.start.to_usize();
-			WriteDescriptorSet::default()
-				.dst_set(set.set)
-				.dst_binding(BINDING_BUFFER)
-				.descriptor_type(DescriptorType::STORAGE_BUFFER)
-				.dst_array_element(range.start.to_u32())
-				.descriptor_count(count as u32)
-				.buffer_info({
-					let buffer_info_start = buffer_info_index;
-					buffer_info_index += count;
-					&buffer_infos[buffer_info_start..buffer_info_start + count]
-				})
-		});
-
-		let (image_table, images) = images.into_inner();
-		let mut storage_images = DescriptorIndexRangeSet::new(image_table, RangeSet::new());
-		let mut sampled_images = DescriptorIndexRangeSet::new(image_table, RangeSet::new());
-		for image_id in images {
-			let image = unsafe { image_table.get_slot_unchecked(image_id) };
-			if image.usage.contains(BindlessImageUsage::STORAGE) {
-				storage_images.insert(image_id);
-			}
-			if image.usage.contains(BindlessImageUsage::SAMPLED) {
-				sampled_images.insert(image_id);
-			}
-		}
-
-		let storage_image_infos = storage_images
-			.iter()
-			.map(|(_, storage_image)| {
-				DescriptorImageInfo::default()
-					.image_view(*storage_image.image_view.as_ref().unwrap())
-					.image_layout(ImageLayout::GENERAL)
-			})
-			.collect::<Vec<_>>();
-		let mut storage_image_info_index = 0;
-		let storage_images = storage_images.iter_ranges().map(|(range, _)| {
-			let count = range.end.to_usize() - range.start.to_usize();
-			WriteDescriptorSet::default()
-				.dst_set(set.set)
-				.dst_binding(BINDING_STORAGE_IMAGE)
-				.descriptor_type(DescriptorType::STORAGE_IMAGE)
-				.dst_array_element(range.start.to_u32())
-				.descriptor_count(count as u32)
-				.image_info({
-					let storage_image_info_start = storage_image_info_index;
-					storage_image_info_index += count;
-					&storage_image_infos[storage_image_info_start..storage_image_info_start + count]
-				})
-		});
-
-		let sampled_image_infos = sampled_images
-			.iter()
-			.map(|(_, sampled_image)| {
-				DescriptorImageInfo::default()
-					.image_view(*sampled_image.image_view.as_ref().unwrap())
-					.image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-			})
-			.collect::<Vec<_>>();
-		let mut sampled_image_info_index = 0;
-		let sampled_images = sampled_images.iter_ranges().map(|(range, _)| {
-			let count = range.end.to_usize() - range.start.to_usize();
-			WriteDescriptorSet::default()
-				.dst_set(set.set)
-				.dst_binding(BINDING_SAMPLED_IMAGE)
-				.descriptor_type(DescriptorType::SAMPLED_IMAGE)
-				.dst_array_element(range.start.to_u32())
-				.descriptor_count(count as u32)
-				.image_info({
-					let sampled_image_info_start = sampled_image_info_index;
-					sampled_image_info_index += count;
-					&sampled_image_infos[sampled_image_info_start..sampled_image_info_start + count]
-				})
-		});
-
-		let samplers = samplers.into_range_set();
-		let sampler_infos = samplers
-			.iter()
-			.map(|(_, sampler)| DescriptorImageInfo::default().sampler(*sampler))
-			.collect::<Vec<_>>();
-		let mut sampler_info_index = 0;
-		let samplers = samplers.iter_ranges().map(|(range, _)| {
-			let count = range.end.to_usize() - range.start.to_usize();
-			WriteDescriptorSet::default()
-				.dst_set(set.set)
-				.dst_binding(BINDING_SAMPLER)
-				.descriptor_type(DescriptorType::SAMPLER)
-				.dst_array_element(range.start.to_u32())
-				.descriptor_count(count as u32)
-				.image_info({
-					let sampler_info_start = sampler_info_index;
-					sampler_info_index += count;
-					&sampler_infos[sampler_info_start..sampler_info_start + count]
-				})
-		});
-
-		let writes = buffers
-			.chain(storage_images)
-			.chain(sampled_images)
-			.chain(samplers)
-			.collect::<Vec<_>>();
-		self.device.update_descriptor_sets(&writes, &[]);
 	}
 
 	unsafe fn destroy_descriptor_set(&self, set: Self::BindlessDescriptorSet) {
-		// descriptor sets allocated from pool are freed implicitly
-		self.device.destroy_descriptor_pool(set.pool, None);
-		self.device.destroy_pipeline_layout(set.pipeline_layout, None);
-		self.device.destroy_descriptor_set_layout(set.set_layout, None);
+		unsafe {
+			// descriptor sets allocated from pool are freed implicitly
+			self.device.destroy_descriptor_pool(set.pool, None);
+			self.device.destroy_pipeline_layout(set.pipeline_layout, None);
+			self.device.destroy_descriptor_set_layout(set.set_layout, None);
+		}
 	}
 
 	unsafe fn alloc_buffer(
@@ -542,67 +556,71 @@ unsafe impl BindlessPlatform for Ash {
 		create_info: &BindlessBufferCreateInfo,
 		size: u64,
 	) -> Result<Self::Buffer, Self::AllocationError> {
-		let buffer = self.device.create_buffer(
-			&ash::vk::BufferCreateInfo::default()
-				.usage(create_info.usage.to_ash_buffer_usage_flags())
-				.size(size)
-				.sharing_mode(SharingMode::EXCLUSIVE),
-			None,
-		)?;
-		self.set_debug_object_name(buffer, create_info.name)?;
-		let requirements = self.device.get_buffer_memory_requirements(buffer);
-		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
-			requirements,
-			name: create_info.name,
-			location: create_info.usage.to_gpu_allocator_memory_location(),
-			allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_buffer(buffer),
-			linear: true,
-		})?;
-		self.device
-			.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
-		Ok(AshBuffer {
-			buffer,
-			allocation: AshMemoryAllocation::new(memory_allocation),
-		})
+		unsafe {
+			let buffer = self.device.create_buffer(
+				&ash::vk::BufferCreateInfo::default()
+					.usage(create_info.usage.to_ash_buffer_usage_flags())
+					.size(size)
+					.sharing_mode(SharingMode::EXCLUSIVE),
+				None,
+			)?;
+			self.set_debug_object_name(buffer, create_info.name)?;
+			let requirements = self.device.get_buffer_memory_requirements(buffer);
+			let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
+				requirements,
+				name: create_info.name,
+				location: create_info.usage.to_gpu_allocator_memory_location(),
+				allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_buffer(buffer),
+				linear: true,
+			})?;
+			self.device
+				.bind_buffer_memory(buffer, memory_allocation.memory(), memory_allocation.offset())?;
+			Ok(AshBuffer {
+				buffer,
+				allocation: AshMemoryAllocation::new(memory_allocation),
+			})
+		}
 	}
 
 	unsafe fn alloc_image<T: ImageType>(
 		&self,
 		create_info: &BindlessImageCreateInfo<T>,
 	) -> Result<Self::Image, Self::AllocationError> {
-		let image_type = bindless_image_type_to_vk_image_type::<T>().expect("Unsupported ImageType");
-		let image = self.device.create_image(
-			&ash::vk::ImageCreateInfo::default()
-				.flags(ash::vk::ImageCreateFlags::empty())
-				.image_type(image_type)
-				.format(create_info.format)
-				.extent(create_info.extent.into())
-				.mip_levels(create_info.mip_levels)
-				.array_layers(create_info.array_layers)
-				.samples(create_info.samples.to_ash_sample_count_flags())
-				.tiling(ImageTiling::OPTIMAL)
-				.usage(create_info.usage.to_ash_image_usage_flags())
-				.sharing_mode(SharingMode::EXCLUSIVE)
-				.initial_layout(ImageLayout::UNDEFINED),
-			None,
-		)?;
-		self.set_debug_object_name(image, create_info.name)?;
-		let requirements = self.device.get_image_memory_requirements(image);
-		let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
-			requirements,
-			name: create_info.name,
-			location: create_info.usage.to_gpu_allocator_memory_location(),
-			allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_image(image),
-			linear: true,
-		})?;
-		self.device
-			.bind_image_memory(image, memory_allocation.memory(), memory_allocation.offset())?;
-		let image_view = self.create_image_view(image, create_info)?;
-		Ok(AshImage {
-			image,
-			image_view,
-			allocation: AshMemoryAllocation::new(memory_allocation),
-		})
+		unsafe {
+			let image_type = bindless_image_type_to_vk_image_type::<T>().expect("Unsupported ImageType");
+			let image = self.device.create_image(
+				&ash::vk::ImageCreateInfo::default()
+					.flags(ash::vk::ImageCreateFlags::empty())
+					.image_type(image_type)
+					.format(create_info.format)
+					.extent(create_info.extent.into())
+					.mip_levels(create_info.mip_levels)
+					.array_layers(create_info.array_layers)
+					.samples(create_info.samples.to_ash_sample_count_flags())
+					.tiling(ImageTiling::OPTIMAL)
+					.usage(create_info.usage.to_ash_image_usage_flags())
+					.sharing_mode(SharingMode::EXCLUSIVE)
+					.initial_layout(ImageLayout::UNDEFINED),
+				None,
+			)?;
+			self.set_debug_object_name(image, create_info.name)?;
+			let requirements = self.device.get_image_memory_requirements(image);
+			let memory_allocation = self.memory_allocator().allocate(&AllocationCreateDesc {
+				requirements,
+				name: create_info.name,
+				location: create_info.usage.to_gpu_allocator_memory_location(),
+				allocation_scheme: create_info.allocation_scheme.to_gpu_allocator_image(image),
+				linear: true,
+			})?;
+			self.device
+				.bind_image_memory(image, memory_allocation.memory(), memory_allocation.offset())?;
+			let image_view = self.create_image_view(image, create_info)?;
+			Ok(AshImage {
+				image,
+				image_view,
+				allocation: AshMemoryAllocation::new(memory_allocation),
+			})
+		}
 	}
 
 	unsafe fn alloc_sampler(
@@ -629,7 +647,7 @@ unsafe impl BindlessPlatform for Ash {
 	}
 
 	unsafe fn mapped_buffer_to_slab(buffer: &BufferSlot<Self>) -> &mut (impl Slab + '_) {
-		buffer.allocation.get_mut()
+		unsafe { buffer.allocation.get_mut() }
 	}
 
 	unsafe fn destroy_buffers<'a>(
@@ -637,15 +655,17 @@ unsafe impl BindlessPlatform for Ash {
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		buffers: impl DescriptorIndexIterator<'a, BufferInterface<Self>>,
 	) {
-		let mut allocator = self.memory_allocator();
-		for (_, buffer) in buffers.into_iter() {
-			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
-			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
-			// it ourselves.
-			if let Some(allocation) = buffer.allocation.take() {
-				allocator.free(allocation).unwrap();
+		unsafe {
+			let mut allocator = self.memory_allocator();
+			for (_, buffer) in buffers.into_iter() {
+				// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
+				// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
+				// it ourselves.
+				if let Some(allocation) = buffer.allocation.take() {
+					allocator.free(allocation).unwrap();
+				}
+				self.device.destroy_buffer(buffer.buffer, None);
 			}
-			self.device.destroy_buffer(buffer.buffer, None);
 		}
 	}
 
@@ -654,20 +674,22 @@ unsafe impl BindlessPlatform for Ash {
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		images: impl DescriptorIndexIterator<'a, ImageInterface<Self>>,
 	) {
-		let mut allocator = self.memory_allocator();
-		for (_, image) in images.into_iter() {
-			// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
-			// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
-			// it ourselves.
-			if let Some(allocation) = image.allocation.take() {
-				allocator.free(allocation).unwrap();
-			}
-			if let Some(imageview) = image.image_view {
-				self.device.destroy_image_view(imageview, None);
-			}
-			// do not destroy swapchain images
-			if !image.usage.contains(BindlessImageUsage::SWAPCHAIN) {
-				self.device.destroy_image(image.image, None);
+		unsafe {
+			let mut allocator = self.memory_allocator();
+			for (_, image) in images.into_iter() {
+				// Safety: We have exclusive access to BufferSlot in this method. The MemoryAllocation will no longer
+				// we accessed by anything nor dropped due to being wrapped in MaybeUninit, so we can safely read and drop
+				// it ourselves.
+				if let Some(allocation) = image.allocation.take() {
+					allocator.free(allocation).unwrap();
+				}
+				if let Some(imageview) = image.image_view {
+					self.device.destroy_image_view(imageview, None);
+				}
+				// do not destroy swapchain images
+				if !image.usage.contains(BindlessImageUsage::SWAPCHAIN) {
+					self.device.destroy_image(image.image, None);
+				}
 			}
 		}
 	}
@@ -677,8 +699,10 @@ unsafe impl BindlessPlatform for Ash {
 		_global_descriptor_set: &Self::BindlessDescriptorSet,
 		samplers: impl DescriptorIndexIterator<'a, SamplerInterface<Self>>,
 	) {
-		for (_, sampler) in samplers.into_iter() {
-			self.device.destroy_sampler(*sampler, None);
+		unsafe {
+			for (_, sampler) in samplers.into_iter() {
+				self.device.destroy_sampler(*sampler, None);
+			}
 		}
 	}
 }

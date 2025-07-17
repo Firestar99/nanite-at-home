@@ -1,5 +1,5 @@
 use crate::image::{BCnImage, BCnImageMetadata, DecodeToRuntimeImage, ImageType, UncompressedImage, ZstdBCnImage};
-use intel_tex_2::{bc4, bc5, bc7, RSurface, RgSurface, RgbaSurface};
+use intel_tex_2::{RSurface, RgSurface, RgbaSurface, bc4, bc5, bc7};
 use std::borrow::Cow;
 
 impl UncompressedImage<'_> {

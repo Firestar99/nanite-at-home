@@ -1,12 +1,12 @@
 use crate::symbols::Symbols;
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use std::collections::HashSet;
 use syn::punctuated::Punctuated;
 use syn::visit_mut::VisitMut;
 use syn::{
-	visit_mut, Fields, GenericParam, Generics, ItemStruct, Lifetime, PathSegment, Result, Token, TypeParam,
-	TypeParamBound,
+	Fields, GenericParam, Generics, ItemStruct, Lifetime, PathSegment, Result, Token, TypeParam, TypeParamBound,
+	visit_mut,
 };
 
 pub enum BufferStructType {
@@ -51,8 +51,8 @@ pub fn buffer_struct(ct: BufferStructType, content: proc_macro::TokenStream) -> 
 				visit_mut::visit_type_mut(&mut visitor, &mut ty);
 				transfer.push(if visitor.found_generics {
 					gen_ref_tys.push(f.ty.clone());
-					let gen = gen_name_gen.next();
-					quote!(#name: #gen)
+					let gen_ident = gen_name_gen.next();
+					quote!(#name: #gen_ident)
 				} else {
 					match ct {
 						BufferStructType::Default => quote! {
@@ -295,7 +295,7 @@ impl GenericNameGen {
 
 fn decl_to_ref<'a>(generics: impl Iterator<Item = &'a GenericParam>) -> TokenStream {
 	let out = generics
-		.map(|gen| match gen {
+		.map(|generic| match generic {
 			GenericParam::Lifetime(l) => l.lifetime.to_token_stream(),
 			GenericParam::Type(t) => t.ident.to_token_stream(),
 			GenericParam::Const(c) => c.ident.to_token_stream(),

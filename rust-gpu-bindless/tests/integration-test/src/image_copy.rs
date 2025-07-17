@@ -10,8 +10,8 @@ use rust_gpu_bindless_core::descriptor::{
 use rust_gpu_bindless_core::pipeline::{
 	HostAccess, MutBufferAccessExt, MutImageAccessExt, TransferRead, TransferWrite,
 };
-use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless_core::platform::ash::{Ash, AshSingleGraphicsQueueCreateInfo, ash_init_single_graphics_queue};
 
 #[test]
 fn test_image_copy_ash() -> anyhow::Result<()> {

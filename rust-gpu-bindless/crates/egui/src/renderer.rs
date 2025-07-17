@@ -7,7 +7,7 @@ use ash::vk::{
 };
 use egui::epaint::Primitive;
 use egui::{
-	epaint, Context, FullOutput, ImageData, PlatformOutput, RawInput, Rect, TextureId, TextureOptions, TexturesDelta,
+	Context, FullOutput, ImageData, PlatformOutput, RawInput, Rect, TextureId, TextureOptions, TexturesDelta, epaint,
 };
 use glam::{IVec2, UVec2};
 use parking_lot::Mutex;
@@ -645,7 +645,8 @@ pub enum EguiRenderingError<P: EguiBindlessPlatform> {
 	},
 	#[error("Color RT with extent {color:?} must match depth RT with extent {depth:?}")]
 	MismatchExtent { color: Extent, depth: Extent },
-	#[error("TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?"
+	#[error(
+		"TextureId {0:?} does not exist in the rendering backend. Has this `EguiRenderContext` been used with multiple egui `Context`s?"
 	)]
 	MissingTexture(TextureId),
 	#[error("Recording Error: {0}")]

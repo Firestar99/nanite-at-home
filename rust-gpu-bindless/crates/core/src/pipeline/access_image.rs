@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 pub trait MutImageAccessExt<P: BindlessPipelinePlatform, T: ImageType>: MutDescExt<P, MutImage<T>> {
 	/// Access this mutable image to use it for recording.
 	fn access<'a, A: ImageAccessType>(self, cmd: &Recording<'a, P>)
-		-> Result<MutImageAccess<'a, P, T, A>, AccessError>;
+	-> Result<MutImageAccess<'a, P, T, A>, AccessError>;
 
 	/// Access this mutable image to use it for recording. Discards the contents of this image and acts as if it were
 	/// uninitialized.
@@ -115,7 +115,7 @@ impl<'a, P: BindlessPipelinePlatform, T: ImageType, A: ImageAccessType> MutImage
 	}
 
 	/// Turns this mutable access to a [`MutImage`] into a shared [`RCDesc`]
-	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Image<T>>> {
+	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Image<T>>> + use<P, T, A> {
 		unsafe {
 			// cannot fail
 			self.transition_inner(A::IMAGE_ACCESS, ImageAccess::GeneralRead)

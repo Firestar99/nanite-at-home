@@ -1,7 +1,7 @@
+use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::Ident;
-use proc_macro_crate::{crate_name, FoundCrate};
 use quote::format_ident;
-use syn::{punctuated, Path, PathSegment, Token};
+use syn::{Path, PathSegment, Token, punctuated};
 
 pub struct Symbols {
 	pub bindless: Ident,

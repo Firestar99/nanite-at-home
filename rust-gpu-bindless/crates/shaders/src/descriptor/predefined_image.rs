@@ -8,13 +8,13 @@ pub trait SpvImageToBindlessImage {
 }
 
 impl<
-		SampledType: SampleType<{ ImageFormat::Unknown as u32 }, 4>,
-		const DIM: u32,
-		const DEPTH: u32,
-		const ARRAYED: u32,
-		const MULTISAMPLED: u32,
-		const SAMPLED: u32,
-	> SpvImageToBindlessImage
+	SampledType: SampleType<{ ImageFormat::Unknown as u32 }, 4>,
+	const DIM: u32,
+	const DEPTH: u32,
+	const ARRAYED: u32,
+	const MULTISAMPLED: u32,
+	const SAMPLED: u32,
+> SpvImageToBindlessImage
 	for SpvImage<SampledType, DIM, DEPTH, ARRAYED, MULTISAMPLED, SAMPLED, { ImageFormat::Unknown as u32 }, 4>
 {
 	type Image = ImageTypeImpl<SampledType, DIM, ARRAYED, MULTISAMPLED>;

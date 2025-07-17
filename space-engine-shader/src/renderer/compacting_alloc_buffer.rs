@@ -91,6 +91,6 @@ impl<'a, T: BufferStructPlain> CompactingAllocBufferReaderAccessed<'a, T> {
 	/// # Safety
 	/// index must be in bounds
 	pub unsafe fn read_unchecked(&self, index: u32) -> T {
-		self.buffer.load_unchecked(index as usize)
+		unsafe { self.buffer.load_unchecked(index as usize) }
 	}
 }

@@ -44,7 +44,7 @@ impl<P: BindlessPipelinePlatform, T: BufferContent + ?Sized> MutBufferAccessExt<
 		self,
 		cmd: &Recording<'a, P>,
 	) -> Result<MutBufferAccess<'a, P, T, A>, AccessError> {
-		MutBufferAccess::from_undefined(self, cmd)
+		unsafe { MutBufferAccess::from_undefined(self, cmd) }
 	}
 }
 
@@ -127,7 +127,7 @@ impl<'a, P: BindlessPipelinePlatform, T: BufferContent + ?Sized, A: BufferAccess
 	}
 
 	/// Turns this mutable access to a [`MutBuffer`] into a shared [`RCDesc`]
-	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Buffer<T>>> {
+	pub fn into_shared(self) -> impl Future<Output = RCDesc<P, Buffer<T>>> + use<P, T, A> {
 		unsafe {
 			// cannot fail
 			self.transition_inner(A::BUFFER_ACCESS, BufferAccess::GeneralRead)

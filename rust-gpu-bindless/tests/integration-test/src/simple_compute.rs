@@ -2,15 +2,15 @@
 
 use crate::debugger;
 use approx::assert_relative_eq;
-use integration_test_shader::simple_compute::{add_calculation, Indirection, Param};
+use integration_test_shader::simple_compute::{Indirection, Param, add_calculation};
 use pollster::block_on;
 use rust_gpu_bindless_core::descriptor::{
 	Bindless, BindlessAllocationScheme, BindlessBufferCreateInfo, BindlessBufferUsage, BindlessInstance,
 	DescriptorCounts, MutDescBufferExt, RCDescExt,
 };
 use rust_gpu_bindless_core::pipeline::{HostAccess, MutBufferAccessExt, ShaderReadWrite};
-use rust_gpu_bindless_core::platform::ash::{ash_init_single_graphics_queue, Ash, AshSingleGraphicsQueueCreateInfo};
 use rust_gpu_bindless_core::platform::BindlessPipelinePlatform;
+use rust_gpu_bindless_core::platform::ash::{Ash, AshSingleGraphicsQueueCreateInfo, ash_init_single_graphics_queue};
 
 #[test]
 fn test_simple_compute_ash() -> anyhow::Result<()> {

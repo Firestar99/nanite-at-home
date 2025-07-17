@@ -1,8 +1,8 @@
+use crate::AppendTokens;
 use crate::image_types::standard_image_types;
 use crate::symbols::Symbols;
-use crate::AppendTokens;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{Error, FnArg, ItemFn, MetaList, PatType, Result, ReturnType, Type, TypeReference};
 
@@ -32,7 +32,7 @@ pub fn bindless(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) ->
 				return Err(Error::new(
 					e.span(),
 					"Entry points may not contain a receiver (eg. self) argument!",
-				))
+				));
 			}
 			FnArg::Typed(e) => e,
 		};

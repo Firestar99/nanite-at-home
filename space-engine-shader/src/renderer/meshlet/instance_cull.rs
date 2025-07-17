@@ -4,7 +4,7 @@ use crate::renderer::frame_data::FrameData;
 use crate::renderer::meshlet::intermediate::MeshletGroupInstance;
 use core::ops::Range;
 use glam::UVec3;
-use rust_gpu_bindless_macros::{bindless, BufferStruct};
+use rust_gpu_bindless_macros::{BufferStruct, bindless};
 use rust_gpu_bindless_shaders::descriptor::{Buffer, Descriptors, Strong, TransientDesc};
 use space_asset_shader::meshlet::instance::MeshInstance;
 use space_asset_shader::meshlet::mesh::MeshletMesh;

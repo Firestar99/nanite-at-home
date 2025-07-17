@@ -1,6 +1,6 @@
 use crate::material::pbr::PbrMaterial;
 use crate::material::pbr::PbrVertex;
-use crate::meshlet::indices::{triangle_indices_load, CompressedIndices};
+use crate::meshlet::indices::{CompressedIndices, triangle_indices_load};
 use crate::meshlet::vertex::{DrawVertex, MaterialVertexId};
 use core::ops::Deref;
 use glam::UVec3;
