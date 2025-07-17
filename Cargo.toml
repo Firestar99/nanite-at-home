@@ -62,7 +62,7 @@ winit = { version = "0.30" }
 
 # rust-gpu
 cargo-gpu = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "d097aa1cdcabb2f78b634f39614287b269000df4" }
-spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "e6d017d5504c4441a84edcc27f4eca61de6fc8cf", features = ["bytemuck"] }
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "8ee9f2f99788134a9c0912238add509539742596", features = ["bytemuck"] }
 
 # async
 futures = "0.3"
