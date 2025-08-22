@@ -102,7 +102,7 @@ pub fn meshlet_mesh(
 	}
 
 	let debug_hue = |primitive_id: u32| {
-		let seed = match frame_data.debug_settings() {
+		let seed = match frame_data.debug_settings {
 			DebugSettings::MeshletId => meshlet_instance.meshlet_id,
 			DebugSettings::TriangleId => meshlet_instance.meshlet_id.wrapping_add(primitive_id),
 			DebugSettings::LodLevel => 32 - leading_zeros(meshlet.lod_level_bitmask.0),
@@ -169,7 +169,7 @@ pub fn meshlet_fragment_g_buffer(
 	let mut sampled = mesh
 		.pbr_material
 		.sample(&descriptors, param.sampler.access(&descriptors), loc);
-	if frame_data.debug_settings() == DebugSettings::VertexNormals {
+	if frame_data.debug_settings == DebugSettings::VertexNormals {
 		sampled.normal = loc.vertex_normal.normalize()
 	}
 

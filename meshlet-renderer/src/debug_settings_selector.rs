@@ -54,7 +54,7 @@ impl DebugSettingsSelector {
 					_ => return,
 				}
 				let selected = i32::rem_euclid(selected, DebugSettings::LEN as i32);
-				self.debug_settings = DebugSettings::try_from(selected as u32).unwrap();
+				self.debug_settings = DebugSettings::from(selected as u32);
 				println!("DebugSettings: {:?}", self.debug_settings);
 			}
 			_ => {}
@@ -66,7 +66,7 @@ impl DebugSettingsSelector {
 		egui::ComboBox::from_id_salt(concat!(file!(), line!()))
 			.selected_text(format!("{:?}", self.debug_settings))
 			.show_ui(ui, |ui| {
-				for x in (0..DebugSettings::MAX_VALUE as u32).map(|i| DebugSettings::try_from(i).unwrap()) {
+				for x in (0..DebugSettings::MAX_VALUE as u32).map(DebugSettings::from) {
 					ui.selectable_value(&mut self.debug_settings, x, format!("{:?}", x));
 				}
 			});

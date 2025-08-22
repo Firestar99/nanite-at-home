@@ -177,7 +177,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			let (sun, ambient_light) = sun_controller.eval_sun(delta_time);
 			FrameData {
 				camera,
-				debug_settings: debug_settings_selector.debug_settings.into(),
+				debug_settings: debug_settings_selector.debug_settings,
 				debug_mix: debug_settings_selector.debug_mix_adjusted(),
 				debug_lod_level: lod_selector.lod_selection(),
 				sun,

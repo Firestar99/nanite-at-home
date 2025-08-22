@@ -40,7 +40,7 @@ pub fn lighting_cs(
 		sampled_material_from_g_buffer(frame_data.camera, &descriptors, param.g_buffer, pixel, size);
 	let skybox = is_skybox(sampled.alpha);
 
-	let debug_color = || match frame_data.debug_settings() {
+	let debug_color = || match frame_data.debug_settings {
 		DebugSettings::None => Vec3::ZERO,
 		DebugSettings::MeshletId | DebugSettings::TriangleId | DebugSettings::LodLevel => debug_color(debug_hue),
 		DebugSettings::BaseColor => sampled.albedo,
