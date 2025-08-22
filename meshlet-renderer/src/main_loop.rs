@@ -141,12 +141,11 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		for event in inputs.try_iter() {
 			swapchain.handle_input(&event);
 
-			if !app_focus.handle_input(&event) {
-				if !egui_ctx.on_event(&event).map_or(false, |e| e.consumed) {
+			if !app_focus.handle_input(&event)
+				&& !egui_ctx.on_event(&event).is_some_and(|e| e.consumed) {
 					camera_controls.handle_input(&event, app_focus.game_focused);
 					debug_settings_selector.handle_input(&event);
 				}
-			}
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -191,7 +190,7 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 			egui::Window::new("Nanite at home")
 				.fixed_pos(Pos2::new(0., 0.))
 				.hscroll(true)
-				.show(&ctx, |ui| {
+				.show(ctx, |ui| {
 					let space = 6.;
 					controls_ui(ui);
 					ui.add_space(space);
@@ -210,8 +209,8 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		})?;
 
 		let output_image = bindless.execute(|cmd| {
-			let mut output_image = output_image.access_dont_care(&cmd)?;
-			if let Err(e) = renderer_main.new_frame(cmd, frame_data, &scene, &mut output_image) {
+			let output_image = output_image.access_dont_care(cmd)?;
+			if let Err(e) = renderer_main.new_frame(cmd, frame_data, &scene, &output_image) {
 				return Ok(Err(e));
 			}
 			let mut output_image = output_image.transition::<ColorAttachment>()?;

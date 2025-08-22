@@ -78,7 +78,7 @@ impl SwapchainImageFormatPreference {
 }
 
 impl AshSwapchainParams {
-	fn create_info(&self, surface: ash::vk::SurfaceKHR, extent: Extent) -> SwapchainCreateInfoKHR {
+	fn create_info(&self, surface: ash::vk::SurfaceKHR, extent: Extent) -> SwapchainCreateInfoKHR<'_> {
 		SwapchainCreateInfoKHR::default()
 			.surface(surface)
 			.min_image_count(self.image_count)

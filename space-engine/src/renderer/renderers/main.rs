@@ -199,12 +199,12 @@ impl RendererMain {
 			.dispatch(cmd, &frame_context, scene, &meshlet_groups, &meshlet_instances)?;
 
 		let meshlet_instances = meshlet_instances.transition_reading()?;
-		let mut g_albedo = resources.g_albedo.access_dont_care::<ColorAttachment>(&cmd)?;
-		let mut g_normal = resources.g_normal.access_dont_care::<ColorAttachment>(&cmd)?;
+		let mut g_albedo = resources.g_albedo.access_dont_care::<ColorAttachment>(cmd)?;
+		let mut g_normal = resources.g_normal.access_dont_care::<ColorAttachment>(cmd)?;
 		let mut g_roughness_metallic = resources
 			.g_roughness_metallic
-			.access_dont_care::<ColorAttachment>(&cmd)?;
-		let mut depth_image = resources.depth_image.access_dont_care::<DepthStencilAttachment>(&cmd)?;
+			.access_dont_care::<ColorAttachment>(cmd)?;
+		let mut depth_image = resources.depth_image.access_dont_care::<DepthStencilAttachment>(cmd)?;
 		cmd.begin_rendering(
 			self.pipeline.format.to_g_buffer_rp(),
 			&[

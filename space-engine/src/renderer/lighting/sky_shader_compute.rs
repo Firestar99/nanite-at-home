@@ -23,8 +23,8 @@ impl SkyShaderCompute {
 		profiling::function_scope!();
 		let image_size = frame_context.frame_data.camera.viewport_size;
 		let groups = [
-			(image_size.x + SKY_SHADER_WG_SIZE.x - 1) / SKY_SHADER_WG_SIZE.x,
-			(image_size.y + SKY_SHADER_WG_SIZE.y - 1) / SKY_SHADER_WG_SIZE.y,
+			image_size.x.div_ceil(SKY_SHADER_WG_SIZE.x),
+			image_size.y.div_ceil(SKY_SHADER_WG_SIZE.y),
 			1,
 		];
 		cmd.dispatch(

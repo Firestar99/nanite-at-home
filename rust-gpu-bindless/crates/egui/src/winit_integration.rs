@@ -64,7 +64,7 @@ impl<P: EguiBindlessPlatform> EguiWinitContext<P> {
 	/// Runs the ui using the supplied `run_ui` function: Extracts accumulated input, updates the ui, tessellates
 	/// the geometry, uploads it to the GPU and handles any outputs from the ui. Use the returned [`EguiRenderOutput`]
 	/// to [`EguiRenderOutput::draw`] the geometry on an image.
-	pub fn run(&mut self, run_ui: impl FnMut(&Context)) -> Result<EguiRenderOutput<P>, EguiRenderingError<P>> {
+	pub fn run(&mut self, run_ui: impl FnMut(&Context)) -> Result<EguiRenderOutput<'_, P>, EguiRenderingError<P>> {
 		let scale = self.update_viewport_info(false).recip();
 		let raw_input = self.winit_state.take_egui_input(&self.window);
 		let (mut render, platform_output) = self.render_ctx.run(raw_input, run_ui)?;

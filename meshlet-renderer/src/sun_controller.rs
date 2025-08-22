@@ -34,6 +34,12 @@ pub struct SunController {
 	pub inclination_degree: f32,
 }
 
+impl Default for SunController {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SunController {
 	pub fn new() -> Self {
 		Self {

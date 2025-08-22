@@ -6,6 +6,12 @@ pub struct FpsUi {
 	last_frames: Vec<DeltaTime>,
 }
 
+impl Default for FpsUi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FpsUi {
 	pub fn new() -> Self {
 		Self {
