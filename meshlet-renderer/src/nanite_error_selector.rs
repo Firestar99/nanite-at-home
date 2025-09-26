@@ -6,6 +6,12 @@ pub struct NaniteErrorSelector {
 	pub nanite: NaniteSettings,
 }
 
+impl Default for NaniteErrorSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NaniteErrorSelector {
 	pub fn new() -> Self {
 		Self {

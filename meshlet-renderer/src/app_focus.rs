@@ -41,17 +41,17 @@ impl AppFocus {
 				self.game_focused = !self.game_focused;
 				let grab = self.game_focused;
 				let window = self.window.clone();
-				let _ = self.event_loop.spawn(move |e| {
+				drop(self.event_loop.spawn(move |e| {
 					let window = window.get(e);
 					window.set_cursor_visible(!grab);
 					if grab {
-						if let Err(_) = window.set_cursor_grab(CursorGrabMode::Confined) {
+						if window.set_cursor_grab(CursorGrabMode::Confined).is_err() {
 							window.set_cursor_grab(CursorGrabMode::Locked).ok();
 						}
 					} else {
 						window.set_cursor_grab(CursorGrabMode::None).unwrap();
 					}
-				});
+				}));
 			}
 			true
 		} else {

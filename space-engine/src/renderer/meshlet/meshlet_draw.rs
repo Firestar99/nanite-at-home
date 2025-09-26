@@ -78,7 +78,7 @@ impl BindlessShader for FakeTaskShader {
 	type ShaderType = TaskShader;
 	type ParamConstant = Param<'static>;
 
-	fn spirv_binary(&self) -> &SpirvBinary {
+	fn spirv_binary(&self) -> &SpirvBinary<'_> {
 		unreachable!()
 	}
 }

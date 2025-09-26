@@ -6,6 +6,12 @@ pub struct LodSelector {
 	lod_level: u32,
 }
 
+impl Default for LodSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LodSelector {
 	pub fn new() -> Self {
 		Self {

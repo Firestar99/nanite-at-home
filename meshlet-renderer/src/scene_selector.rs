@@ -50,7 +50,7 @@ impl<'a> SceneSelector<'a> {
 		if self
 			.loaded_scene_instance
 			.as_ref()
-			.map_or(true, |i| i.instance_count != self.instance_count)
+			.is_none_or(|i| i.instance_count != self.instance_count)
 		{
 			rebuild_instance = true;
 		}
@@ -65,10 +65,10 @@ impl<'a> SceneSelector<'a> {
 		let mut newsel = self.selected;
 		ui.strong("Scene:");
 		egui::ComboBox::from_id_salt(concat!(file!(), line!()))
-			.selected_text(format!("{}", self.scenes[newsel as usize].name()))
+			.selected_text(self.scenes[newsel as usize].name().to_string())
 			.show_ui(ui, |ui| {
 				for i in 0..self.scenes.len() {
-					ui.selectable_value(&mut newsel, i as i32, format!("{}", self.scenes[i].name()));
+					ui.selectable_value(&mut newsel, i as i32, self.scenes[i].name().to_string());
 				}
 			});
 		self.set_scene(newsel);

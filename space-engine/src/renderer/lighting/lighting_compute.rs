@@ -24,7 +24,7 @@ impl LightingCompute {
 		profiling::function_scope!();
 		let image_size = frame_context.frame_data.camera.viewport_size;
 		let groups = [
-			(image_size.x + LIGHTING_WG_SIZE - 1) / LIGHTING_WG_SIZE,
+			image_size.x.div_ceil(LIGHTING_WG_SIZE),
 			image_size.y,
 			1,
 		];
