@@ -3,7 +3,7 @@ use intel_tex_2::{RSurface, RgSurface, RgbaSurface, bc4, bc5, bc7};
 use std::borrow::Cow;
 
 impl UncompressedImage<'_> {
-	pub fn compress_to_bcn(&self, settings: Option<Bc7Settings>) -> BCnImage<'static> {
+	pub fn compress_to_bcn(&self, bc7_settings: Bc7Settings) -> BCnImage<'static> {
 		profiling::function_scope!();
 		let bcn_meta = BCnImageMetadata {
 			image_type: self.meta.image_type,
@@ -44,11 +44,14 @@ impl UncompressedImage<'_> {
 					)
 				}
 				ImageType::RgbaLinear | ImageType::RgbaColor => {
-					let setting = settings.expect("Compressing to bc7 requires Bc7Settings");
 					profiling::scope!("bc7::compress_blocks");
 					let has_alpha = scan_for_alpha(self.meta.image_type, pixels_in);
 					bc7::compress_blocks_into(
-						if has_alpha { &setting.alpha } else { &setting.opaque },
+						if has_alpha {
+							&bc7_settings.alpha
+						} else {
+							&bc7_settings.opaque
+						},
 						&RgbaSurface {
 							height: mip_extent.y,
 							width: mip_extent.x,
@@ -97,71 +100,57 @@ pub struct Bc7Settings {
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncodeSettings {
-	bc4_bc5: bool,
-	bc7: Option<Bc7Settings>,
+	bc7: Bc7Settings,
 	zstd_level: i32,
 }
 
 impl EncodeSettings {
-	pub fn embedded() -> Self {
-		Self {
-			bc4_bc5: false,
-			bc7: None,
-			zstd_level: 1,
-		}
-	}
-
 	pub fn ultra_fast() -> Self {
 		Self {
-			bc4_bc5: true,
-			bc7: Some(Bc7Settings {
+			bc7: Bc7Settings {
 				opaque: bc7::opaque_ultra_fast_settings(),
 				alpha: bc7::alpha_ultra_fast_settings(),
-			}),
+			},
 			zstd_level: 3,
 		}
 	}
 
 	pub fn very_fast() -> Self {
 		Self {
-			bc4_bc5: true,
-			bc7: Some(Bc7Settings {
+			bc7: Bc7Settings {
 				opaque: bc7::opaque_very_fast_settings(),
 				alpha: bc7::alpha_very_fast_settings(),
-			}),
+			},
 			zstd_level: 3,
 		}
 	}
 
 	pub fn fast() -> Self {
 		Self {
-			bc4_bc5: true,
-			bc7: Some(Bc7Settings {
+			bc7: Bc7Settings {
 				opaque: bc7::opaque_fast_settings(),
 				alpha: bc7::alpha_fast_settings(),
-			}),
+			},
 			zstd_level: 3,
 		}
 	}
 
 	pub fn basic() -> Self {
 		Self {
-			bc4_bc5: true,
-			bc7: Some(Bc7Settings {
+			bc7: Bc7Settings {
 				opaque: bc7::opaque_basic_settings(),
 				alpha: bc7::alpha_basic_settings(),
-			}),
+			},
 			zstd_level: 3,
 		}
 	}
 
 	pub fn slow() -> Self {
 		Self {
-			bc4_bc5: true,
-			bc7: Some(Bc7Settings {
+			bc7: Bc7Settings {
 				opaque: bc7::opaque_slow_settings(),
 				alpha: bc7::alpha_slow_settings(),
-			}),
+			},
 			zstd_level: 5,
 		}
 	}
