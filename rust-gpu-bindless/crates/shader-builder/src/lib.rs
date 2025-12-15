@@ -50,34 +50,36 @@ impl ShaderSymbolsBuilder {
 	pub fn new_absolute_path(absolute_crate_path: PathBuf, crate_ident: &str, target: &str) -> anyhow::Result<Self> {
 		let install = Install::from_shader_crate(absolute_crate_path.clone()).run()?;
 
+		let mut b = install.to_spirv_builder(absolute_crate_path, target); // and print panics
+		// we want multiple *.spv files for vulkano's shader! macro to only generate needed structs
+		b.multimodule = true;
+		// has to be DependencyOnly!
+		// may not be None as it's needed for cargo
+		// may not be Full as that's unsupported with multimodule
+		b.print_metadata = MetadataPrintout::DependencyOnly;
+		// required capabilities
+		b.capabilities.extend_from_slice(&[
+			Capability::RuntimeDescriptorArray,
+			Capability::ShaderNonUniform,
+			Capability::StorageBufferArrayDynamicIndexing,
+			Capability::StorageImageArrayDynamicIndexing,
+			Capability::SampledImageArrayDynamicIndexing,
+			Capability::StorageBufferArrayNonUniformIndexing,
+			Capability::StorageImageArrayNonUniformIndexing,
+			Capability::SampledImageArrayNonUniformIndexing,
+			Capability::StorageImageExtendedFormats,
+			Capability::StorageImageReadWithoutFormat,
+			Capability::StorageImageWriteWithoutFormat,
+		]);
+		// maximum debug-ability by default: enable all debug info by default
+		b.spirv_metadata = SpirvMetadata::Full;
+		b.shader_panic_strategy = ShaderPanicStrategy::DebugPrintfThenExit {
+			print_inputs: true,
+			print_backtrace: true,
+		};
+
 		Ok(Self {
-			spirv_builder: install
-				.to_spirv_builder(absolute_crate_path, target)
-				// we want multiple *.spv files for vulkano's shader! macro to only generate needed structs
-				.multimodule(true)
-				// has to be DependencyOnly!
-				// may not be None as it's needed for cargo
-				// may not be Full as that's unsupported with multimodule
-				.print_metadata(MetadataPrintout::DependencyOnly)
-				// required capabilities
-				.capability(Capability::RuntimeDescriptorArray)
-				.capability(Capability::ShaderNonUniform)
-				.capability(Capability::StorageBufferArrayDynamicIndexing)
-				.capability(Capability::StorageImageArrayDynamicIndexing)
-				.capability(Capability::SampledImageArrayDynamicIndexing)
-				.capability(Capability::StorageBufferArrayNonUniformIndexing)
-				.capability(Capability::StorageImageArrayNonUniformIndexing)
-				.capability(Capability::SampledImageArrayNonUniformIndexing)
-				.capability(Capability::StorageImageExtendedFormats)
-				.capability(Capability::StorageImageReadWithoutFormat)
-				.capability(Capability::StorageImageWriteWithoutFormat)
-				// maximum debug-ability by default: enable all debug info by default
-				.spirv_metadata(SpirvMetadata::Full)
-				// and print panics
-				.shader_panic_strategy(ShaderPanicStrategy::DebugPrintfThenExit {
-					print_inputs: true,
-					print_backtrace: true,
-				}),
+			spirv_builder: b,
 			codegen: Some(CodegenOptions {
 				shader_symbols_path: String::from("shader_symbols.rs"),
 			}),
