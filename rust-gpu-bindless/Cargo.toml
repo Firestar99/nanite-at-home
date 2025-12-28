@@ -54,7 +54,7 @@ presser = "0.3.1"
 winit = { version = "0.30" }
 
 # rust-gpu
-cargo-gpu = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "70160693564611ca85e17a3c441da93ee642d29a" }
+cargo-gpu-install = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "70160693564611ca85e17a3c441da93ee642d29a" }
 spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "a30bd43db45f2bfe260051f44141e5eaffcbb4b0", features = ["bytemuck"] }
 
 # async

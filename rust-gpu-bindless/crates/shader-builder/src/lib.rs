@@ -1,5 +1,5 @@
 use crate::codegen::{CodegenOptions, codegen_shader_symbols};
-use cargo_gpu::install::Install;
+use cargo_gpu_install::install::Install;
 use proc_macro_crate::FoundCrate;
 use spirv_builder::{
 	Capability, CompileResult, MetadataPrintout, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvMetadata,
@@ -12,7 +12,7 @@ pub mod symbols;
 
 pub use anyhow;
 use anyhow::Context;
-pub use cargo_gpu::spirv_builder;
+pub use cargo_gpu_install::spirv_builder;
 
 pub struct ShaderSymbolsBuilder {
 	spirv_builder: SpirvBuilder,
