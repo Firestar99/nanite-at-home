@@ -43,10 +43,10 @@ pub fn meshlet_mesh(
 	#[spirv(workgroup_id)] wg_id: UVec3,
 	#[spirv(local_invocation_id)] inv_id: UVec3,
 	#[spirv(primitive_triangle_indices_ext)] prim_indices: &mut [UVec3; MESHLET_MAX_TRIANGLES as usize],
-	#[spirv(per_primitive_ext)] out_debug_hue: &mut [f32; MESHLET_MAX_TRIANGLES as usize],
 	#[spirv(position)] out_positions: &mut [Vec4; MESHLET_MAX_VERTICES as usize],
-	out_mesh_id: &mut [u32; MESHLET_MAX_VERTICES as usize],
-	out_vertex: &mut [InterpolationVertex; MESHLET_MAX_VERTICES as usize],
+	#[spirv(location = 0, per_primitive_ext)] out_debug_hue: &mut [f32; MESHLET_MAX_TRIANGLES as usize],
+	#[spirv(location = 1)] out_mesh_id: &mut [u32; MESHLET_MAX_VERTICES as usize],
+	#[spirv(location = 2)] out_vertex: &mut [InterpolationVertex; MESHLET_MAX_VERTICES as usize],
 ) {
 	let meshlet_instance_id = wg_id.x;
 	let inv_id = inv_id.x as usize;
@@ -149,9 +149,9 @@ pub fn leading_zeros(mut x: u32) -> u32 {
 pub fn meshlet_fragment_g_buffer(
 	#[bindless(descriptors)] descriptors: Descriptors,
 	#[bindless(param)] param: &Param<'static>,
-	#[spirv(per_primitive_ext)] out_debug_hue: f32,
-	#[spirv(flat)] out_mesh_id: u32,
-	out_vertex: InterpolationVertex,
+	#[spirv(location = 0, per_primitive_ext)] out_debug_hue: f32,
+	#[spirv(location = 1, flat)] out_mesh_id: u32,
+	#[spirv(location = 2)] out_vertex: InterpolationVertex,
 	frag_albedo: &mut Vec4,
 	frag_normal: &mut Vec4,
 	frag_roughness_metallic: &mut Vec4,

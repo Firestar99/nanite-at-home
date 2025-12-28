@@ -20,7 +20,7 @@ rust-gpu-bindless-macro-utils = { workspace = true }
 ash = { workspace = true }
 
 # rust-gpu
-cargo-gpu = { workspace = true }
+cargo-gpu-install = { workspace = true }
 
 # codegen
 proc-macro2 = { workspace = true }
