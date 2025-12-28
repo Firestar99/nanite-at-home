@@ -46,13 +46,16 @@ integration-test = { path = "tests/integration-test" }
 integration-test-shader = { path = "tests/integration-test-shader" }
 
 # vulkan
-cargo-gpu = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "cc8f32214368ea1c4a3ffa26e25054233b5e999c" }
-spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "dfcff49cf599e228f50e3aea45a01f4a5cf9d8a1", features = ["bytemuck"] }
 ash = "0.38.0"
 ash-window = "0.13.0"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
 presser = "0.3.1"
+
 winit = { version = "0.30" }
+
+# rust-gpu
+cargo-gpu = { git = "https://github.com/Rust-GPU/cargo-gpu", rev = "70160693564611ca85e17a3c441da93ee642d29a" }
+spirv-std = { git = "https://github.com/Rust-GPU/rust-gpu", rev = "a30bd43db45f2bfe260051f44141e5eaffcbb4b0", features = ["bytemuck"] }
 
 # async
 futures = "0.3"
@@ -67,7 +70,7 @@ prettyplease = "0.2"
 proc-macro-crate = "3.1.0"
 
 # bytes and numbers
-glam = { version = "=0.30.7", default-features = false, features = ["libm", "bytemuck"] }
+glam = { version = "0.30.9", default-features = false, features = ["libm", "bytemuck"] }
 libm = { version = "0.2", default-features = false }
 bytemuck = { version = "1.13", features = ["min_const_generics"] }
 bytemuck_derive = "1.4"

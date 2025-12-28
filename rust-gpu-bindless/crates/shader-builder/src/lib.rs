@@ -1,5 +1,5 @@
 use crate::codegen::{CodegenOptions, codegen_shader_symbols};
-use cargo_gpu::Install;
+use cargo_gpu::install::Install;
 use proc_macro_crate::FoundCrate;
 use spirv_builder::{
 	Capability, CompileResult, MetadataPrintout, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvMetadata,
