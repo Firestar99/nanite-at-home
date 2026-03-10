@@ -2,7 +2,7 @@ use crate::codegen::{CodegenOptions, codegen_shader_symbols};
 use cargo_gpu_install::install::Install;
 use proc_macro_crate::FoundCrate;
 use spirv_builder::{
-	Capability, CompileResult, MetadataPrintout, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvMetadata,
+	Capability, CompileResult, ModuleResult, ShaderPanicStrategy, SpirvBuilder, SpirvMetadata,
 };
 use std::env;
 use std::path::{Path, PathBuf};
@@ -50,13 +50,10 @@ impl ShaderSymbolsBuilder {
 	pub fn new_absolute_path(absolute_crate_path: PathBuf, crate_ident: &str, target: &str) -> anyhow::Result<Self> {
 		let install = Install::from_shader_crate(absolute_crate_path.clone()).run()?;
 
-		let mut b = install.to_spirv_builder(absolute_crate_path, target); // and print panics
-		// we want multiple *.spv files for vulkano's shader! macro to only generate needed structs
+		let mut b = install.to_spirv_builder(absolute_crate_path, target);
+		// we currently require multiple spv files
 		b.multimodule = true;
-		// has to be DependencyOnly!
-		// may not be None as it's needed for cargo
-		// may not be Full as that's unsupported with multimodule
-		b.print_metadata = MetadataPrintout::DependencyOnly;
+		b.build_script.defaults = true;
 		// required capabilities
 		b.capabilities.extend_from_slice(&[
 			Capability::RuntimeDescriptorArray,
