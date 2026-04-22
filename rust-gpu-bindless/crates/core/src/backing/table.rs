@@ -200,6 +200,23 @@ impl TableSync {
 			_guard: self.flush_and_gc_mutex.lock(),
 		}
 	}
+
+	pub fn stats(&self) -> TableSyncStats {
+		TableSyncStats {
+			tables: self
+				.tables
+				.iter()
+				.filter_map(|table| {
+					let guard = table.read();
+					if let Some(table) = guard.as_ref() {
+						Some(table.stats())
+					} else {
+						None
+					}
+				})
+				.collect(),
+		}
+	}
 }
 
 pub struct FlushGuard<'a> {
@@ -281,6 +298,7 @@ trait AbstractTable: Any + Send + Sync + 'static {
 	fn gc_drop(&self, gc_indices: DescriptorIndexRangeSet<'static, ()>);
 	fn flush(&self);
 	fn try_recover(&self, id: DescriptorId, write_queue_ab: AB) -> bool;
+	fn stats(&self) -> TableStats;
 }
 
 impl<I: TableInterface> AbstractTable for Table<I> {
@@ -359,6 +377,19 @@ impl<I: TableInterface> AbstractTable for Table<I> {
 				}
 				Err(o) => old = o,
 			}
+		}
+	}
+
+	fn stats(&self) -> TableStats {
+		let max_allocated_slots = self.next_free.load(Relaxed) as usize;
+		let dead_queue = self.dead_queue.len();
+		TableStats {
+			table_id: self.table_id,
+			max_allocated_slots,
+			dead_queue,
+			allocated_slots: max_allocated_slots - dead_queue,
+			reaper_queue: [self.reaper_queue[AB::A].len(), self.reaper_queue[AB::B].len()],
+			flush_queue: self.flush_queue.len(),
 		}
 	}
 }
@@ -554,6 +585,21 @@ impl Display for SlotAllocationError {
 			}
 		}
 	}
+}
+
+#[derive(Debug)]
+pub struct TableSyncStats {
+	pub tables: Vec<TableStats>,
+}
+
+#[derive(Debug)]
+pub struct TableStats {
+	pub table_id: DescriptorType,
+	pub allocated_slots: usize,
+	pub max_allocated_slots: usize,
+	pub dead_queue: usize,
+	pub reaper_queue: [usize; 2],
+	pub flush_queue: usize,
 }
 
 #[cfg(test)]

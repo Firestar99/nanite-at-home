@@ -141,11 +141,10 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 		for event in inputs.try_iter() {
 			swapchain.handle_input(&event);
 
-			if !app_focus.handle_input(&event)
-				&& !egui_ctx.on_event(&event).is_some_and(|e| e.consumed) {
-					camera_controls.handle_input(&event, app_focus.game_focused);
-					debug_settings_selector.handle_input(&event);
-				}
+			if !app_focus.handle_input(&event) && !egui_ctx.on_event(&event).is_some_and(|e| e.consumed) {
+				camera_controls.handle_input(&event, app_focus.game_focused);
+				debug_settings_selector.handle_input(&event);
+			}
 			if let Event::WindowEvent {
 				event: WindowEvent::CloseRequested,
 				..
@@ -204,6 +203,47 @@ pub async fn main_loop(event_loop: EventLoopExecutor, inputs: Receiver<Event<()>
 					ui.add_space(space);
 					sun_controller.ui(ui);
 					ui.add_space(space);
+
+					ui.collapsing("Bindless Stats", |ui| {
+						let tables = bindless.table_sync.stats().tables;
+						egui::Grid::new("bindless stats grid").show(ui, |ui| {
+							ui.label("table_id");
+							for stats in &tables {
+								ui.label(format!("{:?}", stats.table_id.to_u32()));
+							}
+							ui.end_row();
+
+							ui.label("allocated_slots");
+							for stats in &tables {
+								ui.label(format!("{:?}", stats.allocated_slots));
+							}
+							ui.end_row();
+
+							ui.label("max_allocated_slots");
+							for stats in &tables {
+								ui.label(format!("{:?}", stats.max_allocated_slots));
+							}
+							ui.end_row();
+
+							ui.label("dead_queue");
+							for stats in &tables {
+								ui.label(format!("{:?}", stats.dead_queue));
+							}
+							ui.end_row();
+
+							ui.label("reaper_queue");
+							for stats in &tables {
+								ui.label(format!("{:?}", stats.reaper_queue));
+							}
+							ui.end_row();
+
+							ui.label("flush_queue");
+							for stats in &tables {
+								ui.label(format!("{:?}", stats.flush_queue));
+							}
+							ui.end_row();
+						});
+					});
 				});
 			fps_ui.ui(ctx);
 		})?;
