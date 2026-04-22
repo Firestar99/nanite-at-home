@@ -48,7 +48,7 @@ impl ShaderSymbolsBuilder {
 	/// Build the shader crate at path `absolute_crate_path` and assume the crate is
 	/// accessible with the ident `crate_ident`.
 	pub fn new_absolute_path(absolute_crate_path: PathBuf, crate_ident: &str, target: &str) -> anyhow::Result<Self> {
-		let install = Install::from_shader_crate(absolute_crate_path.clone()).run()?;
+		let install = Install::from_shader_crate(absolute_crate_path.clone()).within_build_script().run()?;
 
 		let mut b = install.to_spirv_builder(absolute_crate_path, target);
 		// we currently require multiple spv files
